@@ -257,3 +257,58 @@ Yöntem: Salt okunur kod okuması. Okunan dosyalar: `app/admin/pricing/page.tsx`
 - Yanlış kısım: "Bayi tarafında checkout her zaman hata veriyor" doğru değil. `dealer/billing/route.ts:73` `payable: false` dönüyor, `app/dealer/billing/page.tsx:199-208` de bu planlar için devre dışı bir "İletişime geçin" butonu gösteriyor. Checkout hiç çağrılmıyor, hata mesajı oluşmuyor. `billing-core.ts:60` hatasına yalnızca doğrudan API çağrısıyla ulaşılabilir.
 - Etki Stripe'ın üretimde açık olmasına bağlı (doğrulanmadı). Stripe kapalıysa hiçbir plan zaten ödenebilir değil (`page.tsx:156-160` uyarısı). Bu nedenle bulgu güvenlik/hata değil, işlevsel bir eksiklik. Önem derecesi: Orta.
 - Çözüm: Plan formuna "Stripe Price ID" alanı (ya da tercihen sunucu tarafında `stripe.prices.retrieve` ile doğrulayan bir "Stripe ile eşle" eylemi) ve kartta "Ödenebilir / Stripe bağlı değil" durumu.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/pricing/page.tsx` sunucu bileşeni (yetki DB'den, `getPricingOverview` sunucuda ön yüklenir) → istemci adası `components/admin/a-fiyatlandirma/pricing-console.tsx` (react-query `initialData`). Sunucu mantığı `lib/admin-pricing/pricing.server.ts`, paylaşılan zod + saf yardımcılar `lib/admin-pricing/contract.ts` (form ve uçlar aynı şemayı kullanır). Yeni defineRoute BFF uçları (ADMIN + zod + rate limit): `GET /api/admin/pricing/console`, `POST /api/admin/pricing/plans`, `PATCH /api/admin/pricing/plans/:id` (iyimser kilit 409), `POST …/plans/:id/archive` (dryRun/confirm), `POST …/plans/:id/restore`, `GET …/plans/:id/history`, `PUT /api/admin/pricing/reorder`, `POST /api/admin/pricing/stripe` (doğrula), `POST /api/admin/pricing/stripe/create-price`. Eski `route.ts`: GET korunur (/admin/users plan seçici), POST/PUT 410, DELETE geriye uyumlu ama arşivdir ve `archivePlan`'a gider. Testler: `__tests__/lib/admin-pricing.test.ts` (20 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero başlık | ÇALIŞIYOR — QDL `PageHeader` (ops); açıklama etkiyi anlatır (bayi faturalama + vitrin). |
+| 2 | Yeni plan | ÇALIŞIYOR — modal yerine sağ çekmece (`EntityEditorSheet`); plan satışa kapalı oluşturulur. |
+| 3 | Plan listesi yükleme | ÇALIŞIYOR — sunucuda ön yükleme + `/console` BFF; abone/MRR/son değişiklik ile. |
+| 4 | Yükleniyor | ÇALIŞIYOR — QueryState iskeleti. |
+| 5 | Boş durum | ÇALIŞIYOR — "Yeni plan" eylemli ilk kullanım boş durumu. |
+| 6 | Hata durumu | ÇALIŞIYOR — QueryState hata + "Tekrar dene"; boş liste gibi görünmez. |
+| 7 | Kart: ad + açıklama | ÇALIŞIYOR |
+| 8 | Popüler rozeti | ÇALIŞIYOR — "Öne çıkan"; sunucuda tek plan kuralı (transaction içinde). |
+| 9 | Fiyat gösterimi | ÇALIŞIYOR — `Intl.NumberFormat` ("₺299 / ay", "Ücretsiz", "tek seferlik"). |
+| 10 | QR/şube rozetleri | ÇALIŞIYOR — 0 artık 0 olarak saklanır ve görünür. |
+| 11 | Aktif/Pasif | ÇALIŞIYOR — "Satışta / Satışa kapalı"; aboneleri düşürmediği formda açıklanır. |
+| 12 | Özellik listesi | ÇALIŞIYOR — ilk 4 + "+N özellik daha"; indeksli key; yinelenen özellik şemada reddedilir. |
+| 13 | Giriş animasyonu | ÇALIŞIYOR — `fadeUp` + bütçeli `staggerDelay`, sıralamada `layout` geçişi; azaltılmış harekette kapalı. |
+| 14 | Düzenle ön doldurma | ÇALIŞIYOR — `planToForm`, sürüm (updatedAt) taşınır. |
+| 15 | Sil butonu | KALDIRILDI → "Arşivle": etki önizlemeli (işletme/ödeyen), plan adı yazılarak onay; aboneli plan onaysız 409; hard delete hiçbir yolda yok (C1). |
+| 16-19 | Form: ad/fiyat/açıklama/para birimi | ÇALIŞIYOR — RHF + paylaşılan zod; odak kaybı yok; fiyat ≤2 ondalık; para birimi seçimi (TRY/USD/EUR). |
+| 20 | Döngü | ÇALIŞIYOR — seçim (Aylık/Yıllık/Tek seferlik). |
+| 21-22 | Maks QR / şube | ÇALIŞIYOR — "Sınırsız" ayrı anahtar; 0 = 0 (testli). Şube limiti uygulanıyor (bayi şube ucu). |
+| 23 | Şube başına fiyat | KALDIRILDI — hiçbir faturalama yolu okumuyordu (SAHTE); formdan ve yeni uçlardan çıkarıldı, kolondaki eski değer korunur. |
+| 24 | Özellikler | ÇALIŞIYOR — satır satır, sayaçlı, 80 satır/200 karakter istemcide ve sunucuda; ayrıca Özellik matrisi sekmesi. |
+| 25-26 | Popüler / Aktif anahtarları | ÇALIŞIYOR — `SwitchField` kart varyantı, açıklamalı. |
+| 27 | İptal | ÇALIŞIYOR — kirliyken X/Esc/dış tıklama dahil kapatma onayı; form her açılışta deterministik sıfırlanır (kopya plan sızıntısı yok). |
+| 28 | Kaydet + doğrulama | ÇALIŞIYOR — alan bazlı hata (aria-invalid/describedby), sunucu `details` alanlara eşlenir; `[object Object]` yok; 409 çakışma bandı + "en son hâlini yükle". |
+| 29 | Toast | ÇALIŞIYOR — sonner, Türkçe karakterli metinler. |
+| 30 | Stripe Price ID | ÇALIŞIYOR — formda alan + "Stripe'ta doğrula"; kayıtta sunucu Stripe'tan okur, tutar/para birimi/döngü/pasiflik uyuşmazlığında reddeder; "Stripe eşlemesi" sekmesi (toplu doğrulama, "Stripe'ta oluştur ve eşle" — idempotent yeni Price). |
+| 31 | Sıralama | ÇALIŞIYOR — yukarı/aşağı (klavye erişilebilir) + "Sırayı kaydet" → `PUT /reorder` (tam liste doğrulaması, denetimli). |
+| 32 | Abone sayısı / gelir | ÇALIŞIYOR — kartta işletme/ödeyen/gecikmede/MRR; KPI şeridi. |
+| 33 | Silme onayı / arşiv | ÇALIŞIYOR — Arşiv sekmesi + "Geri al" (satışa kapalı döner). |
+| 34 | Yetki | ÇALIŞIYOR — sayfa `requireAuth(['ADMIN'])`, tüm yeni uçlar defineRoute. |
+| 35 | Audit log | ÇALIŞIYOR — mutasyonla aynı transaction; yalnız değişen alanlar; düzenleyicide "Değişiklik geçmişi". |
+| 36 | Mobil | ÇALIŞIYOR — çekmece tam genişlik, matris kendi kabında yatay kaydırma, dokunma hedefleri ≥44px. |
+| 37 | Azaltılmış hareket | ÇALIŞIYOR |
+| 38 | Erişilebilirlik | ÇALIŞIYOR — label/for, ikon butonlarda aria-label, durumlar ikon+metin, matris hücreleri `aria-pressed`. |
+| 39 | i18n | KISMİ (bilinçli) — admin panelinin geri kalanı gibi Türkçe; `adminPricing.*` anahtarları i18n dalgasına. |
+| 40 | Landing senkronu | ÇALIŞIYOR — landing `PricingPlan`'dan okuyor; her plan mutasyonu `revalidateTag('public-pricing')` ile vitrini anında tazeler. |
+
+### Kapanan bulgular
+1, 2, 3, 4 (Stripe uyuşmazlığında kayıt reddi + Stripe'ta yeni Price; landing tek kaynaktan, anında tazelenir), 5, 6, 7, 8, 9, 10 (pricePerBranch kaldırıldı), 11, 12, 13 (i18n anahtarları hariç), 14, 15 — **15/15**.
+
+### Kalanlar
+- i18n anahtarları (`adminPricing.*`): admin geneli i18n dalgasına bırakıldı.
+- Deneme süresi, "vitrinde göster", Taslak/Yayında durumu ve abone taşıma sihirbazı şema alanı ister — **ŞEMA İSTEĞİ:** `PricingPlan.trialDays Int?`, `PricingPlan.showOnLanding Boolean @default(true)`. Şimdilik "Satışta" (isActive) vitrin görünürlüğünü belirler.
+- MRR liste fiyatıyla tahmindir (eski fiyatlı Stripe abonelikleri farklı olabilir); arayüzde böyle etiketlidir.
