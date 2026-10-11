@@ -34,6 +34,23 @@ async function stubNotificationStream(page: Page) {
   );
 }
 
+/**
+ * Vercel Web Analytics / Speed Insights betikleri (`/_vercel/insights|speed-insights/script.js`)
+ * yalnız Vercel kenarında sunulur; yerel `next start`ta 404 + "MIME text/plain" konsol hatası
+ * üretir (ölçülen: 99 rotanın hepsinde 4 hata). Uygulamanın değil barındırmanın varlığı → boş betik.
+ */
+async function stubVercelInsights(page: Page) {
+  await page.route('**/_vercel/**', (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: '' }));
+}
+
+/**
+ * Emekli rota koçanları (ör. /dealer/innovation → /dealer/offers, /customer/wallet → /card) sunucu
+ * redirect()'iyle yönlenir; akış kabuğu (layout) önce istemcide başlayıp oturum/tema isteği atar,
+ * yönlendirme bunları keser ve tarayıcı "Failed to fetch" yazar. Yalnız rota GERÇEKTEN başka yere
+ * düştüyse ve hata kesilmiş fetch ise elenir — hedef sayfanın kendi hataları sayılmaya devam eder.
+ */
+const ABORTED_BY_REDIRECT = /Failed to fetch/;
+
 async function visit(page: Page, route: string): Promise<Visit> {
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
@@ -41,6 +58,7 @@ async function visit(page: Page, route: string): Promise<Visit> {
   const origin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3000').origin;
   const isExternalImage = (r: import('@playwright/test').Request) => r.resourceType() === 'image' && new URL(r.url()).origin !== origin;
   await stubNotificationStream(page);
+  await stubVercelInsights(page);
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 300));
   });
@@ -63,7 +81,15 @@ async function visit(page: Page, route: string): Promise<Visit> {
   }
   await page.keyboard.press('Escape').catch(() => {});
   await page.waitForTimeout(500);
-  return { status: res?.status() ?? null, finalPath: new URL(page.url()).pathname, consoleErrors, failedRequests, externalImageFailures };
+  const finalPath = new URL(page.url()).pathname;
+  const redirected = finalPath !== new URL(route, 'http://x').pathname;
+  return {
+    status: res?.status() ?? null,
+    finalPath,
+    consoleErrors: redirected ? consoleErrors.filter((e) => !ABORTED_BY_REDIRECT.test(e)) : consoleErrors,
+    failedRequests,
+    externalImageFailures,
+  };
 }
 
 function routeSuite(role: Role | null, routes: string[]) {
