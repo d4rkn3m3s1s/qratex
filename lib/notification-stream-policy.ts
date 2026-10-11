@@ -9,7 +9,10 @@
  * sekme başına dakikada ~1 açılış.
  */
 
-export const STREAM_OPENS_PER_MINUTE = 6;
+// 6 → 20 (kalite kapısı rate-limit-429): sayaç AÇILIŞ sayar; tam sayfa yüklemeyle gezinen bayi
+// (yeni sekme, yenileme, panel dışından dönüş) her yüklemede yeni akış açar ve dakikada 6'yı
+// meşru kullanımda aşıp 429 alıyordu. Akış 55 sn yaşadığından eşzamanlı açık akış yine ≤ 20.
+export const STREAM_OPENS_PER_MINUTE = 20;
 /** Sunucu akışı bu süre sonunda kendisi kapatır (maxDuration'dan önce, düzenli yeniden bağlanma). */
 export const STREAM_LIFETIME_MS = 55_000;
 /** `since` imleci en fazla bu kadar geriye gidebilir (eski imleçle geniş tarama olmasın). */

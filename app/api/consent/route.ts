@@ -51,11 +51,37 @@ function ipFingerprint(ip: string | null, secret = process.env.NEXTAUTH_SECRET |
 }
 
 export const POST = defineRoute(
-  { name: 'consent.record', roles: 'public', schema: Body, rateLimit: 'public-write' },
+  {
+    name: 'consent.record',
+    roles: 'public',
+    schema: Body,
+    // Rıza kaydı ucuz, yalnız-ekleme ve gövde şemayla sınırlı; genel 'public-write' (10/dk/IP) ortak
+    // NAT arkasındaki ofis/okul ziyaretçilerini (ve her yeni tarayıcı bağlamında karar veren testleri)
+    // 429'a düşürüyordu. Tekrarlar aşağıda özne bazında tekilleştirilir; tavan kötüye kullanım içindir.
+    rateLimit: { max: 30, windowMs: 60_000, by: 'ip' },
+  },
   async ({ body, request, ip }) => {
     const userId = await optionalUserId();
     if (!userId && !body.anonId) {
       return ok({ recorded: false });
+    }
+    // Aynı öznenin aynı sürümdeki AYNI kararı son 10 dk içinde zaten kayıtlıysa yeni satır yazma
+    // (çift tıklama, sekmeler arası tekrar): kanıt değişmez, tablo şişmez.
+    const replay = body.analytics && body.replay;
+    const recent = await prisma.consentRecord.findFirst({
+      where: userId ? { userId } : { anonId: body.anonId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, version: true, analytics: true, replay: true, marketing: true, createdAt: true },
+    });
+    if (
+      recent &&
+      recent.version === String(body.version) &&
+      recent.analytics === body.analytics &&
+      recent.replay === replay &&
+      recent.marketing === body.marketing &&
+      Date.now() - recent.createdAt.getTime() < 10 * 60_000
+    ) {
+      return ok({ recorded: false, duplicate: true, id: recent.id, createdAt: recent.createdAt });
     }
     const ua = getUserAgent(request);
     const row = await prisma.consentRecord.create({
@@ -65,7 +91,7 @@ export const POST = defineRoute(
         version: String(body.version),
         analytics: body.analytics,
         // Oturum kaydı analitik olmadan verilemez (bağımlı kategori).
-        replay: body.analytics && body.replay,
+        replay,
         marketing: body.marketing,
         source: body.surface,
         ipHash: ipFingerprint(ip),

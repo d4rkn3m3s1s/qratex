@@ -12,7 +12,7 @@ import {
   type ConsentSource,
   type ConsentState,
 } from '@/lib/consent';
-import { writeConsent } from '@/lib/consent/client';
+import { getConsentSnapshot, writeConsent } from '@/lib/consent/client';
 
 export type ConsentSurface = 'banner' | 'settings' | 'footer' | 'policy' | 'other';
 
@@ -71,9 +71,17 @@ export function applyConsentDecision(
   surface: ConsentSurface
 ): ConsentState {
   const source: ConsentSource = surface === 'banner' ? 'banner' : 'preferences';
+  // Yalnız karar DEĞİŞİNCE kanıt yaz (kalite kapısı rate-limit-429): güncel sürümde aynı seçim
+  // zaten kayıtlıysa tercih merkezini "kaydet"le kapatmak yeni satır/istek üretmez.
+  const prior = getConsentSnapshot();
+  const unchanged =
+    prior.decided &&
+    prior.state?.version === CONSENT_VERSION &&
+    prior.categories.analytics === (choices.analytics === true) &&
+    prior.categories.replay === (choices.analytics === true && choices.replay === true);
   const state = createConsent({ analytics: choices.analytics === true, replay: choices.replay === true, marketing: false }, { source });
   writeConsent(state);
-  recordConsentDecision(state, surface);
+  if (!unchanged) recordConsentDecision(state, surface);
   return state;
 }
 

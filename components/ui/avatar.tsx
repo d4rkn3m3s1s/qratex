@@ -36,6 +36,10 @@ const AvatarImage = React.forwardRef<
       className={cn('aspect-square h-full w-full object-cover transition-opacity duration-200', className)}
       src={resolved}
       decoding="async"
+      // Harici avatarlar (Google lh3 vb.) yabancı Referer ile 429 + HTML döndürüyor → tarayıcı
+      // ERR_BLOCKED_BY_ORB ile kesiyordu (ölçüldü: Referer'lı 429 text/html, Referer'sız 200 image/png).
+      // Radix ön-yükleyicisi de bu değeri kullanır.
+      referrerPolicy={typeof resolved === 'string' && /^https?:\/\//i.test(resolved) ? 'no-referrer' : undefined}
       {...props}
     />
   );
