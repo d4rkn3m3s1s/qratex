@@ -56,6 +56,7 @@ import { SavedViews, VIEW_KEYS } from './saved-views';
 import { TaskDetail, TaskDetailTitle } from './task-detail/task-detail';
 import { displayName } from './shared';
 import type { ClientViewer, TeamMeta } from './lib/types';
+import { useTeamCopy } from './copy';
 
 const NewTaskDialog = dynamic(() => import('./new-task-dialog'), { ssr: false });
 const TemplatesDialog = dynamic(() => import('./dialogs/templates-dialog'), { ssr: false });
@@ -95,6 +96,7 @@ export function TeamWorkspace(props: TeamWorkspaceProps) {
 }
 
 function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamWorkspaceProps) {
+  const tx = useTeamCopy();
   const url = useUrlState();
   const qc = useQueryClient();
   const meta = useTeamMeta(initialMeta);
@@ -232,13 +234,13 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="default">Sıra: durum ve öncelik</SelectItem>
-            <SelectItem value="priority">Önceliğe göre</SelectItem>
-            <SelectItem value="due">Bitiş gününe göre</SelectItem>
-            <SelectItem value="updated">Son güncellenen</SelectItem>
+            <SelectItem value="default">{tx.sortDefault}</SelectItem>
+            <SelectItem value="priority">{tx.byPriority}</SelectItem>
+            <SelectItem value="due">{tx.byDue}</SelectItem>
+            <SelectItem value="updated">{tx.byUpdated}</SelectItem>
             <SelectItem value="created">En yeni</SelectItem>
-            <SelectItem value="title">Başlığa göre</SelectItem>
-            <SelectItem value="spent">Harcanan süreye göre</SelectItem>
+            <SelectItem value="title">{tx.byTitle}</SelectItem>
+            <SelectItem value="spent">{tx.bySpent}</SelectItem>
           </SelectContent>
         </Select>
       )}
@@ -249,10 +251,10 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Gruplama yok</SelectItem>
-            <SelectItem value="status">Duruma göre</SelectItem>
-            <SelectItem value="assignee">Kişiye göre</SelectItem>
-            <SelectItem value="priority">Önceliğe göre</SelectItem>
-            <SelectItem value="department">Departmana göre</SelectItem>
+            <SelectItem value="status">{tx.byStatus}</SelectItem>
+            <SelectItem value="assignee">{tx.byAssignee}</SelectItem>
+            <SelectItem value="priority">{tx.byPriority}</SelectItem>
+            <SelectItem value="department">{tx.byDepartment}</SelectItem>
           </SelectContent>
         </Select>
       )}
@@ -269,7 +271,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="h-11 gap-1.5 sm:h-10" aria-label="Diğer araçlar">
-          <MoreHorizontal className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Araçlar</span>
+          <MoreHorizontal className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">{tx.tools}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -285,7 +287,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         {(can.templates || can.automations || can.tags || can.autotask) && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Yönetim</DropdownMenuLabel>
+            <DropdownMenuLabel>{tx.management}</DropdownMenuLabel>
             {can.templates && (
               <DropdownMenuItem onSelect={() => setDialog('templates')}>
                 <FileStack className="mr-2 h-4 w-4" aria-hidden /> Şablonlar
@@ -408,14 +410,14 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
                           Filtreleri temizle
                         </Button>
                       ) : can.createTask && tab !== 'archive' ? (
-                        <Button onClick={() => setDialog('new')}>Yeni görev</Button>
+                        <Button onClick={() => setDialog('new')}>{tx.newTask}</Button>
                       ) : undefined,
                   }}
                 >
                   {() => (
                     <div className="space-y-3">
                       {tasks.data?.truncated && (
-                        <p className="qx-caption text-warning">İlk 500 görev gösteriliyor; daraltmak için filtre kullan.</p>
+                        <p className="qx-caption text-warning">{tx.first500Tasks}</p>
                       )}
                       {tab !== 'archive' && (tasks.data?.carriedCount ?? 0) > 0 && (
                         <p className="qx-caption text-fg-muted">

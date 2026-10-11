@@ -21,6 +21,7 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { PriorityBadge, displayName } from '../shared';
+import { useTeamCopy } from '../copy';
 
 type Template = {
   id: string;
@@ -41,6 +42,7 @@ type Template = {
  * denetim kaydı ve atama bildirimi alır.
  */
 export default function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const { weekKey, members, departments } = useWorkspace();
   const qc = useQueryClient();
   const [tab, setTab] = useState('gallery');
@@ -99,7 +101,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__none">Atanmamış</SelectItem>
+          <SelectItem value="__none">{tx.unassigned}</SelectItem>
           {members
             .filter((m) => m.inTeam || m.isAdmin)
             .map((m) => (
@@ -117,7 +119,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Şablonlar</DialogTitle>
+          <DialogTitle>{tx.templates}</DialogTitle>
           <DialogDescription>Görev {weekKeyLabel(weekKey)} haftasına eklenir.</DialogDescription>
         </DialogHeader>
         <SectionTabs
@@ -219,7 +221,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none">Departmansız</SelectItem>
+                      <SelectItem value="__none">{tx.noDepartment}</SelectItem>
                       {departments
                         .filter((d) => d.isActive)
                         .map((d) => (

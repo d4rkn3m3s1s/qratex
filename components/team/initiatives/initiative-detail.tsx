@@ -21,6 +21,7 @@ import { API, teamKeys } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { MemberAvatar, PhaseBadge, displayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 type Detail = {
   item: InitiativeDto;
@@ -57,6 +58,7 @@ export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => v
 }
 
 function Body({ d }: { d: Detail }) {
+  const tx = useTeamCopy();
   const { can, members, departments } = useWorkspace();
   const qc = useQueryClient();
   const item = d.item;
@@ -112,7 +114,7 @@ function Body({ d }: { d: Detail }) {
 
       <section className="grid gap-3 rounded-card border border-subtle p-3 sm:grid-cols-2" aria-label="Girişim özellikleri">
         <div className="space-y-1">
-          <span className="qx-caption text-fg-muted">Aşama</span>
+          <span className="qx-caption text-fg-muted">{tx.stage}</span>
           {edit ? (
             <Select value={item.phase} onValueChange={(v) => void patch({ phase: v })}>
               <SelectTrigger className="h-9" aria-label="Aşama">

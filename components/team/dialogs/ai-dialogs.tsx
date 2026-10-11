@@ -11,6 +11,7 @@ import { weekKeyLabel } from '@/lib/team-week';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
+import { useTeamCopy } from '../copy';
 
 type Turn = { q: string; a: string };
 
@@ -20,6 +21,7 @@ type Turn = { q: string; a: string };
  * gider (takip soruları çalışır).
  */
 export function AiAskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -48,7 +50,7 @@ export function AiAskDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-brand" aria-hidden /> AI'ya sor
           </DialogTitle>
-          <DialogDescription>Yalnız görebildiğin görevlere dayanarak cevap verir; veride olmayanı uydurmaz.</DialogDescription>
+          <DialogDescription>{tx.aiAskDesc}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3" aria-live="polite">
           {turns.length === 0 && (
@@ -103,6 +105,7 @@ type Summary = { summary: string | null; stats: { total: number; done: number; r
 
 /** AI haftalık özet (yönetici) — sayılar koddan, anlatım LLM'den; arşiv hariç. */
 export function AiSummaryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const { weekKey } = useWorkspace();
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -148,7 +151,7 @@ export function AiSummaryDialog({ open, onOpenChange }: { open: boolean; onOpenC
             {data.summary ? (
               <p className="qx-body whitespace-pre-wrap text-fg">{data.summary}</p>
             ) : (
-              <p className="qx-small text-fg-muted">Bu hafta görev yok; özetlenecek bir şey bulunmuyor.</p>
+              <p className="qx-small text-fg-muted">{tx.aiNoTasks}</p>
             )}
             <Button variant="outline" size="sm" className="h-9" disabled={busy} onClick={run}>
               {busy ? 'Yenileniyor…' : 'Yeniden üret'}

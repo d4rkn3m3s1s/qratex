@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useTeamCopy } from './copy';
 
 /**
  * Not isteyen kararlar için satır içi diyalog (revizyon iste, yeniden aç, görünüm adı).
@@ -30,6 +31,7 @@ export function NoteDialog({
   confirmLabel: string;
   onConfirm: (note: string) => Promise<unknown> | unknown;
 }) {
+  const tx = useTeamCopy();
   const id = useId();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,7 +79,7 @@ export function NoteDialog({
           )}
           <label htmlFor={id} className="qx-small block font-medium text-fg">
             {label}
-            {required ? <span className="text-danger"> *</span> : <span className="text-fg-muted"> (isteğe bağlı)</span>}
+            {required ? <span className="text-danger"> *</span> : <span className="text-fg-muted">{tx.optional}</span>}
           </label>
           <Textarea id={id} value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000} autoFocus />
           <DialogFooter className="gap-2 sm:gap-0">

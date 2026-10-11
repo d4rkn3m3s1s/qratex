@@ -13,12 +13,14 @@ import { cn } from '@/lib/utils';
 import { DEPARTMENT_COLORS } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys, useTags } from '../lib/queries';
+import { useTeamCopy } from '../copy';
 
 /**
  * Etiket havuzu (yönetici). Artık gerçekten kullanılır: görev formunda öneri, kartta renk
  * (denetim SAHTE #16). Silme hatası görünür.
  */
 export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const qc = useQueryClient();
   const list = useTags();
   const [label, setLabel] = useState('');
@@ -32,7 +34,7 @@ export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOp
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Etiket havuzu</DialogTitle>
-          <DialogDescription>Görev formunda öneri olarak çıkar, kartlarda bu renkle gösterilir.</DialogDescription>
+          <DialogDescription>{tx.tagsDesc}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-2"

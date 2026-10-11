@@ -15,6 +15,7 @@ import { NoteDialog } from '../note-dialog';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, displayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 type Props = {
   task: TaskDto;
@@ -33,6 +34,7 @@ type Props = {
  * Onaya gönder, yönetici için Onayla / Revizyon iste.
  */
 export const TaskCard = memo(function TaskCard({ task, selectable, selected, onToggleSelect, draggable, onDragStart, onPickTag, compact }: Props) {
+  const tx = useTeamCopy();
   const { teamViewer, can, departments, tags, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -66,7 +68,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
         </Button>
       );
     } else if (task.status === 'review') {
-      primary = <span className="qx-caption text-info">Yönetici onayı bekleniyor</span>;
+      primary = <span className="qx-caption text-info">{tx.awaitingApproval}</span>;
     }
   } else if (can.approve && task.status === 'review' && !task.archivedAt) {
     primary = (
@@ -132,7 +134,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
 
       {blocked && (
         <p className="qx-caption flex items-center gap-1 text-warning">
-          <Link2 className="h-3 w-3" aria-hidden /> Bağlı: <span className="truncate">{task.blockedBy!.title}</span>
+          <Link2 className="h-3 w-3" aria-hidden /> {tx.blockedBy} <span className="truncate">{task.blockedBy!.title}</span>
         </p>
       )}
 
@@ -153,7 +155,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
             <span className="inline-flex items-center gap-0.5" title="Alt görev">
               <ListChecks className="h-3 w-3" aria-hidden />
               <span className="qx-num">{task._count.checklist}</span>
-              <span className="sr-only"> alt görev</span>
+              <span className="sr-only">{tx.subtaskSr}</span>
             </span>
           )}
           {task._count.comments > 0 && (

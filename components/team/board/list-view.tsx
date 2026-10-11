@@ -9,6 +9,7 @@ import { useWorkspace } from '../workspace-context';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 export type GroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'department';
 
@@ -36,6 +37,7 @@ export function ListView({
   onToggleAll: (ids: string[], on: boolean) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tx = useTeamCopy();
   const { departments, tags, openTask } = useWorkspace();
 
   const groups = useMemo<Group[]>(() => {
@@ -85,12 +87,12 @@ export function ListView({
             />
           )}
         </span>
-        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Görev</span>
+        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colTask}</span>
         <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Durum</span>
-        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Öncelik</span>
+        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colPriority}</span>
         <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Atanan</span>
-        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Bitiş</span>
-        <span className="sr-only">İşlemler</span>
+        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colDue}</span>
+        <span className="sr-only">{tx.colActions}</span>
       </div>
       {groups.map((g) => (
         <section key={g.key} aria-label={g.label || 'Görevler'}>

@@ -16,6 +16,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
 import type { TaskDetailPayload } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 /**
  * Alt görevler. Her işlem sunucu yanıtıyla doğrulanır (denetim #64: 403 sessizce yutuluyordu);
@@ -23,6 +24,7 @@ import type { TaskDetailPayload } from '../lib/types';
  * (denetim #66: N paralel istek aynı sıra numarasını üretiyordu).
  */
 export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
+  const tx = useTeamCopy();
   const { task, can } = data;
   const { members, can: caps, weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -106,7 +108,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Atanmamış</SelectItem>
+                  <SelectItem value="__none">{tx.unassigned}</SelectItem>
                   {members
                     .filter((m) => m.inTeam || m.isAdmin)
                     .map((m) => (

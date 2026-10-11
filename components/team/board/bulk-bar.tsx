@@ -14,6 +14,7 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
+import { useTeamCopy } from '../copy';
 
 type Result = { affected: number; skipped: Array<{ id: string; title: string; reason: string }> };
 
@@ -23,6 +24,7 @@ type Result = { affected: number; skipped: Array<{ id: string; title: string; re
  * arşiv görünümünde ve tipli onayla (denetim Bulgu 41: onaysız 200 göreve kadar siliyordu).
  */
 export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveView: boolean; onDone: () => void }) {
+  const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -96,7 +98,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
               <SelectValue placeholder="Ata" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Atamayı kaldır</SelectItem>
+              <SelectItem value="__none">{tx.removeAssignee}</SelectItem>
               {assignable.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {displayName(m)}
@@ -109,7 +111,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
               <SelectValue placeholder="Departman" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Departmansız</SelectItem>
+              <SelectItem value="__none">{tx.noDepartment}</SelectItem>
               {departments
                 .filter((d) => d.isActive)
                 .map((d) => (

@@ -27,6 +27,7 @@ import { useWorkspace } from '../workspace-context';
 import { DeptChip, MemberAvatar, displayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
 import { InitiativeDetail, InitiativeTitle } from './initiative-detail';
+import { useTeamCopy } from '../copy';
 
 const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: false });
 
@@ -37,6 +38,7 @@ const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: fal
  * yönetici düzenler. Aşama değişikliği menüden (klavye) ya da masaüstünde sürükleyerek.
  */
 export function InitiativesView() {
+  const tx = useTeamCopy();
   const { can, departments } = useWorkspace();
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
@@ -88,7 +90,7 @@ export function InitiativesView() {
                 <IconButton aria-label={`${i.title} için işlemler`} icon={<MoreHorizontal />} size="sm" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel>Aşamaya taşı</DropdownMenuLabel>
+                <DropdownMenuLabel>{tx.moveToStage}</DropdownMenuLabel>
                 {INITIATIVE_PHASES.filter((p) => p !== i.phase).map((p) => (
                   <DropdownMenuItem key={p} onSelect={() => void patch(i, { phase: p }, `Aşama: ${PHASE_META[p].label}`)}>
                     {PHASE_META[p].label}
@@ -106,7 +108,7 @@ export function InitiativesView() {
         {i.milestones.total > 0 ? (
           <div className="space-y-1">
             <div className="qx-caption flex justify-between text-fg-muted">
-              <span>Kilometre taşları</span>
+              <span>{tx.milestones}</span>
               <span className="qx-num">
                 {i.milestones.done}/{i.milestones.total}
               </span>
@@ -114,7 +116,7 @@ export function InitiativesView() {
             <Progress value={i.milestones.pct ?? 0} className="h-1.5" aria-label={`İlerleme %${i.milestones.pct ?? 0}`} />
           </div>
         ) : (
-          <p className="qx-caption text-fg-subtle">Kilometre taşı yok — ilerleme ölçülmüyor</p>
+          <p className="qx-caption text-fg-subtle">{tx.noMilestones}</p>
         )}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {i.targetDay && (
@@ -136,7 +138,7 @@ export function InitiativesView() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="qx-small text-fg-muted">Ürünün yönü: şu an ne yapılıyor, sırada ne var, ne yayına çıktı.</p>
+        <p className="qx-small text-fg-muted">{tx.initiativesIntro}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant={showArchived ? 'secondary' : 'outline'} size="sm" className="h-9 gap-1.5" aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
             <Archive className="h-3.5 w-3.5" aria-hidden /> Arşiv
@@ -156,7 +158,7 @@ export function InitiativesView() {
           variant: 'first-use',
           title: showArchived ? 'Arşivde girişim yok' : 'Henüz girişim yok',
           description: showArchived ? undefined : can.manageInitiatives ? 'İlk girişimi ekle: başlık, aşama, sorumlu ve kilometre taşları.' : 'Yöneticiler girişim eklediğinde burada görünür.',
-          action: can.manageInitiatives && !showArchived ? <Button onClick={() => setCreateOpen(true)}>Girişim ekle</Button> : undefined,
+          action: can.manageInitiatives && !showArchived ? <Button onClick={() => setCreateOpen(true)}>{tx.addInitiative}</Button> : undefined,
         }}
       >
         {() => (
@@ -195,7 +197,7 @@ export function InitiativesView() {
                     </header>
                     <ul className="flex min-h-[5rem] flex-col gap-2">
                       {list.map(card)}
-                      {list.length === 0 && <li className="qx-caption rounded-control border border-dashed border-subtle px-3 py-5 text-center text-fg-subtle">Boş</li>}
+                      {list.length === 0 && <li className="qx-caption rounded-control border border-dashed border-subtle px-3 py-5 text-center text-fg-subtle">{tx.empty}</li>}
                     </ul>
                   </section>
                 );

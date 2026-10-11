@@ -16,6 +16,7 @@ import { errorMessage, qs, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
 import { MemberAvatar, displayName } from '../shared';
 import type { ClientViewer, TeamMemberRow, TeamMeta } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 type Candidate = { id: string; name: string | null; email: string; image: string | null };
 
@@ -36,6 +37,7 @@ export function MembersPanel({
   deptFilter: string;
   onDeptFilter: (v: string) => void;
 }) {
+  const tx = useTeamCopy();
   const qc = useQueryClient();
   const manage = viewer.isManager;
   const [q, setQ] = useState('');
@@ -76,8 +78,8 @@ export function MembersPanel({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tüm departmanlar</SelectItem>
-            <SelectItem value="none">Departmansız</SelectItem>
+            <SelectItem value="all">{tx.allDepartments}</SelectItem>
+            <SelectItem value="none">{tx.noDepartment}</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d.slug} value={d.slug}>
                 {d.name}
@@ -90,9 +92,9 @@ export function MembersPanel({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tüm roller</SelectItem>
-            <SelectItem value="yonetici">Yönetici</SelectItem>
-            <SelectItem value="uye">Üye</SelectItem>
+            <SelectItem value="all">{tx.allRoles}</SelectItem>
+            <SelectItem value="yonetici">{tx.roleManager}</SelectItem>
+            <SelectItem value="uye">{tx.roleMember}</SelectItem>
           </SelectContent>
         </Select>
         {manage && <AddMember viewer={viewer} meta={meta} onAdded={() => void refresh()} />}
@@ -120,7 +122,7 @@ export function MembersPanel({
                   </div>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:max-w-[50%]">
-                  {m.departmentSlugs.length === 0 && <span className="qx-caption text-warning">Departmansız</span>}
+                  {m.departmentSlugs.length === 0 && <span className="qx-caption text-warning">{tx.noDepartment}</span>}
                   {m.departmentSlugs.map((s, i) => (
                     <span key={s} className="qx-caption inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-0.5 pl-1.5 pr-0.5 text-fg">
                       <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: departments.find((d) => d.slug === s)?.color ?? '#6b7280' }} />
@@ -170,8 +172,8 @@ export function MembersPanel({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="yonetici">Yönetici</SelectItem>
-                        <SelectItem value="uye">Üye</SelectItem>
+                        <SelectItem value="yonetici">{tx.roleManager}</SelectItem>
+                        <SelectItem value="uye">{tx.roleMember}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -210,6 +212,7 @@ export function MembersPanel({
  * eklerken seçilir (denetim #25: departman parametresi hiç verilmiyordu).
  */
 function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: TeamMeta; onAdded: () => void }) {
+  const tx = useTeamCopy();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -290,10 +293,10 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
             </label>
             <Input id="add-member-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={viewer.isAdmin ? 'en az 3 karakter' : 'ornek@alan.com'} autoFocus />
             <div aria-live="polite" className="space-y-1">
-              {searching && <p className="qx-caption text-fg-muted">Aranıyor…</p>}
+              {searching && <p className="qx-caption text-fg-muted">{tx.searching}</p>}
               {hint && <p className="qx-caption text-fg-muted">{hint}</p>}
               {!searching && debounced.length >= (viewer.isAdmin ? 3 : 5) && results.length === 0 && !error && (
-                <p className="qx-caption text-fg-muted">Eklenebilir kişi bulunamadı (zaten ekipte ya da hesabı yok).</p>
+                <p className="qx-caption text-fg-muted">{tx.noAddable}</p>
               )}
               <ul className="max-h-56 overflow-y-auto">
                 {results.map((u) => (
@@ -323,13 +326,13 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="uye">Üye</SelectItem>
-                  <SelectItem value="yonetici">Yönetici</SelectItem>
+                  <SelectItem value="uye">{tx.roleMember}</SelectItem>
+                  <SelectItem value="yonetici">{tx.roleManager}</SelectItem>
                 </SelectContent>
               </Select>
             )}
             <fieldset className="space-y-1">
-              <legend className="qx-caption font-semibold text-fg-muted">Departmanlar (ilk seçilen birincil)</legend>
+              <legend className="qx-caption font-semibold text-fg-muted">{tx.deptsLegend}</legend>
               <ul className="max-h-48 space-y-0.5 overflow-y-auto">
                 {meta.departments
                   .filter((d) => d.isActive)

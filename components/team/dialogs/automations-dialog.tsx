@@ -18,6 +18,7 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
+import { useTeamCopy } from '../copy';
 
 type Rule = {
   id: string;
@@ -58,6 +59,7 @@ const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '
  * görevi "Bitti"ye geçiremez — onay yöneticidedir. Son 30 günün çalışma/hata sayısı görünür.
  */
 export default function AutomationsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -196,8 +198,8 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Otomasyon kuralları</DialogTitle>
-          <DialogDescription>Kurallar değişiklik anında, "Bitiş günü geçince" ise günlük bakımda görev başına bir kez çalışır.</DialogDescription>
+          <DialogTitle>{tx.automations}</DialogTitle>
+          <DialogDescription>{tx.automationsDesc}</DialogDescription>
         </DialogHeader>
 
         <QueryState
@@ -272,7 +274,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
                 ))}
               </SelectContent>
             </Select>
-            {triggerValueControl ?? <span className="qx-caption self-center text-fg-muted">Bu tetik ek değer almaz.</span>}
+            {triggerValueControl ?? <span className="qx-caption self-center text-fg-muted">{tx.triggerNoValue}</span>}
             <Select value={form.actionType} disabled={editing} onValueChange={(v) => setForm({ ...form, actionType: v, actionValue: '' })}>
               <SelectTrigger className="h-10" aria-label="Aksiyon">
                 <SelectValue />
@@ -285,13 +287,13 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
                 ))}
               </SelectContent>
             </Select>
-            {actionValueControl ?? <span className="qx-caption self-center text-fg-muted">Tüm ekip yöneticilerine bildirim gider.</span>}
+            {actionValueControl ?? <span className="qx-caption self-center text-fg-muted">{tx.notifyAllManagers}</span>}
             <Select value={form.department || '__all'} onValueChange={(v) => setForm({ ...form, department: v === '__all' ? '' : v })}>
               <SelectTrigger className="h-10" aria-label="Departman kapsamı">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all">Tüm departmanlar</SelectItem>
+                <SelectItem value="__all">{tx.allDepartments}</SelectItem>
                 {departments
                   .filter((d) => d.isActive)
                   .map((d) => (

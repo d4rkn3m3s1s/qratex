@@ -25,6 +25,7 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
 import { MemberAvatar, displayName } from '../shared';
 import type { TeamDepartment, TeamMemberRow } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 type Impact = { members: number; openTasks: number; allTasks: number; templates: number; automations: number; referenced: boolean };
 
@@ -50,6 +51,7 @@ export function DepartmentCard({
   manage: boolean;
   onShowMembers: () => void;
 }) {
+  const tx = useTeamCopy();
   const qc = useQueryClient();
   const inDept = members.filter((m) => m.departmentSlugs.includes(dept.slug));
   const leads = inDept.filter((m) => m.teamRole === 'yonetici');
@@ -115,7 +117,7 @@ export function DepartmentCard({
         {leads.length > 0 ? (
           <span>Yönetici: {leads.map((l) => displayName(l)).join(', ')}</span>
         ) : (
-          dept.isActive && <span className="text-warning">Yöneticisi yok</span>
+          dept.isActive && <span className="text-warning">{tx.noManager}</span>
         )}
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -139,6 +141,7 @@ export function DepartmentCard({
 }
 
 function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose: () => void; onSaved: () => void }) {
+  const tx = useTeamCopy();
   const [name, setName] = useState(dept.name);
   const [desc, setDesc] = useState(dept.description ?? '');
   const [color, setColor] = useState(dept.color);
@@ -149,8 +152,8 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Departmanı düzenle</DialogTitle>
-          <DialogDescription>Bağlantılar (görevler, üyelikler) korunur; kimlik değişmez.</DialogDescription>
+          <DialogTitle>{tx.editDept}</DialogTitle>
+          <DialogDescription>{tx.editDeptDesc}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-3"
@@ -178,7 +181,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
             <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} required />
           </label>
           <label className="qx-small block space-y-1">
-            <span className="font-medium text-fg">Açıklama</span>
+            <span className="font-medium text-fg">{tx.description}</span>
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} maxLength={300} />
           </label>
           <div role="group" aria-label="Renk" className="flex flex-wrap gap-1.5">
@@ -210,6 +213,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
 }
 
 function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepartment; departments: TeamDepartment[]; onClose: () => void; onDone: () => void }) {
+  const tx = useTeamCopy();
   const [impact, setImpact] = useState<Impact | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [target, setTarget] = useState('');
@@ -226,9 +230,9 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>"{dept.name}" silinsin mi?</DialogTitle>
-          <DialogDescription>Kullanımdaki departman doğrudan silinmez: arşivleyin ya da başka bir departmanla birleştirin.</DialogDescription>
+          <DialogDescription>{tx.deleteDeptDesc}</DialogDescription>
         </DialogHeader>
-        {!impact && !error && <p className="qx-small text-fg-muted">Etki hesaplanıyor…</p>}
+        {!impact && !error && <p className="qx-small text-fg-muted">{tx.computingImpact}</p>}
         {impact && (
           <dl className="grid grid-cols-2 gap-2 rounded-card border border-subtle p-3">
             {[
@@ -247,7 +251,7 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
         )}
         {impact?.referenced && (
           <div className="space-y-1">
-            <span className="qx-small font-medium text-fg">Her şeyi şu departmana taşı</span>
+            <span className="qx-small font-medium text-fg">{tx.moveAllTo}</span>
             <Select value={target || undefined} onValueChange={setTarget}>
               <SelectTrigger aria-label="Birleştirilecek departman">
                 <SelectValue placeholder="Departman seç" />

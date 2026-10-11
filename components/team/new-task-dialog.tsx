@@ -18,6 +18,7 @@ import { API, invalidateTasks } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { displayName } from './shared';
 import type { TaskList } from './lib/types';
+import { useTeamCopy } from './copy';
 
 const EMPTY = {
   title: '',
@@ -39,6 +40,7 @@ const EMPTY = {
  * (denetim #83). "Bana ata" ADMIN'in ekip rolü olmasa da çalışır (denetim #76).
  */
 export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const { departments, members, tags, viewer, weekKey, currentWeekKey, can } = useWorkspace();
   const qc = useQueryClient();
   const ids = { title: useId(), desc: useId(), tags: useId(), due: useId(), est: useId() };
@@ -138,7 +140,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Yeni görev</DialogTitle>
+          <DialogTitle>{tx.newTask}</DialogTitle>
           <DialogDescription>{weekKeyLabel(week)} haftasına eklenir. Atanan kişiye e-posta ve bildirim gider.</DialogDescription>
         </DialogHeader>
         <form
@@ -181,7 +183,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none">Atanmamış</SelectItem>
+                    <SelectItem value="__none">{tx.unassigned}</SelectItem>
                     {assignable.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {displayName(m)}
@@ -202,7 +204,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Departmansız (genel)</SelectItem>
+                  <SelectItem value="__none">{tx.noDepartmentGeneral}</SelectItem>
                   {departments
                     .filter((d) => d.isActive)
                     .map((d) => (
@@ -255,8 +257,8 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">Tekrarlanmaz</SelectItem>
-                  <SelectItem value="weekly">Her hafta (onaylanınca sonraki haftaya)</SelectItem>
-                  <SelectItem value="monthly">Her ay (onaylanınca sonraki aya)</SelectItem>
+                  <SelectItem value="weekly">{tx.weekly}</SelectItem>
+                  <SelectItem value="monthly">{tx.monthly}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -273,7 +275,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             </datalist>
           </div>
           <div className="space-y-1.5">
-            <span className="qx-small font-medium text-fg">Bağlı olduğu görev</span>
+            <span className="qx-small font-medium text-fg">{tx.dependsOn}</span>
             {form.blockedById ? (
               <div className="qx-small flex items-center gap-2 rounded-control border border-subtle px-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate">{form.blockedTitle}</span>
@@ -295,7 +297,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                         </button>
                       </li>
                     ))}
-                    {depSearch.isFetched && (depSearch.data?.items.length ?? 0) === 0 && <li className="qx-caption px-2 py-2 text-fg-muted">Sonuç yok.</li>}
+                    {depSearch.isFetched && (depSearch.data?.items.length ?? 0) === 0 && <li className="qx-caption px-2 py-2 text-fg-muted">{tx.noResults}</li>}
                   </ul>
                 )}
               </div>

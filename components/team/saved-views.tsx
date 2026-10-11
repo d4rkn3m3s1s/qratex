@@ -12,6 +12,7 @@ import { IconButton } from '@/components/ds/a11y';
 import { errorMessage, teamFetch } from './lib/api';
 import { API, teamKeys, useViews } from './lib/queries';
 import { useWorkspace } from './workspace-context';
+import { useTeamCopy } from './copy';
 
 export const VIEW_KEYS = ['tab', 'department', 'status', 'priority', 'assignedTo', 'tag', 'q', 'mine', 'sort', 'group'] as const;
 
@@ -21,6 +22,7 @@ export const VIEW_KEYS = ['tab', 'department', 'status', 'priority', 'assignedTo
  * URL'yi değiştirir → görünüm bağlantıyla paylaşılabilir (#34).
  */
 export function SavedViews({ current, onApply }: { current: Record<string, string>; onApply: (config: Record<string, string>) => void }) {
+  const tx = useTeamCopy();
   const { can } = useWorkspace();
   const qc = useQueryClient();
   const views = useViews();
@@ -66,7 +68,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 space-y-3">
         {views.isError && <p className="qx-caption text-danger">{errorMessage(views.error)}</p>}
-        {items.length === 0 && !views.isLoading && <p className="qx-caption text-fg-muted">Kayıtlı görünüm yok.</p>}
+        {items.length === 0 && !views.isLoading && <p className="qx-caption text-fg-muted">{tx.noSavedViews}</p>}
         {items.length > 0 && (
           <ul className="max-h-60 space-y-1 overflow-y-auto">
             {items.map((v) => (

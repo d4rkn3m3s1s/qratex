@@ -16,6 +16,7 @@ import { useWorkspace } from '../workspace-context';
 import { MemberAvatar, displayName } from '../shared';
 import { uploadTaskFile } from './files';
 import type { TaskDetailPayload } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 const REACTIONS = ['👍', '❤️', '🎉', '🚀', '👀'] as const;
 type Comment = TaskDetailPayload['task']['comments'][number];
@@ -49,6 +50,7 @@ function renderText(text: string, handles: Set<string>) {
  * yalnız bu göreve yüklenmiş ekin kimliğiyle bağlanır (serbest URL enjeksiyonu kapandı).
  */
 export function TaskComments({ data }: { data: TaskDetailPayload }) {
+  const tx = useTeamCopy();
   const { task } = data;
   const { members, viewer, weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -138,7 +140,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
             <time className="qx-caption text-fg-muted" dateTime={c.createdAt} title={formatTeamDateTime(c.createdAt)}>
               {relativeTeamTime(c.createdAt)}
             </time>
-            {c.editedAt && <span className="qx-caption text-fg-subtle">(düzenlendi)</span>}
+            {c.editedAt && <span className="qx-caption text-fg-subtle">{tx.edited}</span>}
           </div>
           {editing?.id === c.id ? (
             <form
@@ -223,7 +225,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
         Notlar ve yorumlar <span className="qx-num font-normal text-fg-muted">{task.comments.length}</span>
       </h3>
       {top.length === 0 ? (
-        <p className="qx-small text-fg-muted">Henüz not yok. Ne yaptığını yazmak, onaya gönderim için kanıt sayılır.</p>
+        <p className="qx-small text-fg-muted">{tx.noNotes}</p>
       ) : (
         <ul className="space-y-4">{top.map((c) => renderComment(c))}</ul>
       )}

@@ -10,6 +10,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { NoteDialog } from '../note-dialog';
 import { useWorkspace } from '../workspace-context';
 import type { TaskDetailPayload } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 /**
  * Onay durumu şeridi + birincil aksiyon (denetim O6/Bulgu 16/#73/#74): red notu ve onay geçmişi
@@ -17,6 +18,7 @@ import type { TaskDetailPayload } from '../lib/types';
  * gösterilir ("1 not · 0 dosya").
  */
 export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
+  const tx = useTeamCopy();
   const { task, proof, can } = data;
   const { weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -119,7 +121,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
           {title && <p className="qx-small font-semibold">{title}</p>}
           {body}
           {!proof.ok && (task.status === 'todo' || task.status === 'in_progress') && can.move && (
-            <p className="qx-caption text-fg-muted">Not yazmak ya da dosya eklemek için aşağıdaki bölümleri kullan.</p>
+            <p className="qx-caption text-fg-muted">{tx.reviewHint}</p>
           )}
         </div>
       </div>

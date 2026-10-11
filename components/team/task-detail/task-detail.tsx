@@ -16,6 +16,7 @@ import { TaskChecklist } from './checklist';
 import { TaskFiles } from './files';
 import { TaskComments } from './comments';
 import type { TaskDetailPayload } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 /** Detay çekmecesi başlığı (önbellekteki veriden; yüklenirken nötr metin). */
 export function TaskDetailTitle({ id }: { id: string }) {
@@ -49,6 +50,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
+  const tx = useTeamCopy();
   const { task, can } = data;
   const { weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -144,7 +146,7 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
             Açıklama ekle
           </Button>
         ) : (
-          <p className="qx-small text-fg-muted">Açıklama yok.</p>
+          <p className="qx-small text-fg-muted">{tx.noDescription}</p>
         )}
       </section>
 

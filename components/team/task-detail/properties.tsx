@@ -18,6 +18,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
 import type { TaskDetailPayload, TaskList } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 function Row({ label, children, htmlFor }: { label: string; children: React.ReactNode; htmlFor?: string }) {
   return (
@@ -40,6 +41,7 @@ function Row({ label, children, htmlFor }: { label: string; children: React.Reac
  * durum ve süre kaydı kendi görevinde açıktır.
  */
 export function TaskProperties({ data }: { data: TaskDetailPayload }) {
+  const tx = useTeamCopy();
   const { task, can } = data;
   const { members, departments, tags, currentWeekKey, weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -114,7 +116,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Atanmamış</SelectItem>
+              <SelectItem value="__none">{tx.unassigned}</SelectItem>
               {assignable.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {displayName(m)}
@@ -137,7 +139,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Departmansız (genel)</SelectItem>
+              <SelectItem value="__none">{tx.noDepartmentGeneral}</SelectItem>
               {departments
                 .filter((d) => d.isActive || d.slug === task.department)
                 .map((d) => (
@@ -296,6 +298,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
 }
 
 function DependencyField({ data, editable }: { data: TaskDetailPayload; editable: boolean }) {
+  const tx = useTeamCopy();
   const { task } = data;
   const { weekKey } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -337,11 +340,11 @@ function DependencyField({ data, editable }: { data: TaskDetailPayload; editable
           <PopoverContent className="w-80 space-y-2" align="start">
             <Input type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Görev ara (en az 2 harf)" aria-label="Bağlanacak görevi ara" />
             <ul className="max-h-64 space-y-1 overflow-y-auto" aria-live="polite">
-              {debounced.length < 2 && <li className="qx-caption px-1 text-fg-muted">Tüm haftalarda arar.</li>}
-              {search.isFetching && <li className="qx-caption px-1 text-fg-muted">Aranıyor…</li>}
+              {debounced.length < 2 && <li className="qx-caption px-1 text-fg-muted">{tx.searchesAllWeeks}</li>}
+              {search.isFetching && <li className="qx-caption px-1 text-fg-muted">{tx.searching}</li>}
               {search.isError && <li className="qx-caption px-1 text-danger">{errorMessage(search.error)}</li>}
               {debounced.length >= 2 && !search.isFetching && candidates.length === 0 && !search.isError && (
-                <li className="qx-caption px-1 text-fg-muted">Sonuç yok.</li>
+                <li className="qx-caption px-1 text-fg-muted">{tx.noResults}</li>
               )}
               {candidates.map((c) => (
                 <li key={c.id}>

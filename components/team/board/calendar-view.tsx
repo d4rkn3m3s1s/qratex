@@ -9,6 +9,7 @@ import { useWorkspace } from '../workspace-context';
 import { useTaskActions } from '../lib/use-task-actions';
 import { STATUS_ICON, PriorityBadge, MemberAvatar } from '../shared';
 import type { TaskDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
@@ -18,6 +19,7 @@ const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
  * panelindeki tarih alanıyla klavyeyle de yapılır.
  */
 export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
+  const tx = useTeamCopy();
   const { weekKey, can, openTask } = useWorkspace();
   const actions = useTaskActions({ weekKey });
   const days = useMemo(() => weekDays(weekKey), [weekKey]);
@@ -106,7 +108,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
                 <span className={cn('qx-small font-semibold', isToday ? 'text-brand' : 'text-fg')}>
                   {DAY_NAMES[i]} <span className="qx-num font-normal text-fg-muted">{shortDayLabel(d)}</span>
                 </span>
-                {isToday && <span className="qx-caption text-brand">Bugün</span>}
+                {isToday && <span className="qx-caption text-brand">{tx.today}</span>}
               </header>
               <ul className="flex flex-col gap-1.5">
                 {items.map(renderItem)}

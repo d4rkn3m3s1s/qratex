@@ -17,6 +17,7 @@ import type { ClientViewer, TeamMeta } from '../lib/types';
 import { DepartmentCard } from './department-card';
 import { MembersPanel } from './members-panel';
 import { AuditPanel } from './audit-panel';
+import { useTeamCopy } from '../copy';
 
 /**
  * Departmanlar ve üyeler (yönetici) / Ekip rehberi (üye). Yetki sunucudan gelir; üye salt
@@ -33,6 +34,7 @@ export function TeamDepartments(props: { basePath: '/admin/ekip' | '/customer/ek
 }
 
 function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: ClientViewer; initialMeta: TeamMeta | undefined }) {
+  const tx = useTeamCopy();
   const meta = useTeamMeta(initialMeta);
   const qc = useQueryClient();
   const manage = viewer.isManager;
@@ -116,7 +118,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                 hint={withoutManager.length ? `${withoutManager.length} departmanın yöneticisi yok` : undefined}
               />
             </MetricGrid>
-            {meta.data?.membersTruncated && <InlineError variant="banner" tone="warning">İlk 500 üye gösteriliyor.</InlineError>}
+            {meta.data?.membersTruncated && <InlineError variant="banner" tone="warning">{tx.first500Members}</InlineError>}
 
             <SectionTabs
               value={tab}
@@ -140,7 +142,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                           void create();
                         }}
                       >
-                        <p className="qx-small font-semibold text-fg">Departman oluştur</p>
+                        <p className="qx-small font-semibold text-fg">{tx.createDept}</p>
                         <div className="flex flex-col gap-2 sm:flex-row">
                           <div className="flex-1 space-y-1">
                             <label htmlFor="dept-name" className="sr-only">
@@ -179,7 +181,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                         variant="first-use"
                         title="Henüz departman yok"
                         description={manage ? 'Kendi departmanını oluştur ya da şirketin 8 varsayılan departmanını yükle.' : 'Yöneticiler departman oluşturduğunda burada görünür.'}
-                        action={manage ? <Button onClick={seed}>Varsayılan departmanları yükle</Button> : undefined}
+                        action={manage ? <Button onClick={seed}>{tx.seedDepts}</Button> : undefined}
                       />
                     ) : (
                       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

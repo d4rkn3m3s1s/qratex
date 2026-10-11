@@ -14,9 +14,11 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
+import { useTeamCopy } from '../copy';
 
 /** Yeni girişim (yönetici). Kilometre taşları satır satır; ilerleme bunlardan hesaplanır. */
 export default function InitiativeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const qc = useQueryClient();
   const [f, setF] = useState({ title: '', description: '', phase: 'next', ownerId: '', targetDate: '', department: '', milestones: '' });
@@ -57,8 +59,8 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Yeni girişim</DialogTitle>
-          <DialogDescription>Ürün yol haritasındaki bir hedef: neden, kim, ne zaman.</DialogDescription>
+          <DialogTitle>{tx.newInitiative}</DialogTitle>
+          <DialogDescription>{tx.newInitiativeDesc}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-3"

@@ -16,6 +16,7 @@ import { API, useCursorList } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { MemberAvatar, displayName } from './shared';
 import type { TaskDto } from './lib/types';
+import { useTeamCopy } from './copy';
 
 /** Rapor (yönetici): Kişiler · Performans · Akış. Grafikler panodan buraya taşındı (denetim vizyonu). */
 export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
@@ -39,6 +40,7 @@ export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
 
 /** Kişi başı iş yükü — panodaki (filtreli) görevlerden; durum dağılımı yalnız renge dayanmaz. */
 function PeopleView({ tasks }: { tasks: TaskDto[] }) {
+  const tx = useTeamCopy();
   const { openTask } = useWorkspace();
   const rows = useMemo(() => {
     const map = new Map<string, { user: TaskDto['assignedTo']; counts: Record<string, number>; overdue: number; estimate: number; spent: number; items: TaskDto[] }>();
@@ -56,7 +58,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
   }, [tasks]);
   const total = tasks.length || 1;
 
-  if (rows.length === 0) return <p className="qx-small text-fg-muted">Bu görünümde görev yok.</p>;
+  if (rows.length === 0) return <p className="qx-small text-fg-muted">{tx.noTasksInView}</p>;
   return (
     <div className="space-y-3">
       <SectionCard title="Durum dağılımı" density="compact">
@@ -138,6 +140,7 @@ type PerfRow = {
 
 /** Performans — seçili haftada biten son N hafta, departman kapsamlı (denetim #73). */
 function PerformanceView() {
+  const tx = useTeamCopy();
   const { weekKey, departments } = useWorkspace();
   const [weeks, setWeeks] = useState('4');
   const [dep, setDep] = useState('all');
@@ -168,7 +171,7 @@ function PerformanceView() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tüm departmanlar</SelectItem>
+            <SelectItem value="all">{tx.allDepartments}</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d.slug} value={d.slug}>
                 {d.name}
@@ -198,15 +201,15 @@ function PerformanceView() {
             </MetricGrid>
             <div className="overflow-x-auto rounded-card border border-subtle">
               <table className="w-full min-w-[44rem] text-left">
-                <caption className="sr-only">Kişi başı performans</caption>
+                <caption className="sr-only">{tx.perfCaption}</caption>
                 <thead className="bg-surface-2">
                   <tr className="qx-caption text-fg-muted">
-                    <th scope="col" className="px-3 py-2 font-semibold">Kişi</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Görev</th>
+                    <th scope="col" className="px-3 py-2 font-semibold">{tx.person}</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.tasks}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">Biten</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Zamanında</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.onTime}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">Geciken</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Ort. süre</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.avgTime}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">Onay bekleme</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">Harcanan / tahmin</th>
                   </tr>
@@ -233,7 +236,7 @@ function PerformanceView() {
                 </tbody>
               </table>
             </div>
-            <p className="qx-caption text-fg-muted">"Zamanında": bitiş günü olan ve onaylanan görevlerde, onayın bitiş günü içinde gelme oranı. Sıralama ada göredir; bu bir yarış tablosu değildir.</p>
+            <p className="qx-caption text-fg-muted">{tx.onTimeNote}</p>
           </div>
         )}
       </QueryState>
