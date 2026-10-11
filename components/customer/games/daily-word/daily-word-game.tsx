@@ -19,6 +19,8 @@ import type { GameProof } from '@/lib/games/registry/types';
 import { useReducedMotionPref } from '@/lib/motion';
 import { getMiniGame } from '@/lib/minigame-config';
 import { sfxClick, sfxHit, sfxReveal, sfxWarn } from '@/lib/game-sounds';
+import { useGamesCopy } from '../copy';
+import { useDailyWordCopy } from './copy';
 import {
   MAX_GUESSES,
   WORD_LENGTH,
@@ -48,7 +50,6 @@ const PALETTE = {
   contrast: { hit: '#c2410c', near: '#1d4ed8', miss: '#334155' },
 };
 
-const MARK_TEXT: Record<Mark, string> = { 2: 'doğru yerde', 1: 'kelimede var, başka yerde', 0: 'kelimede yok' };
 
 interface Row {
   guess: string;
@@ -87,19 +88,26 @@ function writeLs(key: string, v: string | null) {
   }
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; status: number; code?: string; error: string }> {
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  msgs: { server: string; network: string }
+): Promise<{ ok: true; data: T } | { ok: false; status: number; code?: string; error: string }> {
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; data?: T; error?: string; code?: string } | null;
     if (res.ok && json?.ok) return { ok: true, data: json.data as T };
-    return { ok: false, status: res.status, code: json?.code, error: json?.error ?? 'Sunucuya ulaşılamadı.' };
+    return { ok: false, status: res.status, code: json?.code, error: json?.error ?? msgs.server };
   } catch {
-    return { ok: false, status: 0, error: 'Bağlantı hatası. Tekrar dene.' };
+    return { ok: false, status: 0, error: msgs.network };
   }
 }
 
 export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFinish, fx }: GameComponentProps) {
   const reduced = useReducedMotionPref();
+  const t = useDailyWordCopy();
+  const c = useGamesCopy().common;
+  const netMsgs = useMemo(() => ({ server: t.serverError, network: t.networkError }), [t]);
   const storeKey = `qx.daily-word.run.${seed}`;
   const [stage, setStage] = useState<'tutorial' | 'playing' | 'summary'>(() => (readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'));
   const [rows, setRows] = useState<Row[]>([]);
@@ -178,7 +186,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
   const submitGuess = useCallback(async () => {
     if (busy || over || paused || stage !== 'playing') return;
     if (Array.from(current).length < WORD_LENGTH) {
-      flash('Yetersiz harf: 5 harfli bir kelime yaz.');
+      flash(t.tooShort);
       return;
     }
     setBusy(true);
@@ -186,7 +194,8 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
       mode === 'ranked' ? { mode: 'ranked', seed, guess: current, chain } : { mode: 'practice', seed, guess: current };
     const r = await postJson<{ guess: string; marks: Mark[]; solved: boolean; done?: boolean; answer?: string; chain?: string; dayKey?: string }>(
       '/api/customer/daily-word/guess',
-      body
+      body,
+      netMsgs
     );
     setBusy(false);
     if (!r.ok) {
@@ -201,19 +210,19 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
     if (d.dayKey) setDayKey(d.dayKey);
     fx.sfx(() => sfxReveal());
     const summaryText = Array.from(d.guess)
-      .map((ch, i) => `${ch} ${MARK_TEXT[d.marks[i]]}`)
+      .map((ch, i) => `${ch} ${t.mark[d.marks[i]]}`)
       .join(', ');
-    setAnnounce(`Tahmin ${nextRows.length}: ${summaryText}.`);
+    setAnnounce(t.guessLine(nextRows.length, summaryText));
     const done = d.solved || nextRows.length >= MAX_GUESSES;
     if (!done) return;
     let ans = d.answer ?? null;
     if (!ans && mode === 'practice') {
-      const rv = await postJson<{ answer: string }>('/api/customer/daily-word/guess', { mode: 'practice', seed, reveal: true });
+      const rv = await postJson<{ answer: string }>('/api/customer/daily-word/guess', { mode: 'practice', seed, reveal: true }, netMsgs);
       if (rv.ok) ans = rv.data.answer;
     }
     setAnswer(ans);
     endGame(d.solved);
-  }, [busy, over, paused, stage, current, mode, seed, chain, rows, flash, fx, endGame]);
+  }, [busy, over, paused, stage, current, mode, seed, chain, rows, flash, fx, endGame, t, netMsgs]);
 
   const press = useCallback(
     (key: string) => {
@@ -329,19 +338,26 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
 
   const [shareNote, setShareNote] = useState('');
   const share = async () => {
-    const text = shareText({ dayLabel: dayKey, rows: rows.map((r) => r.marks), solved, highContrast: contrast, practice: mode === 'practice' });
+    const text = shareText({
+      dayLabel: dayKey,
+      rows: rows.map((r) => r.marks),
+      solved,
+      highContrast: contrast,
+      practice: mode === 'practice',
+      labels: { head: t.shareHead, practice: t.sharePractice },
+    });
     const url = `${window.location.origin}/customer/games/daily-word`;
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Günün Kelimesi', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text}\n${url}`);
-      setShareNote('Sonuç kartı panoya kopyalandı.');
+      setShareNote(t.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
@@ -365,10 +381,10 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
     const isCurrent = r === rows.length && !over;
     const letters = row ? Array.from(row.guess) : isCurrent ? Array.from(current) : [];
     const label = row
-      ? `Tahmin ${r + 1}: ${letters.map((ch, i) => `${ch} ${MARK_TEXT[row.marks[i]]}`).join(', ')}`
+      ? t.guessLine(r + 1, letters.map((ch, i) => `${ch} ${t.mark[row.marks[i]]}`).join(', '))
       : isCurrent
-        ? `Yazılan: ${letters.join('') || 'boş'}`
-        : `Satır ${r + 1}: boş`;
+        ? t.typed(letters.join(''))
+        : t.emptyRow(r + 1);
     return (
       <m.div
         key={isCurrent ? `cur-${shakeKey}` : `r-${r}`}
@@ -408,15 +424,15 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
       {/* HUD */}
       <div className="mb-3 flex items-center justify-between gap-2 text-sm">
         <span className="rounded-full bg-white/10 px-3 py-1 font-semibold tabular-nums">
-          Tahmin {Math.min(rows.length + (over ? 0 : 1), MAX_GUESSES)}/{MAX_GUESSES}
+          {t.guessCount(Math.min(rows.length + (over ? 0 : 1), MAX_GUESSES), MAX_GUESSES)}
         </span>
-        <span className="text-xs text-white/70">{mode === 'practice' ? 'Pratik · ödülsüz' : `Günün kelimesi${dayKey ? ` · ${dayKey}` : ''}`}</span>
+        <span className="text-xs text-white/70">{mode === 'practice' ? t.practiceTag : t.dailyTag(dayKey)}</span>
         <div className="flex gap-1">
           <button
             type="button"
             onClick={toggleContrast}
             aria-pressed={contrast}
-            aria-label="Yüksek kontrast renkler (turuncu/mavi)"
+            aria-label={t.contrast}
             className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <Contrast className="h-5 w-5" aria-hidden />
@@ -425,7 +441,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
             type="button"
             onClick={() => setStage('tutorial')}
             disabled={stage === 'summary'}
-            aria-label="Nasıl oynanır"
+            aria-label={t.howTo}
             className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-40"
           >
             <HelpCircle className="h-5 w-5" aria-hidden />
@@ -448,20 +464,21 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
             className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto rounded-3xl bg-[#0b1020]/95 p-4"
           >
             <h3 id="dw-tut-title" className="text-center text-lg font-bold">
-              Nasıl oynanır?
+              {c.howTo}
             </h3>
             <p className="text-sm text-white/85">
-              Günün 5 harfli Türkçe kelimesini <b>{MAX_GUESSES} denemede</b> bul. Herkes bugün aynı kelimeyi arıyor; her tahmin sözlükte
-              olmalı. Sözlükte olmayan kelime hak yemez.
+              {t.introPre}
+              <b>{t.introBold(MAX_GUESSES)}</b>
+              {t.introPost}
             </p>
             <ul className="space-y-2 text-sm">
               {(
                 [
-                  [2, 'K', 'K doğru yerde (dolu + ✓).'],
-                  [1, 'A', 'A kelimede var ama başka yerde (• + kesik çerçeve).'],
-                  [0, 'L', 'L kelimede yok.'],
+                  [2, 'K', t.exHit],
+                  [1, 'A', t.exNear],
+                  [0, 'L', t.exMiss],
                 ] as Array<[Mark, string, string]>
-              ).map(([mk, ch, t]) => (
+              ).map(([mk, ch, desc]) => (
                 <li key={ch} className="flex items-center gap-3">
                   <span
                     className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-extrabold ${mk === 1 ? 'outline-dashed outline-2 -outline-offset-4 outline-white/70' : ''}`}
@@ -472,15 +489,15 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                     {mk === 2 && <span className="absolute right-0.5 top-0 text-[9px]">✓</span>}
                     {mk === 1 && <span className="absolute right-0.5 top-0 text-[10px]">•</span>}
                   </span>
-                  <span>{t}</span>
+                  <span>{desc}</span>
                 </li>
               ))}
             </ul>
             <p className="text-sm text-white/85">
-              Skor: 1. tahminde {MAX_GUESSES}, 6. tahminde 1 puan. Ödül eşiği {threshold}.{' '}
-              {mode === 'ranked' ? 'Her tahmin sunucuda denetlenir.' : 'Pratikte ödül yok, istediğin kadar oyna.'}
+              {t.scoring(MAX_GUESSES, threshold)}{' '}
+              {mode === 'ranked' ? t.rankedNote : t.practiceNote}
             </p>
-            <p className="text-xs text-white/70">Klavye: harfler · Enter tahmin · Backspace sil · Esc duraklat.</p>
+            <p className="text-xs text-white/70">{t.keys}</p>
             <button
               type="button"
               autoFocus
@@ -491,7 +508,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
               className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               style={{ background: '#a3e635' }}
             >
-              Anladım, başla
+              {c.gotIt}
             </button>
           </div>
         )}
@@ -504,49 +521,49 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
             className="absolute inset-0 z-10 flex flex-col items-center gap-2 overflow-y-auto rounded-3xl bg-[#0b1020]/95 p-4 text-center"
           >
             <h3 id="dw-sum-title" className="text-lg font-bold">
-              {solved ? `${rows.length}. tahminde buldun!` : 'Bu sefer olmadı'}
+              {solved ? t.solved(rows.length) : t.notThisTime}
             </h3>
             {answer && (
               <p className="text-sm text-white/85">
-                Kelime: <b className="tracking-widest">{answer}</b>
+                {t.word} <b className="tracking-widest">{answer}</b>
               </p>
             )}
-            <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${stars}`}>
+            <div className="flex gap-1" role="img" aria-label={c.stars(stars)}>
               {[1, 2, 3].map((n) => (
                 <Star key={n} className="h-7 w-7" aria-hidden style={{ color: n <= stars ? '#facc15' : 'rgba(255,255,255,0.25)' }} fill={n <= stars ? '#facc15' : 'none'} />
               ))}
             </div>
             <p className="text-4xl font-black tabular-nums">{score}</p>
             <p className="text-xs text-white/75">
-              {prevBest === null ? 'İlk skorun bu cihazda kaydedildi.' : score > prevBest ? `Yeni kişisel rekor! (önceki ${prevBest})` : `En iyin: ${prevBest}`}
+              {prevBest === null ? c.firstScore : score > prevBest ? c.newBest(prevBest) : c.best(prevBest)}
             </p>
 
             <section aria-labelledby="dw-stats" className="w-full max-w-[18rem] rounded-xl bg-white/5 p-2 text-left text-xs">
               <h4 id="dw-stats" className="mb-1 font-semibold text-white/85">
-                Sıralı istatistiğin
+                {t.statsTitle}
               </h4>
-              {stats.state === 'loading' && <p className="text-white/70">Yükleniyor…</p>}
+              {stats.state === 'loading' && <p className="text-white/70">{t.loading}</p>}
               {stats.state === 'error' && (
                 <p className="text-white/80">
-                  İstatistik alınamadı.{' '}
+                  {t.statsFailed}{' '}
                   <button type="button" onClick={() => void loadStats()} className="min-h-[44px] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                    Tekrar dene
+                    {t.retry}
                   </button>
                 </p>
               )}
               {stats.state === 'ok' && stats.data && (
                 <>
                   {stats.data.played === 0 ? (
-                    <p className="text-white/75">Henüz kayıtlı sıralı günün yok.</p>
+                    <p className="text-white/75">{t.noStats}</p>
                   ) : (
                     <>
                       <dl className="mb-2 grid grid-cols-4 gap-1 text-center">
                         {(
                           [
-                            ['Oynanan', stats.data.played],
-                            ['Kazanma', `%${stats.data.winRate}`],
-                            ['Seri', stats.data.currentStreak],
-                            ['En uzun', stats.data.maxStreak],
+                            [t.played, stats.data.played],
+                            [t.winRate, t.winRateValue(stats.data.winRate)],
+                            [t.streak, stats.data.currentStreak],
+                            [t.maxStreak, stats.data.maxStreak],
                           ] as Array<[string, string | number]>
                         ).map(([k, v]) => (
                           <div key={k}>
@@ -555,7 +572,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                           </div>
                         ))}
                       </dl>
-                      <ol className="space-y-0.5" aria-label="Tahmin dağılımı">
+                      <ol className="space-y-0.5" aria-label={t.distribution}>
                         {stats.data.distribution.map((cnt, i) => {
                           const max = Math.max(1, ...stats.data!.distribution);
                           return (
@@ -570,7 +587,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                       </ol>
                     </>
                   )}
-                  {mode === 'ranked' && <p className="mt-1 text-[10px] text-white/60">Bugünkü sonuç kaydedildikten sonra eklenir.</p>}
+                  {mode === 'ranked' && <p className="mt-1 text-[10px] text-white/60">{t.todayPending}</p>}
                 </>
               )}
             </section>
@@ -578,9 +595,9 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
             <p className="text-xs text-white/75">
               {score >= threshold
                 ? mode === 'ranked'
-                  ? 'Eşiği geçtin — sunucu tahmin zincirini doğruladıktan sonra ödül hesaplanır.'
-                  : 'Sıralı modda bu sonuç ödül getirirdi.'
-                : 'Ödül için kelimeyi 6 tahmin içinde bulmalısın.'}
+                  ? t.passedRanked
+                  : t.passedPractice
+                : t.needSix}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -588,7 +605,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                 onClick={share}
                 className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                <Share2 className="h-4 w-4" aria-hidden /> {c.share}
               </button>
               <button
                 type="button"
@@ -599,7 +616,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                 style={{ background: '#a3e635' }}
               >
                 <Trophy className="h-4 w-4" aria-hidden />
-                {mode === 'ranked' ? (waitLeft > 0 ? `Kaydediliyor… ${waitLeft} sn` : `Sonucu kaydet (${autoLeft})`) : 'Devam'}
+                {mode === 'ranked' ? (waitLeft > 0 ? t.saving(waitLeft) : c.save(autoLeft)) : c.cont}
               </button>
             </div>
             <p className="min-h-[1rem] text-xs text-white/75" aria-live="polite">
@@ -610,7 +627,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
       </div>
 
       {/* Ekran klavyesi (Türkçe Q, Q/W/X yok) */}
-      <div className="mt-3 space-y-1.5" role="group" aria-label="Ekran klavyesi">
+      <div className="mt-3 space-y-1.5" role="group" aria-label={t.keyboard}>
         {KB_ROWS.map((row, i) => (
           <div key={i} className="flex justify-center gap-1">
             {row.map((k) => {
@@ -622,7 +639,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
                   type="button"
                   onClick={() => press(k)}
                   disabled={stage !== 'playing' || over}
-                  aria-label={k === 'ENTER' ? 'Tahmin et' : k === 'BACK' ? 'Sil' : `${k}${mk !== undefined ? `, ${MARK_TEXT[mk]}` : ''}`}
+                  aria-label={k === 'ENTER' ? t.enter : k === 'BACK' ? t.back : `${k}${mk !== undefined ? `, ${t.mark[mk]}` : ''}`}
                   className={`relative flex h-14 min-w-0 touch-manipulation items-center justify-center rounded-lg text-base font-bold text-white transition-colors active:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-70 ${
                     wide ? 'flex-[1.6] text-xs' : 'flex-1'
                   } ${mk === undefined ? 'bg-white/15' : ''} ${mk === 0 ? 'opacity-60' : ''}`}
@@ -642,7 +659,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
         {announce}
       </p>
       <p className="mt-2 text-center text-xs text-white/70">
-        {mode === 'practice' ? 'Pratik: ödülsüz, liderliğe girmez.' : 'Sıralı: her tahmin sunucuda renklenir ve doğrulanır.'}
+        {mode === 'practice' ? c.footPractice : t.footRanked}
       </p>
     </div>
   );

@@ -101,11 +101,14 @@ export function shareText(opts: {
   solved: boolean;
   highContrast?: boolean;
   practice?: boolean;
+  /** Arayüz dili etiketleri (varsayılan Türkçe). */
+  labels?: { head: string; practice: string };
 }): string {
   const hit = opts.highContrast ? '🟧' : '🟩';
   const near = opts.highContrast ? '🟦' : '🟨';
   const miss = '⬛';
-  const head = `Qratex Günün Kelimesi${opts.practice ? ' (Pratik)' : opts.dayLabel ? ` ${opts.dayLabel}` : ''} ${
+  const labels = opts.labels ?? { head: 'Qratex Günün Kelimesi', practice: ' (Pratik)' };
+  const head = `${labels.head}${opts.practice ? labels.practice : opts.dayLabel ? ` ${opts.dayLabel}` : ''} ${
     opts.solved ? opts.rows.length : 'X'
   }/${MAX_GUESSES}`;
   const grid = opts.rows.map((r) => r.map((m) => (m === 2 ? hit : m === 1 ? near : miss)).join('')).join('\n');

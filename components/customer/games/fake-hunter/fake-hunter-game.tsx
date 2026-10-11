@@ -22,7 +22,7 @@ import {
   MODE_ORDER,
   RANKED_PER_MODE,
   TIMEOUT_VERDICT,
-  eloTitle,
+  eloLevel,
   maxPossibleScore,
   pickAdaptive,
   scoreAnswer,
@@ -31,7 +31,8 @@ import {
   type FakeHunterMode,
 } from './rules';
 import { readLocal, writeLocal } from './storage';
-import { FAKE_COLOR, FileCard, MODE_META, ProfileCard, REAL_COLOR, SwipeCard, VerdictButtons, WordCard, type FHItem } from './cards';
+import { FAKE_COLOR, FileCard, ProfileCard, REAL_COLOR, SwipeCard, VerdictButtons, WordCard, type FHItem } from './cards';
+import { useFakeHunterCopy, type FakeHunterCopy } from './copy';
 
 type Phase = 'tutorial' | 'intro' | 'item' | 'feedback' | 'summary';
 
@@ -60,18 +61,19 @@ function toItems(content: GameComponentProps['content']): FHItem[] {
   return (content ?? []).filter((c): c is FHItem => isMode((c as { mode?: unknown }).mode)) as FHItem[];
 }
 
-function verdictText(mode: FakeHunterMode, v: string, parts?: unknown): string {
-  if (v === TIMEOUT_VERDICT) return 'süre doldu';
+function verdictText(tx: FakeHunterCopy, mode: FakeHunterMode, v: string, parts?: unknown): string {
+  if (v === TIMEOUT_VERDICT) return tx.timeUp;
   if (mode === 'kelime') {
     const i = Number(v.slice(1));
     const p = Array.isArray(parts) ? (parts as string[])[i] : undefined;
-    return p ? `${i + 1}. cümle` : v;
+    return p ? tx.sentence(i + 1) : v;
   }
-  return v === 'fake' ? MODE_META[mode].fakeLabel : MODE_META[mode].realLabel;
+  return v === 'fake' ? tx.modes[mode].fakeLabel : tx.modes[mode].realLabel;
 }
 
 export function FakeHunterGame({ mode, config, content, answerKey, paused, onPauseRequest, onFinish, fx, accent }: GameComponentProps) {
   const reduce = useReducedMotionPref();
+  const tx = useFakeHunterCopy();
   const ranked = mode === 'ranked';
   const all = useMemo(() => toItems(content), [content]);
 
@@ -332,13 +334,13 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
   if (all.length === 0 || plan.total === 0) {
     return (
       <div role="alert" className="rounded-2xl border border-white/15 bg-black/60 p-6 text-center text-sm text-white">
-        Bu tur için içerik yüklenemedi. Lütfen oyunu yeniden başlat.
+        {tx.noContent}
         <button
           type="button"
           onClick={() => onFinish({ score: 0, won: false, proof: { answers: [] } })}
           className="mx-auto mt-4 block min-h-[44px] rounded-xl border border-white/30 px-4 font-semibold"
         >
-          Turu kapat
+          {tx.closeRound}
         </button>
       </div>
     );
@@ -349,11 +351,11 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
   const timeFrac = remainingMs === null ? 1 : remainingMs / timeLimit;
   const liveText =
     phase === 'item' && current
-      ? `${answered + 1}. öğe / ${plan.total}, ${MODE_META[current.mode].title} modu`
+      ? tx.liveItem(answered + 1, plan.total, tx.modes[current.mode].title)
       : phase === 'feedback' && feedback
-        ? `${feedback.correct ? 'Doğru' : 'Yanlış'}. ${feedback.why}`
+        ? `${feedback.correct ? tx.correct : tx.wrong}. ${feedback.why}`
         : phase === 'summary'
-          ? `Tur bitti. ${score} puan.`
+          ? tx.liveDone(score)
           : '';
 
   return (
@@ -370,7 +372,7 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
 
         {/* HUD */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-white">
-          <ol className="flex items-center gap-1.5" aria-label="Aşamalar">
+          <ol className="flex items-center gap-1.5" aria-label={tx.stages}>
             {plan.stages.map((md, i) => (
               <li
                 key={md}
@@ -382,7 +384,7 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
                   color: i <= stageIndex ? '#fff' : 'rgba(255,255,255,0.6)',
                 }}
               >
-                {MODE_META[md].title}
+                {tx.modes[md].title}
               </li>
             ))}
           </ol>
@@ -391,7 +393,7 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
               {Math.min(answered + (phase === 'item' ? 1 : 0), plan.total)}/{plan.total}
             </span>
             {ranked ? (
-              <span className="text-xs text-white/70">Hedef {threshold} puan · sunucu puanlar</span>
+              <span className="text-xs text-white/70">{tx.rankedTarget(threshold)}</span>
             ) : (
               <>
                 {streak >= 2 && (
@@ -413,7 +415,7 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
           <div
             className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10"
             role="timer"
-            aria-label={`Kalan süre ${Math.ceil((remainingMs ?? 0) / 1000)} saniye`}
+            aria-label={tx.timeLeft(Math.ceil((remainingMs ?? 0) / 1000))}
           >
             <div
               className="h-full rounded-full transition-[width] duration-100 ease-linear motion-reduce:transition-none"
@@ -465,7 +467,7 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
                 )}
                 {ranked && locked && chosen && (
                   <p className="mt-3 text-center text-sm font-semibold text-white/80" aria-hidden>
-                    Karar kilitlendi: {verdictText(current.mode, chosen, current.parts)}
+                    {tx.locked} {verdictText(tx, current.mode, chosen, current.parts)}
                   </p>
                 )}
               </m.div>
@@ -491,17 +493,17 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
               shareMsg={shareMsg}
               onShare={async () => {
                 const stars = '★'.repeat(starsFor(score, threshold, maxScore)).padEnd(3, '☆');
-                const text = `Sahte Avcısı pratiğinde ${Math.max(0, score)} puan ${stars} — ${correctCount}/${plan.total} doğru. Sen de dene!`;
+                const text = tx.share(Math.max(0, score), stars, correctCount, plan.total);
                 try {
                   if (navigator.share) {
-                    await navigator.share({ title: 'Sahte Avcısı', text, url: `${window.location.origin}/customer/games/fake-hunter` });
-                    setShareMsg('Paylaşıldı.');
+                    await navigator.share({ title: tx.shareTitle, text, url: `${window.location.origin}/customer/games/fake-hunter` });
+                    setShareMsg(tx.shared);
                   } else {
                     await navigator.clipboard.writeText(text);
-                    setShareMsg('Sonuç panoya kopyalandı.');
+                    setShareMsg(tx.copied);
                   }
                 } catch {
-                  setShareMsg('Paylaşım iptal edildi ya da desteklenmiyor.');
+                  setShareMsg(tx.shareFailed);
                 }
               }}
               onDone={finishPractice}
@@ -532,10 +534,11 @@ function PrimaryButton({ children, onClick, accent, disabled }: { children: Reac
 }
 
 function Tutorial({ accent, ranked, threshold, onStart }: { accent: string; ranked: boolean; threshold: number; onStart: () => void }) {
+  const tx = useFakeHunterCopy();
   return (
     <div className="mx-auto max-w-md text-white">
-      <h3 className="text-center text-lg font-bold">Nasıl oynanır?</h3>
-      <p className="mt-1 text-center text-sm text-white/80">Dört aşama, her aşamada üç vaka. Amaç: sahte yorumu ve sahte hesabı yakalamak.</p>
+      <h3 className="text-center text-lg font-bold">{tx.howTo}</h3>
+      <p className="mt-1 text-center text-sm text-white/80">{tx.intro}</p>
       <ol className="mt-4 space-y-2">
         {MODE_ORDER.map((md, i) => (
           <li key={md} className="flex gap-3 rounded-xl border border-white/10 bg-black/30 p-3">
@@ -543,26 +546,26 @@ function Tutorial({ accent, ranked, threshold, onStart }: { accent: string; rank
               {i + 1}
             </span>
             <span>
-              <span className="block text-sm font-bold">{MODE_META[md].title} — {MODE_META[md].short}</span>
-              <span className="block text-xs leading-relaxed text-white/75">{MODE_META[md].how}</span>
+              <span className="block text-sm font-bold">{tx.modes[md].title} — {tx.modes[md].short}</span>
+              <span className="block text-xs leading-relaxed text-white/75">{tx.modes[md].how}</span>
             </span>
           </li>
         ))}
       </ol>
       <ul className="mt-3 space-y-1 text-xs text-white/75">
-        <li>Doğru +2, her üçlü seride +1 bonus; yanlış ya da süre dolması −1.</li>
+        <li>{tx.scoring}</li>
         {ranked ? (
-          <li>Sıralı: kararlar kilitlenir, puanı sunucu hesaplar. Ödül için en az {threshold} puan. Her vakanın süresi var.</li>
+          <li>{tx.rankedRule(threshold)}</li>
         ) : (
-          <li>Pratik: süre yok, her karardan sonra nedenini görürsün; zorluk seviyene göre ayarlanır. Ödül verilmez.</li>
+          <li>{tx.practiceRule}</li>
         )}
         <li>
-          Klavye: <kbd>←</kbd> <span style={{ color: FAKE_COLOR }}>sahte</span> · <kbd>→</kbd> <span style={{ color: REAL_COLOR }}>gerçek</span> · <kbd>1–4</kbd> cümle ·{' '}
-          <kbd>Esc</kbd> duraklat
+          {tx.keyboard} <kbd>←</kbd> <span style={{ color: FAKE_COLOR }}>{tx.keyFake}</span> · <kbd>→</kbd>{' '}
+          <span style={{ color: REAL_COLOR }}>{tx.keyReal}</span> · <kbd>1–4</kbd> {tx.keySentence} · <kbd>Esc</kbd> {tx.keyPause}
         </li>
       </ul>
       <PrimaryButton onClick={onStart} accent={accent}>
-        Anladım, başlayalım
+        {tx.letsGo}
       </PrimaryButton>
     </div>
   );
@@ -583,11 +586,12 @@ function StageIntro({
   accent: string;
   onStart: () => void;
 }) {
-  const meta = MODE_META[mode];
+  const tx = useFakeHunterCopy();
+  const meta = tx.modes[mode];
   return (
     <div className="mx-auto flex max-w-md flex-col items-center pt-6 text-center text-white">
       <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
-        Aşama {index + 1}/{count}
+        {tx.stageOf(index + 1, count)}
       </p>
       <h3 className="mt-1 text-2xl font-black" style={{ color: accent }}>
         {meta.title}
@@ -596,29 +600,30 @@ function StageIntro({
       <p className="mt-3 text-sm leading-relaxed text-white/80">{meta.how}</p>
       {ranked && (
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-white/70">
-          <Timer aria-hidden className="h-3.5 w-3.5" /> Vaka başına {Math.round(ITEM_TIME_MS[mode] / 1000)} saniye; süre sen başlatınca akar.
+          <Timer aria-hidden className="h-3.5 w-3.5" /> {tx.perCase(Math.round(ITEM_TIME_MS[mode] / 1000))}
         </p>
       )}
       <PrimaryButton onClick={onStart} accent={accent}>
-        Başla
+        {tx.start}
       </PrimaryButton>
     </div>
   );
 }
 
 function FeedbackPanel({ feedback, item, onNext, disabled }: { feedback: Feedback; item: FHItem; onNext: () => void; disabled: boolean }) {
+  const tx = useFakeHunterCopy();
   const color = feedback.correct ? REAL_COLOR : FAKE_COLOR;
-  const truthText = verdictText(item.mode, feedback.truth, item.parts);
+  const truthText = verdictText(tx, item.mode, feedback.truth, item.parts);
   return (
     <div className="mx-auto mt-4 max-w-[24rem] rounded-2xl border-2 bg-black/60 p-4 text-white" style={{ borderColor: color }}>
       <p className="flex items-center gap-2 text-base font-bold" style={{ color }}>
         {feedback.correct ? <CheckCircle2 aria-hidden className="h-5 w-5" /> : <XCircle aria-hidden className="h-5 w-5" />}
-        {feedback.correct ? 'Doğru' : feedback.chosen === TIMEOUT_VERDICT ? 'Süre doldu' : 'Yanlış'}
+        {feedback.correct ? tx.correct : feedback.chosen === TIMEOUT_VERDICT ? tx.timeUpTitle : tx.wrong}
         <span className="ml-auto text-sm tabular-nums text-white/80">
           {feedback.gained > 0 ? `+${feedback.gained}` : feedback.gained}
         </span>
       </p>
-      {!feedback.correct && <p className="mt-1 text-sm text-white/85">Doğru cevap: {truthText}</p>}
+      {!feedback.correct && <p className="mt-1 text-sm text-white/85">{tx.answerWas(truthText)}</p>}
       {feedback.why && <p className="mt-2 text-sm leading-relaxed text-white/85">{feedback.why}</p>}
       <button
         type="button"
@@ -627,7 +632,7 @@ function FeedbackPanel({ feedback, item, onNext, disabled }: { feedback: Feedbac
         autoFocus
         className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-white/30 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
       >
-        Devam (Enter)
+        {tx.next}
       </button>
     </div>
   );
@@ -662,32 +667,33 @@ function PracticeSummary({
   onShare: () => void;
   onDone: () => void;
 }) {
+  const tx = useFakeHunterCopy();
   const stars = starsFor(score, threshold, maxScore);
   const delta = eloTo - eloFrom;
   return (
     <div className="mx-auto max-w-md pt-2 text-center text-white">
-      <p className="text-xs font-semibold uppercase tracking-widest text-white/70">Pratik turu bitti</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-white/70">{tx.practiceDone}</p>
       <p className="mt-1 text-4xl font-black tabular-nums" style={{ color: accent }}>
         {score}
       </p>
-      <p className="mt-1 text-2xl" role="img" aria-label={`${stars} yıldız`}>
+      <p className="mt-1 text-2xl" role="img" aria-label={tx.starsLabel(stars)}>
         <span style={{ color: '#fbbf24' }}>{'★'.repeat(stars)}</span>
         <span className="text-white/30">{'★'.repeat(3 - stars)}</span>
       </p>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-xl bg-black/40 p-2">
-          <dt className="text-[11px] text-white/70">Doğru</dt>
+          <dt className="text-[11px] text-white/70">{tx.statCorrect}</dt>
           <dd className="font-bold tabular-nums">
             {correct}/{total}
           </dd>
         </div>
         <div className="rounded-xl bg-black/40 p-2">
-          <dt className="text-[11px] text-white/70">Pratik rekoru</dt>
+          <dt className="text-[11px] text-white/70">{tx.statBest}</dt>
           <dd className="font-bold tabular-nums">{best}</dd>
         </div>
         <div className="rounded-xl bg-black/40 p-2">
           <dt className="flex items-center justify-center gap-1 text-[11px] text-white/70">
-            <Gauge aria-hidden className="h-3 w-3" /> Seviye
+            <Gauge aria-hidden className="h-3 w-3" /> {tx.statLevel}
           </dt>
           <dd className="font-bold tabular-nums">
             {eloTo}{' '}
@@ -699,18 +705,18 @@ function PracticeSummary({
         </div>
       </dl>
       <p className="mt-2 text-sm text-white/80">
-        Unvan: <span className="font-semibold">{eloTitle(eloTo)}</span>
-        {score < threshold ? ` · Sıralı ödül eşiği ${threshold} puan.` : ' · Sıralıda ödül eşiğini geçecek seviyedesin.'}
+        {tx.rank} <span className="font-semibold">{tx.eloTitles[eloLevel(eloTo)]}</span>
+        {score < threshold ? tx.belowThreshold(threshold) : tx.aboveThreshold}
       </p>
-      <ol className="mt-3 flex flex-wrap justify-center gap-1.5" aria-label="Vaka özeti">
+      <ol className="mt-3 flex flex-wrap justify-center gap-1.5" aria-label={tx.caseSummary}>
         {history.map((h, i) => (
           <li
             key={i}
             className="flex h-7 min-w-[2.25rem] items-center justify-center gap-0.5 rounded-md border px-1 text-[11px] font-semibold"
             style={{ borderColor: h.correct ? REAL_COLOR : FAKE_COLOR, color: h.correct ? REAL_COLOR : FAKE_COLOR }}
-            aria-label={`${i + 1}. vaka, ${MODE_META[h.mode].title}: ${h.correct ? 'doğru' : 'yanlış'}`}
+            aria-label={tx.caseItem(i + 1, tx.modes[h.mode].title, !!h.correct)}
           >
-            {h.correct ? '✓' : '✕'} {MODE_META[h.mode].title.slice(0, 1)}
+            {h.correct ? '✓' : '✕'} {tx.modes[h.mode].title.slice(0, 1)}
           </li>
         ))}
       </ol>
@@ -720,7 +726,7 @@ function PracticeSummary({
           onClick={onShare}
           className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-white/30 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
-          <Share2 aria-hidden className="h-4 w-4" /> Paylaş
+          <Share2 aria-hidden className="h-4 w-4" /> {tx.shareBtn}
         </button>
         <button
           type="button"
@@ -728,7 +734,7 @@ function PracticeSummary({
           className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl font-bold text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           style={{ background: accent }}
         >
-          <Sparkles aria-hidden className="h-4 w-4" /> Turu bitir
+          <Sparkles aria-hidden className="h-4 w-4" /> {tx.endRound}
         </button>
       </div>
       <p className="mt-2 min-h-[1.25rem] text-xs text-white/75" role="status">

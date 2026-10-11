@@ -9,6 +9,7 @@
 import { LazyMotion, domMax, m, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { BadgeCheck, CalendarDays, Camera, Check, MessageSquareText, Radar, ShieldQuestion, Star, X } from 'lucide-react';
 import type { FakeHunterMode } from './rules';
+import { FH_MODES_TR, useFakeHunterCopy, type ModeMeta } from './copy';
 
 export const FAKE_COLOR = '#f59e0b';
 export const REAL_COLOR = '#38bdf8';
@@ -21,41 +22,14 @@ export interface FHItem {
   [k: string]: unknown;
 }
 
-export const MODE_META: Record<FakeHunterMode, { title: string; short: string; how: string; fakeLabel: string; realLabel: string }> = {
-  kaydir: {
-    title: 'Kaydır',
-    short: 'Yorumu oku, karar ver',
-    how: 'Kartı sola kaydır: sahte. Sağa kaydır: gerçek. Somut ayrıntı, artı-eksi dengesi gerçeğe; abartı, kalıp ve reklam diline sahteliğe işaret eder.',
-    fakeLabel: 'Sahte',
-    realLabel: 'Gerçek',
-  },
-  dosya: {
-    title: 'Dosya',
-    short: 'Yorumcunun dosyasını incele',
-    how: 'Hesap yaşı, yorum hızı, ziyaret doğrulaması ve geçmiş birlikte okunur. Tek bir işaret yetmez: yeni hesap da dürüst olabilir.',
-    fakeLabel: 'Sahte',
-    realLabel: 'Gerçek',
-  },
-  kelime: {
-    title: 'Kelime',
-    short: 'Yorumu ele veren cümleyi bul',
-    how: 'Her yorumda tek bir cümle sahteliği ele verir: teşvik, reklam, rakibe yönlendirme, işletme ağzı ya da anahtar kelime doldurma. O cümleye dokun.',
-    fakeLabel: '',
-    realLabel: '',
-  },
-  profil: {
-    title: 'Profil',
-    short: 'İnsan mı, bot mu?',
-    how: 'Hesabın davranış izine bak: yorum hızı, saatler, hedeflenen işletmeler, tekrar eden metinler. Bot ya da koordineli hesap mı, gerçek bir insan mı?',
-    fakeLabel: 'Bot',
-    realLabel: 'İnsan',
-  },
-};
+/** Türkçe mod meta verisi (geri uyum); bileşenler dil için `useFakeHunterCopy().modes` kullanır. */
+export const MODE_META: Record<FakeHunterMode, ModeMeta> = FH_MODES_TR;
 
 function Stars({ n }: { n: number }) {
+  const tx = useFakeHunterCopy();
   const v = Math.max(0, Math.min(5, Math.round(n)));
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${v} yıldız`} role="img">
+    <span className="inline-flex items-center gap-0.5" aria-label={tx.starRating(v)} role="img">
       {Array.from({ length: 5 }).map((_, i) => (
         <Star key={i} aria-hidden className="h-3.5 w-3.5" style={{ color: i < v ? '#fbbf24' : 'rgba(255,255,255,0.25)', fill: i < v ? '#fbbf24' : 'transparent' }} />
       ))}
@@ -97,6 +71,7 @@ export function SwipeCard({
   reduce: boolean;
   onVerdict: (v: 'real' | 'fake') => void;
 }) {
+  const tx = useFakeHunterCopy();
   // Kart başına KENDİ hareket değeri (kart anahtarla yeniden kurulur → önceki uçuş taşınmaz).
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], reduce ? [0, 0] : [-12, 12]);
@@ -126,14 +101,14 @@ export function SwipeCard({
           style={{ opacity: fakeOp, borderColor: FAKE_COLOR, color: FAKE_COLOR }}
           className="pointer-events-none absolute left-3 top-3 -rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
         >
-          ✕ SAHTE
+          {tx.fakeStamp}
         </m.div>
         <m.div
           aria-hidden
           style={{ opacity: realOp, borderColor: REAL_COLOR, color: REAL_COLOR }}
           className="pointer-events-none absolute right-3 top-3 rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
         >
-          ✓ GERÇEK
+          {tx.realStamp}
         </m.div>
         <div className="relative mt-6 flex items-center justify-between gap-2 text-xs text-white/70">
           <span className="truncate">{String(item.place ?? '')}</span>
@@ -160,30 +135,31 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
 }
 
 export function FileCard({ item, accent }: { item: FHItem; accent: string }) {
+  const tx = useFakeHunterCopy();
   const verified = item.visitVerified === true;
   return (
     <div className="relative mx-auto w-full max-w-[24rem] rounded-2xl border p-4" style={cardShell(accent)}>
       <Scanlines accent={accent} />
       <div className="relative flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/60">Yorumcu dosyası</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/60">{tx.reviewerFile}</p>
           <p className="truncate text-base font-bold text-white">{String(item.reviewer ?? '')}</p>
         </div>
         <Stars n={Number(item.stars ?? 0)} />
       </div>
       <div className="relative mt-3 grid grid-cols-2 gap-2">
-        <Field icon={<CalendarDays className="h-4 w-4" />} label="Hesap yaşı" value={String(item.accountAge ?? '')} />
-        <Field icon={<MessageSquareText className="h-4 w-4" />} label="Toplam yorum" value={String(item.reviewCount ?? 0)} />
-        <Field icon={<Camera className="h-4 w-4" />} label="Fotoğraf" value={String(item.photoCount ?? 0)} />
+        <Field icon={<CalendarDays className="h-4 w-4" />} label={tx.accountAge} value={String(item.accountAge ?? '')} />
+        <Field icon={<MessageSquareText className="h-4 w-4" />} label={tx.totalReviews} value={String(item.reviewCount ?? 0)} />
+        <Field icon={<Camera className="h-4 w-4" />} label={tx.photos} value={String(item.photoCount ?? 0)} />
         <Field
           icon={verified ? <BadgeCheck className="h-4 w-4" /> : <ShieldQuestion className="h-4 w-4" />}
-          label="Ziyaret"
-          value={verified ? 'Doğrulandı' : 'Doğrulanmadı'}
+          label={tx.visit}
+          value={verified ? tx.verified : tx.notVerified}
         />
       </div>
       <p className="relative mt-3 text-[15px] leading-relaxed text-white">“{String(item.text ?? '')}”</p>
       <p className="relative mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white/80">
-        <span className="font-semibold text-white">Geçmiş: </span>
+        <span className="font-semibold text-white">{tx.history}</span>
         {String(item.history ?? '')}
       </p>
     </div>
@@ -209,11 +185,12 @@ export function WordCard({
   correct: string | null;
   onVerdict: (v: string) => void;
 }) {
+  const tx = useFakeHunterCopy();
   const parts = Array.isArray(item.parts) ? (item.parts as string[]) : [];
   return (
     <div className="relative mx-auto w-full max-w-[24rem] rounded-2xl border p-4" style={cardShell(accent)}>
       <Scanlines accent={accent} />
-      <p className="relative text-[11px] font-semibold uppercase tracking-widest text-white/60">Ele veren cümleye dokun</p>
+      <p className="relative text-[11px] font-semibold uppercase tracking-widest text-white/60">{tx.tapSentence}</p>
       <ol className="relative mt-3 space-y-2">
         {parts.map((p, i) => {
           const sid = `s${i}`;
@@ -227,7 +204,7 @@ export function WordCard({
                 type="button"
                 disabled={disabled}
                 onClick={() => onVerdict(sid)}
-                aria-label={`${i + 1}. cümle: ${p}`}
+                aria-label={tx.sentenceLabel(i + 1, p)}
                 className="flex min-h-[44px] w-full items-start gap-3 rounded-xl border bg-black/30 px-3 py-2.5 text-left text-[15px] leading-snug text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:hover:bg-black/30"
                 style={{ borderColor: border, borderWidth: isCorrect || isChosen ? 2 : 1 }}
               >
@@ -237,10 +214,10 @@ export function WordCard({
                 <span className="flex-1">{p}</span>
                 {isCorrect && (
                   <span className="shrink-0 rounded px-1.5 text-xs font-bold" style={{ color: '#000', background: FAKE_COLOR }}>
-                    ✕ ele veren
+                    {tx.givesAway}
                   </span>
                 )}
-                {isChosenWrong && <span className="shrink-0 text-xs font-semibold text-white/80">senin seçimin</span>}
+                {isChosenWrong && <span className="shrink-0 text-xs font-semibold text-white/80">{tx.yourPick}</span>}
               </button>
             </li>
           );
@@ -253,6 +230,7 @@ export function WordCard({
 // ───────────────────────────── Profil ─────────────────────────────
 
 export function ProfileCard({ item, accent, reduce }: { item: FHItem; accent: string; reduce: boolean }) {
+  const tx = useFakeHunterCopy();
   const name = String(item.name ?? '');
   const initials = name
     .split(/\s+/)
@@ -284,18 +262,18 @@ export function ProfileCard({ item, accent, reduce }: { item: FHItem; accent: st
         <div className="min-w-0">
           <p className="truncate text-base font-bold text-white">{name}</p>
           <p className="truncate text-xs text-white/70">
-            {String(item.handle ?? '')} · {String(item.joined ?? '')}’den beri
+            {String(item.handle ?? '')} · {tx.since(String(item.joined ?? ''))}
           </p>
         </div>
       </div>
       <div className="relative mt-3 grid grid-cols-2 gap-2">
-        <Field icon={<MessageSquareText className="h-4 w-4" />} label="Yorum" value={String(item.reviewCount ?? 0)} />
-        <Field icon={<Star className="h-4 w-4" />} label="Ortalama puan" value={Number(item.avgStars ?? 0).toLocaleString('tr-TR', { minimumFractionDigits: 1 })} />
+        <Field icon={<MessageSquareText className="h-4 w-4" />} label={tx.reviews} value={String(item.reviewCount ?? 0)} />
+        <Field icon={<Star className="h-4 w-4" />} label={tx.avgRating} value={Number(item.avgStars ?? 0).toLocaleString(tx.numberLocale, { minimumFractionDigits: 1 })} />
       </div>
       <p className="relative mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm text-white" style={{ borderColor: `${accent}55`, background: `${accent}14` }}>
         <Radar aria-hidden className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent }} />
         <span>
-          <span className="font-semibold">Davranış izi: </span>
+          <span className="font-semibold">{tx.trail}</span>
           {String(item.pattern ?? '')}
         </span>
       </p>
@@ -321,14 +299,15 @@ export function VerdictButtons({
   disabled: boolean;
   onVerdict: (v: 'real' | 'fake') => void;
 }) {
-  const meta = MODE_META[mode];
+  const tx = useFakeHunterCopy();
+  const meta = tx.modes[mode];
   return (
     <div className="mt-4 grid grid-cols-2 gap-3">
       <button
         type="button"
         disabled={disabled}
         onClick={() => onVerdict('fake')}
-        aria-label={`${meta.fakeLabel} (sol ok tuşu)`}
+        aria-label={tx.leftKey(meta.fakeLabel)}
         className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border-2 bg-black/40 text-base font-bold transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 motion-reduce:transition-none"
         style={{ borderColor: FAKE_COLOR, color: FAKE_COLOR }}
       >
@@ -339,7 +318,7 @@ export function VerdictButtons({
         type="button"
         disabled={disabled}
         onClick={() => onVerdict('real')}
-        aria-label={`${meta.realLabel} (sağ ok tuşu)`}
+        aria-label={tx.rightKey(meta.realLabel)}
         className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border-2 bg-black/40 text-base font-bold transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 motion-reduce:transition-none"
         style={{ borderColor: REAL_COLOR, color: REAL_COLOR }}
       >

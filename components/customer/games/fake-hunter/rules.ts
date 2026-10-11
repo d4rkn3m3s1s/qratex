@@ -71,12 +71,19 @@ export function updateElo(player: number, difficulty: 1 | 2 | 3, correct: boolea
   return Math.round(Math.max(400, Math.min(2400, next)));
 }
 
+/** Unvan basamağı (0 = Çaylak … 4 = Baş Müfettiş); metinler `copy.ts → eloTitles`. */
+export function eloLevel(elo: number): 0 | 1 | 2 | 3 | 4 {
+  if (elo >= 1300) return 4;
+  if (elo >= 1150) return 3;
+  if (elo >= 1000) return 2;
+  if (elo >= 880) return 1;
+  return 0;
+}
+
+const ELO_TITLES_TR = ['Çaylak', 'Stajyer Dedektif', 'Dedektif', 'Kıdemli Dedektif', 'Baş Müfettiş'] as const;
+
 export function eloTitle(elo: number): string {
-  if (elo >= 1300) return 'Baş Müfettiş';
-  if (elo >= 1150) return 'Kıdemli Dedektif';
-  if (elo >= 1000) return 'Dedektif';
-  if (elo >= 880) return 'Stajyer Dedektif';
-  return 'Çaylak';
+  return ELO_TITLES_TR[eloLevel(elo)];
 }
 
 /** Pratikte Elo'ya en yakın zorluktaki öğeyi seç (eşitlikte ilk gelen; deterministik). */
