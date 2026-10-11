@@ -11,6 +11,8 @@ const tx = {
   consumptionReview: { findMany: jest.fn(), updateMany: jest.fn() },
   auditLog: { create: jest.fn() },
   notification: { create: jest.fn() },
+  // Moderasyon geri alımı (lib/economy/clawback): varsayılan "kredi satırı yok" → puan işlemi yok.
+  pointsLedger: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
 };
 const mockPrisma = {
   ...tx,

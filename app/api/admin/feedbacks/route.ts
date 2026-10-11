@@ -6,6 +6,7 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { adminFeedbacksDeleteSchema, adminFeedbacksQuerySchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
+import { clawBackModeratedCredits, type ModerationItem } from '@/lib/economy/clawback';
 
 
 export const dynamic = 'force-dynamic';
@@ -379,6 +380,18 @@ export async function DELETE(request: NextRequest) {
     // yeniden PUANLI yorum yazabiliyordu (tekrarlanabilir kredi); RemedyOffer geçmişi de
     // cascade ile gidiyordu. Satır kaldığı için ikinci yorum (ve ikinci kredi) imkânsız.
     const affected = await prisma.$transaction(async (tx) => {
+      // Gerçekten çöpe giden satırlar (ekonomi geri alımı yalnız bunlara uygulanır).
+      const items: ModerationItem[] =
+        type === 'consumption'
+          ? (
+              await tx.consumptionReview.findMany({
+                where: { id: { in: ids }, deletedAt: null },
+                select: { consumptionId: true },
+              })
+            ).map((r) => ({ kind: 'consumption_review' as const, consumptionId: r.consumptionId }))
+          : (
+              await tx.feedback.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true } })
+            ).map((f) => ({ kind: 'feedback' as const, feedbackId: f.id }));
       const res =
         type === 'consumption'
           ? await tx.consumptionReview.updateMany({
@@ -389,6 +402,8 @@ export async function DELETE(request: NextRequest) {
               where: { id: { in: ids }, deletedAt: null },
               data: { deletedAt: now },
             });
+      // Oyunlaştırma-ekonomi Y4: silinen yorumdan basılan puan defterli geri alınır (aynı tx).
+      const clawback = await clawBackModeratedCredits(tx, items, { actorId: session.user.id });
       await tx.auditLog.create({
         data: {
           ...auditEntry(
@@ -397,7 +412,7 @@ export async function DELETE(request: NextRequest) {
               action: type === 'consumption' ? 'SOFT_DELETE_CONSUMPTION_REVIEWS' : 'SOFT_DELETE_FEEDBACKS',
               entity: type === 'consumption' ? 'ConsumptionReview' : 'Feedback',
               entityId: ids.join(','),
-              newData: { requested: ids.length, affected: res.count, type: type ?? 'qr' },
+              newData: { requested: ids.length, affected: res.count, type: type ?? 'qr', pointsClawedBack: clawback.points },
             }
           ),
           ...auditMeta,

@@ -55,6 +55,7 @@ jest.mock('@/lib/login-streak', () => ({
     { days: 3, points: 50 },
     { days: 7, points: 150 },
   ],
+  normalizeLoginStreakMilestones: (raw: Array<{ days: number; points: number }>) => raw,
 }));
 
 import { GET } from '@/app/api/customer/home/route';

@@ -3,7 +3,9 @@ import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { startOfDayUTC, startOfWeekUTC } from '@/lib/timezone';
+import { startOfWeekUTC } from '@/lib/timezone';
+import { levelProgress } from '@/components/customer/m-ben-ilerleme/level';
+import { getActivityStreak } from '@/lib/quests/activity-streak';
 
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +33,7 @@ export async function GET(_request: NextRequest) {
           select: {
             feedbacks: { where: { deletedAt: null } },
             badges: true,
-            quests: true,
+            quests: { where: { completedAt: { not: null } } },
           },
         },
       },
@@ -39,7 +41,7 @@ export async function GET(_request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: 'Kullanıcı bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
@@ -53,7 +55,7 @@ export async function GET(_request: NextRequest) {
       Date.UTC(nowForStats.getUTCFullYear(), nowForStats.getUTCMonth(), 1)
     );
 
-    const [weeklyFeedbacks, monthlyFeedbacks] = await Promise.all([
+    const [weeklyFeedbacks, monthlyFeedbacks, totalReferrals] = await Promise.all([
       prisma.feedback.count({
         where: {
           deletedAt: null,
@@ -68,40 +70,22 @@ export async function GET(_request: NextRequest) {
           createdAt: { gte: thisMonthStart },
         },
       }),
+      prisma.referral.count({ where: { referrerId: userId, status: 'COMPLETED' } }),
     ]);
 
-    // Calculate XP needed for next level
-    const currentLevel = user.level || 1;
-    const xpForNextLevel = currentLevel * 1000; // Each level requires level * 1000 XP
-    const currentXp = user.xp || 0;
-    const xpProgress = Math.min(100, (currentXp / xpForNextLevel) * 100);
-
-    // Calculate streak from recent feedbacks
-    const recentFeedbacks = await prisma.feedback.findMany({
-      where: { deletedAt: null, userId: userId },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: { createdAt: true },
-    });
-
-    let currentStreak = 0;
-    if (recentFeedbacks.length > 0) {
-      // UTC gün sınırları — yerel setHours ay/gün geçişlerinde streak'i yanlış
-      // sıfırlıyordu. Aktivite günlerini UTC gün damgasına indirgeyip karşılaştır.
-      const activityDays = new Set(
-        recentFeedbacks.map((f) => startOfDayUTC(new Date(f.createdAt)).getTime())
-      );
-      const todayUTC = startOfDayUTC(new Date());
-
-      for (let i = 0; i < 30; i++) {
-        const checkDay = todayUTC.getTime() - i * 24 * 60 * 60 * 1000;
-        if (activityDays.has(checkDay)) {
-          currentStreak++;
-        } else if (i > 0) {
-          break;
-        }
-      }
-    }
+    // Seviye ilerlemesi yazan akışla (creditPointsAndXp → calculateLevel) AYNI geometrik eğri;
+    // eskiden "seviye × 1000 XP" ile kümülatif XP bölünüyordu (Seviye 2'den sonra yanlış yüzde).
+    // Seri: QR geri bildirimi + tüketim yorumu, İstanbul günü (görev ekranının seri alevi ile aynı
+    // modül); eskiden yalnız QR yorumu, UTC günü ve `longestStreak = currentStreak` uydurmasıydı.
+    const lp = levelProgress(user.xp || 0, user.level);
+    const [streak, lastFeedback] = await Promise.all([
+      getActivityStreak(prisma, userId),
+      prisma.feedback.findFirst({
+        where: { deletedAt: null, userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ]);
 
     const progressData = {
       userId: user.id,
@@ -109,30 +93,31 @@ export async function GET(_request: NextRequest) {
       
       // Points & Level
       totalPoints: user.points || 0,
-      level: currentLevel,
-      xp: currentXp,
-      xpForNextLevel,
-      xpProgress: Math.floor(xpProgress),
+      level: lp.level,
+      xp: lp.xp,
+      /** Sonraki seviyenin başladığı kümülatif XP. */
+      xpForNextLevel: lp.nextLevelXp,
+      xpToNextLevel: lp.xpToNext,
+      xpProgress: lp.percent,
       
       // Counts
       feedbackCount: user._count.feedbacks,
       badgeCount: user._count.badges,
       questsCompleted: user._count.quests,
       
-      // Streaks
-      currentStreak,
-      longestStreak: currentStreak, // Simplified
+      // Seri (İstanbul günü, son 60 gün penceresi)
+      currentStreak: streak.current,
+      longestStreak: streak.bestInWindow,
+      streakAtRisk: streak.atRisk,
       
       // Time-based stats
       weeklyFeedbacks,
       monthlyFeedbacks,
-      totalReferrals: 0,
-      
+      totalReferrals,
+
       // Activity
-      lastActivityAt: recentFeedbacks[0]?.createdAt || null,
-      isActiveToday: recentFeedbacks.length > 0 
-        ? new Date(recentFeedbacks[0].createdAt).toDateString() === new Date().toDateString()
-        : false,
+      lastActivityAt: lastFeedback?.createdAt ?? null,
+      isActiveToday: streak.activeToday,
     };
 
     return NextResponse.json(

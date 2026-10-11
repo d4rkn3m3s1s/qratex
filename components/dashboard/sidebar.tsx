@@ -20,11 +20,10 @@ import { signOut, useSession } from 'next-auth/react';
 import { ChevronDown, ChevronLeft, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn, getInitials, calculateLevelProgress } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
 import { navIcon } from '@/lib/navigation/icons';
 import { matchActiveHref, type NavBadgeKey } from '@/lib/navigation/registry';
@@ -240,7 +239,6 @@ function SidebarContent({ nodes, activeHref, collapsed, mobile, badges, siteName
   const label = (it: ShellItem) => bl(it.label);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
   const [openedGroups, setOpenedGroups] = useState<Set<string>>(() => new Set());
-  const levelProgress = calculateLevelProgress(session?.user?.points || 0);
   const expandLabel = t('appShell.sidebarExpand');
   const collapseLabel = t('appShell.sidebarCollapse');
 
@@ -373,13 +371,17 @@ function SidebarContent({ nodes, activeHref, collapsed, mobile, badges, siteName
       <div className="p-3">
         {role === 'customer' && showLabels && (
           <div className="mb-3 rounded-card border border-border/50 bg-muted/40 p-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
                 {t('appShell.level')} {session?.user?.level || 1}
               </span>
-              <span className="text-xs tabular-nums text-muted-foreground">{session?.user?.points || 0} XP</span>
+              {/* Harcanabilir PUAN bakiyesi (XP değil). Eskiden "{puan} XP" yazıp seviye çubuğunu puan
+                  bakiyesinden hesaplıyordu — seviye XP'den türediği için çubuk uydurmaydı; gerçek seviye
+                  ilerlemesi Ben → İlerleme'de (XP, aynı eğri). */}
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {(session?.user?.points || 0).toLocaleString(bl({ tr: 'tr-TR', en: 'en-US' }))} {t('appShell.globalSearchPointsShort')}
+              </span>
             </div>
-            <Progress value={levelProgress} className="h-2" aria-label={`${t('appShell.level')} ${session?.user?.level || 1}`} />
           </div>
         )}
 

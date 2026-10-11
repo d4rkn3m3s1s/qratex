@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { mintPoints } from '@/lib/economy';
+import { getDefaultPointsMatrix, getPointsMatrix } from '@/lib/points-rules';
 import { addDays, istanbulDay, istanbulDayStart } from '@/components/ds/page/date-range';
 
 /**
@@ -13,8 +14,9 @@ import { addDays, istanbulDay, istanbulDayStart } from '@/components/ds/page/dat
  *
  * Bu sistem şunlardan TAMAMEN BAĞIMSIZDIR:
  *  - MİNİ OYUN serisi (MiniGameSession / GameStreakClaim, app/api/customer/games/streak).
- *  - UserStreak loyalty tablosu (app/api/streak).
- * Veri, User modelindeki loginStreak* alanlarında tutulur.
+ *  - UserStreak loyalty tablosu (eski /api/streak ucu kaldırıldı; tabloyu yazan yol yok).
+ * Veri, User modelindeki loginStreak* alanlarında tutulur. Kilometre taşları puan matrisinden
+ * (`getLoginStreakMilestones`) — yönetici "Seri" ayarını değiştirince ödeme de değişir.
  *
  * Puan ekonomisi değişmezleri (lib/economy README):
  *  - Ödül yalnız `mintPoints` ile (kilit + defter + `points_credited` aynı tx'te).
@@ -22,13 +24,41 @@ import { addDays, istanbulDay, istanbulDayStart } from '@/components/ds/page/dat
  *    `claimedMilestones` bayrağı hem defterin `idempotencyKey`'i ile (ömür boyu bir kez).
  */
 
-/** Ödüllü kilometre taşları: gün → puan. Artan sırada tutulur. */
-export const LOGIN_STREAK_MILESTONES: ReadonlyArray<{ days: number; points: number }> = [
-  { days: 3, points: 50 },
-  { days: 7, points: 150 },
-  { days: 14, points: 300 },
-  { days: 30, points: 1000 },
-];
+export type LoginStreakMilestone = { days: number; points: number };
+
+/**
+ * Ödüllü kilometre taşları — puan matrisinden (`/admin/economy` → Puan matrisi → Seri) okunur;
+ * `getLoginStreakMilestones()` canlı değerleri döner. Bu sabit yalnız matris VARSAYILANIDIR
+ * (ayar yokken / okunamazken) ve aynı listeyi `lib/points-rules.ts` tanımlar (tek kaynak).
+ */
+export const LOGIN_STREAK_MILESTONES: ReadonlyArray<LoginStreakMilestone> = getDefaultPointsMatrix().streak.milestones;
+
+/** Matris satırlarını ödenebilir taşlara indirger: tam sayı gün ≥ 1, puan > 0, gün başına tek, artan. */
+export function normalizeLoginStreakMilestones(raw: ReadonlyArray<{ days: unknown; points: unknown }>): LoginStreakMilestone[] {
+  const byDay = new Map<number, number>();
+  for (const row of raw) {
+    const days = Math.floor(Number(row?.days));
+    const points = Math.floor(Number(row?.points));
+    if (!Number.isFinite(days) || days < 1 || !Number.isFinite(points) || points <= 0) continue;
+    if (!byDay.has(days)) byDay.set(days, points);
+  }
+  return [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([days, points]) => ({ days, points }));
+}
+
+/**
+ * Canlı kilometre taşları (puan matrisi, 60 sn önbellekli). Matris okunamazsa varsayılan —
+ * seri ilerlemesi ayar okumasına bağlı olarak düşmez. Ödemeyi yapan `touchLoginStreak`,
+ * ekrandaki "sıradaki taş" ve tanıtım sayfası aynı listeyi kullanır.
+ */
+export async function getLoginStreakMilestones(): Promise<LoginStreakMilestone[]> {
+  try {
+    const matrix = await getPointsMatrix();
+    const list = normalizeLoginStreakMilestones(matrix.streak.milestones);
+    return list.length > 0 ? list : [...LOGIN_STREAK_MILESTONES];
+  } catch {
+    return [...LOGIN_STREAK_MILESTONES];
+  }
+}
 
 /** "YYYY-MM-DD" (Europe/Istanbul) — serinin gün anahtarı. */
 export function loginDayKey(d: Date): string {
@@ -115,7 +145,8 @@ export async function touchLoginStreak(userId: string, now: Date = new Date()): 
   const nextStreak = decision.next;
   const nextLongest = Math.max(existing.loginStreakLongest, nextStreak);
   const todayStart = istanbulDayStart(decision.today);
-  const milestone = LOGIN_STREAK_MILESTONES.find((m) => m.days === nextStreak && !claimedBefore.includes(m.days));
+  const milestones = await getLoginStreakMilestones();
+  const milestone = milestones.find((m) => m.days === nextStreak && !claimedBefore.includes(m.days));
 
   const result = await prisma.$transaction(async (tx) => {
     // ATOMİK gün guard'ı: yalnızca son gün bugünden (İstanbul) ÖNCE ya da null iken ilerlet.

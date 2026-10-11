@@ -4,6 +4,7 @@ import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { addDays, istanbulDay } from '@/components/ds/page/date-range';
+import { levelProgress as canonicalLevelProgress } from '@/components/customer/m-ben-ilerleme/level';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,12 +94,12 @@ export async function GET() {
       );
     }
 
-    // Calculate level progress
-    const xpForCurrentLevel = (user.level - 1) * 1000;
-    const xpForNextLevel = user.level * 1000;
-    const xpProgress = user.xp - xpForCurrentLevel;
-    const xpNeeded = xpForNextLevel - xpForCurrentLevel;
-    const levelProgress = Math.min((xpProgress / xpNeeded) * 100, 100);
+    // Seviye ilerlemesi — yazan akışla (creditPointsAndXp → calculateLevel, geometrik) aynı eğri.
+    // Eskiden "her seviye 1000 XP" varsayılıyordu: Seviye 3+'te çubuk hep %100, kalan XP yanlış.
+    const lp = canonicalLevelProgress(user.xp, user.level);
+    const xpProgress = lp.xpIntoLevel;
+    const xpNeeded = lp.xpForLevel;
+    const levelProgress = lp.percent;
 
     // Format active quests
     const activeQuests = questProgress.map(uq => {
@@ -159,7 +160,7 @@ export async function GET() {
       {
         success: true,
         data: {
-          user: { id: user.id, name: user.name, email: user.email, image: user.image, points: user.points, xp: user.xp, level: user.level, createdAt: user.createdAt, levelProgress, xpProgress, xpNeeded },
+          user: { id: user.id, name: user.name, email: user.email, image: user.image, points: user.points, xp: user.xp, level: lp.level, createdAt: user.createdAt, levelProgress, xpProgress, xpNeeded },
           stats: {
             feedbackCount: feedbackCount + cardSystemData.consumptionReviewCount,
             badgeCount,

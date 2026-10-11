@@ -5,12 +5,12 @@
  *   POST → bugünü say ("dokun"): günde bir kez ilerler, kilometre taşında tek seferlik
  *          puan (`mintPoints`). Ana Sayfa açılışında bir kez çağrılır.
  *
- * NOT: /api/customer/games/streak (mini oyun serisi) ve /api/streak (UserStreak loyalty)
- * AYRIDIR — bu yalnızca giriş serisidir.
+ * NOT: /api/customer/games/streak (mini oyun serisi) AYRIDIR — bu yalnızca giriş serisidir.
+ * Kilometre taşları puan matrisinden (`getLoginStreakMilestones`); ödeyen kodla aynı liste.
  */
 import { prisma } from '@/lib/prisma';
 import { defineRoute, ok } from '@/lib/http/define-route';
-import { LOGIN_STREAK_MILESTONES, touchLoginStreak } from '@/lib/login-streak';
+import { getLoginStreakMilestones, touchLoginStreak } from '@/lib/login-streak';
 import { parseClaimedMilestones, streakSnapshot } from '@/lib/customer-home/core';
 
 export const dynamic = 'force-dynamic';
@@ -18,15 +18,18 @@ export const dynamic = 'force-dynamic';
 export const GET = defineRoute(
   { name: 'customer.streak.read', roles: ['CUSTOMER'], rateLimit: 'read' },
   async ({ user }) => {
-    const row = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        loginStreakCount: true,
-        loginStreakLongest: true,
-        loginStreakLastDay: true,
-        loginStreakClaimedMilestones: true,
-      },
-    });
+    const [row, milestones] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: {
+          loginStreakCount: true,
+          loginStreakLongest: true,
+          loginStreakLastDay: true,
+          loginStreakClaimedMilestones: true,
+        },
+      }),
+      getLoginStreakMilestones(),
+    ]);
     const snapshot = streakSnapshot(
       {
         count: row?.loginStreakCount ?? 0,
@@ -35,9 +38,9 @@ export const GET = defineRoute(
         claimedMilestones: parseClaimedMilestones(row?.loginStreakClaimedMilestones),
       },
       new Date(),
-      LOGIN_STREAK_MILESTONES
+      milestones
     );
-    return ok({ ...snapshot, milestones: LOGIN_STREAK_MILESTONES }, { legacySpread: true });
+    return ok({ ...snapshot, milestones }, { legacySpread: true });
   }
 );
 
@@ -45,7 +48,7 @@ export const POST = defineRoute(
   { name: 'customer.streak.touch', roles: ['CUSTOMER'], rateLimit: 'mutation' },
   async ({ user }) => {
     const now = new Date();
-    const result = await touchLoginStreak(user.id, now);
+    const [result, milestones] = await Promise.all([touchLoginStreak(user.id, now), getLoginStreakMilestones()]);
     const snapshot = streakSnapshot(
       {
         count: result.streak,
@@ -54,7 +57,7 @@ export const POST = defineRoute(
         claimedMilestones: result.claimedMilestones,
       },
       now,
-      LOGIN_STREAK_MILESTONES
+      milestones
     );
     return ok(
       {
@@ -62,7 +65,7 @@ export const POST = defineRoute(
         // Eski istemci alanları (components/customer/login-streak-card.tsx).
         streak: snapshot.days,
         isNewDay: result.isNewDay,
-        milestones: LOGIN_STREAK_MILESTONES,
+        milestones,
         claimedMilestones: result.claimedMilestones,
         todayClaimed: !!result.milestoneReward,
         milestoneReward: result.milestoneReward ?? null,

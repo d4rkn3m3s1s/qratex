@@ -5,6 +5,7 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import { adminFeedbacksRestoreSchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
+import { restoreModeratedCredits, type ModerationItem } from '@/lib/economy/clawback';
 
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,17 @@ export async function POST(request: NextRequest) {
 
     // Geri alma + denetim satırı (aktör anlık görüntüsüyle) AYNI transaction'da.
     const result = await prisma.$transaction(async (tx) => {
+      // Gerçekten geri yüklenen satırlar — moderasyonla geri alınan puan bunlara iade edilir.
+      const items: ModerationItem[] = isConsumption
+        ? (
+            await tx.consumptionReview.findMany({
+              where: { id: { in: ids }, deletedAt: { not: null } },
+              select: { consumptionId: true },
+            })
+          ).map((r) => ({ kind: 'consumption_review' as const, consumptionId: r.consumptionId }))
+        : (
+            await tx.feedback.findMany({ where: { id: { in: ids }, deletedAt: { not: null } }, select: { id: true } })
+          ).map((f) => ({ kind: 'feedback' as const, feedbackId: f.id }));
       const res = isConsumption
         ? await tx.consumptionReview.updateMany({
             where: { id: { in: ids }, deletedAt: { not: null } },
@@ -52,6 +64,8 @@ export async function POST(request: NextRequest) {
             where: { id: { in: ids }, deletedAt: { not: null } },
             data: { deletedAt: null },
           });
+      // Oyunlaştırma-ekonomi Y4: silmede geri alınan puan defterli iade edilir (aynı tx, tek-kez).
+      const restored = await restoreModeratedCredits(tx, items, { actorId: session.user.id });
       await tx.auditLog.create({
         data: auditEntry(
           actorFromSession(session),
@@ -59,7 +73,7 @@ export async function POST(request: NextRequest) {
             action: isConsumption ? 'RESTORE_CONSUMPTION_REVIEWS' : 'RESTORE_FEEDBACKS',
             entity: isConsumption ? 'ConsumptionReview' : 'Feedback',
             entityId: ids.join(','),
-            newData: { requested: ids.length, count: res.count },
+            newData: { requested: ids.length, count: res.count, pointsRestored: restored.points },
           },
           request
         ),

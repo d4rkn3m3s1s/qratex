@@ -68,15 +68,17 @@ const DEFAULT_POINTS_MATRIX: PointsMatrix = {
   birthday: {
     points: 500,
   },
+  // Günlük giriş serisinin (lib/login-streak.ts) kilometre taşları — TEK kaynak. Eskiden bu
+  // bölüm yetim `UserStreak` loyalty serisini (7…365 gün) tanımlıyordu; kullanıcının gördüğü
+  // giriş serisi ise kodda sabit 3/7/14/30 taşlarını ödüyordu → Ekonomi Stüdyosu'ndaki "Seri"
+  // düzenlemesinin hiçbir etkisi yoktu ve tanıtım sayfası ödenmeyen değerleri vaat ediyordu.
+  // Varsayılanlar giriş serisinin tarihsel ödemeleridir (davranış değişmez).
   streak: {
     milestones: [
-      { days: 7, points: 100 },
-      { days: 14, points: 250 },
-      { days: 30, points: 500 },
-      { days: 60, points: 1000 },
-      { days: 90, points: 2000 },
-      { days: 180, points: 5000 },
-      { days: 365, points: 10000 },
+      { days: 3, points: 50 },
+      { days: 7, points: 150 },
+      { days: 14, points: 300 },
+      { days: 30, points: 1000 },
     ],
   },
   quest: {

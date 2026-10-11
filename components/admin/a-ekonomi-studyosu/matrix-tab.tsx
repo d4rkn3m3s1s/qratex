@@ -195,8 +195,8 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
 
         <SectionCard
           icon={<Flame className="h-4 w-4" />}
-          title="Seri kilometre taşları"
-          description="Bonus yalnız TAM gün eşleşmesinde verilir (14. günde, 15. günde değil). Gün en az 2 olmalı: 1. gün bonusu her sıfırlamada yeniden kazanılırdı."
+          title="Giriş serisi kilometre taşları"
+          description="Müşterinin Ana Sayfa'daki günlük giriş serisi bu taşları öder. Bonus yalnız TAM gün eşleşmesinde ve her taş için ömür boyu bir kez verilir (14. günde, 15. günde değil). Gün en az 2 olmalı."
           actions={
             <Button type="button" size="sm" variant="outline" className="min-h-11 gap-1.5 sm:min-h-9" onClick={addMilestone} disabled={m.streak.milestones.length >= L.streakMilestones.max}>
               <Plus className="h-4 w-4" aria-hidden /> Taş ekle

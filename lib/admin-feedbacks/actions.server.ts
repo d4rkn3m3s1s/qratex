@@ -14,6 +14,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auditEntry, type AuditActor } from '@/lib/data-safety/audit';
+import { clawBackModeratedCredits, restoreModeratedCredits, type ModerationItem } from '@/lib/economy/clawback';
 import {
   REMIND_COOLDOWN_HOURS,
   feedKey,
@@ -67,6 +68,7 @@ export async function runBulk(body: BulkBody, ctx: ActionCtx): Promise<BulkResul
   const revMut = reviewMutation(action, now);
   if (!revMut) for (const id of revIds) skipped.push({ key: feedKey('consumption', id), reason: QR_ONLY_REASON });
 
+  let pointsAdjusted: { affected: number; points: number } | null = null;
   const affected = await prisma.$transaction(async (tx) => {
     let count = 0;
     const snapshot: Record<string, unknown>[] = [];
@@ -94,7 +96,7 @@ export async function runBulk(body: BulkBody, ctx: ActionCtx): Promise<BulkResul
     if (revIds.length && revMut) {
       const before = await tx.consumptionReview.findMany({
         where: { id: { in: revIds }, ...revMut.where },
-        select: { id: true, rating: true, text: true, deletedAt: true },
+        select: { id: true, rating: true, text: true, deletedAt: true, consumptionId: true },
       });
       const ids = before.map((b) => b.id);
       if (ids.length) {
@@ -109,6 +111,22 @@ export async function runBulk(body: BulkBody, ctx: ActionCtx): Promise<BulkResul
       }
     }
 
+    // Ekonomi (oyunlaştırma-ekonomi Y4): çöp kutusuna atılan yorumun puanı geri alınır, geri
+    // yüklenince iade edilir — aynı transaction'da, defterli ve tek-kez (lib/economy/clawback).
+    if ((action === 'delete' || action === 'restore') && changedKeys.length) {
+      const items: ModerationItem[] = [];
+      for (const snap of snapshot) {
+        if (snap.source === 'qr') items.push({ kind: 'feedback', feedbackId: String(snap.id) });
+        else if (typeof snap.consumptionId === 'string') items.push({ kind: 'consumption_review', consumptionId: snap.consumptionId });
+      }
+      const actorId = ctx.actor.id ?? 'system';
+      const ledger =
+        action === 'delete'
+          ? await clawBackModeratedCredits(tx, items, { actorId, reason: body.reason ? `Moderasyon: ${body.reason}` : undefined })
+          : await restoreModeratedCredits(tx, items, { actorId });
+      if (ledger.affected > 0) pointsAdjusted = ledger;
+    }
+
     if (changedKeys.length) {
       const sources = new Set(snapshot.map((s) => s.source as FeedSource));
       await tx.auditLog.create({
@@ -120,7 +138,7 @@ export async function runBulk(body: BulkBody, ctx: ActionCtx): Promise<BulkResul
             // Kimlikler denetim satırında aranabilir (detay çekmecesi `contains` ile okur).
             entityId: changedKeys.join(',').slice(0, 4000),
             oldData: { items: snapshot },
-            newData: { action, reason: body.reason ?? null, affected: count, keys: changedKeys },
+            newData: { action, reason: body.reason ?? null, affected: count, keys: changedKeys, pointsAdjusted },
           },
           ctx.request
         ),

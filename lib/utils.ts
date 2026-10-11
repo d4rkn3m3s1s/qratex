@@ -1,13 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import {
-  DEFAULT_LEAGUE_RULES,
-  getLeagueMetaFromRules,
-  getNextLeagueMetaFromRules,
-  getLeagueProgressFromRules,
-  type LeagueKey,
-  type LeagueRule,
-} from '@/lib/league-rules-core';
+import type { LeagueKey } from '@/lib/league-rules-core';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -134,38 +127,14 @@ export function calculateLevelProgress(xp: number, xpPerLevel: number = 1000, mu
   return (currentLevelXp / requiredXp) * 100;
 }
 
-/** Lig: tek kaynak lib/league-rules (DB/Admin). Client fallback: DEFAULT_LEAGUE_RULES. */
+/**
+ * Lig: tek kaynak lib/league-rules (DB/Admin) + lib/league-rules-core (saf yardımcılar).
+ * Buradaki eski `getLeague*`/`getLeagueProgress*` yardımcıları KALDIRILDI: yöneticinin lig
+ * kurallarını yok sayıp `DEFAULT_LEAGUE_RULES` ile (ve çoğu zaman bayat oturum bakiyesiyle)
+ * hesaplıyordu → admin ligleri değiştirince dashboard ile liderlik farklı lig gösteriyordu.
+ * Lig her zaman sunucuda `getLeagueRules()` + `getLeagueMetaFromRules()` ile hesaplanır.
+ */
 export type { LeagueKey };
-export type LeagueMeta = LeagueRule;
-
-/** Lig ismi; client tarafında varsayılan kurallarla. API'den gelen league kullanıldığında tercih edin. */
-export function getLeague(points: number): string {
-  return getLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES).name;
-}
-
-export function getLeagueMetaByPoints(points: number): LeagueMeta {
-  return getLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES);
-}
-
-export function getLeagueMeta(levelOrPoints: number): LeagueMeta {
-  return getLeagueMetaByPoints(levelOrPoints);
-}
-
-export function getNextLeagueMetaByPoints(points: number): LeagueMeta | null {
-  return getNextLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES);
-}
-
-export function getNextLeagueMeta(levelOrPoints: number): LeagueMeta | null {
-  return getNextLeagueMetaByPoints(levelOrPoints);
-}
-
-export function getLeagueProgressByPoints(points: number): number {
-  return getLeagueProgressFromRules(points, DEFAULT_LEAGUE_RULES);
-}
-
-export function getLeagueProgress(levelOrPoints: number): number {
-  return getLeagueProgressByPoints(levelOrPoints);
-}
 
 export function generateQRCode(): string {
   // QR `code` public lookup anahtarıdır (scan/feedback endpoint'lerinde).

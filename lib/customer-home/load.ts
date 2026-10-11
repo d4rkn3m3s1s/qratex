@@ -13,7 +13,7 @@ import { getModuleControls } from '@/lib/module-gate';
 import { getShellConfig } from '@/lib/navigation/get-shell-config';
 import { getLeagueRules } from '@/lib/league-rules';
 import { getPointsMatrix, getSpinRules } from '@/lib/points-rules';
-import { LOGIN_STREAK_MILESTONES } from '@/lib/login-streak';
+import { LOGIN_STREAK_MILESTONES, normalizeLoginStreakMilestones } from '@/lib/login-streak';
 import { resolveRewardDisplayImage } from '@/lib/reward-display-image';
 import { istanbulDay } from '@/components/ds/page/date-range';
 import {
@@ -91,6 +91,9 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
   if (!user) throw new CustomerHomeNotFoundError();
 
   const points = Math.max(0, user.points);
+  // Seri kilometre taşları puan matrisinden — ödeyen `touchLoginStreak` ile aynı liste.
+  const liveMilestones = Array.isArray(matrix?.streak?.milestones) ? normalizeLoginStreakMilestones(matrix.streak.milestones) : [];
+  const streakMilestones = liveMilestones.length > 0 ? liveMilestones : LOGIN_STREAK_MILESTONES;
   const sortedRules = [...leagueRules].sort((a, b) => a.minPoints - b.minPoints);
   const { current: league, index: leagueIndex } = leagueFor(points, sortedRules);
   const nextLeagueMin = sortedRules[leagueIndex + 1]?.minPoints ?? null;
@@ -161,7 +164,7 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
       claimedMilestones: parseClaimedMilestones(user.loginStreakClaimedMilestones),
     },
     now,
-    LOGIN_STREAK_MILESTONES
+    streakMilestones
   );
 
   const rewardTargets = pickRewardTargets(rewards, points, now, (r) =>

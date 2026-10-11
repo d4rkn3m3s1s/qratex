@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { badgeRewardPoints } from '@/lib/badge-reward-points';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { getClientIdentifier } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
@@ -256,7 +257,9 @@ export async function GET(request: NextRequest) {
         category: normalizedCategory,
         categoryLabel: CATEGORY_LABELS[normalizedCategory] || CATEGORY_LABELS.general,
         rarity: (badge.rarity || 'common').toUpperCase() as 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
-        points: targetValue,
+        // Kazanınca hesaba yatan ödül puanı — TEK kaynak `badgeRewardPoints` (awardBadge'in ödediği).
+        // Eskiden `requirement.value` (eşik sayısı) "puan" diye dönüyordu → koleksiyon "Toplam Puan" yanlış.
+        points: badgeRewardPoints(badge.id),
         pointCost: badge.pointCost ?? null,
         color: badge.color ?? null,
         bgColor: badge.bgColor ?? null,

@@ -12,7 +12,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { addDays, istanbulDay } from '@/components/ds/page/date-range';
-import { LOGIN_STREAK_MILESTONES } from '@/lib/login-streak';
+import { LOGIN_STREAK_MILESTONES, getLoginStreakMilestones, type LoginStreakMilestone } from '@/lib/login-streak';
 import { getLeagueRules, getLeagueMetaFromRules, getNextLeagueMetaFromRules } from '@/lib/league-rules';
 import { daysToNextLevel, levelProgress, upcomingLevels } from '../level';
 import {
@@ -60,6 +60,8 @@ export function streakStateOf(
   longest: number,
   claimedRaw: unknown,
   now: Date,
+  /** Canlı kilometre taşları (puan matrisi); verilmezse varsayılan liste. */
+  milestones: ReadonlyArray<LoginStreakMilestone> = LOGIN_STREAK_MILESTONES,
 ): ProgressSummary['streak'] {
   const today = istanbulDay(now);
   let state: StreakState = 'none';
@@ -78,7 +80,7 @@ export function streakStateOf(
     }
   }
   const claimed = parseClaimed(claimedRaw);
-  const m = LOGIN_STREAK_MILESTONES.find((x) => x.days > current && !claimed.includes(x.days)) ?? null;
+  const m = milestones.find((x) => x.days > current && !claimed.includes(x.days)) ?? null;
   return {
     state,
     current,
@@ -142,7 +144,7 @@ export async function getProgressSummary(userId: string, opts: SummaryOptions): 
   const balance = Math.max(0, user.points);
   const rewardStock = { OR: [{ stock: -1 }, { stock: { gt: 0 } }] };
 
-  const [rewards, league, badges, pendingReviews, xpLast30, contribution] = await Promise.all([
+  const [rewards, league, badges, pendingReviews, xpLast30, contribution, streakMilestones] = await Promise.all([
     section('rewards', partial, async () => {
       const [next, affordableCount] = await Promise.all([
         prisma.reward.findFirst({
@@ -217,6 +219,7 @@ export async function getProgressSummary(userId: string, opts: SummaryOptions): 
           };
         })
       : Promise.resolve(null),
+    getLoginStreakMilestones(),
   ]);
 
   return {
@@ -240,6 +243,7 @@ export async function getProgressSummary(userId: string, opts: SummaryOptions): 
       user.loginStreakLongest,
       user.loginStreakClaimedMilestones,
       now,
+      streakMilestones,
     ),
     badges: badges ?? { total: 0, recent: [] },
     pendingReviews,
