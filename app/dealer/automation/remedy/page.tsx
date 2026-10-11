@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getServerLocale } from '@/lib/server-locale';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
 import { requireAuth } from '@/lib/api-auth';
 import { loadRemedyOverview } from '@/lib/dealer-automation/remedy.server';
@@ -7,10 +8,12 @@ import { RemedyScreen } from '@/components/dealer/b-otomasyon/remedy-screen';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Telafi otomasyonu · Otomasyon',
-  description: 'Düşük puanlı ya da kayıp riski yüksek yorumlar için onay kuyruğuna telafi taslağı ve teklif kataloğu.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale().catch(() => 'tr' as const);
+  return locale === 'en'
+    ? { title: 'Remedy automation · Automation', description: 'Remedy drafts for the approval queue and the offer catalog, for low-rated or high churn-risk reviews.' }
+    : { title: 'Telafi otomasyonu · Otomasyon', description: 'Düşük puanlı ya da kayıp riski yüksek yorumlar için onay kuyruğuna telafi taslağı ve teklif kataloğu.' };
+}
 
 /**
  * Bayi › Otomasyon › Telafi (eski /dealer/remedy-automation + /templates). Ayar, bu ayın

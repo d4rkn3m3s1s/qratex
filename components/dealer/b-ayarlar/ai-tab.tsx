@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Bot, GraduationCap, Power, RefreshCw, Sparkles, Zap } from 'lucide-react';
@@ -18,15 +18,16 @@ import { useSettingsCopy } from './copy';
 import { InstantSwitchRow } from './ui';
 import { useAiPatch } from './use-ai-patch';
 
-const contextSchema = z.object({
-  customPrompt: z
-    .string()
-    .trim()
-    .max(AI_CONTEXT_MAX, `En çok ${AI_CONTEXT_MAX} karakter`)
-    .nullable()
-    .transform((v) => (v && v.length > 0 ? v : null)),
-});
-type ContextValues = z.input<typeof contextSchema>;
+const contextSchemaFor = (maxMsg: string) =>
+  z.object({
+    customPrompt: z
+      .string()
+      .trim()
+      .max(AI_CONTEXT_MAX, maxMsg)
+      .nullable()
+      .transform((v) => (v && v.length > 0 ? v : null)),
+  });
+type ContextValues = z.input<ReturnType<typeof contextSchemaFor>>;
 
 /**
  * AI — yalnız GERÇEKTEN uygulanan anahtarlar (denetim B3: 17 ayarın 14'ü hiçbir yerde
@@ -253,6 +254,7 @@ function ContextCard({ initial, version, locked }: { initial: string | null; ver
   const queryClient = useQueryClient();
   const patch = useAiPatch();
   const c = useSettingsCopy().ai;
+  const contextSchema = useMemo(() => contextSchemaFor(c.maxChars(AI_CONTEXT_MAX)), [c]);
   const form = useZodForm(contextSchema, { defaultValues: { customPrompt: initial } });
   const baseRef = useRef(initial);
 

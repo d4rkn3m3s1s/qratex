@@ -163,6 +163,7 @@ export function FormRow({
 /** Ekip merkezi yazma işlemleri: başarıda hub yenilenir + bildirim; hatada sunucunun Türkçe mesajı. */
 export function useHubMutation<V, R = unknown>(fn: (v: V) => Promise<R>, opts: { success?: string | ((r: R) => string); onSuccess?: (r: R) => void } = {}) {
   const qc = useQueryClient();
+  const { copy } = useTeamCopy();
   return useMutation({
     mutationFn: fn,
     onSuccess: (r) => {
@@ -172,7 +173,7 @@ export function useHubMutation<V, R = unknown>(fn: (v: V) => Promise<R>, opts: {
       void qc.invalidateQueries({ queryKey: [TEAM_HUB_QUERY_KEY] });
     },
     onError: (err) => {
-      toast.error(err instanceof TeamApiError || err instanceof Error ? err.message : 'İşlem tamamlanamadı.');
+      toast.error(err instanceof TeamApiError || err instanceof Error ? err.message : copy.common.actionFailed);
     },
   });
 }

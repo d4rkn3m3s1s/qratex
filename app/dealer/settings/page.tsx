@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getServerLocale } from '@/lib/server-locale';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
@@ -21,11 +22,12 @@ import { BILLING_KEY, SETTINGS_KEY } from '@/components/dealer/b-ayarlar/keys';
  */
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Ayarlar',
-  description: 'İşletme profili, hesabınız, bildirimler, güvenlik, AI ve abonelik.',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale().catch(() => 'tr' as const);
+  return locale === 'en'
+    ? { title: 'Settings', description: 'Business profile, your account, notifications, security, AI and subscription.', robots: { index: false, follow: false } }
+    : { title: 'Ayarlar', description: 'İşletme profili, hesabınız, bildirimler, güvenlik, AI ve abonelik.', robots: { index: false, follow: false } };
+}
 
 type SearchParams = Record<string, string | string[] | undefined>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);

@@ -11,6 +11,7 @@ const TR = {
   locale: 'tr-TR',
   common: {
     retry: 'Tekrar dene',
+    actionFailed: 'İşlem tamamlanamadı.',
     cancel: 'Vazgeç',
     close: 'Kapat',
     save: 'Kaydet',
@@ -276,6 +277,7 @@ const EN: TeamCopy = {
   locale: 'en-GB',
   common: {
     retry: 'Try again',
+    actionFailed: "Couldn't complete that.",
     cancel: 'Cancel',
     close: 'Close',
     save: 'Save',

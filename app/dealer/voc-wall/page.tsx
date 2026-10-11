@@ -1,5 +1,6 @@
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
 import { requireAuth } from '@/lib/api-auth';
+import { getServerLocale } from '@/lib/server-locale';
 import { resolveDealerScope } from '@/lib/auth/scope';
 import { EmptyState, ErrorState } from '@/components/states';
 import { WALL_RANGES, type WallRange } from '@/lib/dealer/voc-wall/config';
@@ -39,12 +40,13 @@ export default async function DealerVocWallPage({ searchParams }: { searchParams
   try {
     const { assertModuleEnabled } = await import('@/lib/module-gate');
     if (await assertModuleEnabled('voc_wall', { userId: auth.session.user.id, routeKey: 'page:/dealer/voc-wall' })) {
+      const en = (await getServerLocale().catch(() => 'tr' as const)) === 'en';
       return (
         <div className="mx-auto w-full max-w-3xl">
           <EmptyState
             variant="permission"
-            title="Müşteri sesi duvarı kapalı"
-            description="Bu modül yönetici tarafından geçici olarak devre dışı bırakıldı."
+            title={en ? 'Customer voice wall is off' : 'Müşteri sesi duvarı kapalı'}
+            description={en ? 'An admin has temporarily disabled this module.' : 'Bu modül yönetici tarafından geçici olarak devre dışı bırakıldı.'}
           />
         </div>
       );

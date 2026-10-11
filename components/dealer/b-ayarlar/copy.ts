@@ -328,6 +328,7 @@ const tr = {
   },
   ai: {
     refreshFailed: 'Kullanım bilgisi yenilenemedi.',
+    maxChars: (n: number) => `En çok ${n} karakter`,
     engineOn: 'AI motoru açıldı.',
     engineOff: 'AI motoru kapatıldı.',
     locked: 'AI özellikleri yönetici tarafından bu hesap için kapatıldı. Ayarlarınız korunur ama şu an değiştirilemez ve uygulanmaz.',
@@ -805,6 +806,7 @@ const en: SettingsCopy = {
   },
   ai: {
     refreshFailed: "Couldn't refresh usage.",
+    maxChars: (n) => `Up to ${n} characters`,
     engineOn: 'AI engine turned on.',
     engineOff: 'AI engine turned off.',
     locked: "AI features were turned off for this account by an admin. Your settings are kept but can't be changed or applied right now.",

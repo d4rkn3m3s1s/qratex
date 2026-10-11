@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getServerLocale } from '@/lib/server-locale';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
 import { requireAuth } from '@/lib/api-auth';
 import { loadRepliesOverview } from '@/lib/dealer-automation/replies.server';
@@ -7,10 +8,12 @@ import { RepliesScreen } from '@/components/dealer/b-otomasyon/replies-screen';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Otomatik yanıtlar · Otomasyon',
-  description: 'Geri bildirime koşula göre otomatik yanıt yazan ya da vaka açan kurallar.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale().catch(() => 'tr' as const);
+  return locale === 'en'
+    ? { title: 'Auto-replies · Automation', description: 'Rules that automatically reply to feedback or open an incident based on a condition.' }
+    : { title: 'Otomatik yanıtlar · Otomasyon', description: 'Geri bildirime koşula göre otomatik yanıt yazan ya da vaka açan kurallar.' };
+}
 
 /**
  * Bayi › Otomasyon › Otomatik yanıtlar. Sunucu önce: kurallar + sayaçlar BFF ile AYNI
