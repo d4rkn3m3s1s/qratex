@@ -69,7 +69,7 @@ function toDrafts(state: NavStudioState): Drafts {
 
 function Studio({ state, reload }: { state: NavStudioState; reload: () => Promise<NavStudioState | null> }) {
   const fx = useNavStudioCopy().fx;
-  const roleLabel = ((cx) => (r: string) => cx.roles[r] ?? r)(useNavStudioCopy().fx);
+  const roleLabel = (r: string) => fx.roles[r] ?? r;
   const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const qc = useQueryClient();

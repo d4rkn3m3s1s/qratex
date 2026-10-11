@@ -73,7 +73,7 @@ export function ListView({
       map.get(key)!.items.push(t);
     }
     return [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, 'tr'));
-  }, [tasks, groupBy, departments]);
+  }, [tasks, groupBy, departments, tf, tm, tu]);
 
   const allIds = tasks.map((t) => t.id);
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));

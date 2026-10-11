@@ -157,7 +157,7 @@ export function CosmeticsTab({
         cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(COSMETIC_STATUS, row.original.status)} label={L(statusBadgeProps(COSMETIC_STATUS, row.original.status).label)} />,
       },
     ],
-    []
+    [L, fx, ux]
   );
 
   const href = (status: string) => `?tab=kozmetik&status=${status}`;

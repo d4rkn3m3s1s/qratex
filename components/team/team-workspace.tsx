@@ -146,7 +146,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         ? ([{ type: 'select', key: 'department', label: tu.departman, allLabel: tu.tumDepartmanlar, options: departments.map((d) => ({ value: d.slug, label: d.name })) }] as FilterField[])
         : []),
     ],
-    [members, tags, departments, viewer.isManager]
+    [members, tags, departments, viewer.isManager, tm, tu]
   );
   const filters = useFilterState(fields, { resetKeys: [] });
   const fv = filters.values as Record<string, string>;

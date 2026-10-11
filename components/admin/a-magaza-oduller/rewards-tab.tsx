@@ -153,7 +153,7 @@ export function RewardsTab({
         cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(REWARD_STATUS, row.original.status)} label={L(statusBadgeProps(REWARD_STATUS, row.original.status).label)} />,
       },
     ],
-    []
+    [L, ux]
   );
 
   const href = (status: string) => `?tab=oduller&status=${status}`;
