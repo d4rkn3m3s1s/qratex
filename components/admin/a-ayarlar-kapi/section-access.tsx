@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import type { AccessState } from '@/lib/platform-settings/server';
 import { errorText, fetchAccess, isConflict, saveAccess, settingsKeys } from './api';
 import { SettingSwitchRow } from './shared';
+import { AdminAyarlarKapiText } from './copy';
 
 type Role = 'dealer' | 'customer';
 const ROLE_LABEL: Record<Role, string> = { dealer: 'Bayi', customer: 'Müşteri' };
@@ -115,7 +116,7 @@ function AccessEditor({ access }: { access: AccessState }) {
             disabled={changed > 0}
             onConfirm={() => mutation.mutateAsync(true)}
           />
-          {changed > 0 ? <span className="qx-caption mt-1 block">Önce bekleyen değişiklikleri kaydedin ya da geri alın.</span> : null}
+          {changed > 0 ? <span className="qx-caption mt-1 block"><AdminAyarlarKapiText k="saveFirst" /></span> : null}
         </InlineError>
       ) : null}
 

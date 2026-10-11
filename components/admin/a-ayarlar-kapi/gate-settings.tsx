@@ -18,6 +18,7 @@ import {
   StatTile,
 } from '@/components/states';
 import { cn } from '@/lib/utils';
+import { AdminAyarlarKapiText } from './copy';
 
 /**
  * ADMIN ERİŞİM GÜVENLİĞİ — "Boyutlar Arası Geçit" ayarı (P0-01).
@@ -299,7 +300,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
                 placeholder="Örn: Evrende bize göre kaç boyut gizlidir?"
               />
               <p id={ids.questionHelp} className="qx-small flex justify-between gap-3 text-fg-muted">
-                <span>Cevabı tek rakam olan, yalnız kurucuların bileceği bir soru.</span>
+                <span><AdminAyarlarKapiText k="questionHint" /></span>
                 <span className="tabular-nums">
                   {question.length}/{QUESTION_MAX}
                 </span>
@@ -309,7 +310,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
             </div>
 
             <fieldset className="space-y-3 rounded-control border border-border p-4">
-              <legend className="qx-small px-1 font-semibold text-fg">Cevabı değiştir (isteğe bağlı)</legend>
+              <legend className="qx-small px-1 font-semibold text-fg"><AdminAyarlarKapiText k="changeAnswer" /></legend>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor={ids.current}>Mevcut cevap</Label>
@@ -355,7 +356,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
                   />
                 </div>
               </div>
-              {answerMismatch && <InlineError id={ids.answerErr}>Yeni cevap ile tekrarı aynı olmalıdır.</InlineError>}
+              {answerMismatch && <InlineError id={ids.answerErr}><AdminAyarlarKapiText k="answerMismatch" /></InlineError>}
               {fieldErrors.newAnswer && <InlineError>{fieldErrors.newAnswer}</InlineError>}
               <p className="qx-small text-fg-muted">
                 Cevap 0-9 arası tek rakamdır. Değiştirdiğinizde diğer bütün yöneticilerin kapı oturumları anında sona erer.
@@ -369,7 +370,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
                 <Save className="h-4 w-4" aria-hidden />
                 Kaydet
               </Button>
-              {!dirty && <span className="qx-small text-fg-muted">Değişiklik yok.</span>}
+              {!dirty && <span className="qx-small text-fg-muted"><AdminAyarlarKapiText k="noChange" /></span>}
             </div>
           </form>
 
@@ -424,7 +425,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
           </div>
           <dl className="qx-small mt-5 grid gap-2 text-fg-muted">
             <div className="flex justify-between gap-3">
-              <dt>Kısa kilit</dt>
+              <dt><AdminAyarlarKapiText k="shortLock" /></dt>
               <dd className="text-fg">
                 1 saatte {policy.shortMaxFailures} yanlış → {policy.shortLockMinutes} dk
               </dd>
@@ -437,7 +438,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
             </div>
             <div className="flex justify-between gap-3">
               <dt>Kilit bildirimi</dt>
-              <dd className="text-fg">Diğer bütün yöneticilere</dd>
+              <dd className="text-fg"><AdminAyarlarKapiText k="allOtherAdmins" /></dd>
             </div>
           </dl>
         </SectionCard>
@@ -534,8 +535,8 @@ function GatePreview({ question }: { question: string }) {
           🛸
         </span>
       </div>
-      <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.35em] text-purple-300/80">Boyutlar Arası Geçit</p>
-      <p className="mt-1 text-lg font-black">Erişim Doğrulaması</p>
+      <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.35em] text-purple-300/80"><AdminAyarlarKapiText k="gateTitle" /></p>
+      <p className="mt-1 text-lg font-black"><AdminAyarlarKapiText k="gateSubtitle" /></p>
       <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-white/75">{question}</p>
       <div className="mx-auto mt-4 flex h-12 max-w-[16rem] items-center justify-center gap-2 rounded-xl border-2 border-purple-500/40 bg-white/5">
         {Array.from({ length: 9 }).map((_, i) => (
