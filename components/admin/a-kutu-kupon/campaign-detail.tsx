@@ -14,6 +14,7 @@ import { ConfirmAction, QueryState } from '@/components/states';
 import { AUDIT_ACTION_LABEL, TIER_LABEL, type CampaignDetail } from '@/lib/admin-surprise-boxes/contract';
 import { boxKeys, fetchCampaign, revokeCampaign } from './api';
 import { CAMPAIGN_STATE_MAP, fmtDateTime, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 const RECIPIENT_PREVIEW = 50;
 
@@ -46,7 +47,7 @@ export function CampaignDetailBody({ id }: { id: string }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge size="sm" {...statusBadgeProps(CAMPAIGN_STATE_MAP, c.state)} />
                   <RarityBadge rarity={c.tier} register="ops" />
-                  {c.legacy ? <span className="qx-caption text-fg-muted">Kampanya kimliği öncesi tekil kutu</span> : null}
+                  {c.legacy ? <span className="qx-caption text-fg-muted"><AdminKutuKuponText k="legacyBox" /></span> : null}
                 </div>
               </div>
               {pending > 0 ? (
@@ -61,9 +62,9 @@ export function CampaignDetailBody({ id }: { id: string }) {
                   title="Açılmamış kutular geri çekilsin mi?"
                   description={
                     <span className="block space-y-2">
-                      <span className="block">Açılmış kutular ve basılmış puanlar etkilenmez. Geri çekilen kutular müşterinin listesinden kalkar; anlık görüntüsü denetim kaydında saklanır.</span>
+                      <span className="block"><AdminKutuKuponText k="recallNote" /></span>
                       <span className="block space-y-1">
-                        <Label htmlFor={`${rid}-reason`}>Gerekçe</Label>
+                        <Label htmlFor={`${rid}-reason`}><AdminKutuKuponText k="reason" /></Label>
                         <Textarea id={`${rid}-reason`} rows={2} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="Örn. yanlış puan girildi" />
                       </span>
                     </span>
@@ -114,7 +115,7 @@ export function CampaignDetailBody({ id }: { id: string }) {
                 Alıcılar ({fmtNumber(d.recipients.length)})
               </h3>
               {d.recipients.length === 0 ? (
-                <p className="qx-small text-fg-muted">Bu kampanyada kutu kalmadı (tümü geri çekilmiş).</p>
+                <p className="qx-small text-fg-muted"><AdminKutuKuponText k="allRecalled" /></p>
               ) : (
                 <ul className="divide-y divide-border rounded-card border border-subtle">
                   {list.map((r) => (
@@ -146,8 +147,8 @@ export function CampaignDetailBody({ id }: { id: string }) {
             </section>
 
             <section className="space-y-2">
-              <h3 className="qx-small font-semibold text-fg">Denetim geçmişi</h3>
-              {events.length ? <Timeline events={events} timeStyle="datetime" dense /> : <p className="qx-small text-fg-muted">Denetim kaydı yok (P0-19 öncesi gönderim).</p>}
+              <h3 className="qx-small font-semibold text-fg"><AdminKutuKuponText k="auditHistory" /></h3>
+              {events.length ? <Timeline events={events} timeStyle="datetime" dense /> : <p className="qx-small text-fg-muted"><AdminKutuKuponText k="noAuditP019" /></p>}
             </section>
           </div>
         );

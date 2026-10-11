@@ -32,6 +32,7 @@ import {
   type SendPreview,
 } from './api';
 import { fmtDate, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 type Step = 0 | 1 | 2;
 type Mode = 'user' | 'random';
@@ -221,7 +222,7 @@ export function BoxSendSheet({
     >
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-subtle px-5 py-4 text-left">
-          <SheetTitle>Yeni sürpriz kutu</SheetTitle>
+          <SheetTitle><AdminKutuKuponText k="newBox" /></SheetTitle>
           <SheetDescription>
             Kutu açıldığında puan defterden basılır. Kutu başına en çok {fmtNumber(SURPRISE_BOX_LIMITS.maxPointsPerBox)} puan, gönderim başına {fmtNumber(SURPRISE_BOX_LIMITS.maxCampaignPoints)}, günlük
             bütçeniz {remainingToday == null ? '—' : `${fmtNumber(remainingToday)} kaldı`}.
@@ -254,7 +255,7 @@ export function BoxSendSheet({
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
-                  <Label htmlFor={`${ids}-title`}>Başlık</Label>
+                  <Label htmlFor={`${ids}-title`}><AdminKutuKuponText k="title" /></Label>
                   <span className="qx-caption text-fg-muted" aria-live="polite">
                     {title.length}/{TITLE_MAX}
                   </span>
@@ -276,7 +277,7 @@ export function BoxSendSheet({
               </div>
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
-                  <Label htmlFor={`${ids}-msg`}>Mesaj (isteğe bağlı)</Label>
+                  <Label htmlFor={`${ids}-msg`}><AdminKutuKuponText k="messageOptional" /></Label>
                   <span className="qx-caption text-fg-muted">
                     {fmtNumber(message.length)}/{fmtNumber(MESSAGE_MAX)}
                   </span>
@@ -286,7 +287,7 @@ export function BoxSendSheet({
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${ids}-points`}>Kutu başına puan</Label>
+                  <Label htmlFor={`${ids}-points`}><AdminKutuKuponText k="pointsPerBox" /></Label>
                   <Input
                     id={`${ids}-points`}
                     inputMode="numeric"
@@ -300,7 +301,7 @@ export function BoxSendSheet({
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${ids}-coupon`}>Kupon (isteğe bağlı)</Label>
+                  <Label htmlFor={`${ids}-coupon`}><AdminKutuKuponText k="couponOptional" /></Label>
                   <select
                     id={`${ids}-coupon`}
                     value={coupon}
@@ -365,7 +366,7 @@ export function BoxSendSheet({
                     </div>
                   ) : (
                     <>
-                      <Label htmlFor={`${ids}-search`}>Müşteri ara</Label>
+                      <Label htmlFor={`${ids}-search`}><AdminKutuKuponText k="searchCustomer" /></Label>
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
                         <Input
@@ -382,7 +383,7 @@ export function BoxSendSheet({
                       </div>
                       <div id={`${ids}-results`} role="listbox" aria-label="Arama sonuçları" className="space-y-1">
                         {q.length < 2 ? (
-                          <p className="qx-caption text-fg-muted">En az 2 karakter yazın. Yalnız müşteri hesapları listelenir.</p>
+                          <p className="qx-caption text-fg-muted"><AdminKutuKuponText k="min2" /></p>
                         ) : recipients.isLoading ? (
                           <p className="qx-caption inline-flex items-center gap-2 text-fg-muted">
                             <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden /> Aranıyor…
@@ -390,7 +391,7 @@ export function BoxSendSheet({
                         ) : recipients.isError ? (
                           <p className="qx-caption text-danger">{errorText(recipients.error)}</p>
                         ) : recipients.data && recipients.data.length === 0 ? (
-                          <p className="qx-caption text-fg-muted">Eşleşen müşteri yok.</p>
+                          <p className="qx-caption text-fg-muted"><AdminKutuKuponText k="noCustomerMatch" /></p>
                         ) : (
                           recipients.data?.map((r) => (
                             <button
@@ -417,7 +418,7 @@ export function BoxSendSheet({
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${ids}-count`}>Kaç müşteri?</Label>
+                  <Label htmlFor={`${ids}-count`}><AdminKutuKuponText k="howMany" /></Label>
                   <Input
                     id={`${ids}-count`}
                     inputMode="numeric"
@@ -454,18 +455,18 @@ export function BoxSendSheet({
               {preview ? (
                 <dl className="grid grid-cols-2 gap-3 rounded-card border border-subtle bg-surface-1 p-4 text-sm">
                   <div>
-                    <dt className="qx-caption text-fg-muted">Alıcı</dt>
+                    <dt className="qx-caption text-fg-muted"><AdminKutuKuponText k="recipient" /></dt>
                     <dd className="qx-num text-lg font-semibold text-fg">{fmtNumber(preview.recipientCount)}</dd>
                     {preview.recipient ? <dd className="qx-caption truncate text-fg-muted">{preview.recipient.name} · {preview.recipient.email}</dd> : null}
                   </div>
                   <div>
-                    <dt className="qx-caption text-fg-muted">Toplam puan yükümlülüğü</dt>
+                    <dt className="qx-caption text-fg-muted"><AdminKutuKuponText k="totalLiability" /></dt>
                     <dd className="qx-num text-lg font-semibold text-fg">{fmtNumber(preview.totalPoints)}</dd>
                     <dd className="qx-caption text-fg-muted">{fmtNumber(preview.pointsPerBox)} × {fmtNumber(preview.recipientCount)}</dd>
                   </div>
                   <div className="col-span-2 space-y-1">
                     <dt className="qx-caption flex justify-between text-fg-muted">
-                      <span>Günlük bütçe</span>
+                      <span><AdminKutuKuponText k="dailyBudget" /></span>
                       <span className="qx-num">
                         {fmtNumber(Math.max(0, budgetAfter ?? 0))} / {fmtNumber(SURPRISE_BOX_LIMITS.dailySenderBudget)} kalacak
                       </span>
@@ -506,7 +507,7 @@ export function BoxSendSheet({
                   <Input id={`${ids}-phrase`} value={phrase} onChange={(e) => setPhrase(e.target.value)} autoComplete="off" />
                 </div>
               ) : null}
-              <p className="qx-caption text-fg-muted">Alıcılar uygulama içi bildirim alır. Açılmamış kutuları kampanya ayrıntısından geri çekebilirsiniz.</p>
+              <p className="qx-caption text-fg-muted"><AdminKutuKuponText k="recipientsNotified" /></p>
             </div>
           ) : null}
         </div>

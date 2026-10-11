@@ -6,6 +6,7 @@ import { SectionCard } from '@/components/ds/page';
 import { RarityBadge } from '@/components/ds/play';
 import { TIER_LABEL, type SurpriseStats } from '@/lib/admin-surprise-boxes/contract';
 import { fmtDayKey, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 /**
  * Günlük giriş kutuları — salt okunur. Müşteri Ödüllerim'de "Aç" dediğinde üretilir (İstanbul günü,
@@ -52,12 +53,12 @@ export function DailyTab({ stats, loading }: { stats: SurpriseStats | undefined;
               </span>
             </p>
             <table className="sr-only">
-              <caption>Son 14 günün günlük kutu sayıları</caption>
+              <caption><AdminKutuKuponText k="dailyCounts" /></caption>
               <thead>
                 <tr>
-                  <th scope="col">Gün</th>
-                  <th scope="col">Üretilen</th>
-                  <th scope="col">Açılan</th>
+                  <th scope="col"><AdminKutuKuponText k="day" /></th>
+                  <th scope="col"><AdminKutuKuponText k="created" /></th>
+                  <th scope="col"><AdminKutuKuponText k="opened" /></th>
                 </tr>
               </thead>
               <tbody>

@@ -33,6 +33,7 @@ import { BoxSendSheet } from './box-send-sheet';
 import { CampaignDetailBody } from './campaign-detail';
 import { DailyTab } from './daily-tab';
 import { CAMPAIGN_STATE_MAP, fmtDateTime, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 export type BoxesInitial = {
   stats: SurpriseStats | null;
@@ -206,7 +207,7 @@ export function BoxesCenter({ initial }: { initial: BoxesInitial }) {
       {s && !s.moduleEnabled ? (
         <div role="status" className="qx-small flex flex-wrap items-start gap-2 rounded-card border border-warning-border bg-warning-subtle px-4 py-3 text-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          <span className="min-w-0 flex-1">Sürpriz kutu modülü kapalı: yeni gönderim yapılamaz, müşteriler kutularını göremez. Geçmiş kampanyaları inceleyebilirsiniz.</span>
+          <span className="min-w-0 flex-1"><AdminKutuKuponText k="moduleOff" /></span>
           <Link href="/admin/settings?tab=modules" className="font-medium underline underline-offset-4">
             Modüller’den aç
           </Link>

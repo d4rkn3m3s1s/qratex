@@ -10,6 +10,7 @@ import { AUDIT_ACTION_LABEL, TYPE_LABEL, formatCouponValue, type CouponDetail } 
 import { couponKeys, fetchCoupon } from './api';
 import { CouponActions } from './coupon-actions';
 import { COUPON_STATUS_MAP, fmtDateTime, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 export function CouponDetailBody({ id, onEdit }: { id: string; onEdit: (id: string) => void }) {
   const q = useQuery({ queryKey: couponKeys.detail(id), queryFn: () => fetchCoupon(id), staleTime: 10_000 });
@@ -68,20 +69,20 @@ export function CouponDetailBody({ id, onEdit }: { id: string; onEdit: (id: stri
 
             <section className="space-y-2">
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="qx-small font-semibold text-fg">Son 14 gün kod girişi</h3>
+                <h3 className="qx-small font-semibold text-fg"><AdminKutuKuponText k="entries14d" /></h3>
                 <span className="qx-caption text-fg-muted">{fmtNumber(total14)} kullanım</span>
               </div>
               {total14 > 0 ? (
                 <Sparkline data={d.redemptions14d} label={`Son 14 günde günlük kod girişi; toplam ${fmtNumber(total14)}`} />
               ) : (
-                <p className="qx-small text-fg-muted">Son 14 günde kod girişi yok.</p>
+                <p className="qx-small text-fg-muted"><AdminKutuKuponText k="noEntries14d" /></p>
               )}
             </section>
 
             <section className="space-y-2">
               <h3 className="qx-small font-semibold text-fg">Kullananlar (son 50)</h3>
               {d.redemptions.length === 0 ? (
-                <p className="qx-small text-fg-muted">Henüz kimse kullanmadı.</p>
+                <p className="qx-small text-fg-muted"><AdminKutuKuponText k="unused" /></p>
               ) : (
                 <ul className="divide-y divide-border rounded-card border border-subtle">
                   {d.redemptions.map((r) => (
@@ -102,8 +103,8 @@ export function CouponDetailBody({ id, onEdit }: { id: string; onEdit: (id: stri
             </section>
 
             <section className="space-y-2">
-              <h3 className="qx-small font-semibold text-fg">Değişiklik geçmişi</h3>
-              {events.length ? <Timeline events={events} timeStyle="datetime" dense /> : <p className="qx-small text-fg-muted">Denetim kaydı yok.</p>}
+              <h3 className="qx-small font-semibold text-fg"><AdminKutuKuponText k="changeHistory" /></h3>
+              {events.length ? <Timeline events={events} timeStyle="datetime" dense /> : <p className="qx-small text-fg-muted"><AdminKutuKuponText k="noAudit" /></p>}
             </section>
           </div>
         );

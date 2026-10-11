@@ -41,6 +41,7 @@ import { CouponBatchDialog } from './coupon-batch-dialog';
 import { CouponDetailBody } from './coupon-detail';
 import { CouponEditor, type CouponEditorTarget } from './coupon-editor';
 import { COUPON_STATUS_MAP, fmtDateTime, fmtNumber, pct } from './format';
+import { AdminKutuKuponText } from './copy';
 
 export type CouponsInitial = {
   stats: CouponStats | null;
@@ -190,12 +191,12 @@ export function CouponsCenter({ initial }: { initial: CouponsInitial }) {
               {fmtDateTime(row.original.expiresAt)}
             </time>
           ) : (
-            <span className="text-sm text-fg-muted">Süresiz</span>
+            <span className="text-sm text-fg-muted"><AdminKutuKuponText k="noExpiry" /></span>
           ),
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">İşlemler</span>,
+        header: () => <span className="sr-only"><AdminKutuKuponText k="actions" /></span>,
         enableSorting: false,
         enableHiding: false,
         meta: { mobile: 'actions', interactive: true, align: 'end', label: 'İşlemler' } satisfies DataTableColumnMeta,

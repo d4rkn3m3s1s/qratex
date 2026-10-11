@@ -8,6 +8,7 @@ import { useMotionPolicy } from '@/lib/motion';
 import { boxTier } from '@/lib/wallet-rewards/rules';
 import SignatureGiftBox3D, { type BoxPhase } from '@/components/rewards/signature-gift-box-lazy';
 import { fmtNumber } from './format';
+import { AdminKutuKuponText } from './copy';
 
 /**
  * Müşterinin göreceği kutunun önizlemesi (Ödüllerim → kutu açılışı ile aynı içerik ve kademe).
@@ -44,7 +45,7 @@ export function BoxPreview({ title, message, points, couponCode }: { title: stri
   return (
     <section aria-label="Müşteri görünümü önizlemesi" className="space-y-3 rounded-card border border-subtle bg-surface-1 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="qx-overline text-fg-muted">Müşteri böyle görecek</p>
+        <p className="qx-overline text-fg-muted"><AdminKutuKuponText k="customerSees" /></p>
         <RarityBadge rarity={tier} register="ops" />
       </div>
 
@@ -68,7 +69,7 @@ export function BoxPreview({ title, message, points, couponCode }: { title: stri
               <p className="select-all break-all font-mono text-lg font-semibold tracking-wider text-fg">{couponCode}</p>
             </div>
           ) : null}
-          {points === 0 && !couponCode && !message.trim() ? <p className="qx-small text-warning">Kutu boş görünecek: puan, kupon ya da mesaj ekleyin.</p> : null}
+          {points === 0 && !couponCode && !message.trim() ? <p className="qx-small text-warning"><AdminKutuKuponText k="emptyBox" /></p> : null}
         </div>
       ) : (
         <p className="qx-small text-center text-fg-muted" aria-live="polite">
@@ -78,7 +79,7 @@ export function BoxPreview({ title, message, points, couponCode }: { title: stri
 
       <div className="flex justify-center">
         {policy.reduce ? (
-          <p className="qx-caption text-center text-fg-muted">Hareket azaltma açık: açılış animasyonu oynatılmaz.</p>
+          <p className="qx-caption text-center text-fg-muted"><AdminKutuKuponText k="reducedMotion" /></p>
         ) : (
           <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={start}>
             {play ? <RotateCcw className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}

@@ -11,6 +11,7 @@ import { ChoiceChips } from '@/components/ds/a11y';
 import { TYPE_LABEL, couponBatchSchema, csvCell, formatCouponValue, normalizeCode, type CouponType } from '@/lib/admin-coupons/contract';
 import { createBatch, errorText, fieldErrors } from './api';
 import { downloadText, fmtNumber, wallToIso } from './format';
+import { AdminKutuKuponText } from './copy';
 
 /** Tek kullanımlık N kod üretir (kişiye özel dağıtım için) ve CSV olarak indirir. */
 export function CouponBatchDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
@@ -72,8 +73,8 @@ export function CouponBatchDialog({ open, onOpenChange, onDone }: { open: boolea
     >
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Toplu kod üret</DialogTitle>
-          <DialogDescription>Her kod tek kez kullanılabilir. Kodlar üretildikten sonra CSV olarak indirilir.</DialogDescription>
+          <DialogTitle><AdminKutuKuponText k="bulkCodes" /></DialogTitle>
+          <DialogDescription><AdminKutuKuponText k="bulkHint" /></DialogDescription>
         </DialogHeader>
         {result ? (
           <div className="space-y-3">
@@ -96,7 +97,7 @@ export function CouponBatchDialog({ open, onOpenChange, onDone }: { open: boolea
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor={`${ids}-prefix`}>Önek</Label>
+                <Label htmlFor={`${ids}-prefix`}><AdminKutuKuponText k="prefix" /></Label>
                 <Input id={`${ids}-prefix`} value={prefix} maxLength={12} className="font-mono uppercase" onChange={(e) => setPrefix(normalizeCode(e.target.value).replace(/[^A-Z0-9]/g, ''))} placeholder="YAZ" aria-invalid={!!errors.prefix || undefined} />
                 <p className={`qx-caption ${errors.prefix ? 'text-danger' : 'text-fg-muted'}`}>{errors.prefix ?? `Örnek: ${prefix || 'YAZ'}-K7M2QX`}</p>
               </div>
@@ -127,7 +128,7 @@ export function CouponBatchDialog({ open, onOpenChange, onDone }: { open: boolea
                 {errors.value ? <p className="qx-caption text-danger">{errors.value}</p> : null}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${ids}-exp`}>Son kullanım</Label>
+                <Label htmlFor={`${ids}-exp`}><AdminKutuKuponText k="expiry" /></Label>
                 <Input id={`${ids}-exp`} type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} aria-invalid={!!errors.expiresAt || undefined} />
                 <p className={`qx-caption ${errors.expiresAt ? 'text-danger' : 'text-fg-muted'}`}>{errors.expiresAt ?? 'Boş = süresiz'}</p>
               </div>

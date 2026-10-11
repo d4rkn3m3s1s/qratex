@@ -13,6 +13,7 @@ import { QueryState } from '@/components/states';
 import { TYPE_LABEL, couponCreateSchema, formatCouponValue, normalizeCode, type CouponDetail, type CouponType } from '@/lib/admin-coupons/contract';
 import { KutuKuponApiError, couponKeys, createCoupon, errorText, fetchCoupon, fieldErrors, updateCoupon } from './api';
 import { fmtNumber, isoToWall, wallToIso } from './format';
+import { AdminKutuKuponText } from './copy';
 
 export type CouponEditorTarget = { mode: 'create' } | { mode: 'edit'; id: string };
 
@@ -112,7 +113,7 @@ function Fields({
           {err('value')}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${ids}-max`}>Toplam kullanım limiti</Label>
+          <Label htmlFor={`${ids}-max`}><AdminKutuKuponText k="totalLimit" /></Label>
           <Input
             id={`${ids}-max`}
             inputMode="numeric"
@@ -130,7 +131,7 @@ function Fields({
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor={`${ids}-exp`}>Son kullanım (İstanbul saati)</Label>
+        <Label htmlFor={`${ids}-exp`}><AdminKutuKuponText k="expiryIst" /></Label>
         <div className="flex gap-2">
           <Input
             id={`${ids}-exp`}
@@ -146,7 +147,7 @@ function Fields({
             </Button>
           ) : null}
         </div>
-        {err('expiresAt') ?? <p className="qx-caption text-fg-muted">Boş bırakılırsa süresiz.</p>}
+        {err('expiresAt') ?? <p className="qx-caption text-fg-muted"><AdminKutuKuponText k="emptyNoExpiry" /></p>}
       </div>
     </div>
   );
@@ -240,7 +241,7 @@ export function CouponEditor({
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-subtle px-5 py-4 text-left">
           <SheetTitle>{editId ? 'Kuponu düzenle' : 'Yeni kupon'}</SheetTitle>
-          <SheetDescription>Kupon, sürpriz kutuyla dağıtılan ve kasada gösterilen kampanya kodudur. Ödeme akışı olmadığı için indirimi işletme uygular.</SheetDescription>
+          <SheetDescription><AdminKutuKuponText k="couponHint" /></SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-5 px-5 py-5">
           {editId ? (
@@ -252,7 +253,7 @@ export function CouponEditor({
           )}
           {values.code && Number.isFinite(valueNum) && valueNum > 0 ? (
             <div className="rounded-card border border-dashed border-strong bg-surface-2 p-4 text-center" aria-label="Müşteri görünümü önizlemesi">
-              <p className="qx-caption text-fg-muted">Müşteri kutuyu açınca</p>
+              <p className="qx-caption text-fg-muted"><AdminKutuKuponText k="onOpen" /></p>
               <p className="mt-1 font-mono text-lg font-semibold tracking-wider text-fg">{values.code}</p>
               <p className="qx-small text-fg-muted">{formatCouponValue(values.type, valueNum)} indirim</p>
             </div>
