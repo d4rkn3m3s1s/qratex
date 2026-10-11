@@ -12,7 +12,7 @@
  * eşleşmesiyle seçilir (B12.1). İçerik bileşeni modül düzeyinde (B7: her render'da
  * yeniden kurulmaz, kaydırma konumu korunur).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -262,6 +262,14 @@ function SidebarContent({ nodes, activeHref, collapsed, mobile, badges, siteName
 
   const linkProps = { activeHref, showLabels, badges, onNavigate, label, expandLabel, collapseLabel };
 
+  // Derin bir sayfaya doğrudan gelindiğinde (yer imi, bildirim, ⌘K) etkin öğe görünür alana
+  // alınır; menü içinden tıklamada öğe zaten görünür olduğundan `nearest` kaydırmaz (B7).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeHref]);
+
   return (
     <div className={cn('flex h-full flex-col', mobile ? 'w-full' : collapsed ? 'w-[72px]' : 'w-72')}>
       {/* Üst çizgi yüksekliği DashboardHeader ile aynı */}
@@ -312,7 +320,7 @@ function SidebarContent({ nodes, activeHref, collapsed, mobile, badges, siteName
         )}
       </div>
 
-      <nav className="no-scrollbar flex-1 overflow-y-auto p-3" aria-label={t('appShell.sidebarAppMenu')}>
+      <nav ref={navRef} className="no-scrollbar flex-1 overflow-y-auto p-3" aria-label={t('appShell.sidebarAppMenu')}>
         <ul className="space-y-1">
           {nodes.map((node) => {
             if (node.kind === 'item') return <NavLink key={node.item.id} item={node.item} {...linkProps} />;
