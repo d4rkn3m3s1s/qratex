@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { QrCode, MessageSquare, CheckCircle, ArrowRight } from 'lucide-react';
 import { useAppT } from '@/lib/app-locale';
 import { useFirstRunTurn } from '@/lib/first-run-queue';
+import { fetchUiSeen, markUiSeen } from '@/lib/ui-seen';
 
 const STORAGE_KEY = 'qratex-onboarding-done';
 
@@ -65,12 +66,41 @@ export function OnboardingSheet() {
       setWants(false);
       return;
     }
+    let localDone: boolean;
     try {
-      setWants(localStorage.getItem(STORAGE_KEY) !== 'true');
+      localDone = localStorage.getItem(STORAGE_KEY) === 'true';
     } catch {
       setWants(false);
+      return;
     }
+    if (localDone) {
+      setWants(false);
+      return;
+    }
+    // Sunucu kopyası: başka cihazda / native uygulamada tamamlandıysa tekrar gösterme.
+    let cancelled = false;
+    void fetchUiSeen().then((seen) => {
+      if (cancelled) return;
+      if (seen?.onboarding) {
+        try {
+          localStorage.setItem(STORAGE_KEY, 'true');
+        } catch {}
+        setWants(false);
+      } else {
+        setWants(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [status, session?.user?.role]);
+
+  const persistDone = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, 'true');
+    } catch {}
+    markUiSeen('onboarding');
+  };
 
   const dismiss = () => {
     setClosed(true);
@@ -88,9 +118,7 @@ export function OnboardingSheet() {
       router.push(current.link);
     }
     if (isLast) {
-      try {
-        localStorage.setItem(STORAGE_KEY, 'true');
-      } catch {}
+      persistDone();
       dismiss();
     } else {
       setStep((s) => s + 1);
@@ -98,9 +126,7 @@ export function OnboardingSheet() {
   };
 
   const handleSkip = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, 'true');
-    } catch {}
+    persistDone();
     dismiss();
   };
 

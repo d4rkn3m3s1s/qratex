@@ -184,7 +184,7 @@ export function LedgerScreen({
               {c.filters.search}
             </Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-            <Input id="ledger-q" value={qDraft} onChange={(e) => setQDraft(e.target.value)} placeholder={c.filters.search} className="min-h-11 pl-9" />
+            <Input type="search" id="ledger-q" value={qDraft} onChange={(e) => setQDraft(e.target.value)} placeholder={c.filters.search} className="min-h-11 pl-9" />
           </div>
           <div>
             <Label htmlFor="ledger-rating" className="sr-only">

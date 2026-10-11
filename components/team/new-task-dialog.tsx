@@ -281,7 +281,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
               </div>
             ) : (
               <div className="space-y-1">
-                <Input value={depQ} onChange={(e) => setDepQ(e.target.value)} placeholder="Ara (isteğe bağlı, en az 2 harf)" aria-label="Bağlanacak görevi ara" />
+                <Input type="search" value={depQ} onChange={(e) => setDepQ(e.target.value)} placeholder="Ara (isteğe bağlı, en az 2 harf)" aria-label="Bağlanacak görevi ara" />
                 {depQ.trim().length >= 2 && (
                   <ul className="max-h-40 overflow-y-auto rounded-control border border-subtle" aria-live="polite">
                     {(depSearch.data?.items ?? []).map((t) => (

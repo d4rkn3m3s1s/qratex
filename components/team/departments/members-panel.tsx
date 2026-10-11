@@ -69,7 +69,7 @@ export function MembersPanel({
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="relative lg:w-72">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Üye ara" aria-label="Üye ara" className="h-11 pl-9" />
+          <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Üye ara" aria-label="Üye ara" className="h-11 pl-9" />
         </div>
         <Select value={deptFilter} onValueChange={onDeptFilter}>
           <SelectTrigger className="h-11 lg:w-64" aria-label="Departman filtresi">

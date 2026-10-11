@@ -8,15 +8,26 @@ export interface InputProps
   errorId?: string;
 }
 
+const KEYBOARD_DEFAULTS: Record<string, Pick<React.InputHTMLAttributes<HTMLInputElement>, 'inputMode' | 'enterKeyHint' | 'autoComplete' | 'autoCapitalize' | 'spellCheck'>> = {
+  search: { inputMode: 'search', enterKeyHint: 'search', autoComplete: 'off' },
+  email: { inputMode: 'email', enterKeyHint: 'next', autoComplete: 'email', autoCapitalize: 'none', spellCheck: false },
+  tel: { inputMode: 'tel', enterKeyHint: 'next', autoComplete: 'tel' },
+  url: { inputMode: 'url', autoCapitalize: 'none', spellCheck: false },
+  password: { autoCapitalize: 'none', spellCheck: false },
+};
+
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, errorId, 'aria-describedby': ariaDescribedBy, ...props }, ref) => {
     // error → aria-invalid (ekran okuyucu hatayı duyar); errorId varsa describedby.
     const describedBy = [ariaDescribedBy, error && errorId ? errorId : null]
       .filter(Boolean)
       .join(' ') || undefined;
+    // Mobil klavye ipuçları (native/PWA): türden türetilen varsayılanlar; çağıran prop'u ezer.
+    const keyboardDefaults = KEYBOARD_DEFAULTS[type ?? ''] ?? null;
     return (
       <input
         type={type}
+        {...keyboardDefaults}
         aria-invalid={error || undefined}
         aria-describedby={describedBy}
         className={cn(

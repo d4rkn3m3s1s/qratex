@@ -7,6 +7,7 @@ import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocaleSafe } from '@/lib/app-locale';
 import { useFirstRunTurn } from '@/lib/first-run-queue';
+import { fetchUiSeen, markUiSeen } from '@/lib/ui-seen';
 import { useMotionPolicy } from '@/lib/motion/use-reduced-motion-pref';
 
 /**
@@ -91,6 +92,14 @@ export function WelcomeVideoModal() {
         }
       } catch { /* localStorage kapalıysa yine de göster */ }
 
+      // Sunucu kopyası: başka cihazda / native uygulamada görüldüyse tekrar gösterme.
+      const serverSeen = await fetchUiSeen();
+      if (serverSeen?.welcomeVideo) {
+        try { localStorage.setItem(storageKey(userId), 'true'); } catch { /* yoksay */ }
+        if (!cancelled) setWants(false);
+        return;
+      }
+
       // Video dosyası gerçekten var mı? Yoksa modalı hiç açma (kırık kutu görünmesin).
       let exists = false;
       try {
@@ -110,6 +119,7 @@ export function WelcomeVideoModal() {
   const close = () => {
     if (userId) {
       try { localStorage.setItem(storageKey(userId), 'true'); } catch { /* yoksay */ }
+      markUiSeen('welcomeVideo');
     }
     setClosed(true);
     finish();

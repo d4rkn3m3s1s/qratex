@@ -335,7 +335,7 @@ function DependencyField({ data, editable }: { data: TaskDetailPayload; editable
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 space-y-2" align="start">
-            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Görev ara (en az 2 harf)" aria-label="Bağlanacak görevi ara" />
+            <Input type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Görev ara (en az 2 harf)" aria-label="Bağlanacak görevi ara" />
             <ul className="max-h-64 space-y-1 overflow-y-auto" aria-live="polite">
               {debounced.length < 2 && <li className="qx-caption px-1 text-fg-muted">Tüm haftalarda arar.</li>}
               {search.isFetching && <li className="qx-caption px-1 text-fg-muted">Aranıyor…</li>}

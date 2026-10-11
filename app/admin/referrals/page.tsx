@@ -79,7 +79,7 @@ export default function AdminReferralsPage() {
       />
       <Card>
         <CardContent className="p-4 flex flex-col md:flex-row gap-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Kod veya e-posta ara..." />
+          <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Kod veya e-posta ara..." />
           <select
             className="h-10 rounded-md border bg-background px-3 text-sm"
             value={sort}

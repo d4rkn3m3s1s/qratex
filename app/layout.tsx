@@ -16,6 +16,7 @@ import { VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/bra
 import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
 import { RUNTIME_THEME_STYLE_ID, buildRuntimeThemeCss, runtimeThemeStateFromRows } from '@/lib/design-system/theme-runtime';
 import { PageTransition } from '@/components/layout/page-transition';
+import { NativeBridge } from '@/components/native/native-bridge';
 import { LOCALE_LANG_INIT_SNIPPET } from '@/lib/locale-shared';
 
 /** İlk boyamadan önce light/dark sınıfı (next-themes / localStorage ile uyumlu; FOUC azaltır). */
@@ -142,6 +143,7 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: [
         { url: '/logo/logo.png', type: 'image/png' },
+        { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
         { url: '/icons/icon-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
         { url: '/icons/icon-512x512.svg', sizes: '512x512', type: 'image/svg+xml' },
       ],
@@ -205,6 +207,8 @@ export default async function RootLayout({
             {children}
           </PageTransition>
           <Toaster />
+          {/* Capacitor native kabuk köprüsü (web'de etkisiz). */}
+          <NativeBridge />
           <ChatbotLazy />
           {/* Ölçüm: Vercel çerezsiz + URL redaksiyonlu; PostHog yalnız rızayla (P0-31). */}
           <VercelAnalytics />

@@ -312,7 +312,7 @@ export function PlatformSection({ section, onRetry }: { section: Section<Platfor
               <label className="relative min-w-0 flex-1">
                 <span className="sr-only">Bileşen ara</span>
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bileşen ara" className="h-11 pl-9" />
+                <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bileşen ara" className="h-11 pl-9" />
               </label>
               <label className="inline-flex min-h-11 items-center gap-2 text-sm">
                 <input type="checkbox" className="h-4 w-4" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />

@@ -443,7 +443,8 @@
         "globalSearchAriaQr": "QR kod",
         "globalSearchPointsShort": "puan",
         "globalSearchSentimentNeutral": "Nötr",
-        "toasterRegion": "Bildirimler"
+        "toasterRegion": "Bildirimler",
+        "nativeExitHint": "Uygulamadan çıkmak için geri tuşuna tekrar basın"
     },
     "notificationCenter": {
         "title": "Bildirimler",
