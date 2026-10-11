@@ -130,7 +130,7 @@ export function CardsScreen({ initial }: { initial: CardsInitial }) {
         header: 'Kart',
         enableSorting: false,
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Kart' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: 'Kart', interactive: true } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate font-mono text-sm text-fg" title={row.original.token}>
