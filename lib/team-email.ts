@@ -174,6 +174,11 @@ export async function sendMentionEmail(opts: {
 }
 
 /** Haftalık hatırlatma: kişinin açık (tamamlanmamış) görevlerini özetler. */
+/** Haftalık hatırlatma sonucu: iş, gidemeyenleri sayıp yeniden dener (arka plan Y6). */
+export type WeeklyReminderSendResult =
+  | { ok: true; skipped?: boolean }
+  | { ok: false; error: string; maybeDelivered?: boolean };
+
 export async function sendWeeklyReminderEmail(opts: {
   to: string; name?: string | null;
   openTasks: { title: string; priority: string; dueAt?: Date | string | null }[];
@@ -181,8 +186,8 @@ export async function sendWeeklyReminderEmail(opts: {
   pendingApprovals?: { title: string; submittedByName?: string | null }[];
   /** Alıcının paneline göre çözülmüş mutlak pano bağlantısı. */
   link?: string;
-}): Promise<void> {
-  if (opts.openTasks.length === 0 && !(opts.pendingApprovals && opts.pendingApprovals.length > 0)) return;
+}): Promise<WeeklyReminderSendResult> {
+  if (opts.openTasks.length === 0 && !(opts.pendingApprovals && opts.pendingApprovals.length > 0)) return { ok: true, skipped: true };
   try {
     const origin = getPublicAppOrigin();
     const link = opts.link || `${origin}/customer/ekip`;
@@ -247,6 +252,9 @@ export async function sendWeeklyReminderEmail(opts: {
     const subject = opts.openTasks.length > 0
       ? `⏰ ${opts.openTasks.length} açık görevin var`
       : `⏳ Onayını bekleyen ${opts.pendingApprovals?.length ?? 0} görev var`;
-    await sendTransactionalEmail({ to: opts.to, subject, html, text, from });
-  } catch { /* sessiz */ }
+    const r = await sendTransactionalEmail({ to: opts.to, subject, html, text, from });
+    return r.ok ? { ok: true } : { ok: false, error: r.error, maybeDelivered: r.maybeDelivered === true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Haftalık hatırlatma oluşturulamadı' };
+  }
 }

@@ -130,17 +130,118 @@ function digestSubject(businessName: string): string {
   return flat.length > 160 ? `${flat.slice(0, 159).trimEnd()}…` : flat;
 }
 
+/**
+ * (bayi, hafta) için "e-posta henüz teslim edilmedi" işareti (arka plan Y6). Bildirim talebiyle
+ * AYNI transaction'da yazılır, başarılı gönderimde silinir. Gönderim başarısız olursa işaret
+ * kalır ve sonraki koşu (haftalık iş başarısız sayıldığı için ertesi gün yeniden koşar) e-postayı
+ * yeniden dener — eskiden `sendTransactionalEmail` sonucu hiç kontrol edilmiyor, başarısız mail
+ * "gönderildi" sayılıyor ve bir daha denenmiyordu.
+ * Bu sürümden ÖNCE bildirilmiş haftalarda işaret yoktur → geçmişe dönük yeniden gönderim olmaz.
+ */
+export function weeklyDigestEmailPendingKey(dealerId: string, weekStart: Date): string {
+  return `system:weekly-digest-email-pending:v1:${dealerId}:${weekStart.toISOString()}:`.padEnd(SYSTEM_KEY_MIN_LENGTH, '#');
+}
+
+/** Bekleyen e-posta en fazla bu kadar denenir; sonra işaret silinir (sonsuz yeniden deneme yok). */
+export const DIGEST_EMAIL_MAX_ATTEMPTS = 3;
+
+function pendingAttempts(responseBody: string | null | undefined): number {
+  try {
+    const n = (JSON.parse(responseBody || '{}') as { attempts?: unknown }).attempts;
+    return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** AI'sız (yeniden deneme yolu) deterministik özet: AI'ya ikinci kez harcama yapılmaz. */
+function fallbackSummary(stats: WeekStats, playbook: GrowthPlaybook): string {
+  return (
+    `Bu hafta ${stats.total} geri bildirim aldınız${stats.avgRating != null ? `, ortalama puan ${stats.avgRating.toFixed(2)}★` : ''}. ` +
+    `${stats.negativeCount} negatif, ${stats.churnHighCount} yüksek kayıp riski. Önerilen odak: ${playbook.title}.`
+  );
+}
+
+async function isDigestEmailOptedOut(dealerId: string): Promise<boolean> {
+  // Bayi "Haftalık özet e-postası"nı kapattıysa (Ayarlar › Bildirimler → AISettings.weeklyReportEnabled)
+  // uygulama içi bildirim yine düşer, e-posta gönderilmez. Okuma hatasında eski davranış (gönder).
+  try {
+    const pref = await prisma.aISettings.findUnique({ where: { dealerId }, select: { weeklyReportEnabled: true } });
+    return pref?.weeklyReportEnabled === false;
+  } catch {
+    return false;
+  }
+}
+
+export type WeeklyDigestStatus = 'sent' | 'no_email' | 'skipped' | 'opted_out' | 'email_failed';
+
+/**
+ * E-postayı gönderir ve bekleyen işareti günceller. Başarı → işaret silinir. Belirsiz SMTP
+ * hatası (ileti gitmiş olabilir) ya da deneme hakkı bitti → işaret silinir (çift kopya / sonsuz
+ * deneme yok) ama sonuç `email_failed` olur (iş başarısız → alarm).
+ */
+async function deliverDigestEmail(params: {
+  pendingKey: string;
+  attemptsSoFar: number;
+  to: string;
+  businessName: string;
+  summary: string;
+  stats: WeekStats;
+  playbook: GrowthPlaybook;
+}): Promise<'sent' | 'email_failed'> {
+  const r = await sendTransactionalEmail({
+    to: params.to,
+    subject: digestSubject(params.businessName),
+    html: buildEmailHtml(params.businessName, params.summary, params.stats, params.playbook),
+    text: params.summary,
+  });
+  const attempts = params.attemptsSoFar + 1;
+  if (r.ok || r.maybeDelivered || attempts >= DIGEST_EMAIL_MAX_ATTEMPTS) {
+    await prisma.idempotencyKey.deleteMany({ where: { key: params.pendingKey } }).catch(() => undefined);
+    if (!r.ok) console.error('[WEEKLY_DIGEST] e-posta gönderilemedi (yeniden denenmeyecek):', r.error);
+    return r.ok ? 'sent' : 'email_failed';
+  }
+  console.error('[WEEKLY_DIGEST] e-posta gönderilemedi (sonraki koşuda yeniden denenecek):', r.error);
+  await prisma.idempotencyKey
+    .updateMany({ where: { key: params.pendingKey }, data: { responseBody: JSON.stringify({ attempts }) } })
+    .catch(() => undefined);
+  return 'email_failed';
+}
+
 /** Tek bir bayi için haftalık digest üretir + e-postalar. Döner: durum. */
 export async function generateWeeklyDigestForDealer(
   dealer: { id: string; email: string | null; businessName: string | null; name: string | null },
   weekStart: Date
-): Promise<{ dealerId: string; status: 'sent' | 'no_email' | 'skipped' | 'opted_out' }> {
+): Promise<{ dealerId: string; status: WeeklyDigestStatus }> {
   const notifyKey = weeklyDigestNotifyKey(dealer.id, weekStart);
-  // Hızlı yol: bu (bayi, hafta) zaten bildirildiyse AI'ya yeniden harcama yapma.
-  const alreadyNotified = await prisma.idempotencyKey.findUnique({ where: { key: notifyKey } });
-  if (alreadyNotified) return { dealerId: dealer.id, status: 'skipped' };
-
+  const pendingKey = weeklyDigestEmailPendingKey(dealer.id, weekStart);
+  const businessName = dealer.businessName || dealer.name || 'İşletmeniz';
   const prevWeekStart = new Date(weekStart.getTime() - 7 * DAY);
+
+  // Hızlı yol: bu (bayi, hafta) zaten bildirildiyse AI'ya yeniden harcama yapma. Yalnız önceki
+  // koşuda e-postası GİDEMEMİŞSE (bekleyen işaret) e-postayı AI'sız özetle yeniden dene.
+  const alreadyNotified = await prisma.idempotencyKey.findUnique({ where: { key: notifyKey } });
+  if (alreadyNotified) {
+    const pending = await prisma.idempotencyKey.findUnique({ where: { key: pendingKey } });
+    if (!pending || !dealer.email) return { dealerId: dealer.id, status: 'skipped' };
+    if (await isDigestEmailOptedOut(dealer.id)) {
+      await prisma.idempotencyKey.deleteMany({ where: { key: pendingKey } }).catch(() => undefined);
+      return { dealerId: dealer.id, status: 'opted_out' };
+    }
+    const stats = await computeWeekStats(dealer.id, weekStart, prevWeekStart);
+    const playbook = matchPlaybook(stats);
+    const status = await deliverDigestEmail({
+      pendingKey,
+      attemptsSoFar: pendingAttempts((pending as { responseBody?: string | null }).responseBody),
+      to: dealer.email,
+      businessName,
+      summary: fallbackSummary(stats, playbook),
+      stats,
+      playbook,
+    });
+    return { dealerId: dealer.id, status };
+  }
+
   const stats = await computeWeekStats(dealer.id, weekStart, prevWeekStart);
   const playbook = matchPlaybook(stats);
 
@@ -153,10 +254,7 @@ export async function generateWeeklyDigestForDealer(
       'Sen bir işletme analitiği asistanısın. Verilen haftalık metriklerden Türkçe, 3-4 cümlelik, somut ve aksiyona dönük bir özet yaz. Sayı uydurma; yalnızca verilenleri kullan.',
     user: `Metikler: ${JSON.stringify(stats)}\nÖnerilen playbook: ${playbook.title} — ${playbook.summary}`,
   });
-  const summary =
-    ai?.content ??
-    `Bu hafta ${stats.total} geri bildirim aldınız${stats.avgRating != null ? `, ortalama puan ${stats.avgRating.toFixed(2)}★` : ''}. ` +
-      `${stats.negativeCount} negatif, ${stats.churnHighCount} yüksek kayıp riski. Önerilen odak: ${playbook.title}.`;
+  const summary = ai?.content ?? fallbackSummary(stats, playbook);
 
   // Satır içeriği her çalıştırmada güncellenir (elle "yenile" ile çakışmaz).
   const recommendedAction = `${playbook.title}: ${playbook.dealerActions[0] ?? ''}`;
@@ -166,9 +264,13 @@ export async function generateWeeklyDigestForDealer(
     update: { topThemes: stats.topThemes as object, recommendedAction },
   });
 
-  // Bildirim kararı: tek-seferlik anahtar + bildirim AYNI transaction'da. Cron yeniden denemesi
-  // ya da eşzamanlı iki çalıştırmadan yalnız biri bildirir; bildirim yazılamazsa anahtar da geri
-  // alınır (sonraki deneme yeniden gönderebilir).
+  const optedOut = dealer.email ? await isDigestEmailOptedOut(dealer.id) : false;
+  const wantsEmail = Boolean(dealer.email) && !optedOut;
+  const keyExpiresAt = new Date(weekStart.getTime() + NOTIFY_KEY_TTL_DAYS * DAY);
+
+  // Bildirim kararı: tek-seferlik anahtar + bildirim (+ e-posta bekleyen işareti) AYNI
+  // transaction'da. Cron yeniden denemesi ya da eşzamanlı iki çalıştırmadan yalnız biri bildirir;
+  // bildirim yazılamazsa anahtar da geri alınır (sonraki deneme yeniden gönderebilir).
   const claimed = await prisma.$transaction(async (tx) => {
     const claim = await tx.idempotencyKey.createMany({
       data: [
@@ -177,7 +279,7 @@ export async function generateWeeklyDigestForDealer(
           route: 'weekly-digest-notify',
           statusCode: 200,
           responseBody: '{}',
-          expiresAt: new Date(weekStart.getTime() + NOTIFY_KEY_TTL_DAYS * DAY),
+          expiresAt: keyExpiresAt,
         },
       ],
       skipDuplicates: true,
@@ -191,36 +293,59 @@ export async function generateWeeklyDigestForDealer(
         type: 'info',
       },
     });
+    if (wantsEmail) {
+      await tx.idempotencyKey.createMany({
+        data: [
+          {
+            key: pendingKey,
+            route: 'weekly-digest-email-pending',
+            statusCode: 0,
+            responseBody: JSON.stringify({ attempts: 0 }),
+            expiresAt: keyExpiresAt,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
     return true;
   });
   if (!claimed) return { dealerId: dealer.id, status: 'skipped' };
 
   if (!dealer.email) return { dealerId: dealer.id, status: 'no_email' };
-
-  // Bayi "Haftalık özet e-postası"nı kapattıysa (Ayarlar › Bildirimler → AISettings.weeklyReportEnabled)
-  // uygulama içi bildirim yine düşer, e-posta gönderilmez. Okuma hatasında eski davranış (gönder).
-  let optedOut = false;
-  try {
-    const pref = await prisma.aISettings.findUnique({ where: { dealerId: dealer.id }, select: { weeklyReportEnabled: true } });
-    optedOut = pref?.weeklyReportEnabled === false;
-  } catch {
-    optedOut = false;
-  }
   if (optedOut) return { dealerId: dealer.id, status: 'opted_out' };
 
-  const businessName = dealer.businessName || dealer.name || 'İşletmeniz';
-  await sendTransactionalEmail({
+  const status = await deliverDigestEmail({
+    pendingKey,
+    attemptsSoFar: 0,
     to: dealer.email,
-    subject: digestSubject(businessName),
-    html: buildEmailHtml(businessName, summary, stats, playbook),
-    text: summary,
+    businessName,
+    summary,
+    stats,
+    playbook,
   });
-
-  return { dealerId: dealer.id, status: 'sent' };
+  return { dealerId: dealer.id, status };
 }
 
-/** Tüm aktif bayiler için geçen haftanın digest'ini üretir. Döner: özet sayımlar. */
-export async function runWeeklyDigestForAllDealers(now: Date = new Date()): Promise<{ processed: number; sent: number }> {
+export interface WeeklyDigestRunSummary {
+  processed: number;
+  sent: number;
+  /** E-postası bu koşuda gidemeyen bayi sayısı (bekleyen işaret varsa sonraki koşu yeniden dener). */
+  emailFailed: number;
+  /** Hata fırlatan bayi sayısı (bildirim/brief yazılamadı; sonraki koşu yeniden dener). */
+  failed: number;
+  /** Süre bütçesi yüzünden bu koşuda başlatılmayan bayi sayısı (sonraki koşu devam eder). */
+  deferred: number;
+}
+
+/**
+ * Tüm aktif bayiler için geçen haftanın digest'ini üretir. `deadlineAt` (orkestratörün iş son
+ * tarihi) yaklaşınca yeni bayiye başlamaz; kalanlar `deferred` döner. Bayi başına tek-seferlik
+ * anahtar sayesinde sonraki koşu yalnız kalanları işler (biten bayiler hızlı yoldan atlanır).
+ */
+export async function runWeeklyDigestForAllDealers(
+  now: Date = new Date(),
+  opts: { deadlineAt?: number } = {}
+): Promise<WeeklyDigestRunSummary> {
   // Geçen tamamlanmış hafta (bu haftanın başından 7 gün öncesi).
   const thisWeekStart = startOfWeekUTC(now);
   const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * DAY);
@@ -228,18 +353,27 @@ export async function runWeeklyDigestForAllDealers(now: Date = new Date()): Prom
   const dealers = await prisma.user.findMany({
     where: { role: 'DEALER' },
     select: { id: true, email: true, businessName: true, name: true },
+    orderBy: { id: 'asc' },
   });
 
-  let processed = 0;
-  let sent = 0;
-  for (const d of dealers) {
+  // Bir bayi (AI + e-posta) ~birkaç saniye sürer; son tarihe bu paydan az kaldıysa yenisine başlama.
+  const PER_DEALER_RESERVE_MS = 8_000;
+  const summary: WeeklyDigestRunSummary = { processed: 0, sent: 0, emailFailed: 0, failed: 0, deferred: 0 };
+  for (let i = 0; i < dealers.length; i++) {
+    if (opts.deadlineAt && Date.now() + PER_DEALER_RESERVE_MS > opts.deadlineAt) {
+      summary.deferred = dealers.length - i;
+      break;
+    }
+    const d = dealers[i];
     try {
       const r = await generateWeeklyDigestForDealer(d, lastWeekStart);
-      processed++;
-      if (r.status === 'sent') sent++;
+      summary.processed++;
+      if (r.status === 'sent') summary.sent++;
+      if (r.status === 'email_failed') summary.emailFailed++;
     } catch (err) {
+      summary.failed++;
       console.error(`[WEEKLY_DIGEST] dealer ${d.id} failed:`, err);
     }
   }
-  return { processed, sent };
+  return summary;
 }

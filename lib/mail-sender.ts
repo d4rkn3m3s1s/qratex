@@ -12,7 +12,16 @@ export type SendMailResult =
       /** SMTP 535 vb. sonrası Resend ile teslim edildiyse true */
       usedResendAfterSmtpFailure?: boolean;
     }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /**
+       * Hata sonucu BELİRSİZ: ileti sunucuya teslim edilmiş olabilir (DATA sonrası soket kopması /
+       * zaman aşımı). Bu durumda yedek kanala geçilmez ve otomatik yeniden deneme yapılmaz —
+       * alıcıya iki kopya gitmesin (arka plan Y6/O10). Çağıran kaydı "hata" sayar, alarm üretir.
+       */
+      maybeDelivered?: boolean;
+    };
 
 const fromDefault = process.env.EMAIL_FROM || 'QRATEX <onboarding@resend.dev>';
 
@@ -73,20 +82,74 @@ function smtpConfigured(): boolean {
 
 // Havuzlanmış SMTP transporter cache — config (host+user) başına tek transporter (bağlantı
 // yeniden kullanımı: toplu gönderimde el sıkışma maliyetini keser). pool:true + maxConnections.
+//
+// Sunucusuz tuzak (arka plan O10): örnek istekler arasında DONDURULUR; havuzdaki soketler bu
+// sırada sunucu tarafından kapatılır ve çözülen örnekte ilk gönderim bayat sokete yazıp hata
+// alırdı (ardından her seferinde Resend yedeğine düşülürdü). Bu yüzden havuz yalnız SICAK
+// kullanımda (toplu gönderim döngüsü) paylaşılır: SMTP_POOL_IDLE_MS'ten uzun boşta kalan havuz
+// kapatılıp yenisi kurulur. Hata alan havuz da atılır.
 type SmtpCreds = NonNullable<ReturnType<typeof getSmtpCredentials>>;
-let cachedTransporter: { key: string; tx: nodemailer.Transporter } | null = null;
+let cachedTransporter: { key: string; tx: nodemailer.Transporter; lastUsedAt: number } | null = null;
+const SMTP_POOL_IDLE_MS = 20_000;
 
-function getPooledTransporter(smtp: SmtpCreds): nodemailer.Transporter {
+function dropPooledTransporter(): void {
+  const cur = cachedTransporter;
+  cachedTransporter = null;
+  try {
+    cur?.tx.close();
+  } catch {
+    /* kapanış hatası önemsiz */
+  }
+}
+
+function getPooledTransporter(smtp: SmtpCreds, now: number = Date.now()): nodemailer.Transporter {
   const key = `${smtp.host}:${smtp.port}:${smtp.user}:${smtp.secure}`;
-  if (cachedTransporter && cachedTransporter.key === key) return cachedTransporter.tx;
+  if (cachedTransporter && cachedTransporter.key === key) {
+    if (now - cachedTransporter.lastUsedAt <= SMTP_POOL_IDLE_MS) {
+      cachedTransporter.lastUsedAt = now;
+      return cachedTransporter.tx;
+    }
+    dropPooledTransporter(); // boşta kalmış (muhtemelen dondurulmuş) havuz → bayat soket riski
+  }
   const timeouts = { connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 20_000 };
   const pool = { pool: true, maxConnections: 5, maxMessages: 100 };
   const isGmailHost = smtp.host.toLowerCase() === 'smtp.gmail.com';
   const tx = isGmailHost
     ? nodemailer.createTransport({ service: 'gmail', auth: { user: smtp.user, pass: smtp.pass }, ...timeouts, ...pool })
     : nodemailer.createTransport({ host: smtp.host, port: smtp.port, secure: smtp.secure, auth: { user: smtp.user, pass: smtp.pass }, ...timeouts, ...pool });
-  cachedTransporter = { key, tx };
+  cachedTransporter = { key, tx, lastUsedAt: now };
   return tx;
+}
+
+/**
+ * SMTP hatasının teslim açısından anlamı (saf; test: __tests__/lib/mail-sender-failover.test.ts).
+ *
+ *  - `not_delivered`: ileti sunucuya KESİN ulaşmadı — bağlantı/DNS/TLS/kimlik hatası, ya da
+ *    sunucu bir SMTP yanıt koduyla reddetti (MAIL FROM / RCPT TO / DATA reddi dahil; kodlu ret
+ *    iletinin KABUL EDİLMEDİĞİ anlamına gelir). Yedek kanala geçmek güvenlidir.
+ *  - `ambiguous`: oturum kurulduktan sonra yanıtsız kopma/zaman aşımı. DATA gövdesi gitmiş ve
+ *    yalnız son "250" yanıtı kaybolmuş olabilir → yedek kanala geçmek ÇİFT KOPYA üretebilir.
+ */
+export function classifySmtpFailure(err: unknown): 'not_delivered' | 'ambiguous' {
+  if (!err || typeof err !== 'object') return 'not_delivered';
+  const o = err as { code?: string; responseCode?: number; command?: string; syscall?: string; message?: string };
+  if (o.code === 'EAUTH' || o.code === 'EENVELOPE' || o.code === 'EMESSAGE' || o.code === 'EDNS' || o.code === 'ETLS') {
+    return 'not_delivered';
+  }
+  if (typeof o.responseCode === 'number' && o.responseCode >= 400) return 'not_delivered';
+  // Soket hiç kurulamadı (DNS / bağlantı reddi): Node hata nesnesinin syscall'ı korunur.
+  if (o.syscall === 'connect' || o.syscall === 'getaddrinfo') return 'not_delivered';
+  const msg = typeof o.message === 'string' ? o.message : '';
+  if (/^(Connection timeout|Greeting never received)/.test(msg)) return 'not_delivered';
+  if (/\b(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH)\b/.test(msg)) return 'not_delivered';
+  if (o.command && o.command !== 'CONN' && o.command !== 'DATA') return 'not_delivered';
+  return 'ambiguous';
+}
+
+/** Resend tarafında gönderen adresi yalnız sandbox (`onboarding@resend.dev`) mı? */
+export function resendUsesSandboxSender(): boolean {
+  if (!resendConfigured()) return false;
+  return /onboarding@resend\.dev/i.test(fromAddressForResend(fromDefault));
 }
 
 function resendConfigured(): boolean {
@@ -213,8 +276,14 @@ export async function sendTransactionalEmail(params: {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'SMTP gönderilemedi';
       console.warn('[mail-sender] SMTP error:', e);
-      // HERHANGİ bir SMTP hatasında Resend'e düş (sadece auth değil: timeout/bağlantı/rate-limit de).
-      // "Herkese mail gitmiyor"un ana nedeni buydu — auth-dışı hatada fallback yoktu.
+      // Hatalı havuz bir sonraki gönderimde yeniden kullanılmasın (bayat soket / kopuk oturum).
+      dropPooledTransporter();
+      // BELİRSİZ hata (DATA sonrası kopma): ileti gitmiş olabilir → Resend'e GEÇME, çift kopya
+      // gönderme. Çağıran hata olarak kaydeder; alarm + elle kontrol (arka plan Y6/O10).
+      if (classifySmtpFailure(e) === 'ambiguous') {
+        return { ok: false, error: `SMTP (belirsiz — teslim edilmiş olabilir): ${message}`, maybeDelivered: true };
+      }
+      // KESİN teslim edilmemiş hatada (bağlantı/kimlik/ret, rate-limit dahil) Resend yedeğine düş.
       if (resendConfigured() && smtpFallbackToResendEnabled()) {
         if (isSmtpAuthFailure(e)) {
           console.warn('[mail-sender] SMTP giriş reddedildi (535/EAUTH). Gmail app password yenile / SMTP_USER eşleştir. Resend yedeğe geçiliyor.');
@@ -247,6 +316,12 @@ export type MailDeliverySummary = {
   configured: boolean;
   smtp: boolean;
   resend: boolean;
+  /**
+   * Resend yapılandırılmış ama gönderen yalnız sandbox (`onboarding@resend.dev`): Resend bu
+   * adresten YALNIZ hesap sahibine teslim eder; gerçek kullanıcılara giden (yedek) gönderim
+   * sessizce başarısız olur. RESEND_FROM doğrulanmış alan adına ayarlanmalı (arka plan O10).
+   */
+  resendSandboxSender: boolean;
 };
 
 export function getMailDeliverySummary(): MailDeliverySummary {
@@ -254,5 +329,6 @@ export function getMailDeliverySummary(): MailDeliverySummary {
     configured: smtpConfigured() || resendConfigured(),
     smtp: smtpConfigured(),
     resend: resendConfigured(),
+    resendSandboxSender: resendUsesSandboxSender(),
   };
 }

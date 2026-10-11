@@ -458,8 +458,14 @@ export async function computeHealth(now: Date = new Date()): Promise<HealthSecti
     {
       id: 'mail',
       label: 'E-posta',
-      status: mail.configured ? 'ok' : 'warn',
-      detail: mail.configured ? `Yapılandırılmış (${[mail.smtp ? 'SMTP' : null, mail.resend ? 'Resend' : null].filter(Boolean).join(' + ')})` : 'Gönderici yapılandırılmamış',
+      // Resend sandbox göndereni yalnız hesap sahibine teslim eder: yapılandırılmış görünse de
+      // gerçek kullanıcılara (yedek) gönderim sessizce düşer → uyarı (arka plan O10).
+      status: !mail.configured || mail.resendSandboxSender ? 'warn' : 'ok',
+      detail: !mail.configured
+        ? 'Gönderici yapılandırılmamış'
+        : mail.resendSandboxSender
+          ? 'Resend gönderen adresi sandbox (onboarding@resend.dev) — RESEND_FROM doğrulanmış alan adı olmalı'
+          : `Yapılandırılmış (${[mail.smtp ? 'SMTP' : null, mail.resend ? 'Resend' : null].filter(Boolean).join(' + ')})`,
       href: '/admin/settings',
     },
   ];

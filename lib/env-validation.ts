@@ -81,6 +81,23 @@ export function validateEnv(
     issues.push({ key: 'CRON_SECRET', level: 'warn', message: 'CRON_SECRET 32 karakterden kısa — tahmin edilebilir sır; uzun rastgele değer kullanın.' });
   }
 
+  // Resend sandbox göndereni (arka plan O10): RESEND_API_KEY var ama doğrulanmış gönderen yok →
+  // Resend `onboarding@resend.dev`'den YALNIZ hesap sahibine teslim eder; SMTP yedeği ve
+  // yalnız-Resend kurulumlarda gerçek kullanıcılara giden mailler sessizce düşer.
+  if (isProduction && env.RESEND_API_KEY?.trim()) {
+    const resendFrom = (env.RESEND_FROM ?? '').trim();
+    const emailFrom = (env.EMAIL_FROM ?? '').trim().toLowerCase();
+    const freeMailbox = /@(gmail|googlemail|yahoo\.|hotmail\.|outlook\.)/.test(emailFrom);
+    if (!resendFrom && (!emailFrom || freeMailbox || emailFrom.includes('onboarding@resend.dev'))) {
+      issues.push({
+        key: 'RESEND_FROM',
+        level: 'warn',
+        message:
+          "Resend gönderen adresi sandbox (onboarding@resend.dev) — yalnız hesap sahibine teslim eder. RESEND_FROM'u doğrulanmış alan adına ayarlayın.",
+      });
+    }
+  }
+
   // OAuth sağlayıcı çiftleri: biri tanımlıysa diğeri de olmalı (yarım yapılandırma sessizce kırılır).
   if (Boolean(env.GOOGLE_CLIENT_ID?.trim()) !== Boolean(env.GOOGLE_CLIENT_SECRET?.trim())) {
     issues.push({

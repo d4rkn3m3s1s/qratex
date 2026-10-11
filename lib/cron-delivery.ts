@@ -25,7 +25,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Gönderimi en fazla `attempts` kez dener (aralarda artan bekleme). Son tarihe yetmeyecekse
- * yeni deneme başlatmaz. Son sonucu döndürür.
+ * yeni deneme başlatmaz. Sonuç belirsizse (`maybeDelivered`: ileti gitmiş olabilir) yeniden
+ * DENEMEZ. Son sonucu döndürür.
  */
 export async function sendWithRetry(
   send: () => Promise<SendMailResult>,
@@ -41,6 +42,8 @@ export async function sendWithRetry(
       last = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
     if (last.ok) return { ...last, attempts: i };
+    // Belirsiz SMTP hatası: ileti gitmiş olabilir → yeniden deneme çift kopya üretir; dur.
+    if (last.maybeDelivered) return { ...last, attempts: i };
     if (i < attempts) {
       const wait = backoff * i;
       if (opts.deadlineAt && Date.now() + wait + 5_000 > opts.deadlineAt) return { ...last, attempts: i };

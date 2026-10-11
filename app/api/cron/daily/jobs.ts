@@ -120,7 +120,9 @@ export const DAILY_JOBS: CronJobDefinition[] = [
   { name: 'inbox-sync', priority: 3, cadence: DAILY, timeoutMs: 30_000, run: viaCronGet(inboxSync) },
   { name: 'customer-reminder-nudges', priority: 3, cadence: DAILY, timeoutMs: 25_000, run: viaInternalPost(customerReminderNudges) },
   { name: 'team-weekly-reminder', priority: 3, cadence: MONDAY, timeoutMs: 40_000, run: viaInternalPost(teamWeeklyReminder) },
-  { name: 'weekly-digest', priority: 3, cadence: MONDAY, timeoutMs: 60_000, run: viaInternalPost(weeklyDigest) },
+  // Bayi başına AI özeti + e-posta (sıralı): bütçeyi okur, yetmezse kalan bayileri erteler (iş
+  // başarısız sayılır → ertesi gün yalnız kalanlarla devam). Bu yüzden diğerlerinden geniş pay.
+  { name: 'weekly-digest', priority: 3, cadence: MONDAY, timeoutMs: 120_000, run: viaInternalPost(weeklyDigest) },
   { name: 'partner-digest-webhook', priority: 3, cadence: DAILY, timeoutMs: 15_000, run: viaInternalPost(partnerDigestWebhook) },
 
   // ── 4 · AI yeniden deneme ───────────────────────────────────

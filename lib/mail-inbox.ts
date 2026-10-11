@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { loadInternTemplatesState } from '@/lib/intern-task-emails';
 import { INCOMING_MAILBOXES, MAILBOX_INBOX, type InboxSyncState } from '@/lib/mail-center/inbox-contract';
 import { attachmentDisposition } from '@/lib/mail-center/mail-html';
+import { applyBounceToSends, extractBounceInfo } from '@/lib/mail-center/bounce';
 
 export const INBOX_SYNC_STATE_KEY = 'inbox_sync_state';
 /** İlk kurulumda (imleç ve DB kaydı yokken) geriye dönük çekilecek en fazla mail. */
@@ -160,6 +161,7 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
   let stored = 0;
   let matched = 0;
   let hasMore = false;
+  let bouncesLinked = 0;
   let storeError: string | null = null;
   let nextState: InboxSyncState = { ...prev };
 
@@ -315,6 +317,20 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
           if (result === 'created') {
             stored++;
             if (m) matched++;
+            // Kalıcı bounce → ilgili stajyer gönderim kaydı "Teslim edilemedi" (arka plan O2).
+            if (isBounce) {
+              const dsnPart = rawAtts.find((a) => /message\/(delivery-status|global-delivery-status)/i.test(a.contentType || ''));
+              const failedHeader = parsed?.headers?.get('x-failed-recipients');
+              const info = extractBounceInfo({
+                failedRecipientsHeader: typeof failedHeader === 'string' ? failedHeader : null,
+                deliveryStatus: dsnPart?.content ? Buffer.from(dsnPart.content as Buffer).toString('utf8') : null,
+                bodyText,
+                subject,
+                ownAddresses: [envVal('IMAP_USER', 'SMTP_USER'), toEmail].filter(Boolean),
+              });
+              const marked = await applyBounceToSends(info, sentAt);
+              if (marked) bouncesLinked += marked;
+            }
           }
         }
       }
@@ -350,5 +366,6 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
 
   await writeSyncState(nextState);
   if (storeError) return { ok: false, error: storeError };
+  if (bouncesLinked) console.info(`[inbox] ${bouncesLinked} geri dönen gönderim kaydı işaretlendi`);
   return { ok: true, fetched, stored, matched, hasMore };
 }
