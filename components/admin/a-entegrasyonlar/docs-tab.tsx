@@ -5,6 +5,7 @@ import { API_SCOPES, WEBHOOK_EVENTS } from '@/lib/integrations/contract';
 import { CodeBlock } from './secret-reveal';
 import { VERIFY_SNIPPET } from './webhook-dialogs';
 import { origin } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 /**
  * Partnere gönderilecek "kurulum paketi": temel adres, kimlik doğrulama, kapsamlar, uçlar,
@@ -21,19 +22,19 @@ export function DocsTab() {
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="font-medium text-fg">401</dt>
-              <dd className="text-fg-muted">Anahtar yok, geçersiz, iptal edilmiş ya da süresi dolmuş.</dd>
+              <dd className="text-fg-muted"><AdminEntegrasyonlarText k="err401" /></dd>
             </div>
             <div>
               <dt className="font-medium text-fg">403</dt>
-              <dd className="text-fg-muted">Kapsam eksik, IP izinli değil, partner pasif ya da bayi erişim alanı dışında.</dd>
+              <dd className="text-fg-muted"><AdminEntegrasyonlarText k="err403" /></dd>
             </div>
             <div>
               <dt className="font-medium text-fg">503</dt>
-              <dd className="text-fg-muted">Dış API erişimi yönetici tarafından geçici olarak kapatıldı.</dd>
+              <dd className="text-fg-muted"><AdminEntegrasyonlarText k="err503" /></dd>
             </div>
             <div>
-              <dt className="font-medium text-fg">Bayi kapsamı</dt>
-              <dd className="text-fg-muted">Bayiye bağlı anahtar yalnız o bayiyi görür; `?dealerId=` ile başka bayi istenirse 403.</dd>
+              <dt className="font-medium text-fg"><AdminEntegrasyonlarText k="dealerScope" /></dt>
+              <dd className="text-fg-muted"><AdminEntegrasyonlarText k="dealerScopeHint" /></dd>
             </div>
           </dl>
         </div>

@@ -26,6 +26,7 @@ import { errorText, fetchKey, fetchKeys, intKeys, revokeKey } from './api';
 import { CreateKeyDialog, EditKeyDialog, RollKeyDialog } from './key-dialogs';
 import { ReasonDialog } from './reason-dialog';
 import { KEY_STATUS_META, expiryText, fmtAbs, fmtDay, fmtNum, fmtRel } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'kq', label: 'Ara', placeholder: 'Ad ya da önek (qrx_…)' },
@@ -126,7 +127,7 @@ export function KeysTab({ initial }: { initial: { qs: string; page: Paged<ApiKey
               ) : (
                 'Hiç kullanılmadı'
               )}
-              {idle && k.status === 'active' ? <span className="ml-1 text-warning">· atıl</span> : null}
+              {idle && k.status === 'active' ? <span className="ml-1 text-warning"><AdminEntegrasyonlarText k="idle" /></span> : null}
             </span>
           );
         },
@@ -207,7 +208,7 @@ function UsageBars({ usage }: { usage: { day: string; ok: number; denied: number
   return (
     <figure className="space-y-2">
       <figcaption className="text-sm text-fg-muted">
-        Son 14 gün: <strong className="text-fg">{fmtNum(total)}</strong> başarılı istek · <strong className={denied ? 'text-danger' : 'text-fg'}>{fmtNum(denied)}</strong> reddedilen (kapsam/IP/partner)
+        <AdminEntegrasyonlarText k="last14d" /> <strong className="text-fg">{fmtNum(total)}</strong> <AdminEntegrasyonlarText k="successfulRequests" /> <strong className={denied ? 'text-danger' : 'text-fg'}>{fmtNum(denied)}</strong> <AdminEntegrasyonlarText k="deniedRequests" />
       </figcaption>
       <div className="flex h-24 items-end gap-1" aria-hidden>
         {usage.map((u) => (
@@ -218,11 +219,11 @@ function UsageBars({ usage }: { usage: { day: string; ok: number; denied: number
         ))}
       </div>
       <table className="sr-only">
-        <caption>Günlük istek sayısı</caption>
+        <caption><AdminEntegrasyonlarText k="dailyRequests" /></caption>
         <thead>
           <tr>
-            <th>Gün</th>
-            <th>Başarılı</th>
+            <th><AdminEntegrasyonlarText k="day" /></th>
+            <th><AdminEntegrasyonlarText k="successful" /></th>
             <th>Reddedilen</th>
           </tr>
         </thead>
@@ -298,7 +299,7 @@ function KeyDetailView({ id }: { id: string }) {
               <h3 id={`usage-${id}`} className="text-sm font-semibold text-fg">
                 Kullanım
               </h3>
-              {d.usage ? <UsageBars usage={d.usage} /> : <p className="text-sm text-fg-muted">Günlük kullanım sayacı için Redis (Upstash) yapılandırılmamış; yalnız son kullanım zamanı tutuluyor.</p>}
+              {d.usage ? <UsageBars usage={d.usage} /> : <p className="text-sm text-fg-muted"><AdminEntegrasyonlarText k="noRedis" /></p>}
             </section>
 
             <section aria-labelledby={`audit-${id}`} className="space-y-2">

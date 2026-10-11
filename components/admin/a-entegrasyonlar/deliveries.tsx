@@ -11,6 +11,7 @@ import { webhookEventLabel, type DeliveryItem } from '@/lib/integrations/contrac
 import { cn } from '@/lib/utils';
 import { errorText, fetchDeliveries, intKeys, resendDelivery } from './api';
 import { ERROR_KIND_LABEL, fmtAbs, fmtRel } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 function prettyJson(s: string | null): string {
   if (!s) return '';
@@ -99,8 +100,8 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
                   <StatusBadge size="sm" tone={d.ok ? 'success' : 'danger'} label={d.ok ? `HTTP ${d.status}` : d.status ? `HTTP ${d.status}` : ERROR_KIND_LABEL[d.errorKind ?? ''] ?? 'Hata'} />
                   <span className="text-sm text-fg">{webhookEventLabel(d.event)}</span>
                   {d.test ? <span className="text-xs text-fg-muted">(test)</span> : null}
-                  {d.resendOf ? <span className="text-xs text-fg-muted">(yeniden gönderim)</span> : null}
-                  {host ? <span className="font-mono text-xs text-fg-muted">{host}</span> : !webhookId ? <span className="text-xs text-fg-muted">Silinmiş webhook</span> : null}
+                  {d.resendOf ? <span className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="redelivery" /></span> : null}
+                  {host ? <span className="font-mono text-xs text-fg-muted">{host}</span> : !webhookId ? <span className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="deletedWebhook" /></span> : null}
                   <span className="ml-auto flex items-center gap-2 text-xs text-fg-muted">
                     {d.durationMs != null ? `${d.durationMs} ms` : null}
                     {d.attempts && d.attempts > 1 ? ` · ${d.attempts} deneme` : null}
@@ -115,15 +116,15 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
                     {d.error ? <p className="text-danger">{d.error}</p> : null}
                     {d.body ? (
                       <div>
-                        <p className="mb-1 text-xs font-medium text-fg-muted">İstek gövdesi</p>
+                        <p className="mb-1 text-xs font-medium text-fg-muted"><AdminEntegrasyonlarText k="requestBody" /></p>
                         <pre className="max-h-48 overflow-auto rounded bg-surface-1 p-2 font-mono text-xs text-fg">{prettyJson(d.body)}</pre>
                       </div>
                     ) : (
-                      <p className="text-xs text-fg-muted">İstek gövdesi saklanmamış (eski kayıt ya da 16 KB üstü).</p>
+                      <p className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="bodyNotStored" /></p>
                     )}
                     {d.responseSnippet ? (
                       <div>
-                        <p className="mb-1 text-xs font-medium text-fg-muted">Yanıt (ilk 500 karakter)</p>
+                        <p className="mb-1 text-xs font-medium text-fg-muted"><AdminEntegrasyonlarText k="responseFirst500" /></p>
                         <pre className="max-h-32 overflow-auto rounded bg-surface-1 p-2 font-mono text-xs text-fg">{d.responseSnippet}</pre>
                       </div>
                     ) : null}

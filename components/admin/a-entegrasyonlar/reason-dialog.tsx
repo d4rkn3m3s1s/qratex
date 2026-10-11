@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { InlineError } from '@/components/states';
 import { errorText } from './api';
+import { AdminEntegrasyonlarText } from './copy';
 
 /** Gerekçe zorunlu yıkıcı aksiyon (anahtar iptali). Hata olursa açık kalır ve görünür. */
 export function ReasonDialog({
@@ -66,7 +67,7 @@ export function ReasonDialog({
           }}
         >
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-r`}>Gerekçe (denetim kaydına yazılır)</Label>
+            <Label htmlFor={`${id}-r`}><AdminEntegrasyonlarText k="reasonAudited" /></Label>
             <Textarea id={`${id}-r`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={300} placeholder="ör. Anahtar ekran paylaşımında göründü" autoFocus />
           </div>
           {err ? <InlineError>{err}</InlineError> : null}

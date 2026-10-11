@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import type { DealerOption } from '@/lib/integrations/contract';
 import { cn } from '@/lib/utils';
 import { errorText, intKeys, searchDealers } from './api';
+import { AdminEntegrasyonlarText } from './copy';
 
 /**
  * Aranabilir bayi seçici (tekli ya da çoklu). Sonuç listesi `listbox`; seçilenler
@@ -105,7 +106,7 @@ export function DealerPicker({
               {errorText(res.error)}
             </p>
           ) : (res.data?.items.length ?? 0) === 0 ? (
-            <p className="p-3 text-sm text-fg-muted">Eşleşen bayi yok.</p>
+            <p className="p-3 text-sm text-fg-muted"><AdminEntegrasyonlarText k="noDealerMatch" /></p>
           ) : (
             <ul id={`${id}-list`} role="listbox" aria-label="Bayi sonuçları" className="max-h-56 overflow-auto py-1">
               {res.data?.items.map((d) => {
@@ -122,7 +123,7 @@ export function DealerPicker({
                       )}
                     >
                       {d.label}
-                      {sel ? <span className="ml-auto text-xs">Seçili</span> : null}
+                      {sel ? <span className="ml-auto text-xs"><AdminEntegrasyonlarText k="selected" /></span> : null}
                     </button>
                   </li>
                 );

@@ -19,6 +19,7 @@ import { DeliveryLog } from './deliveries';
 import { RotateSecretDialog, WebhookFormDialog } from './webhook-dialogs';
 import { TestPanel } from './test-panel';
 import { WEBHOOK_STATUS_META, fmtAbs, fmtRel, healthSummary } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'wq', label: 'Ara', placeholder: 'Adres ya da açıklama' },
@@ -126,7 +127,7 @@ export function WebhooksTab({ initial }: { initial: { qs: string; items: Webhook
               {fmtRel(h.lastAt)}
             </time>
           ) : (
-            <span className="text-sm text-fg-muted">7 günde teslim yok</span>
+            <span className="text-sm text-fg-muted"><AdminEntegrasyonlarText k="noDelivery7d" /></span>
           );
         },
       },

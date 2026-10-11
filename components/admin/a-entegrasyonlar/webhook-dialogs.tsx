@@ -15,6 +15,7 @@ import { WEBHOOK_EVENTS, type WebhookEventKey, type WebhookItem } from '@/lib/in
 import { createWebhook, errorText, fetchPartners, fieldErrors, intKeys, rotateSecret, updateWebhook } from './api';
 import { CodeBlock, SecretReveal } from './secret-reveal';
 import { TestPanel } from './test-panel';
+import { AdminEntegrasyonlarText } from './copy';
 
 export const VERIFY_SNIPPET = `// Node.js — X-Qratex-Signature-V2 doğrulama (Express, ham gövde)
 import crypto from 'node:crypto';
@@ -33,7 +34,7 @@ function EventChecklist({ value, onChange, error }: { value: string[]; onChange:
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium text-fg">Olaylar</legend>
-      <p className="text-xs text-fg-muted">Yalnız platformda gerçekten tetiklenen olaylar listelenir.</p>
+      <p className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="realEventsOnly" /></p>
       <ul className="space-y-2">
         {WEBHOOK_EVENTS.map((ev) => (
           <li key={ev.key} className="flex items-start gap-3 rounded-control border border-border p-3">
@@ -61,13 +62,13 @@ function PartnerField({ value, onChange }: { value: string; onChange: (v: string
   const partners = useQuery({ queryKey: intKeys.partners('status=active'), queryFn: ({ signal }) => fetchPartners('status=active', signal), staleTime: 60_000 });
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>Partner (isteğe bağlı)</Label>
+      <Label htmlFor={id}><AdminEntegrasyonlarText k="partnerOptional" /></Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger id={id} className="min-h-11">
           <SelectValue placeholder="Partnersiz" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">Partnersiz (iç kullanım)</SelectItem>
+          <SelectItem value="none"><AdminEntegrasyonlarText k="noPartner" /></SelectItem>
           {partners.data?.items.map((p) => (
             <SelectItem key={p.id} value={p.id}>
               {p.name}
@@ -190,7 +191,7 @@ export function WebhookFormDialog({
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-url`}>Uç nokta adresi</Label>
+              <Label htmlFor={`${id}-url`}><AdminEntegrasyonlarText k="endpointUrl" /></Label>
               <Input
                 id={`${id}-url`}
                 type="url"
@@ -208,11 +209,11 @@ export function WebhookFormDialog({
                   {errs.url}
                 </p>
               ) : url && !/^https:\/\//i.test(url.trim()) ? (
-                <p className="text-xs text-warning">Adres https:// ile başlamalı.</p>
+                <p className="text-xs text-warning"><AdminEntegrasyonlarText k="httpsRequired" /></p>
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-desc`}>Açıklama (isteğe bağlı)</Label>
+              <Label htmlFor={`${id}-desc`}><AdminEntegrasyonlarText k="descriptionOptional" /></Label>
               <Input id={`${id}-desc`} value={description} maxLength={200} onChange={(e) => setDescription(e.target.value)} placeholder="ör. CRM — yeni geri bildirim akışı" className="min-h-11" />
             </div>
             <EventChecklist value={events} onChange={setEvents} error={errs.events} />

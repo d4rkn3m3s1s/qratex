@@ -20,6 +20,7 @@ import { createKey, errorText, fetchPartners, fieldErrors, intKeys, rollKey, upd
 import { DealerPicker } from './dealer-picker';
 import { CodeBlock, SecretReveal } from './secret-reveal';
 import { origin } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 type Expiry = '30' | '90' | '365' | 'none';
 
@@ -68,8 +69,8 @@ function ScopeFields({
         <li className={cn('flex items-start gap-3 rounded-control border p-3', full ? TONE_CALLOUT.danger : 'border-border')}>
           <Checkbox id={`${id}-full`} checked={full} onCheckedChange={(v) => toggle(FULL_ACCESS_SCOPE, v === true)} className="mt-0.5" />
           <Label htmlFor={`${id}-full`} className="cursor-pointer space-y-0.5 leading-snug">
-            <span className="block text-sm font-medium">Tam erişim (*)</span>
-            <span className="block text-xs font-normal">İleride eklenecek uçlar dahil tüm partner API'si. Yalnız güvendiğiniz iç sistemler için.</span>
+            <span className="block text-sm font-medium"><AdminEntegrasyonlarText k="fullAccess" /></span>
+            <span className="block text-xs font-normal"><AdminEntegrasyonlarText k="fullAccessHint" /></span>
           </Label>
         </li>
       </ul>
@@ -90,13 +91,13 @@ function PartnerSelect({ value, onChange, id }: { value: string; onChange: (v: s
   const partners = useQuery({ queryKey: intKeys.partners('status=active'), queryFn: ({ signal }) => fetchPartners('status=active', signal), staleTime: 60_000 });
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>Partner (isteğe bağlı)</Label>
+      <Label htmlFor={id}><AdminEntegrasyonlarText k="partnerOptional" /></Label>
       <Select value={value} onValueChange={onChange} disabled={partners.isLoading}>
         <SelectTrigger id={id} className="min-h-11">
           <SelectValue placeholder={partners.isLoading ? 'Yükleniyor…' : 'Partnersiz (iç kullanım)'} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">Partnersiz (iç kullanım)</SelectItem>
+          <SelectItem value="none"><AdminEntegrasyonlarText k="noPartner" /></SelectItem>
           {partners.data?.items.map((p) => (
             <SelectItem key={p.id} value={p.id}>
               {p.name} · {p.typeLabel}
@@ -105,7 +106,7 @@ function PartnerSelect({ value, onChange, id }: { value: string; onChange: (v: s
         </SelectContent>
       </Select>
       {partners.isError ? <p className="text-xs text-danger">Partnerler yüklenemedi: {errorText(partners.error)}</p> : null}
-      <p className="text-xs text-fg-muted">Partner pasifleştirilirse bu anahtar otomatik reddedilir.</p>
+      <p className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="partnerInactiveHint" /></p>
     </div>
   );
 }
@@ -235,25 +236,25 @@ export function CreateKeyDialog({
               <PartnerSelect id={`${id}-partner`} value={partnerId} onChange={setPartnerId} />
 
               <div className="space-y-1.5">
-                <Label htmlFor={`${id}-exp`}>Geçerlilik süresi</Label>
+                <Label htmlFor={`${id}-exp`}><AdminEntegrasyonlarText k="validity" /></Label>
                 <Select value={expiry} onValueChange={(v) => setExpiry(v as Expiry)}>
                   <SelectTrigger id={`${id}-exp`} className="min-h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="30">30 gün</SelectItem>
-                    <SelectItem value="90">90 gün (önerilen)</SelectItem>
-                    <SelectItem value="365">1 yıl</SelectItem>
-                    <SelectItem value="none">Süresiz</SelectItem>
+                    <SelectItem value="30"><AdminEntegrasyonlarText k="days30" /></SelectItem>
+                    <SelectItem value="90"><AdminEntegrasyonlarText k="days90" /></SelectItem>
+                    <SelectItem value="365"><AdminEntegrasyonlarText k="year1" /></SelectItem>
+                    <SelectItem value="none"><AdminEntegrasyonlarText k="noExpiry" /></SelectItem>
                   </SelectContent>
                 </Select>
-                {expiry === 'none' ? <p className="text-xs text-warning">Süresiz anahtarlar zamanla birikip saldırı yüzeyi oluşturur; düzenli döndürmeyi unutmayın.</p> : null}
+                {expiry === 'none' ? <p className="text-xs text-warning"><AdminEntegrasyonlarText k="noExpiryWarn" /></p> : null}
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor={`${id}-ips`}>IP izin listesi (isteğe bağlı)</Label>
+                <Label htmlFor={`${id}-ips`}><AdminEntegrasyonlarText k="ipAllowlist" /></Label>
                 <Textarea id={`${id}-ips`} value={ips} onChange={(e) => setIps(e.target.value)} rows={2} placeholder="ör. 203.0.113.10, 198.51.100.0/24" className="font-mono text-sm" />
-                <p className="text-xs text-fg-muted">Doluysa yalnız bu adreslerden gelen istekler kabul edilir.</p>
+                <p className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="ipAllowlistHint" /></p>
                 {errs.ipAllowlist ? <p className="text-xs text-danger">{errs.ipAllowlist}</p> : null}
               </div>
 
@@ -324,8 +325,8 @@ export function EditKeyDialog({ item, open, onOpenChange }: { item: ApiKeyItem; 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Anahtarı düzenle</DialogTitle>
-          <DialogDescription>Değişiklikler bir sonraki istekte geçerli olur ve denetim kaydına yazılır. Ham anahtar değişmez.</DialogDescription>
+          <DialogTitle><AdminEntegrasyonlarText k="editKey" /></DialogTitle>
+          <DialogDescription><AdminEntegrasyonlarText k="editKeyHint" /></DialogDescription>
         </DialogHeader>
         <form
           className="space-y-5"
@@ -346,7 +347,7 @@ export function EditKeyDialog({ item, open, onOpenChange }: { item: ApiKeyItem; 
           <DealerPicker label="Erişim alanı: tek bayi" value={dealer} onChange={setDealer} />
           <PartnerSelect id={`${id}-partner`} value={partnerId} onChange={setPartnerId} />
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-exp`}>Son geçerlilik günü (boş = süresiz)</Label>
+            <Label htmlFor={`${id}-exp`}><AdminEntegrasyonlarText k="lastValidDay" /></Label>
             <Input id={`${id}-exp`} type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="min-h-11" />
           </div>
           <div className="space-y-1.5">
@@ -410,15 +411,15 @@ export function RollKeyDialog({ item, open, onOpenChange }: { item: ApiKeyItem; 
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-grace`}>Eski anahtar ne kadar daha çalışsın?</Label>
+              <Label htmlFor={`${id}-grace`}><AdminEntegrasyonlarText k="graceQuestion" /></Label>
               <Select value={grace} onValueChange={(v) => setGrace(v as typeof grace)}>
                 <SelectTrigger id={`${id}-grace`} className="min-h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">Hemen geçersiz (sızıntı şüphesi)</SelectItem>
+                  <SelectItem value="0"><AdminEntegrasyonlarText k="revokeNow" /></SelectItem>
                   <SelectItem value="1">1 saat</SelectItem>
-                  <SelectItem value="24">24 saat (önerilen)</SelectItem>
+                  <SelectItem value="24"><AdminEntegrasyonlarText k="hours24" /></SelectItem>
                   <SelectItem value="72">72 saat</SelectItem>
                 </SelectContent>
               </Select>

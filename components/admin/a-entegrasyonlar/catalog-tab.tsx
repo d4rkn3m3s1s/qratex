@@ -12,6 +12,7 @@ import { AUTH_LABEL, type CatalogPayload, type CatalogRoute } from '@/lib/integr
 import { cn } from '@/lib/utils';
 import { copyText, fetchCatalog, intKeys } from './api';
 import { fmtAbs, fmtNum, fmtRel } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 const METHOD_TONE: Record<string, Tone> = { GET: 'info', POST: 'success', PUT: 'warning', PATCH: 'warning', DELETE: 'danger' };
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -159,7 +160,7 @@ function CatalogView({ data }: { data: CatalogPayload }) {
                 {row.original.usedBy.length} dosya
               </span>
             ) : (
-              <span className="text-xs text-warning">Yönetim panelinde referans yok</span>
+              <span className="text-xs text-warning"><AdminEntegrasyonlarText k="noAdminRef" /></span>
             )
           ) : (
             <span className="text-xs text-fg-muted">—</span>

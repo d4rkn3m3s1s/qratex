@@ -23,6 +23,7 @@ import { createPartner, dealersByIds, errorText, fetchPartner, fetchPartners, fi
 import { DealerPicker } from './dealer-picker';
 import { SecretReveal } from './secret-reveal';
 import { KEY_STATUS_META, PARTNER_STATUS_META, WEBHOOK_STATUS_META, fmtAbs, fmtRel, healthSummary } from './format';
+import { AdminEntegrasyonlarText } from './copy';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'pq', label: 'Ara', placeholder: 'Partner adı' },
@@ -208,7 +209,7 @@ function PartnerFormDialog({ open, onOpenChange, item }: { open: boolean; onOpen
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{item ? 'Partneri düzenle' : 'Yeni partner'}</DialogTitle>
-          <DialogDescription>Partner kaydı kimlik bilgisi üretmez; anahtarı “Anahtar bağla” ile kapsamlı ve süreli olarak verirsiniz.</DialogDescription>
+          <DialogDescription><AdminEntegrasyonlarText k="partnerNoCreds" /></DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -230,7 +231,7 @@ function PartnerFormDialog({ open, onOpenChange, item }: { open: boolean; onOpen
             ) : null}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-type`}>Tür</Label>
+            <Label htmlFor={`${id}-type`}><AdminEntegrasyonlarText k="type" /></Label>
             <Select value={type} onValueChange={(v) => setType(v as PartnerType)}>
               <SelectTrigger id={`${id}-type`} className="min-h-11">
                 <SelectValue />
@@ -246,11 +247,11 @@ function PartnerFormDialog({ open, onOpenChange, item }: { open: boolean; onOpen
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-cn`}>İrtibat kişisi</Label>
+              <Label htmlFor={`${id}-cn`}><AdminEntegrasyonlarText k="contactPerson" /></Label>
               <Input id={`${id}-cn`} value={contactName} maxLength={100} onChange={(e) => setContactName(e.target.value)} className="min-h-11" autoComplete="off" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-ce`}>İrtibat e-postası</Label>
+              <Label htmlFor={`${id}-ce`}><AdminEntegrasyonlarText k="contactEmail" /></Label>
               <Input id={`${id}-ce`} type="email" value={contactEmail} maxLength={200} onChange={(e) => setContactEmail(e.target.value)} className="min-h-11" autoComplete="off" aria-invalid={Boolean(errs.contactEmail)} />
               {errs.contactEmail ? <p className="text-xs text-danger">{errs.contactEmail}</p> : null}
             </div>
@@ -406,7 +407,7 @@ function PartnerDetailView({ id }: { id: string }) {
             {p.legacyWebhookUrl ? <LegacyWebhookMigration partnerId={p.id} url={p.legacyWebhookUrl} /> : null}
             {p.hasLegacyKey ? (
               <div className={cn('flex flex-col gap-2 rounded-card border p-3 text-sm sm:flex-row sm:items-center', TONE_CALLOUT.info)}>
-                <p className="flex-1">Eski sistemde üretilen qrk_ anahtarının özeti duruyor. Bu anahtar hiçbir uçta doğrulanmadı ve çalışmaz; kaydı temizleyin ve gerekirse yeni anahtar bağlayın.</p>
+                <p className="flex-1"><AdminEntegrasyonlarText k="legacyKey" /></p>
                 <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" disabled={patch.isPending} onClick={() => patch.mutate({ clearLegacyKey: true })}>
                   Eski anahtarı temizle
                 </Button>
@@ -433,7 +434,7 @@ function PartnerDetailView({ id }: { id: string }) {
                 ) : null}
               </div>
               {d.keys.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu partnere bağlı anahtar yok.</p>
+                <p className="text-sm text-fg-muted"><AdminEntegrasyonlarText k="noPartnerKeys" /></p>
               ) : (
                 <ul className="divide-y divide-border rounded-card border border-border">
                   {d.keys.map((k) => (
@@ -463,7 +464,7 @@ function PartnerDetailView({ id }: { id: string }) {
                 ) : null}
               </div>
               {d.webhooks.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu partnere bağlı webhook yok.</p>
+                <p className="text-sm text-fg-muted"><AdminEntegrasyonlarText k="noPartnerWebhooks" /></p>
               ) : (
                 <ul className="divide-y divide-border rounded-card border border-border">
                   {d.webhooks.map((w) => (
@@ -485,7 +486,7 @@ function PartnerDetailView({ id }: { id: string }) {
                 <Building2 className="h-4 w-4" aria-hidden /> Bağlı bayiler
               </h3>
               {d.dealers.length === 0 ? (
-                <p className="text-sm text-fg-muted">Kısıt yok: platform geneli anahtarlar tüm bayileri okuyabilir. Kısıtlamak için “Düzenle”den bayi seçin.</p>
+                <p className="text-sm text-fg-muted"><AdminEntegrasyonlarText k="noRestriction" /></p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
                   {d.dealers.map((x) => (
