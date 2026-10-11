@@ -138,7 +138,7 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
           className="mt-4 space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (ready && !accept.isPending) accept.mutate();
+            if (ready && !accept.isPending && !accept.isSuccess) accept.mutate();
           }}
         >
           <fieldset className="space-y-2">
@@ -174,7 +174,7 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
               <p className="qx-small text-fg">{copy.remedyConfirm(selectionText(option, valueNum))}</p>
             ) : null}
             <p className="qx-caption text-fg-muted">{copy.remedyIrreversible}</p>
-            <Button type="submit" className="w-full sm:w-auto" disabled={!ready} loading={accept.isPending}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={!ready || accept.isSuccess} loading={accept.isPending || accept.isSuccess}>
               {copy.remedyAccept}
             </Button>
           </div>
