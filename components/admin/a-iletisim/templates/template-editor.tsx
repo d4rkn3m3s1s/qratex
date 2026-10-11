@@ -17,6 +17,7 @@ import {
   type TemplateInput,
 } from '@/lib/mail-center/templates-contract';
 import { fmtDeadline, istanbulNowLocal } from '../format';
+import { AdminIletisimText } from '../copy';
 
 const ISO_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
@@ -47,7 +48,7 @@ export function TemplateEditor({ draft, onChange }: { draft: TemplateInput; onCh
   return (
     <div className="space-y-5">
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-fg">Şablon türü</legend>
+        <legend className="text-sm font-medium text-fg"><AdminIletisimText k="templateType" /></legend>
         <ChoiceChips<InternEmailKind>
           aria-label="Şablon türü"
           size="sm"
@@ -64,7 +65,7 @@ export function TemplateEditor({ draft, onChange }: { draft: TemplateInput; onCh
           <Input id={`${uid}-dept`} value={draft.department} maxLength={60} onChange={(e) => onChange({ department: e.target.value })} className="min-h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${uid}-name`}>Alıcı adı (hitap)</Label>
+          <Label htmlFor={`${uid}-name`}><AdminIletisimText k="greetingName" /></Label>
           <Input id={`${uid}-name`} value={draft.recipientName} maxLength={80} onChange={(e) => onChange({ recipientName: e.target.value })} className="min-h-11" />
         </div>
       </div>
@@ -128,7 +129,7 @@ export function TemplateEditor({ draft, onChange }: { draft: TemplateInput; onCh
 
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <Label htmlFor={`${uid}-body`}>İçerik</Label>
+          <Label htmlFor={`${uid}-body`}><AdminIletisimText k="content" /></Label>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Değişken ekle (imlecin olduğu yere)">
             {MAIL_VARIABLES.map((v) => (
               <button
@@ -154,7 +155,7 @@ export function TemplateEditor({ draft, onChange }: { draft: TemplateInput; onCh
           aria-describedby={`${uid}-body-help`}
         />
         <p id={`${uid}-body-help`} className="text-xs text-fg-muted">
-          Biçim: <code>1. Başlık</code> numaralı bölüm · <code>• madde</code> ya da <code>- madde</code> liste · boş satır = yeni paragraf.
+          <AdminIletisimText k="fmtLabel" /> <code><AdminIletisimText k="fmtHeading" /></code> <AdminIletisimText k="fmtNumbered" /> <code>• <AdminIletisimText k="fmtItem" /></code> <AdminIletisimText k="fmtOr" /> <code>- <AdminIletisimText k="fmtItem" /></code> <AdminIletisimText k="fmtListTail" />
         </p>
         {unknown.length > 0 && (
           <p role="alert" className="flex items-start gap-1.5 text-xs text-warning">
@@ -185,7 +186,7 @@ function RecipientsField({ id, value, onChange }: { id: string; value: string; o
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>Alıcılar</Label>
+      <Label htmlFor={id}><AdminIletisimText k="recipients" /></Label>
       <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-control border border-strong bg-surface-1 p-1.5 focus-within:ring-2 focus-within:ring-focus">
         {list.map((e) => (
           <span key={e} className="inline-flex items-center gap-1 rounded-chip bg-surface-3 py-0.5 pl-2 pr-0.5 text-sm text-fg">

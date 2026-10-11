@@ -12,6 +12,7 @@ import { matchesConfirmPhrase } from '@/components/states';
 import { DURATION, useMotionPolicy } from '@/lib/motion';
 import { sendLabelFor, splitRecipients, type SendResultRow, type TemplateInput, type TemplateStatView } from '@/lib/mail-center/templates-contract';
 import { errorText, sendTemplateApi } from '../api';
+import { AdminIletisimText } from '../copy';
 
 /** Alıcıları üç gruba ayırır: yeni / daha önce başarıyla almış / son denemesi hatalı. */
 export function groupRecipients(tpl: TemplateInput, stat: TemplateStatView | undefined) {
@@ -120,11 +121,11 @@ export function SingleSendDialog({
             <dd className="text-lg font-semibold tabular-nums">{g.fresh.length}</dd>
           </div>
           <div className="rounded-control bg-surface-2 p-2">
-            <dt className="text-xs text-fg-muted">Daha önce almış</dt>
+            <dt className="text-xs text-fg-muted"><AdminIletisimText k="alreadyReceived" /></dt>
             <dd className="text-lg font-semibold tabular-nums">{g.already.length}</dd>
           </div>
           <div className="rounded-control bg-surface-2 p-2">
-            <dt className="text-xs text-fg-muted">Son denemesi hatalı</dt>
+            <dt className="text-xs text-fg-muted"><AdminIletisimText k="lastFailed" /></dt>
             <dd className="text-lg font-semibold tabular-nums">{g.errored.length}</dd>
           </div>
         </dl>
@@ -244,7 +245,7 @@ export function BulkSendDialog({
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Toplu gönderim</DialogTitle>
+          <DialogTitle><AdminIletisimText k="bulkSend" /></DialogTitle>
           <DialogDescription>
             {targetPlan.length} şablon · {recipientTotal} alıcı · tahmini {etaMin} dk. Gönderim sırayla yapılır; sayfayı kapatmayın.
           </DialogDescription>

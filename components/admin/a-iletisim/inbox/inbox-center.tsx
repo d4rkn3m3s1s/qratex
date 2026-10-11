@@ -51,6 +51,7 @@ import {
 import { CommTabs } from '../comm-tabs';
 import { fmtAgo, fmtListDate, initials } from '../format';
 import { ReadingPane, type ReadingPaneHandle } from './reading-pane';
+import { AdminIletisimText } from '../copy';
 
 const VIEW_ICON: Record<InboxView, LucideIcon> = {
   inbox: Inbox,
@@ -329,7 +330,7 @@ export function InboxCenter({ initial }: { initial: Initial }) {
                     {sync.error}
                   </span>
                 )}
-                {sync.ok !== false && sync.hasMore && <span className="text-warning">Çekilmeyi bekleyen mailler var; tekrar senkronlayın.</span>}
+                {sync.ok !== false && sync.hasMore && <span className="text-warning"><AdminIletisimText k="pendingFetch" /></span>}
               </p>
             ) : null
           }
@@ -522,7 +523,7 @@ function MailRow({ item, active, onOpen }: { item: InboxListItem; active: boolea
           {!item.seen && !out && (
             <>
               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-brand" />
-              <span className="sr-only">Okunmadı. </span>
+              <span className="sr-only"><AdminIletisimText k="notRead" /> </span>
             </>
           )}
           <span className={cn('min-w-0 flex-1 truncate text-sm', item.seen || out ? 'text-fg' : 'font-semibold text-fg')}>{who}</span>
@@ -609,7 +610,7 @@ function RetentionSetting({ value, onSaved }: { value: number | null; onSaved: (
               </option>
             ))}
           </select>
-          <p className="text-xs text-fg-muted">Süresi dolan mailler ve ekleri her gün otomatik silinir. Gmail&apos;deki kopyalar etkilenmez.</p>
+          <p className="text-xs text-fg-muted"><AdminIletisimText k="retentionNote" /></p>
         </div>
       )}
     </div>

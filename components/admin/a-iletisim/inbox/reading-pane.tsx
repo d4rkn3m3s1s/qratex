@@ -31,6 +31,7 @@ import { MAILBOX_ARCHIVED, formatBytes, replySubject, type InboxDetail, type Inb
 import { attachmentUrl, fetchInboxDetail, inboxKeys } from '../api';
 import { fmtLong } from '../format';
 import { MailFrame } from './mail-frame';
+import { AdminIletisimText } from '../copy';
 
 export type ReadingPaneHandle = { openReply: () => void };
 
@@ -213,7 +214,7 @@ function Detail({
                       <span className="block text-xs text-fg-muted">{formatBytes(a.size)} · {a.contentType}</span>
                     </span>
                     <ExternalLink className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
-                    <span className="sr-only">(yeni sekmede açılır)</span>
+                    <span className="sr-only"><AdminIletisimText k="newTab" /></span>
                   </a>
                 ) : (
                   <div className="flex min-h-11 items-center gap-3 rounded-control border border-dashed border-border px-3 py-2 text-sm text-fg-muted">
@@ -349,7 +350,7 @@ function Composer({
         <span className="font-medium text-fg">Kime:</span> {to} · <span className="font-medium text-fg">Konu:</span> {subject}
       </p>
       <div className="space-y-1.5">
-        <Label htmlFor="reply-text">Yanıtınız</Label>
+        <Label htmlFor="reply-text"><AdminIletisimText k="yourReply" /></Label>
         <Textarea
           id="reply-text"
           ref={areaRef}
@@ -362,12 +363,12 @@ function Composer({
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && text.trim() && !pending) void send();
           }}
         />
-        <p className="text-xs text-fg-muted">Ctrl + Enter ile gönder. Konu ve konuşma başlıkları otomatik eklenir.</p>
+        <p className="text-xs text-fg-muted"><AdminIletisimText k="replyHint" /></p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-h-11 items-center gap-2">
           <Checkbox id="reply-quote" checked={quote} onCheckedChange={(v) => setQuote(v === true)} />
-          <Label htmlFor="reply-quote" className="font-normal">Orijinal maili alıntıla</Label>
+          <Label htmlFor="reply-quote" className="font-normal"><AdminIletisimText k="quoteOriginal" /></Label>
         </div>
         <div className="ml-auto flex gap-2">
           <Button

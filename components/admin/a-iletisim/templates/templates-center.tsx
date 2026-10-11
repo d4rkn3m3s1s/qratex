@@ -47,6 +47,7 @@ import { PreviewPane } from './preview-pane';
 import { ResultsPanel } from './results-panel';
 import { BulkSendDialog, SingleSendDialog } from './send-dialogs';
 import { TemplateEditor } from './template-editor';
+import { AdminIletisimText } from '../copy';
 
 type Filter = 'active' | 'unsent' | 'sent' | 'error' | 'due' | 'archived';
 const FILTERS: { value: Filter; label: string }[] = [
@@ -284,7 +285,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72">
-                  <DropdownMenuLabel>Şablon türü</DropdownMenuLabel>
+                  <DropdownMenuLabel><AdminIletisimText k="templateType" /></DropdownMenuLabel>
                   {INTERN_EMAIL_KINDS.map((k) => (
                     <DropdownMenuItem key={k.value} onSelect={() => createNew(k.value)} className="min-h-11 flex-col items-start gap-0.5">
                       <span className="font-medium">{k.label}</span>
@@ -308,7 +309,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
           meta={
             <p className="text-sm text-fg-muted" aria-live="polite">
               {dirty ? (
-                <span className="font-medium text-warning">Kaydedilmemiş değişiklikler var</span>
+                <span className="font-medium text-warning"><AdminIletisimText k="unsavedChanges" /></span>
               ) : data.updatedAt ? (
                 <>Kaydedildi · {fmtAgo(data.updatedAt)}{data.updatedByName ? ` · ${data.updatedByName}` : ''}</>
               ) : (
@@ -340,7 +341,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
         {/* Liste */}
         <section aria-label="Şablon listesi" className={cn('min-w-0 space-y-3', selected && 'hidden lg:block')}>
           <div className="relative">
-            <Label htmlFor="tpl-search" className="sr-only">Şablonlarda ara</Label>
+            <Label htmlFor="tpl-search" className="sr-only"><AdminIletisimText k="searchTemplates" /></Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
             <Input
               id="tpl-search"
@@ -506,7 +507,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
         <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
           <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
             <SheetHeader>
-              <SheetTitle>Önizleme</SheetTitle>
+              <SheetTitle><AdminIletisimText k="preview" /></SheetTitle>
             </SheetHeader>
             <PreviewPane draft={selected} className="mt-4" />
           </SheetContent>
@@ -517,7 +518,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
       {dirty && (
         <div className="sticky bottom-0 z-raised -mx-1 flex flex-wrap items-center gap-2 rounded-card border border-warning-border bg-surface-elevated p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] qx-elevation-2">
           <AlertTriangle className="h-4 w-4 text-warning" aria-hidden />
-          <p className="min-w-0 flex-1 text-sm text-fg">Kaydedilmemiş değişiklikler var. Gönderim, kayıtlı hâli kullanır.</p>
+          <p className="min-w-0 flex-1 text-sm text-fg"><AdminIletisimText k="unsavedSendNote" /></p>
           <Button variant="ghost" className="min-h-11" onClick={discard} disabled={saveMut.isPending}>
             <Undo2 className="mr-2 h-4 w-4" aria-hidden />
             Vazgeç

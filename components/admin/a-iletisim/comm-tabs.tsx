@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Inbox, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AdminIletisimText } from './copy';
 
 /**
  * İletişim yüzeyinin iki ucu arasında yerel geçiş (giden şablonlar ↔ gelen yanıtlar).
@@ -32,7 +33,7 @@ export function CommTabs({ active, unread }: { active: 'inbox' | 'templates'; un
             {typeof it.badge === 'number' && it.badge > 0 && (
               <span className="rounded-full bg-brand px-1.5 text-[11px] font-semibold leading-5 text-brand-fg tabular-nums">
                 {it.badge > 99 ? '99+' : it.badge}
-                <span className="sr-only"> okunmamış</span>
+                <span className="sr-only"> <AdminIletisimText k="unread" /></span>
               </span>
             )}
           </Link>

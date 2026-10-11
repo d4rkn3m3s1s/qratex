@@ -9,6 +9,7 @@ import { EmptyState, QueryState } from '@/components/states';
 import type { ReminderInfo, TemplateStatView } from '@/lib/mail-center/templates-contract';
 import { fetchSendHistory, templateKeys } from '../api';
 import { fmtAgo, fmtLong } from '../format';
+import { AdminIletisimText } from '../copy';
 
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Send; label: string; value: number; tone?: string }) {
   return (
@@ -66,7 +67,7 @@ export function ResultsPanel({
       )}
 
       <section aria-labelledby={`rcpt-${templateId}`} className="space-y-2">
-        <h3 id={`rcpt-${templateId}`} className="text-sm font-semibold text-fg">Alıcılar</h3>
+        <h3 id={`rcpt-${templateId}`} className="text-sm font-semibold text-fg"><AdminIletisimText k="recipients" /></h3>
         {s.recipients.length === 0 ? (
           <EmptyState compact variant="first-use" title="Henüz gerçek gönderim yok" description="Gönderdiğinizde her alıcının durumu burada görünür." />
         ) : (
@@ -112,7 +113,7 @@ export function ResultsPanel({
 
       {testStat && testStat.recipients.length > 0 && (
         <section aria-label="Test gönderimleri" className="space-y-2">
-          <h3 className="text-sm font-semibold text-fg">Test gönderimleri</h3>
+          <h3 className="text-sm font-semibold text-fg"><AdminIletisimText k="testSends" /></h3>
           <ul className="space-y-1 text-sm">
             {testStat.recipients.map((r) => (
               <li key={r.email} className="flex flex-wrap items-center gap-2">
@@ -145,7 +146,7 @@ function History({ templateId }: { templateId: string }) {
   const rows = q.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <section aria-labelledby={`hist-${templateId}`} className="space-y-2">
-      <h3 id={`hist-${templateId}`} className="text-sm font-semibold text-fg">Gönderim geçmişi</h3>
+      <h3 id={`hist-${templateId}`} className="text-sm font-semibold text-fg"><AdminIletisimText k="sendHistory" /></h3>
       <QueryState query={q} skeleton="list" isEmpty={() => rows.length === 0} empty={{ compact: true, title: 'Geçmiş yok', description: 'Bu şablonla henüz mail gönderilmedi.' }}>
         {() => (
           <ol className="space-y-1.5">
