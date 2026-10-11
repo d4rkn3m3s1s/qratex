@@ -267,3 +267,90 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (route, sayfa, `pro
 - Düzeltme: ortak `toCsvCell()` yardımcısı (baştaki `= + - @ \t \r` için `'` öneki) hem istemci hem sunucu dışa aktarımında tek yerden kullanılmalı.
 
 **Özet:** 7 iddianın 7'si kodla doğrulandı; #2'de sayfa sayısı bir kaydırıldı, #5'in önemi "Düşük"e indirildi, #6'ya HMAC'siz sayfa-kapısı gözlemi eklendi.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni mimari.** `/admin/feedbacks` sunucu bileşeni (URL'deki görünümün ilk sayfası + sayaçlar sunucuda paralel, `initialData`) + küçük istemci adası `components/admin/a-geri-bildirimler/**` (QDL v2: `PanelPage`, `MetricTile`, `FilterBar`, `SectionTabs`, `DataTable`, `DetailSheet`, `QueryState`). Veri katmanı `lib/admin-feedbacks/` (`contract.ts` istemci+sunucu ortak zod sözleşmesi, `feed.server.ts` tek SQL birleşik akış, `detail.server.ts`, `actions.server.ts`). Yeni BFF uçları (hepsi `defineRoute`, yalnız ADMIN, zod, rate limit): `GET /api/admin/feedbacks/feed`, `GET …/stats`, `GET …/item?key=`, `POST …/bulk`, `GET …/export`, `GET …/dealer-options`. Eski `GET/DELETE /api/admin/feedbacks` ve `…/restore` yalnız geriye uyumluluk/testler için duruyor (sayfa artık kullanmıyor; sahte `samplingNote` kaldırıldı). Test: `__tests__/lib/admin-feedbacks.test.ts` (15 test).
+
+**Ürün dönüşümü:** "liste + sil" → VOC moderasyon kuyruğu. Görünüm sekmeleri (sayaçlı): *Dikkat gerektiren* (varsayılan: 1–2★ yanıtsız ∨ toksik ∨ güven işaretli ∨ sahte skoru ≥ %70) · Tümü · Yanıtsız · İşaretli · Gizlenen · Çöp kutusu. Aksiyonlar: çöp kutusuna taşı (gerekçeli, "Geri al" toast'lı), geri yükle, gizle/yayınla (`isPublic`), toksik işaretle (gizler), işaretleri temizle, bayiye hatırlat (bayi başına tek uygulama içi bildirim, 24 saat bekleme). Her aksiyon koşullu yazım + gerçek etkilenen sayı + gerekçeli atlananlar + aynı transaction'da değişiklik öncesi anlık görüntülü denetim satırı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero | ÇALIŞIYOR — kompakt `PageHeader` (ops kaydı); açıklama gerçek aksiyonlarla uyumlu |
+| 2 | "Yenile" butonu | KALDIRILDI — TanStack Query odakta/aksiyon sonrası yeniler; hata durumunda `QueryState` "Tekrar dene" |
+| 3 | Rota iskeleti | ÇALIŞIYOR — QDL `SkeletonStats` + `SkeletonTable` |
+| 4–7 | Toplam / QR / Tüketim / Ort. puan | ÇALIŞIYOR — tek SQL KPI; QR/Tüketim ayrımı kaynak süzgeciyle (ayrı kart yerine) |
+| 8 | NPS | ÇALIŞIYOR — "NPS (yalnız QR)" etiketi + `n`; kaynak süzgecine duyarlı |
+| 9 | Olumlu/Nötr/Olumsuz | ÇALIŞIYOR — tek duygu tanımı (AI → yoksa puan; metinli analiz edilmemiş = "Analiz bekliyor" ayrı kova); "Olumsuz oranı" KPI |
+| 10 | Puan dağılımı | ÇALIŞIYOR — çubuklar tıklanabilir süzgeç (`aria-pressed`) |
+| 11 | Serbest arama | ÇALIŞIYOR — sunucuda tek tanım: metin, müşteri adı/e-posta, bayi adı, QR/ürün adı, kimlik; istemci yeniden süzmesi yok; sayfa sıfırlanır |
+| 12 | Enter ile arama | ÇALIŞIYOR — `FilterBar` debounce + Enter |
+| 13 | `?search=` senkronu | ÇALIŞIYOR — `?search=` → `?q=&view=all` sunucu yönlendirmesi |
+| 14 | `?sentiment=` deep-link | ÇALIŞIYOR — okunur (+ `view=all`) |
+| 15 | Tür sekmeleri | ÇALIŞIYOR — "Kaynak" süzgeci; sekmeler artık kayıtlı görünümler |
+| 16 | Duygu filtresi | ÇALIŞIYOR — tüketimde AI `sentiment` kullanılır; puan süzgecini ezmez |
+| 17 | Bayi filtresi | ÇALIŞIYOR — aranabilir combobox, sunucu araması (≤20), alfabetik |
+| 18 | Gelişmiş filtre Sheet | KALDIRILDI — yerine görünür `FilterBar` (mobilde katlanır) |
+| 19 | Puan aralığı | ÇALIŞIYOR — çoklu puan seçimi (1–5), sayfa sıfırlanır |
+| 20 | Tarih aralığı | ÇALIŞIYOR — hazır dönemler + `from/to` derin bağlantı çipi; İstanbul günü, bitiş DAHİL |
+| 21 | Manuel inceleme (<%70) | KALDIRILDI — çakışma bölümüne göre `/admin/ai-quality`'ye taşındı; detayda düşük güvende bağlantı |
+| 22 | "Uygula" | KALDIRILDI — süzgeçler anında uygulanır, yanıltıcı buton yok |
+| 23 | Sheet "Temizle" | ÇALIŞIYOR — "Filtreleri temizle" (bayi + özel aralık dahil) |
+| 24 | Aktif filtre göstergesi | ÇALIŞIYOR — `FilterBar` sayaç/çipleri + bayi ve aralık çipleri |
+| 25 | "Filtreleri temizle" | ÇALIŞIYOR |
+| 26 | CSV | ÇALIŞIYOR — sunucuda, aktif görünüm+süzgeçlerin tamamı (≤10.000), formül enjeksiyonu nötr, denetimli |
+| 27 | PDF | KALDIRILDI — yazdırma penceresi "PDF indirildi" diyordu; CSV yeterli ve dürüst |
+| 28 | Toplu aksiyon çubuğu | ÇALIŞIYOR — görünüme göre aksiyon seti |
+| 29 | Tümünü seç | ÇALIŞIYOR — `DataTable` sayfa seçimi + Shift aralığı |
+| 30 | Satır seçimi | ÇALIŞIYOR — kaynak önekli kimlik; görünüm/süzgeç değişiminde sıfırlanır |
+| 31 | Toplu silme | ÇALIŞIYOR — `POST …/bulk`, soft delete, gerçek sayı, sayfalar arası seçim gönderilir |
+| 32 | Silme onayı | ÇALIŞIYOR — gerekçe diyaloğu, doğru metin ("geri yüklenebilir"), işlem sırasında kilit |
+| 33 | Satır kimlik bilgileri | ÇALIŞIYOR |
+| 34 | Yıldızlar | ÇALIŞIYOR — `role="img"` "5 üzerinden N puan" |
+| 35 | Duygu rozeti | ÇALIŞIYOR — `StatusBadge` token tonları |
+| 36 | Tür rozeti | ÇALIŞIYOR |
+| 37 | "İşletme yanıtladı" | ÇALIŞIYOR — iki kaynakta da (tüketimde `dealerReply` eşlendi) |
+| 38 | Konular | ÇALIŞIYOR |
+| 39 | Göreli tarih | ÇALIŞIYOR — mobil kartta da görünür, `title` mutlak İstanbul saati |
+| 40 | Detay Gör | ÇALIŞIYOR — `?id=` derin linkli yan çekmece, önceki/sonraki |
+| 41 | Satır menüsü Sil | ÇALIŞIYOR — toplu seçimi ezmez |
+| 42 | Liste animasyonu | KALDIRILDI — ops kaydı: stagger yok, `keepPreviousData` ile zıplamasız yenileme |
+| 43 | Yükleniyor | ÇALIŞIYOR — `QueryState` iskelet + "Güncelleniyor" |
+| 44 | Boş durum | ÇALIŞIYOR — görünüme/süzgece özel, "Filtreleri temizle" CTA |
+| 45 | Hata durumu | ÇALIŞIYOR — her 4xx/5xx görünür hata + tekrar dene; aksiyon hataları diyalogda/toast'ta |
+| 46 | Sayfalama | ÇALIŞIYOR — `UNION ALL` + `ORDER BY at, id` + `LIMIT/OFFSET` veritabanında |
+| 47 | Sayfa bilgisi | ÇALIŞIYOR |
+| 48–51 | Detay: kullanıcı/işletme/puan/metin | ÇALIŞIYOR — Müşteri 360 ve bayi sağlığı bağlantıları, diğer yorum sayısı |
+| 52 | Detay: duygu | ÇALIŞIYOR — TR etiket |
+| 53 | Detay: duygular | ÇALIŞIYOR — `normalizeStringList` (indeks değil etiket), TR sözlük |
+| 54 | Detay: konular | ÇALIŞIYOR |
+| 55 | Detay: boyutlar | ÇALIŞIYOR — TR etiket, iç içe `{score}` destekli, sayısal olmayan düşer |
+| 56 | Detay: işletme yanıtı | ÇALIŞIYOR — yanıt + süre; yoksa "gördü/görmedi" |
+| 57 | Detay: AI sinyalleri | ÇALIŞIYOR — niyet+güven, aciliyet, kayıp riski, NPS, sahte skoru, güven/toksik, öneriler, medya sayısı, personel |
+| 58 | Çöp kutusu / geri yükleme | ÇALIŞIYOR — "Çöp kutusu" görünümü + geri yükle + toast "Geri al" |
+| 59 | `maxFraudScore` filtresi | ÇALIŞIYOR — "Sahte şüphesi" işaret süzgeci (≥ %70) |
+| 60 | Moderasyon | ÇALIŞIYOR — gizle/yayınla, toksik işaretle, işaretleri temizle (QR) |
+| 61 | Yetki (API) | ÇALIŞIYOR — `defineRoute` roles ADMIN (DB'den); gizli kapının API katmanı sistem geneli (Kalanlar) |
+| 62 | Denetim kaydı | ÇALIŞIYOR — değişiklik öncesi anlık görüntü + gerekçe + gerçek sayı, aynı transaction |
+| 63 | Rate limit | ÇALIŞIYOR — `defineRoute` (`checkRateLimitDb`, Redis öncelikli) |
+| 64 | `samplingNote` | KALDIRILDI — sahte not eski uçtan da silindi |
+| 65 | Mobil yerleşim | ÇALIŞIYOR — `DataTable` md altı kart görünümü, ≥44px hedefler, detay alttan sheet |
+
+### Kapanan bulgular
+1 (soft delete + anlık görüntülü denetim; `deletedAt` şemada zaten vardı) · 2 (birleşik SQL sayfalama/arama) · 3 (gerçek sayı, sayfa bağımsız seçim, hata görünür, kilit) · 4 (duygular) · 5 (İstanbul gün sonu, duygu/puan bağımsız, manuel inceleme taşındı, NPS etiketli, analiz bekleyen ayrı) · 6 (CSV enjeksiyonu + sunucu dışa aktarımı + gerçek aktör denetimi) · 7 (tek KPI sorgusu, liste/sayaç ayrı, bayi araması) · 9 (`?sentiment=`, `?search=`, `?id=` derin linkleri) · 10 (moderasyon aksiyonları) · 11 (aria etiketleri, yıldız metni, ≥12px) · 12 (tipli sözleşme, TR sözlükler, ölü kod gitti) · 13 (gereksiz hareket kaldırıldı) · 14 (sahte örnekleme notu).
+
+### Kalanlar
+- **Bulgu 8 (gizli kapı API'de):** sistem geneli `requireAuth`/`defineRoute` işi; bu yüzeyin sahipliği dışında.
+- **AI duygusunu düzelt:** `AIFeedbackCorrection.dealerId` zorunlu ve bayi kullanıcısına bağlı; yönetici düzeltmesi için alan yok (ŞEMA İSTEĞİ). Düşük güvenli analizler `/admin/ai-quality`'ye yönlendiriliyor.
+- **Durum iş akışı / atama / SLA (eksik özellik 1):** `Feedback`'te durum/atanan alanı yok (ŞEMA İSTEĞİ).
+- **Tüketim yorumunda gizleme/toksik:** `ConsumptionReview`'da `isPublic`/`isToxic` yok; bu aksiyonlar tüketimde gerekçeli "atlandı" döner.
+- **Trend grafiği (eksik özellik 5):** `/admin/analytics` dönemsel seri + kök neden gösteriyor; burada tekrarlanmadı.
+- `/admin/trust-command` bağlantısı (`app/api/admin/trust-timeline/route.ts:225`) hâlâ kimliksiz; `?id=qr:<id>` desteği hazır, o yüzeyin sahibi bağlayabilir.
+- Gizlenen (`isPublic=false`) QR yorumlarının herkese açık yüzeylerde süzülmesi o yüzeylerin sorumluluğunda (bu turda doğrulanmadı).
+
+**ŞEMA İSTEKLERİ:** (1) `AIFeedbackCorrection.dealerId` opsiyonel + `correctedById` (yönetici düzeltmesi). (2) `Feedback`/`ConsumptionReview` için `reviewStatus` (`new|in_review|resolved|escalated`) + `assigneeId` + `resolvedAt` (inceleme kuyruğu/SLA). (3) `ConsumptionReview.isPublic` + `isToxic` (iki kaynakta eşit moderasyon).

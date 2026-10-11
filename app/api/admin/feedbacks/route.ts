@@ -3,7 +3,6 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
-import { getSamplingConfig } from '@/lib/analytics-sampling';
 import { adminFeedbacksDeleteSchema, adminFeedbacksQuerySchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
@@ -57,12 +56,9 @@ export async function GET(request: NextRequest) {
       qrWhere.qrCode = { dealerId };
     }
 
-    const sampling = startDate && endDate
-      ? getSamplingConfig(new Date(startDate), new Date(endDate))
-      : { sampleRatio: 1 as const };
-    const takeLimit = sampling.sampleRatio < 1 && sampling.maxTake
-      ? Math.min(pageSize * 10, sampling.maxTake)
-      : 100;
+    // Dalga 2: gerçek örnekleme yapmayan "samplingNote" kaldırıldı (rapor Bulgu 14).
+    // Bu uç ESKİDİR; /admin/feedbacks artık /api/admin/feedbacks/{feed,stats,item,bulk,export} kullanır.
+    const takeLimit = 100;
 
     // Fetch QR feedbacks
     let qrFeedbacks: any[] = [];
@@ -323,7 +319,6 @@ export async function GET(request: NextRequest) {
         pageSize,
         totalPages: Math.ceil(totalItems / pageSize),
       },
-      ...(sampling.note && { samplingNote: sampling.note }),
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin feedbacks error:', error);
