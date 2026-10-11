@@ -285,3 +285,35 @@ Yöntem: `components/customer/pacman-game.tsx`, `app/api/customer/games/pacman/{
 | 3 | `failed` oturum → `canPlay:true` → 409 | Doğrulandı (orta; generic oyunlarda canlı, Pacman'de gizli) |
 | 4 | İstemci beyanı + 5 sn eşiği ile sahte ödül | Doğrulandı (yüksek, hesap başına günde 150 ile sınırlı) |
 | 5 | `gameType` kontrolü yok | Doğrulandı (orta-düşük; "kapalı oyun" gerekçesi Pacman'e özgü değil) |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/games/star-hunt` (dinamik `[game]` sayfası + `GameHost` v2). `/customer/games/pacman` → kalıcı yönlendirme (sorgu parametreleri korunur). Sunucu anahtarı geçmiş veriyle süreklilik için `pacman` kaldı; API generic `POST /api/customer/games/pacman/{start,complete,practice}` (`[game]` route'u; `defineRoute` + rol + rate limit). Ayrı `app/api/customer/games/pacman/*` route'ları ve `components/customer/pacman-game.tsx` **silindi**.
+
+**Dosyalar:** `components/customer/games/star-hunt/{sim,render,star-hunt-game}.ts(x)`, `lib/games/registry/star-hunt{,.server}.ts`, `lib/games/validators/star-hunt.ts`, `__tests__/lib/star-hunt.test.ts` (16 test), `lib/minigame-config.ts` (`PACMAN_GAME`: maxScore 25, maxScorePerSec 0,8), `__tests__/api/games-routes.test.ts` (pacman bloğu generic route'a taşındı).
+
+**Oyun:** 5 seviye (3 labirent: Avlu, Çarşı, Kule), seviye başına 5 yıldız + 2 güç kapsülü, 3 can, 4 hayalet kişiliği (kovalayan / önünü kesen / gezinen / çekingen). Zorluk eğrisi: hayalet sayısı 2→4, hızı 6→8 alt birim/adım, kararlılığı 0,60→0,86, güç süresi 6→4 sn. Skor = toplam yıldız (0..25), ödül eşiği 5 (ilk seviye). Bot ölçümü (8 tohum): 3–19 yıldız; kimse 25'e ulaşmadı → tavan anlamlı.
+
+**Kapatılan bulgular (12/14):**
+1. Bayat kapanış → oturum/ödül kabukta (`useMiniGame`, ref tabanlı), bileşen `onFinish`'i bir kez çağırır.
+2. Kayıpta döngü → sim `over` olunca `update` erken döner, özet ekranına geçilir; tek `finishedRef`.
+4. Oynamadan ödül → **deterministik replay**: kanıt `{log: [[tick, yön]], steps}`; sunucu aynı tohumla oynatır, skor sunucunun. Kanıtsız / uydurma / hızlandırılmış / başka tohumun kaydı reddedilir (jest).
+5. `gameType` kontrolü → generic route (404 testi korunuyor).
+6. Kare hızı → motorun 60 Hz sabit adımı + tamsayı alt birim; güç süresi adım sayacı (duraklatmada akmaz).
+7. Çatallanmış yol → registry + generic API; seri/başarım/liderlik/turnuva/admin override/kişilik metinleri (`GAME_COPY.pacman` GameShell'de) artık ortak.
+8. "Yenile" butonu kaldırıldı; hak durumu/sonuç/sonraki adım GameShell'de; sıralıda özet 12 sn sonra kendiliğinden gönderir.
+9. Labirent DPR ölçeğine göre bir kez gizli canvas'a çizilir; karede `shadowBlur` yok.
+10. Erişilebilirlik: canvas `role="application"` + açıklama, `aria-live` durum duyuruları, D-pad `aria-label`, odak yönetimi; sarsıntı/parçacık/ses/titreşim `fx` (hareket politikası) üzerinden.
+11. DPR keskinliği; D-pad `(pointer: coarse)` ile (iPad dahil), ≥ 56 px; başlık dinamik sayfada.
+12. Teknik/İngilizce hata sızması → `useMiniGame`'in TR mesaj + `res.json().catch` deseni.
+13. Pacman sayfasındaki `/auth/signin` ve çift başlık → sayfa artık yönlendirme.
+
+Ayrıca: WASD `KeyboardEvent.code` (CapsLock/Shift'ten bağımsız), arama kutusuna yazarken oyun tuşları yutulmaz; ilk oynayış öğreticisi; Pratik/Sıralı; duraklat/devam (Esc/P, sekme gizlenince otomatik); sonuç ekranı (skor, kişisel rekor, 3 kupa, istatistik, paylaş); renk körü güvenli Okabe–Ito palet + biçimle ayırt (hayalet tepe biçimleri, korkmuş hayalet kesik kenar/zikzak ağız, yıldız/halka).
+
+**Kalan açıklar:**
+- Bulgu 14 (gün sınırı UTC): `lib/game-session.ts gameDayKey` ortak modül, tüm oyunları ve seriyi etkiler — oyun ekosistemi sahibinin işi.
+- Bulgu 3 (failed → 409) ortak `lib/game-session.ts`'te önceden kapatılmıştı (games-routes testi 1).
+- Dinamik `[game]` sayfası hâlâ `/auth/signin`'e yönlendiriyor (ortak sayfa, sahiplik dışı).
+- `games-hub` / `play-hub` / `status` route'u `PACMAN_GAME`'i ayrıca okuyor (MINI_GAMES dışında): turnuva rotasyonu indeks tuzağı nedeniyle MINI_GAMES'e eklenmedi; liderlik/turnuva uygunluğu turnuva sahibiyle koordine edilmeli.

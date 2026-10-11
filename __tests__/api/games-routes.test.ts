@@ -4,7 +4,7 @@
  *  1. Kaybeden oyuncu: failed oturumda start → canPlay:false + outcome:'lost' (eskiden
  *     canPlay:true + aynı sessionId, oyun sonunda 409).
  *  2. Betik: start → complete {score: maxScore, won:true} anında → ödül YOK, mint YOK.
- *  3. Pacman complete başka oyunun oturumunu kapatamaz (gameType kontrolü) → 404.
+ *  3. Yıldız Avı (pacman) complete başka oyunun oturumunu kapatamaz (gameType kontrolü) → 404.
  *  4. Aynı denemeye ikinci complete → 200 + kayıtlı sonuç (409 değil), ikinci kredi YOK.
  *  5. Admin kapattı: complete ÖNBELLEKSİZ config okur → ödül yok (kill-switch derhal).
  *  6. Turnuva: rakipsiz (minParticipants altı) ödül yok; aynı sıraya ikinci ödül yok.
@@ -212,36 +212,36 @@ describe('generic oyun route\'ları', () => {
   });
 });
 
-describe('pacman route\'ları', () => {
+// Yıldız Avı (sunucu anahtarı 'pacman') artık generic `[game]` route'larından geçer; ayrı
+// pacman route'ları emekli. Dürüst oyunun ödülü: __tests__/lib/star-hunt.test.ts (replay botu).
+describe('Yıldız Avı (pacman) generic route\'larda', () => {
   it('3) pacman complete başka oyunun oturumunu kapatamaz → 404', async () => {
     const s = await start('mind-thief');
     db.rows[0].serverStartedAt = new Date(Date.now() - 40_000);
-    const { POST } = await import('@/app/api/customer/games/pacman/complete/route');
-    const res = await POST(post('/api/customer/games/pacman/complete', { sessionId: s.json.sessionId, starsCollected: 5, durationSec: 30, won: true, attemptToken: s.json.attemptToken }));
-    expect(res.status).toBe(404);
+    const r = await complete('pacman', { sessionId: s.json.sessionId, score: 5, durationSec: 30, won: true, attemptToken: s.json.attemptToken });
+    expect(r.status).toBe(404);
     expect(db.rows[0].status).toBe('active');
     expect(mockMint).not.toHaveBeenCalled();
   });
 
-  it('pacman: 5 sn\'de 5 yıldız (eski 5 sn eşiği) artık ödülsüz', async () => {
-    const { POST: START } = await import('@/app/api/customer/games/pacman/start/route');
-    const s = await (await START()).json();
-    expect(s.canPlay).toBe(true);
-    db.rows[0].serverStartedAt = new Date(Date.now() - 5_500);
-    const { POST } = await import('@/app/api/customer/games/pacman/complete/route');
-    const res = await POST(post('/api/customer/games/pacman/complete', { sessionId: s.sessionId, starsCollected: 5, durationSec: 5, won: true, attemptToken: s.attemptToken }));
-    const j = await res.json();
-    expect(j).toMatchObject({ rewarded: false, won: false });
+  it('eski açık: kanıtsız "won:true, 5 yıldız" → ödülsüz (replay kanıtı zorunlu)', async () => {
+    const s = await start('pacman');
+    expect(s.json.canPlay).toBe(true);
+    db.rows[0].serverStartedAt = new Date(Date.now() - 25_000);
+    const r = await complete('pacman', { sessionId: s.json.sessionId, score: 5, durationSec: 24, won: true, attemptToken: s.json.attemptToken });
+    expect(r.json).toMatchObject({ rewarded: false, won: false });
     expect(mockMint).not.toHaveBeenCalled();
   });
 
-  it('pacman: dürüst 5 yıldız (25 sn) → ödül', async () => {
-    const { POST: START } = await import('@/app/api/customer/games/pacman/start/route');
-    const s = await (await START()).json();
+  it('uydurma kanıt (oyun beyan edilen adımda bitmiyor) → ödülsüz', async () => {
+    const s = await start('pacman');
     db.rows[0].serverStartedAt = new Date(Date.now() - 25_000);
-    const { POST } = await import('@/app/api/customer/games/pacman/complete/route');
-    const res = await POST(post('/api/customer/games/pacman/complete', { sessionId: s.sessionId, starsCollected: 5, durationSec: 24, won: true, attemptToken: s.attemptToken }));
-    expect(await res.json()).toMatchObject({ rewarded: true, rewardPoints: 150, rewardXp: 75 });
+    const r = await complete('pacman', {
+      sessionId: s.json.sessionId, score: 5, durationSec: 24, won: true, attemptToken: s.json.attemptToken,
+      proof: { log: [[0, 3]], steps: 600 },
+    });
+    expect(r.json).toMatchObject({ rewarded: false, won: false });
+    expect(mockMint).not.toHaveBeenCalled();
   });
 });
 

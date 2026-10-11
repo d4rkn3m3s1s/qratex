@@ -1,12 +1,11 @@
 /**
  * Yıldız Avı — kayıt defteri girdisi (istemci güvenli).
  *
- * MOTORA TAŞI (§7.3 #10). Sunucu anahtarı geçmiş veriyle süreklilik için 'pacman' kalır
- * (PACMAN_GAME). Eski /customer/games/pacman → /customer/games/star-hunt yönlendirmesi oyun
- * ajanının işi.
- *
- * OYUN AJANI: v2'ye taşırken `component`'i `{ contract: 'v2', load }` yap, doğrulayıcıyı
- * `./star-hunt.server.ts`'e yaz. Sözleşme: lib/games/README.md
+ * MOTORA TAŞINDI (§7.3 #10). Sunucu anahtarı geçmiş veriyle süreklilik için 'pacman' kalır
+ * (PACMAN_GAME); API generic `/api/customer/games/pacman/{start,complete,practice}` → `[game]`.
+ * Eski /customer/games/pacman → /customer/games/star-hunt (kayıt defteri eşlemesi + kalıcı yönlendirme).
+ * Saf simülasyon `components/customer/games/star-hunt/sim.ts`; sunucu aynı tohum + yön kaydıyla
+ * yeniden oynatır (`./star-hunt.server.ts` → `lib/games/validators/star-hunt.ts`).
  */
 import { defineGame } from './types';
 
@@ -14,19 +13,17 @@ export const starHuntGame = defineGame({
   id: 'star-hunt',
   gameType: 'pacman',
   title: 'Yıldız Avı',
-  tagline:
-    'Labirentte yıldızları topla, hayaletlerden kaç; 5 yıldız ödül eşiği.',
+  tagline: 'Labirentte yıldızları topla, hayaletlerden kaç: 5 seviye, 3 can, güç kapsülüyle hayaletleri kovala.',
   emoji: '👾',
   accent: '#fbbf24',
   status: 'live',
   role: 'arcade',
-  verification: 'action',
+  verification: 'deterministic',
   mergedFrom: ['pacman'],
-  // Eski sözleşmeli bileşen pratik modunu bilmiyor; v2'ye taşınınca true.
-  modes: { practice: false, ranked: { attemptsPerDay: 1 } },
+  modes: { practice: true, ranked: { attemptsPerDay: 1 } },
   component: {
-    contract: 'legacy',
-    load: () => import('@/components/customer/pacman-game').then((m) => m.PacmanGame),
+    contract: 'v2',
+    load: () => import('@/components/customer/games/star-hunt/star-hunt-game').then((m) => m.StarHuntGame),
   },
-  controls: 'Ok tuşları / WASD ya da kaydırma.',
+  controls: 'Ok tuşları / WASD, kaydırma ya da ekrandaki yön tuşları: yön ver. Esc/P: duraklat.',
 });

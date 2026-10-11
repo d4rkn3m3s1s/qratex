@@ -1,24 +1,12 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { PacmanGame } from '@/components/customer/pacman-game';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = { title: 'Yıldız Avı | QRateX' };
-
-export default async function PacmanGamePage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
+/** Emekli rota: Yıldız Avı motora taşındı (§7.3 #10) → /customer/games/star-hunt. Sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    if (Array.isArray(v)) v.forEach((x) => q.append(k, x));
+    else if (v !== undefined) q.set(k, v);
   }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Yıldız Avı 🎮"
-        description="QRatex labirentinde yıldızları topla, hayaletlerden kaç! Günde 1 hak — 5 yıldız topla, ödülü kap."
-      />
-      <PacmanGame />
-    </div>
-  );
+  const qs = q.toString();
+  permanentRedirect(`/customer/games/star-hunt${qs ? `?${qs}` : ''}`);
 }

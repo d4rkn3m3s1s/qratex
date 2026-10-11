@@ -1,11 +1,9 @@
 /**
  * Yıldız Avı — SUNUCU modülü (doğrulayıcı). Yalnız `registry/server.ts` içe aktarır; istemci
- * paketine girmez. Etiketli içerik (`lib/games/content/star-hunt.ts`) yalnız buradan import edilir.
- *
- * null → bu oyun için kanıt istenmez; `lib/game-session.ts` yalnız ortak makullük
- * kurallarını uygular (süre, saniye başına skor, tavan). Hedef aile: 'action'.
- * Örnek: `export const serverModule: GameServerModule = { verifier: actionVerifier({ … }) };`
+ * paketine girmez. Aile: 'deterministic' (tohum + yön kaydı → sunucuda replay).
+ * Sunucu anahtarı tarihsel olarak 'pacman' (registry/server.ts).
  */
 import type { GameServerModule } from '@/lib/games/verify/types';
+import { starHuntVerifier } from '@/lib/games/validators/star-hunt';
 
-export const serverModule: GameServerModule | null = null;
+export const serverModule: GameServerModule | null = { verifier: starHuntVerifier };
