@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { getPointsMatrix } from '@/lib/points-rules';
+import { daysToNextLevel as daysToNextLevelFromPace, levelProgress } from '@/components/customer/m-ben-ilerleme/level';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
@@ -264,13 +265,20 @@ export async function GET() {
     const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0];
     const peakHourFormatted = peakHour ? `${peakHour[0]}:00 - ${parseInt(peakHour[0]) + 1}:00` : 'Veri yok';
 
-    // Seviye ilerleme tahmini
-    const currentXP = Number(user.xp) || 0;
-    const xpPerLevel = 1000;
-    const xpToNextLevel = xpPerLevel - (currentXP % xpPerLevel);
+    // Seviye ilerleme tahmini — yazan akışla aynı geometrik eğri ve DEFTERDEN son 30 gün XP temposu
+    // (Ben → İlerleme ile aynı hesap). Eskiden "her seviye 1000 XP" (xp % 1000) ve ömür boyu
+    // toplam XP / 30 "günlük tempo" sayılıyordu: kalan XP ve gün tahmini ikisi de yanlıştı.
+    const lp = levelProgress(Number(user.xp) || 0, user.level);
+    const xpToNextLevel = lp.xpToNext;
     const combined30d = fbCount30d + consumptionReviewCount30d;
-    const avgDailyXP = combined30d > 0 ? currentXP / 30 : 0;
-    const daysToNextLevel = avgDailyXP > 0 ? Math.ceil(xpToNextLevel / avgDailyXP) : null;
+    const xpLast30 = await prisma.pointsLedger
+      .aggregate({
+        _sum: { xpDelta: true },
+        where: { userId, status: 'posted', xpDelta: { gt: 0 }, createdAt: { gte: thirtyDaysAgo } },
+      })
+      .then((a) => a._sum.xpDelta ?? 0)
+      .catch(() => 0);
+    const daysToNextLevel = daysToNextLevelFromPace(xpToNextLevel, xpLast30, 30);
 
     // Streak hesaplama (ardışık gün sayısı)
     let currentStreak = 0;
@@ -298,8 +306,8 @@ export async function GET() {
         totalBadges: user._count.badges,
         totalRewards: user._count.rewards,
         currentPoints: Number(user.points) || 0,
-        currentXP: currentXP,
-        currentLevel: user.level,
+        currentXP: lp.xp,
+        currentLevel: lp.level,
         memberSince: user.createdAt,
         // Additional consumption stats
         totalConsumptions: consumptionCount,
