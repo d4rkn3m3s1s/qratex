@@ -12,6 +12,7 @@
  * alınır ve bağlantı gelince gönderilir. Hata türü sınıflanır (429 geri sayım, 413, 5xx).
  */
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { AnimatePresence, m as Motion } from 'framer-motion';
 import { AlertTriangle, ArrowLeft, ArrowRight, Info, Loader2, LogIn, MessageSquareHeart, RotateCw, Send, WifiOff } from 'lucide-react';
@@ -19,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { useAppLocale } from '@/lib/app-locale';
 import { RatingInput } from '@/components/ds/a11y/rating-input';
 import { ChoiceChips } from '@/components/ds/a11y/choice-chips';
-import { PhotoPicker } from '@/components/ds/a11y/photo-picker';
 import { announce } from '@/components/ds/a11y/live-region';
 import { DURATION, EASE } from '@/lib/motion/tokens';
 import { useMotionPolicy } from '@/lib/motion/use-reduced-motion-pref';
@@ -34,11 +34,30 @@ import { postFeedback, postScan, type ApiResult } from './api';
 import { addClaim, clearDraft, enqueueOutbox, loadDraft, newIdempotencyKey, saveDraft, type FunnelDraft } from './storage';
 import { usePhotoUploads } from './use-photo-uploads';
 import { useOutbox } from './use-outbox';
-import { ClaimBanner } from './claim-banner';
-import { SuccessPanel, type FunnelOutcome } from './success-panel';
+import type { FunnelOutcome } from './success-panel';
 import { btnPrimary, btnSecondary } from './button-styles';
 import { VenueBar, VenueMark, type StepIndex } from './venue-bar';
 import type { FeedbackFunnelProps } from './types';
+
+// Huni bütçesi (≤ 150 KB gzip ilk JS): yalnız sonraki adımlarda görünen parçalar ayrı yüklenir.
+// Fotoğraf seçici ve başarı paneli ilk yıldız seçiminde ısıtılır (gönderimde beklemesin,
+// çevrimdışı kuyruğa düşüşte de hazır olsun); talep bandı yalnız oturumlu müşteride çizilir.
+const loadPhotoPicker = () => import('@/components/ds/a11y/photo-picker');
+const loadSuccessPanel = () => import('./success-panel');
+const PhotoPicker = dynamic(() => loadPhotoPicker().then((m) => m.PhotoPicker));
+const SuccessPanel = dynamic(() => loadSuccessPanel().then((m) => m.SuccessPanel));
+const ClaimBanner = dynamic(() => import('./claim-banner').then((m) => m.ClaimBanner));
+let laterStepsWarmed = false;
+function warmLaterSteps() {
+  if (laterStepsWarmed) return;
+  laterStepsWarmed = true;
+  void loadPhotoPicker().catch(() => {
+    laterStepsWarmed = false;
+  });
+  void loadSuccessPanel().catch(() => {
+    laterStepsWarmed = false;
+  });
+}
 
 type Step = 'rating' | 'details' | 'done';
 const STEP_INDEX: Record<Step, StepIndex> = { rating: 0, details: 1, done: 2 };
@@ -143,7 +162,16 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
       firstRender.current = false;
       return;
     }
-    headingRef.current?.focus();
+    if (step !== 'rating') warmLaterSteps();
+    // Ayrı yüklenen panel (başarı) bir kare geç bağlanabilir: başlık gelene kadar kısa süre bekle.
+    let tries = 0;
+    let raf = 0;
+    const focusHeading = () => {
+      if (headingRef.current) headingRef.current.focus();
+      else if (tries++ < 30) raf = window.requestAnimationFrame(focusHeading);
+    };
+    focusHeading();
+    return () => window.cancelAnimationFrame(raf);
   }, [step]);
 
   // ── Yıldız: işaretçiyle seçimde kendiliğinden ilerle (klavyede oklar seçimi değiştirir, ilerletmez) ──
@@ -153,6 +181,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
     if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
   }, []);
   const onRate = (v: number) => {
+    warmLaterSteps();
     setRating(v);
     setTags((prev) => {
       const allowed = new Set(tagsForRating(v).map((t) => t.id));
