@@ -10,13 +10,21 @@ import {
   permissionsPolicyFor,
 } from '@/lib/admin-gate-edge';
 import { maintenanceBlock } from '@/lib/platform-settings/maintenance-edge';
+import { checkRequestOrigin } from '@/lib/security/origin-guard';
 
+// Kimlik bilgili (credentials) CORS izin listesi. Uygulamanın kendi istekleri aynı kaynaktan
+// geldiği için CORS'a ihtiyaç duymaz; liste yalnız açıkça yapılandırılmış harici kaynaklar içindir.
+// Üretimde varsayılan BOŞ (denetim: tanımsız env'de canlıda localhost ve eski netlify alan adı
+// çerezli isteğe izinliydi); geliştirmede yerel portlar. Sunucu tarafı `ALLOWED_ORIGINS`
+// önceliklidir (NEXT_PUBLIC_ öneki istemci paketine sızar; geriye uyum için okunur).
 const CORS_ALLOWLIST = (
+  process.env.ALLOWED_ORIGINS ||
   process.env.NEXT_PUBLIC_ALLOWED_ORIGINS ||
-  'http://localhost:3000,http://localhost:3001,https://qratex.netlify.app'
+  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000,http://localhost:3001')
 )
   .split(',')
-  .map((s) => s.trim());
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 function addSecurityHeaders(res: NextResponse, pathname: string): void {
   res.headers.set('X-Content-Type-Options', 'nosniff');
@@ -24,27 +32,39 @@ function addSecurityHeaders(res: NextResponse, pathname: string): void {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   // API yanıtı belge açmaz → kamera dahil güçlü özellikler kapalı (lib/admin-gate-edge.ts).
   res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));
-  const csp = [
-    "default-src 'self'",
-    // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcıda çalışır, sunucu CPU yakmaz).
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
-    "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: https: blob:",
-    "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https: wss: https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://*.ingest.sentry.io https://vercel.live",
-    // Vercel Live preview feedback toolbar iframe'i (yalnız preview'da yüklenir).
-    "frame-src 'self' https://vercel.live",
-    "frame-ancestors 'none'",
-  ].join('; ');
-  res.headers.set('Content-Security-Policy', csp);
+  // CSP burada YAZILMAZ (guvenlik-admin-api B11): tek kaynak `config/security-headers.js`
+  // (next.config `headers()` → her yanıt, /api dahil). Eskiden proxy farklı bir ikinci CSP
+  // yazıyordu (`connect-src https: wss:`, base-uri/form-action/object-src yok); iki başlık
+  // birlikte gidince tarayıcı kesişimi uyguluyor, hangi kuralın geçerli olduğu belirsizleşiyordu.
+}
+
+/** CSRF köken denetimi (B5): durum değiştiren API isteği yabancı kökenden geliyorsa 403. */
+function csrfOriginBlock(req: NextRequest): NextResponse | null {
+  const decision = checkRequestOrigin(
+    {
+      method: req.method,
+      pathname: req.nextUrl.pathname,
+      selfOrigin: req.nextUrl.origin,
+      headers: req.headers,
+    },
+    CORS_ALLOWLIST
+  );
+  if (decision.ok) return null;
+  return NextResponse.json(
+    {
+      success: false,
+      code: 'CSRF_ORIGIN_MISMATCH',
+      error: 'İstek bu sitenin dışından geldiği için reddedildi. Sayfayı yenileyip tekrar deneyin.',
+    },
+    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 function addCorsHeaders(res: NextResponse, req: NextRequest): void {
   const origin = req.headers.get('origin');
-  if (origin && CORS_ALLOWLIST.includes(origin)) {
-    res.headers.set('Access-Control-Allow-Origin', origin);
-  }
+  if (!origin || !CORS_ALLOWLIST.includes(origin)) return; // izinsiz kaynağa CORS başlığı yok
+  res.headers.set('Access-Control-Allow-Origin', origin);
+  res.headers.append('Vary', 'Origin');
   res.headers.set('Access-Control-Allow-Credentials', 'true');
   res.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -96,10 +116,6 @@ const authMiddleware = withAuth(
         if (gateCookie) redirect.cookies.set(ADMIN_GATE_COOKIE, '', { path: '/', maxAge: 0 });
         return redirect;
       }
-    }
-
-    if (pathname === '/' && token?.role === 'STAFF') {
-      return NextResponse.redirect(new URL('/staff', req.url));
     }
 
     const res = NextResponse.next();
@@ -155,8 +171,8 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
       addCorsHeaders(res, req);
       return res;
     }
-    // Bakım modu (/admin/settings → Bakım): panel API'leri 503, yöneticiler muaf.
-    const blocked = (await maintenanceBlock(req)) ?? (await adminApiGateBlock(req));
+    // Sıra: CSRF köken denetimi (B5) → bakım modu (panel API'leri 503, yöneticiler muaf) → admin kapısı.
+    const blocked = csrfOriginBlock(req) ?? (await maintenanceBlock(req)) ?? (await adminApiGateBlock(req));
     const res = blocked ?? NextResponse.next();
     addSecurityHeaders(res, pathname);
     addCorsHeaders(res, req);
@@ -173,5 +189,8 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/admin/:path*', '/admin', '/admin-gate', '/dealer/:path*', '/customer/:path*'],
+  // `/staff` de eşleşir (B15): roleRouteMap'teki STAFF kuralı eskiden matcher dışında kaldığı için
+  // ölüydü; personel paneli yalnız layout denetimine dayanıyordu. Kök `/` için STAFF
+  // yönlendirmesi (matcher'da `/` hiç yoktu, hiç çalışmıyordu) kaldırıldı.
+  matcher: ['/api/:path*', '/admin/:path*', '/admin', '/admin-gate', '/dealer/:path*', '/customer/:path*', '/staff', '/staff/:path*'],
 };

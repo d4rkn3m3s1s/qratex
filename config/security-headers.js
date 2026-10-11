@@ -24,24 +24,59 @@ const PERMISSIONS_POLICY = [
   'usb=()',
 ].join(', ');
 
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcı tarafı).
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
-  "worker-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.ingest.sentry.io https://vercel.live https://cdn.jsdelivr.net https://tile.openstreetmap.org",
-  "frame-src 'self' https://vercel.live",
-  "frame-ancestors 'none'",
-  // base-uri: <base> ile script kaçırma/relative-URL hijack önlemi.
-  "base-uri 'self'",
-  // form-action: form gönderimini yalnızca kendi origin'e sınırla.
-  "form-action 'self'",
-  // object-src: eklenti/Flash vektörlerini kapat.
-  "object-src 'none'",
-].join('; ');
+/**
+ * İçerik Güvenlik Politikası — TEK KAYNAK (guvenlik-admin-api B11). `proxy.ts` artık kendi
+ * CSP'sini yazmaz; her yanıt (sayfa + /api) bu başlığı next.config `headers()` üzerinden alır.
+ *
+ * Dış kaynaklar (yalnız fiilen kullanılanlar):
+ *  - Vercel Analytics/Speed Insights + Live (önizleme araç çubuğu)
+ *  - jsdelivr → Tesseract.js OCR worker/wasm (tarayıcı tarafı)
+ *  - PostHog (yalnız analitik rızasıyla yüklenir): eu.i.posthog.com + eklenti betikleri
+ *  - Sentry (bölgesel alt alanlar dahil: o1.ingest.de.sentry.io → *.sentry.io)
+ *  - OpenStreetMap karoları (Leaflet)
+ * Eskiden connect-src'de kullanılmayan `*.supabase.co`/`*.netlify.app` (herkesin alt alan açabildiği
+ * barındırma alanları → veri sızdırma kanalı) vardı, PostHog ise yoktu (rıza verilse bile engelleniyordu).
+ */
+const CSP_SCRIPT_HOSTS =
+  'https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net https://*.posthog.com';
+
+function buildCsp(scriptSrc) {
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    "worker-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' blob: data: https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.sentry.io https://*.posthog.com https://vercel.live https://cdn.jsdelivr.net https://tile.openstreetmap.org",
+    "frame-src 'self' https://vercel.live",
+    "frame-ancestors 'none'",
+    // base-uri: <base> ile script kaçırma/relative-URL hijack önlemi.
+    "base-uri 'self'",
+    // form-action: form gönderimini yalnızca kendi origin'e sınırla.
+    "form-action 'self'",
+    // object-src: eklenti/Flash vektörlerini kapat.
+    "object-src 'none'",
+  ].join('; ');
+}
+
+/**
+ * Uygulanan politika. `'unsafe-inline'` Next.js App Router'ın satır içi önyükleme betikleri için
+ * gerekli (nonce'lu CSP her sayfayı dinamik render'a zorlar — statik/ISR sayfalar kaybolur).
+ */
+const CONTENT_SECURITY_POLICY = buildCsp(`'self' 'unsafe-inline' 'unsafe-eval' blob: ${CSP_SCRIPT_HOSTS}`);
+
+/** CSP ihlal raporlarının gönderildiği uç (yalnız Report-Only politikası kullanır). */
+const CSP_REPORT_PATH = '/api/security/csp-report';
+
+/**
+ * GÖZLEM politikası (Report-Only, ENGELLEMEZ): `'unsafe-eval'` olmadan — WebAssembly derlemesi
+ * (Tesseract) için yalnız `'wasm-unsafe-eval'`. Üretimde bu politikayı ihlal eden betik kalmadığı
+ * raporlarla doğrulanınca `'unsafe-eval'` uygulanan politikadan çıkarılır (B11 geçiş planı).
+ */
+const CONTENT_SECURITY_POLICY_REPORT_ONLY = `${buildCsp(
+  `'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${CSP_SCRIPT_HOSTS}`
+)}; report-uri ${CSP_REPORT_PATH}`;
 
 const SECURITY_HEADERS = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -54,6 +89,7 @@ const SECURITY_HEADERS = [
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
   { key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY },
+  { key: 'Content-Security-Policy-Report-Only', value: CONTENT_SECURITY_POLICY_REPORT_ONLY },
 ];
 
 /** İçerik hash'li dosyalar: adı içerik değişince değişir → 1 yıl + immutable güvenli. */
@@ -106,6 +142,8 @@ function buildHeaders() {
 module.exports = {
   PERMISSIONS_POLICY,
   CONTENT_SECURITY_POLICY,
+  CONTENT_SECURITY_POLICY_REPORT_ONLY,
+  CSP_REPORT_PATH,
   SECURITY_HEADERS,
   IMMUTABLE_CACHE,
   STATIC_ASSET_CACHE,

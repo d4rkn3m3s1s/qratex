@@ -102,6 +102,18 @@ function r2RemotePatterns() {
   }
 }
 
+/** Yapılandırılmış tek bir dış adresin (ör. Supabase projesi) host'u; tanımsızsa hiçbiri. */
+function envHostPattern(raw) {
+  const v = (raw || '').trim();
+  if (!v) return [];
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' ? [{ protocol: 'https', hostname: u.hostname }] : [];
+  } catch {
+    return [];
+  }
+}
+
 function expandOutputFileTracingExcludes(globs) {
   const out = new Set();
   for (const g of globs) {
@@ -128,25 +140,26 @@ const nextConfig = {
   images: {
     unoptimized: false,
     remotePatterns: [
-      { protocol: 'https', hostname: 'localhost' },
-      { protocol: 'http', hostname: 'localhost' },
+      // guvenlik-admin-api B15: yalnız fiilen kullanılan, sahibi belli alanlar. Eskiden
+      // "**.netlify.app" / "**.supabase.co" (herkesin alt alan açabildiği barındırma alanları →
+      // görsel optimizasyon kotası başkasının görselleriyle tüketilebilirdi) ve üretimde de
+      // "localhost" (optimizasyon sunucusunun kendi makinesine istek) vardı.
+      ...(process.env.NODE_ENV === 'production'
+        ? []
+        : [
+            { protocol: 'https', hostname: 'localhost' },
+            { protocol: 'http', hostname: 'localhost' },
+          ]),
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'qratex.netlify.app' },
       {
         protocol: 'https',
-        hostname: '**.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.netlify.app',
-      },
-      {
-        protocol: 'https',
         hostname: 'images.unsplash.com',
       },
       ...r2RemotePatterns(),
+      ...envHostPattern(process.env.NEXT_PUBLIC_SUPABASE_URL),
     ],
   },
   experimental: {

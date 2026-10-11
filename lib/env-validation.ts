@@ -72,6 +72,15 @@ export function validateEnv(
     });
   }
 
+  // CRON_SECRET — cron/iç iş uçları fail-closed (yoksa 503); üretimde eksik ya da kısa sır
+  // görünür olsun (guvenlik-admin-api B13). Dağıtımı durdurmaz: uçlar zaten kapalı kalır.
+  const cron = env.CRON_SECRET?.trim();
+  if (isProduction && !cron) {
+    issues.push({ key: 'CRON_SECRET', level: 'warn', message: 'CRON_SECRET tanımsız — zamanlanmış işler 503 döner (çalışmaz).' });
+  } else if (cron && cron.length < 32) {
+    issues.push({ key: 'CRON_SECRET', level: 'warn', message: 'CRON_SECRET 32 karakterden kısa — tahmin edilebilir sır; uzun rastgele değer kullanın.' });
+  }
+
   // OAuth sağlayıcı çiftleri: biri tanımlıysa diğeri de olmalı (yarım yapılandırma sessizce kırılır).
   if (Boolean(env.GOOGLE_CLIENT_ID?.trim()) !== Boolean(env.GOOGLE_CLIENT_SECRET?.trim())) {
     issues.push({

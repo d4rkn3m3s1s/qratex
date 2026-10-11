@@ -9,8 +9,11 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
  * Rol atama/yönetim işlemleri (yönetici) için `manager: true` istenir.
  */
 export async function requireTeamAccess(opts?: { manager?: boolean }) {
-  // Ekip modülü gizli kapıdan MUAF (tasarım gereği: müşteri/bayi ekip üyeleri de kullanır).
-  const auth = await requireAuth(['ADMIN', 'DEALER', 'CUSTOMER', 'STAFF'], { adminGate: false });
+  // Kapı yalnız ADMIN rolüne uygulanır; müşteri/bayi ekip üyeleri etkilenmez. Eskiden burada
+  // `adminGate: false` vardı: kapıdan geçmemiş ADMIN ekip uçlarında tam yönetici yetkisiyle
+  // (tüm kullanıcıları arama, yönetici atama) çalışabiliyordu (guvenlik-admin-api B1/B9).
+  // Güncel ekip uçları `lib/team/access` + `defineRoute` kullanır (kapı varsayılan açık).
+  const auth = await requireAuth(['ADMIN', 'DEALER', 'CUSTOMER', 'STAFF']);
   if ('error' in auth) return { error: auth.error };
 
   // P0-10: Yetki kararı YALNIZ DB'deki güncel ekip rolünden verilir. Eski kod

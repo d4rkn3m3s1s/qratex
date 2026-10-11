@@ -23,6 +23,10 @@ jest.mock('@/lib/redis', () => ({
   redisSetJson: (...a: unknown[]) => mockRedisSet(...a),
 }));
 jest.mock('@sentry/nextjs', () => ({ captureMessage: jest.fn() }));
+const mockRoam = jest.fn();
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimitDb: (...a: unknown[]) => mockRoam(...a),
+}));
 
 import { checkTokenReplay } from '@/lib/token-replay';
 
@@ -35,6 +39,7 @@ beforeEach(() => {
   mockUpdate.mockReset().mockResolvedValue({});
   mockRedisGet.mockReset().mockResolvedValue(null);
   mockRedisSet.mockReset().mockResolvedValue(undefined);
+  mockRoam.mockReset().mockResolvedValue({ ok: true });
 });
 
 describe('checkTokenReplay', () => {
@@ -67,13 +72,67 @@ describe('checkTokenReplay', () => {
     expect(mockUpdate).not.toHaveBeenCalled();     // lastSeen yazımı da yok (kısılmış)
   });
 
-  it('REPLAY (Redis yolu): farklı IP → ALARM', async () => {
+  it('DOLAŞIM (Redis yolu): aynı tarayıcı farklı IP → serbest, bağ yeni IP’ye taşınır', async () => {
     await checkTokenReplay('jti-3', IP, UA);
     const hotWritten = mockRedisSet.mock.calls[0][1] as { ipHash: string; uaHash: string };
     mockRedisGet.mockResolvedValue({ ...hotWritten, dbTouchedAt: Date.now() });
+    mockRedisSet.mockClear();
 
     const r = await checkTokenReplay('jti-3', '9.9.9.9', UA);
+    expect(r.ok).toBe(true);
+    expect(mockRoam).toHaveBeenCalledWith('trp_roam:jti-3', expect.any(Number), expect.any(Number));
+    const rebound = mockRedisSet.mock.calls[0][1] as { ipHash: string };
+    expect(rebound.ipHash).not.toBe(hotWritten.ipHash);
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { jti: 'jti-3' } }));
+  });
+
+  it('DOLAŞIM bütçesi aşıldı → ALARM + jti iptal edilir', async () => {
+    await checkTokenReplay('jti-3b', IP, UA);
+    const hotWritten = mockRedisSet.mock.calls[0][1] as { ipHash: string; uaHash: string };
+    mockRedisGet.mockResolvedValue({ ...hotWritten, dbTouchedAt: Date.now() });
+    mockRoam.mockResolvedValue({ ok: false });
+    mockRedisSet.mockClear();
+
+    const r = await checkTokenReplay('jti-3b', '9.9.9.9', UA);
     expect(r.ok).toBe(false);
+    expect(mockRedisSet.mock.calls[0][1]).toMatchObject({ ipHash: 'revoked', uaHash: 'revoked' });
+  });
+
+  it('tarayıcı güncellemesi (yalnız sürüm farkı) alarm DEĞİL', async () => {
+    const v1 = 'Mozilla/5.0 (Windows NT 10.0) Chrome/129.0.6668.89 Safari/537.36';
+    const v2 = 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0.6723.58 Safari/537.36';
+    await checkTokenReplay('jti-up', IP, v1);
+    const hotWritten = mockRedisSet.mock.calls[0][1] as { ipHash: string; uaHash: string };
+    mockRedisGet.mockResolvedValue({ ...hotWritten, dbTouchedAt: Date.now() });
+    expect((await checkTokenReplay('jti-up', IP, v2)).ok).toBe(true);
+  });
+
+  it('farklı tarayıcı (Redis yolu) → ALARM + iptal; iptal sonrası sahibi de reddedilir', async () => {
+    await checkTokenReplay('jti-ua', IP, UA);
+    const hotWritten = mockRedisSet.mock.calls[0][1] as { ipHash: string; uaHash: string };
+    mockRedisGet.mockResolvedValue({ ...hotWritten, dbTouchedAt: Date.now() });
+    mockRedisSet.mockClear();
+
+    expect((await checkTokenReplay('jti-ua', IP, 'curl/8.4.0')).ok).toBe(false);
+    const revoked = mockRedisSet.mock.calls[0][1];
+    expect(revoked).toMatchObject({ ipHash: 'revoked' });
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ipHash: 'revoked', userAgentHash: 'revoked' }) })
+    );
+
+    mockRedisGet.mockResolvedValue(revoked);
+    expect((await checkTokenReplay('jti-ua', IP, UA)).ok).toBe(false);
+  });
+
+  it('geçiş: ham UA özetli ESKİ kayıt kabul edilir ve yeni biçime yükseltilir', async () => {
+    const { createHash } = await import('crypto');
+    const h = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
+    mockFindUnique.mockResolvedValue({ jti: 'jti-old', ipHash: h(IP), userAgentHash: h(UA) });
+    const r = await checkTokenReplay('jti-old', IP, UA);
+    expect(r.ok).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userAgentHash: expect.any(String) }) })
+    );
   });
 
   it('REPLAY (Redis KAPALI → DB yolu): farklı UA → ALARM', async () => {

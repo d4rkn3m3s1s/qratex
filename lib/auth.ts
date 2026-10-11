@@ -10,6 +10,7 @@ import {
   checkRateLimitDb,
   getLoginLockoutDb,
   recordFailedLoginAttemptDb,
+  ACCOUNT_LOGIN_LOCKOUT,
   clearFailedLoginAttemptsDb,
 } from '@/lib/rate-limit';
 import {
@@ -177,13 +178,39 @@ function authError(code: (typeof AUTH_ERROR)[keyof typeof AUTH_ERROR], retryAfte
 // "kullanıcı yok" yolu yine ölçülebilir biçimde hızlı kalırdı.
 const DUMMY_BCRYPT_HASH = '$2a$12$b98Jz6zxKFOqLELcUyqkyOVDLwoBK2QIjNrjjCTTDRw1jdKG5LbD6';
 
+/** Hesap bazlı kilit anahtarı (IP'den bağımsız; guvenlik-admin-api B7). */
+function accountLockKey(email: string): string {
+  return `acct:${normalizeEmail(email)}`;
+}
+
+/**
+ * İki katmanlı kilit: (1) `ip:e-posta` — 15 dk'da 5 hata, (2) HESAP — tüm IP'lerden 15 dk'da
+ * 20 hata. Eskiden yalnız (1) vardı; IP değiştiren saldırgan (botnet/konut proxy'si) aynı
+ * hesaba her IP'den 5 deneme yapabiliyordu. Hesap kilidi yalnız şifre/2FA girişini durdurur
+ * (e-posta bağlantısı ve Google girişi açık kalır → meşru kullanıcı dışarıda kalmaz).
+ */
 async function assertNotLocked(identifier: string, ip: string, email: string): Promise<void> {
-  const lockout = await getLoginLockoutDb(identifier);
-  if (lockout.locked) {
-    const sec = lockout.retryAfterMs ? Math.ceil(lockout.retryAfterMs / 1000) : 900;
+  const [lockout, account] = await Promise.all([
+    getLoginLockoutDb(identifier),
+    getLoginLockoutDb(accountLockKey(email)),
+  ]);
+  const hit = lockout.locked ? lockout : account.locked ? account : null;
+  if (hit) {
+    const sec = hit.retryAfterMs ? Math.ceil(hit.retryAfterMs / 1000) : 900;
     logLockout(ip, email, sec);
     throw authError(AUTH_ERROR.LOCKED, sec);
   }
+}
+
+async function recordLoginFailure(identifier: string, email: string): Promise<void> {
+  await Promise.all([
+    recordFailedLoginAttemptDb(identifier),
+    recordFailedLoginAttemptDb(accountLockKey(email), ACCOUNT_LOGIN_LOCKOUT),
+  ]);
+}
+
+async function clearLoginFailures(identifier: string, email: string): Promise<void> {
+  await Promise.all([clearFailedLoginAttemptsDb(identifier), clearFailedLoginAttemptsDb(accountLockKey(email))]);
 }
 
 /**
@@ -209,7 +236,7 @@ async function authorizeLoginLink(token: string, twoFactorCode: string, ip: stri
     await assertNotLocked(identifier, ip, user.email);
     const ok = await verifyTwoFactorForLogin(user.id, twoFactorCode);
     if (!ok) {
-      await recordFailedLoginAttemptDb(identifier);
+      await recordLoginFailure(identifier, user.email);
       logLoginFailed(ip, user.email, 'invalid_2fa_link');
       throw authError(AUTH_ERROR.INVALID_2FA);
     }
@@ -217,7 +244,7 @@ async function authorizeLoginLink(token: string, twoFactorCode: string, ip: stri
 
   const claimed = await claimAuthEmailToken(peek.tokenId);
   if (!claimed) throw authError(AUTH_ERROR.INVALID_LINK);
-  await clearFailedLoginAttemptsDb(identifier);
+  await clearLoginFailures(identifier, user.email);
   logLoginSuccess(ip, user.email);
   return toAuthUser(user);
 }
@@ -406,14 +433,14 @@ export const authOptions: NextAuthOptions = {
         // bcrypt çalışır (zamanlama eşit).
         if (!user || !user.password) {
           await bcrypt.compare(password, DUMMY_BCRYPT_HASH).catch(() => false);
-          await recordFailedLoginAttemptDb(identifier);
+          await recordLoginFailure(identifier, email);
           logLoginFailed(ip, email, 'user_not_found');
           throw authError(AUTH_ERROR.INVALID_CREDENTIALS);
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-          await recordFailedLoginAttemptDb(identifier);
+          await recordLoginFailure(identifier, email);
           logLoginFailed(ip, email, 'invalid_password');
           throw authError(AUTH_ERROR.INVALID_CREDENTIALS);
         }
@@ -433,13 +460,13 @@ export const authOptions: NextAuthOptions = {
           if (!twoFactorCode) throw authError(AUTH_ERROR.TWO_FACTOR_REQUIRED);
           const ok = await verifyTwoFactorForLogin(user.id, twoFactorCode);
           if (!ok) {
-            await recordFailedLoginAttemptDb(identifier);
+            await recordLoginFailure(identifier, email);
             logLoginFailed(ip, email, 'invalid_2fa');
             throw authError(AUTH_ERROR.INVALID_2FA);
           }
         }
 
-        await clearFailedLoginAttemptsDb(identifier);
+        await clearLoginFailures(identifier, email);
         logLoginSuccess(ip, email);
         return toAuthUser(user);
       },

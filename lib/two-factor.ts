@@ -7,7 +7,8 @@
  */
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { verifyTOTP } from '@/lib/totp';
+import { verifyTOTPStep } from '@/lib/totp';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 
 const RECOVERY_CODE_COUNT = 10;
 
@@ -72,7 +73,24 @@ export async function verifyTwoFactorForLogin(userId: string, code: string): Pro
   const trimmed = code.trim();
   // 6 haneli → TOTP; aksi halde kurtarma kodu dene.
   if (/^\d{6}$/.test(trimmed)) {
-    if (verifyTOTP(user.twoFactorSecret, trimmed)) return true;
+    const step = verifyTOTPStep(user.twoFactorSecret, trimmed);
+    if (step !== null) return consumeTotpStep(userId, step);
   }
   return consumeRecoveryCode(userId, trimmed);
+}
+
+/**
+ * TOTP kodu TEK KULLANIMLIK (guvenlik-admin-api B15): ±30 sn tolerans penceresi yüzünden aynı
+ * kod ~90 sn boyunca geçerliydi; omuz üstünden/kayıttan görülen kod ikinci bir girişte yeniden
+ * kullanılabiliyordu. Eşleşen zaman adımı atomik sayaçla (Redis INCR ya da DB upsert) işaretlenir;
+ * aynı adımın ikinci kullanımı reddedilir. Sayaç altyapısı çökerse kod kabul edilir (giriş
+ * kilitlenmesin; ip/hesap kilidi katmanları çalışmaya devam eder).
+ */
+async function consumeTotpStep(userId: string, step: number): Promise<boolean> {
+  try {
+    const r = await checkRateLimitDb(`totp_used:${userId}:${step}`, 1, 3 * 60_000);
+    return r.ok;
+  } catch {
+    return true;
+  }
 }

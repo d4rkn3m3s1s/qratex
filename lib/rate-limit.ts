@@ -117,10 +117,29 @@ export async function getLoginLockoutDb(identifier: string): Promise<{ locked: b
   return { locked: false };
 }
 
-export async function recordFailedLoginAttemptDb(identifier: string): Promise<void> {
+/**
+ * Giriş kilidi politikası. Varsayılan (`ip:e-posta` anahtarı): 15 dk'da 5 hata → 15 dk kilit.
+ * HESAP BAZLI üst sınır (`acct:e-posta`, guvenlik-admin-api B7): IP değiştiren dağıtık saldırı
+ * her IP'den 5 deneme yapabiliyordu; hesabın tüm IP'lerdeki toplam hatası da sınırlanır.
+ */
+export interface LoginLockoutPolicy {
+  maxFailures: number;
+  windowMs: number;
+  lockMs: number;
+}
+export const DEFAULT_LOGIN_LOCKOUT: LoginLockoutPolicy = { maxFailures: MAX_FAILED_ATTEMPTS, windowMs: LOCKOUT_MS, lockMs: LOCKOUT_MS };
+/** Hesap bazlı: 15 dk'da (tüm IP'lerden) 20 hata → hesabın şifreli girişi 15 dk kilit. */
+export const ACCOUNT_LOGIN_LOCKOUT: LoginLockoutPolicy = { maxFailures: 20, windowMs: LOCKOUT_MS, lockMs: LOCKOUT_MS };
+
+export async function recordFailedLoginAttemptDb(
+  identifier: string,
+  policy: LoginLockoutPolicy = DEFAULT_LOGIN_LOCKOUT
+): Promise<void> {
+  const LOCKOUT_MS = policy.lockMs;
+  const MAX_FAILED_ATTEMPTS = policy.maxFailures;
   const now = new Date();
   const bucket = `lockout:${identifier}`;
-  const windowResetAt = new Date(now.getTime() + LOCKOUT_MS);
+  const windowResetAt = new Date(now.getTime() + policy.windowMs);
 
   const existing = await prisma.rateLimitCounter.findUnique({ where: { bucket } });
   if (!existing || existing.resetAt <= now) {

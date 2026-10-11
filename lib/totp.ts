@@ -39,14 +39,24 @@ export function generateTOTP(secret: string): string {
  * Sabit-zaman karşılaştırma (timing attack önlemi).
  */
 export function verifyTOTP(secret: string, token: string): boolean {
-  if (!secret || !token || !/^\d{6}$/.test(token)) return false;
+  return verifyTOTPStep(secret, token) !== null;
+}
+
+/**
+ * `verifyTOTP` ile aynı kural; eşleşen 30 sn'lik ZAMAN ADIMINI döndürür (yoksa null).
+ * Tek kullanımlık doğrulama (aynı kodun pencere içinde ikinci kez kabul edilmemesi) için
+ * çağıran bu adımı "kullanıldı" diye işaretler — bkz. lib/two-factor `verifyTwoFactorForLogin`.
+ */
+export function verifyTOTPStep(secret: string, token: string): number | null {
+  if (!secret || !token || !/^\d{6}$/.test(token)) return null;
   const base = Math.floor(Date.now() / 1000 / 30);
+  let matched: number | null = null;
   for (let i = -1; i <= 1; i++) {
     const candidate = hotp(secret, base + i);
-    // timingSafeEqual: aynı uzunlukta (her ikisi de 6 hane) → güvenli.
-    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(token))) return true;
+    // timingSafeEqual: aynı uzunlukta (her ikisi de 6 hane) → güvenli. Döngü erken bitmez.
+    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(token)) && matched === null) matched = base + i;
   }
-  return false;
+  return matched;
 }
 
 /** otpauth:// URI — yetkilendirici uygulamada QR olarak okutulur. */

@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { loadInternTemplatesState } from '@/lib/intern-task-emails';
 import { INCOMING_MAILBOXES, MAILBOX_INBOX, type InboxSyncState } from '@/lib/mail-center/inbox-contract';
-import { uploadDisposition } from '@/lib/mail-center/mail-html';
+import { attachmentDisposition } from '@/lib/mail-center/mail-html';
 
 export const INBOX_SYNC_STATE_KEY = 'inbox_sync_state';
 /** İlk kurulumda (imleç ve DB kaydı yokken) geriye dönük çekilecek en fazla mail. */
@@ -266,7 +266,11 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
               if (r2ok && content && size <= 15 * 1024 * 1024) {
                 const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
                 const key = `inbox/${uid}-${Date.now()}-${safeName}`;
-                url = await uploadToR2(key, content, contentType, uploadDisposition(contentType, filename)).catch(() => null);
+                // Depoya yazılan tür de izin listesinden türetilir: göndericinin beyan ettiği
+                // `text/html`/`image/svg+xml` herkese açık R2 URL'sinde çalıştırılabilir tür
+                // olarak durmasın (guvenlik-admin-api B4) — izin dışı her şey octet-stream.
+                const stored = attachmentDisposition(contentType, filename);
+                url = await uploadToR2(key, content, stored.contentType, stored.disposition).catch(() => null);
               }
               attachmentsMeta.push({ filename, contentType, size, url });
             }

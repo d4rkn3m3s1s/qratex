@@ -10,6 +10,7 @@ import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
 import { Admin2faBanner } from '@/components/admin/admin-2fa-banner';
+import { requireAdminPage } from '@/lib/auth/admin-page-guard';
 
 export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
@@ -28,6 +29,8 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Sunucu tarafı rol + gizli kapı denetimi (proxy'ye ek savunma katmanı; bkz. lib/auth/admin-page-guard).
+  await requireAdminPage();
   // Menü sunucuda, kayıttan ve önbellekten çözülür (lib/navigation) — istemci isteği yok.
   const [seo, shell] = await Promise.all([getSeoSettings(), getShellConfig('admin')]);
   return (
