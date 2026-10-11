@@ -442,3 +442,102 @@ Fabrikanın merkezde garanti ettikleri:
 6. ESLint geçici izin listesini boşalt; kural artık istisnasız çalışsın.
 
 **Başarı ölçütleri (katalog raporundan izlenir):** doğrudan `getServerSession` 80 → 0 · `defineRoute` kapsamı 1 → 398 · Sentry'ye ulaşan route hatası 6 route → %100 · şemasız JSON gövdesi 51 → 0 · ham `fetch('/api')` 573 → <50 (yalnızca özel durumlar) · müşteri paneli açılış isteği 7+ → 1–2 · `points_credited` olmadan puan basan yol 2 → 0.
+
+---
+
+## Uygulama sonrası durum
+
+**Tarih:** 2026-10-11 · **Dal:** `feat/platform-overhaul` · Dalga 1–3 sonrası bütün bulgular ŞİMDİKİ koda karşı yeniden ölçüldü (grep + statik import grafiği + jest; DB'ye bağlanılmadı).
+Bu turun commit'leri: `c32a32d` (kesinti öncesi yarım kalan dalga 3 işi), `72eeec5` (platform geneli korkuluklar), `0182712` (sahipsiz/ağır uçlar + sözleşme), `497947a` (IP tek kaynak + kabul yalnız müşteri), `4768c81` (bildirim merkezi tipli istemciye). Önceki dalgaların mimari-api commit'i: `8ef1dd0`.
+
+### Ölçümler (önce → şimdi)
+
+| Ölçüt (§6 başarı ölçütleri) | 2026-10-08 | 2026-10-11 |
+|---|---:|---:|
+| Route dosyası | 398 | 759 (alanlar bölündü; 17'si 410 emekli uç) |
+| `defineRoute` kullanan route dosyası | 1 | 586 (kalan 173: `requireAuth`/`getOptionalSession`, cron/iç iş sırrı, partner anahtarı, imza, gerekçeli public) |
+| Çıplak `getServerSession` (app/api) | 80 | **0** (+ ESLint kuralı + mimari testi) |
+| Rol listesiz `requireAuth()` | 3+ | **0** (rol listesi zorunlu: derlenmez) |
+| Tanınmayan kimlik yolu olan route | — | **0** (mimari testi; 19 gerekçeli public uç listede) |
+| Oran sınırsız yazma handlerı | 473 / 517 | **0** (makine uçları ve 410'lar hariç; mimari testi) |
+| Şemasız JSON gövdesi okuyan route | 51 | **0** (mimari testi) |
+| Eski yanıt yardımcısı (`createApiRoute`/`jsonOk`/`apiOk`/`ApiResponse`) | 3 rakip standart | **0** — tek zarf v2 (`lib/http/define-route.ts`), `lib/api-route.ts` silindi |
+| İngilizce genel hata metni (`Unauthorized`, `Internal server error`) | 61 + 27 dosya | **0** (mimari testi) |
+| Sentry'ye ulaşan route hatası | 6 route | defineRoute merkezi catch + `instrumentation.ts onRequestError` (fabrika dışı hatalar dahil) |
+| "Hata = sıfırlı başarı" catch bloğu | 19 dosya | **0** (catch bloğu tarayıcısı; `dealer/stats` kaldırıldı) |
+| Modül kapılı route | 23 | 113 (`ModuleKey` katalogdan türetilmiş union: katalog dışı anahtar derlenmez) |
+| `'use client'` sayfa | 151 / 200 | 3 / 247 |
+| `'use client'` → Prisma değer importu zinciri | doğrulanmamıştı | **0** / 1006 istemci dosyası (mimari testi, CI'da) |
+| React Query kullanan dosya | 10 | 284 |
+| Ham `fetch('/api…')` | 573 çağrı / 198 dosya | 167 çağrı / 83 dosya |
+| `points_credited`'sız puan basan yol | 2 | 0 (`lib/consumption/service.ts` → `mintPoints`; admin ayarı `lib/economy/admin-adjust.ts`) |
+| openapi.yaml yolu | 9 (1'i silinmiş uç) | 10 (bayat uç çıktı; partner sözleşmesi + zarf v2 hata şeması girdi; kayma testi) |
+
+### Bulgu bazında
+
+**B1 — Kimlik üç yoldan [YÜKSEK]: KAPANDI.**
+Kanıt: `grep getServerSession app/api` yalnız yorumlarda; `lib/api-auth.ts requireAuth(allowedRoles: ReadonlyArray<AllowedRole>)` rol listesi ZORUNLU (boş liste her rolü reddeder, oturumlu herkes için `ANY_SIGNED_IN_ROLE`); `requireAuth` askı/silinme, `sessionVersion`, DB'deki güncel rol, token-replay ve admin kapısını tek yerde uygular; 401 (oturum yok) / 403 (rol) ayrımı merkezde, Türkçe + `code`. Puan basan uçlar `['CUSTOMER']` (spin/görev/doğum günü/turnuva/sezonluk/referans; bu tur telafi kabulü `customer/remedy/[offerId]` PATCH da). Sahipsiz ve rolsüz `/api/streak` silindi. Kalıcı korkuluk: `eslint.config.mjs` `app/api/**` altında `next-auth` `getServerSession` importu hata (NextAuth işleyicisi hariç; kural stdin ile doğrulandı), `__tests__/architecture/api-architecture.test.ts` "çıplak getServerSession yok" + "her route tanınan kimlik yolu kullanır".
+
+**B2 — Rol dizisi kiracı anlamı taşımıyor [YÜKSEK]: KAPANDI.**
+Kanıt: `defineRoute({ tenant: 'dealer' })` → `lib/auth/scope.ts resolveDealerScope` (deny-by-default; ADMIN yalnız `?dealerId=`/`X-Act-As-Dealer` ile ve varsayılan SALT-OKUNUR, `allowAdminWrite` açıkça istenmeli; yönetici kiracılar arası erişimi denetime yazılır). `['DEALER','ADMIN']` kabul eden defineRoute'ların hepsinde `tenant` ya da kayıt-sahibi kontrolü var; eski (`requireAuth`) bayi uçlarının hepsinde ADMIN dalı/kapsam çözücüsü bulunuyor (21 dosya tek tek tarandı). Bu tur: kayıt sahibinden bayi çözen ama ADMIN'e de açık olan iki telafi oluşturma ucu (`dealer/feedbacks/[id]/remedy`, `dealer/consumption-reviews/[id]/remedy`) yalnız `['DEALER']` — yönetici herhangi bir işletme adına (onun bütçesinden) denetimsiz telafi teklifi açabiliyordu; hiçbir yönetici ekranı bu uçları çağırmıyor.
+
+**B3 — Tüketim akışı cüzdanı atlıyor [YÜKSEK]: KAPANDI.**
+Kanıt: `app/api/dealer/consumptions/route.ts` → `lib/consumption/service.ts createConsumption`: tek `$transaction` içinde kayıt + `mintPoints(source: 'dealer_passive')` (defter satırı + `points_credited`), `idempotencyKey: consumption:<id>`, `clientOpId`/`Idempotency-Key` ile tekrar koruması; `dealer/offline-sync` aynı servisi çağırır. Admin manuel puan `lib/economy/admin-adjust.ts` (ham `increment` yok).
+
+**B4 — Hata gözlemlenebilirliği kör [YÜKSEK]: KAPANDI.**
+Kanıt: `instrumentation.ts onRequestError` (DSN varsa SDK tembel yüklenir); `defineRoute` merkezi catch: `ApiError` → kendi kodu, Prisma bağlantı hatası → 503 retryable, P2025 → 404, P2002 → 409, diğerleri → `captureApiError` + 500 `INTERNAL` + `requestId` + `x-request-id`; `captureApiError`/`token-replay` SDK'yı tembel yükler. Catch bloğunda başarı/örtük 200 dönen route taraması: 0 (`dealer/stats` sıfırlı panel ucu kaldırıldı).
+
+**B5 — Zarf ve hata sözleşmesi tutarsız [ORTA]: KAPANDI.**
+Kanıt: tek zarf v2 (`{ ok, success, data, requestId }` / `{ ok:false, success:false, error, code, details?, retryable?, requestId }`), kapalı `ApiErrorCode` union'ı, `legacySpread` geçiş bayrağı. Bu tur: son `createApiRoute` kullanıcısı (`admin/users/hall-of-fame`) defineRoute'a taşındı (zod, oran sınırı, denetim kaydı); `lib/api-route.ts`, `apiOk/apiError`, `types ApiResponse<T>` silindi; cron/iç iş 401/503 yanıtları zarf v2 + Türkçe; müşteri eğilimleri `Internal server error` → Türkçe + `INTERNAL`; partner hataları `partnerAuthFailure` ile kodlu. Mimari testi eski yardımcıların ve İngilizce genel metinlerin geri gelmesini engeller.
+
+**B6 — Girdi doğrulama kısmi [ORTA]: KAPANDI.**
+Kanıt: defineRoute `schema/query/params` (415 içerik türü, 413 boyut, 400 `VALIDATION` + `details`); eski route'lar için `lib/http/parse-body.ts parseJsonBody` (boyut sınırı + zod). Bu tur: son şemasız gövde (`gamification/badges/[id]` PATCH) zarf şemasına alındı. Mimari testi: JSON gövdesi okuyan her route şema/ayrıştırıcı içerir (0 ihlal). Ham `parseInt(searchParams…)` üst sınırsız kullanım: 0 (tek `Number()` okuması `discovery` yarıçapı, çekirdekte 0.1–50 km'ye sıkıştırılıyor). İstemci-sunucu ortak şema: alan sözleşmeleri modül `contract.ts` dosyalarında (`lib/admin-store/contract.ts`, `lib/admin-pricing/contract.ts`, `lib/campaigns-calendar/contract.ts`, `lib/integrations/contract.ts` …).
+
+**B7 — Oran sınırı / AI maliyet koruması tutarsız [ORTA]: KAPANDI.**
+Kanıt: adlandırılmış politikalar `RATE_LIMIT_POLICIES` (`ai`/`mutation`/`public-write`/`read`/`sensitive`), hepsi Redis öncelikli `checkRateLimitDb`; eski route'lar aynı kova adıyla `enforceRouteRateLimit`. Bellek içi limiter'lar silindi (`checkAdminRateLimit` paylaşılan sayaçta). Bu tur: defineRoute'a taşınmamış 36 yazma handlerına oran sınırı (admin kullanıcı/kart/fiyat/ayar/lig/puan matrisi/geri alma/otomasyon/kapı kilidi; toplu e-posta ve test e-postası 10/10 dk; bildirim okundu/silme; profil; ilk şifre `sensitive`; geri bildirim dışa aktarımı 10/dk; kişisel veri dışa aktarımı saatte 3; şüpheli etkinlik bildirimi). AI: `lib/ai-engine.ts` ve `lib/groq.ts` her çağrıda `guardAiCall` (dakikalık limit + günlük token tavanı); `lib/openai.ts` yalnız ai-engine'e devreden ince adaptör. Mimari testi: oran sınırsız yazma handlerı 0.
+
+**B8 — Modül kapısı kısmi ve tip güvencesiz [ORTA]: KAPANDI.**
+Kanıt: `export type ModuleKey = (typeof MODULE_CATALOG_ITEMS)[number]['key']`; `assertModuleEnabled(key: ModuleKey)` ve `defineRoute({ module })` katalog dışı anahtarı derlemez. Kapılı route 23 → 113; sürpriz kutu müşteri uçları (`customer/wallet/boxes/*`) `surprise_boxes` kapılı; bayi modülleri (`voc_wall`, `heatmap`, `benchmark`, `churn_risk`, `roi`, `action_items` → yeni `dealer/queues/*`) API'de kapılı. Admin kataloğu üreticisi uç başına modül anahtarlarını da çıkarır (`policy.modules`). (Eski sahipsiz `dealer/action-items` için bkz. Kalan maddeler 3.)
+
+**B9 — İstemci veri katmanı yok [ORTA]: KAPANDI (ölçülü kalıntı aşağıda).**
+Kanıt: `'use client'` sayfa 151/200 → 3/247 (sunucu bileşeni + BFF yükleyicileri, ör. `lib/customer-home/load.ts`); React Query 10 → 284 dosya; `lib/api-client.ts` (zarf v2 çözümü, kodlu `ApiClientError`, 429 `retryAfterSec`, iptal) + jest. Polling: API'yi yoklayan her `setInterval` görünürlük kapılı (kalan `setInterval`'lar yalnız saat/geri sayım); React Query `refetchIntervalInBackground` varsayılanı kapalı. Bildirimler: liste yoklaması yalnız görünür sekmede; bu tur SSE akışı da gizli sekmede kapanır ve görünür olunca `since` imleciyle yeniden bağlanır (her açık bayi sekmesi 60 sn'lik sunucu fonksiyonunu sürekli açık tutuyordu); iki kanaldan gelen aynı bildirimin toast'ı tekilleştirildi. Bildirim merkezi tipli istemciye geçti: HTTP hatası (429/5xx) artık "okundu/silindi/tümü okundu" başarısı sayılmıyor.
+
+**B10 — Önbellek iki sistemle elle [ORTA]: KAPANDI.**
+Kanıt: `cachedJson` 0 → 13 kullanım, anahtarlar sürümlü (`…:v1:`); elle `redisGetJson` kullanan route 16 → 7 (kalanlar sürümlü anahtar ya da açık geçersizleştirme taşıyor). Bu tur: ağır ve sahipsiz iki önbellekli admin ucu emekli (aşağıda B11); herkese aynı `settings/background` CDN önbellekli (`s-maxage=60, stale-while-revalidate=300`; tanıtım sayfası her yüklemede DB'ye gidiyordu) — `settings/theme`, `settings/seasonal-concept`, `public/stats` ile aynı.
+
+**B11 — Yinelenen/sahipsiz uçlar, üç zamanlayıcı [ORTA]: KAPANDI.**
+Kanıt: tüm periyodik işler tek `/api/cron/daily` tetikleyicisinden `lib/cron-runner.ts` kayıt defteriyle (bütçe, öncelik, telafi); Inngest'te periyodik cron yok, yalnız olay işleri; cron yetkilendirmesi tek yerde (`lib/cron-auth.ts verifyCronBearer`, sabit zamanlı) — `validBearer` kopyası 0. `/api/streak` silindi, `/api/push/subscribe` panel rolleriyle defineRoute + zod. Bu tur emekli (410): `/api/admin/preagg` (okuyucusu olmayan tabloyu GET ile 8000 bayi × 365 gün sıralı upsert ediyordu; `?cron_secret=` sorgu sırrı + `===` + iç hata metni sızıntısı), `/api/admin/tenant-health` (~15 sn) ve `/api/admin/onboarding/install-to-value` (~11 sn) — üçünün de hiçbir istemcisi yok.
+
+**B12 — İş mantığı route'larda, sunucu/istemci sınırı belirsiz [ORTA]: KISMEN KAPANDI.**
+Kapanan: alan servisleri (`lib/consumption`, `lib/economy`, `lib/dealer/*`, `lib/admin-*`, `lib/remedy-offer-service`, `lib/cards/claim` …) ve testleri; sunucu/istemci sınırı artık CI'da doğrulanıyor (mimari testi: 1006 istemci dosyasından Prisma'ya değer importu zinciri 0). `lib/prisma.ts`'e `import 'server-only'` bilinçli olarak EKLENMEDİ: `prisma/seed.ts` (`ts-node`) `lib/achievements` üzerinden `lib/prisma`'yı yüklüyor ve Next dışında `server-only` paketi yok/fırlatır — sınır test ile korunuyor.
+KALDI: iki büyük route hâlâ kalın — `app/api/ai/analyze/route.ts` (1019 satır) ve `app/api/admin/users/route.ts` (733 satır); başka ajanların paralel düzenlediği dosyalar olduğu için bu turda taşınmadı. Sonraki adım: use-case'leri `lib/ai/analyze/*` ve `lib/admin-users/actions.server.ts`'e taşıma (alan bazında).
+
+**B13 — Partner API anahtar modeli zayıf [DÜŞÜK]: KAPANDI (şema kısmı istekte).**
+Kanıt: kiracı bağlama (bayiye bağlı anahtar başka `dealerId` isterse 403; partner bayi listesi), iptal/son kullanma/IP izin listesi/kapsam (`lib/integrations/meta.ts` v2 zarfı), `lastUsedAt` dakikada bir (Redis kısma), modül kill-switch. Bu tur: anahtar başına oran sınırı (120/dk, 429 + `Retry-After`, fail-open) ve kodlu zarf v2 hata yanıtı (`partnerAuthFailure`) + `__tests__/lib/partner-api-rate-limit.test.ts`. Şema: `ApiKey.keyHash @unique` ve yaşam döngüsü sütunları `docs/audit/2026-10-08/SCHEMA-REQUESTS.md` "mimari-api (Dalga 3)" bölümünde (schema.prisma ajanlara yasak).
+
+**B14 — Sözleşme belgesi ve API testleri gerçekliği yansıtmıyor [DÜŞÜK]: KAPANDI.**
+Kanıt: `openapi.yaml` kaldırılmış `/api/dealer/stats`'tan arındırıldı; gerçek dış sözleşme (partner `digest`/`catalog`, `partnerApiKey` güvenlik şeması, zarf v2 `ApiError` yanıtı + kod enum'u) eklendi; `__tests__/api/contract.test.ts` artık spec ↔ route dosyası/export edilen metot kaymasını yakalar. İç uçların sözleşmesi `defineRoute` meta verisi (`routeMeta`: roller, kiracı, modül, oran sınırı, şema var mı) ve `__tests__/architecture/api-architecture.test.ts` ile CI'da; admin API kataloğu üreticisi (`scripts/generate-admin-api-catalog.mjs`, prebuild) uç başına `policy` özeti (oran sınırı, modül, gövde şeması, emekli) çıkarır, `lib/integrations/catalog.ts` bunu tipli geçirir (+ jest). İç uçlar için tam OpenAPI üretimi bilinçli olarak yapılmadı: `zod-to-openapi` bağımlılığı yok (npm install yasak) ve iç uçların tek istemcisi kendi arayüzümüz.
+
+**B15 — IP çıkarımı ve JWT tazeliği [DÜŞÜK]: KAPANDI.**
+Kanıt: `sessionVersion` (`lib/auth/session-state.ts`, JWT `sv` ↔ `User.sessionVersion`, Redis sıcak katman; rol değişikliği/askı/şifre sıfırlamada artırılır); oturum güncelleme dalı istemcinin gönderdiği puan/seviye/görsel DEĞERİNİ yazmaz, alanı yalnız "tazele" sinyali sayıp DB'den okur (bu tur oradaki tip hatası da giderildi). Bu tur: `getClientIdentifier` (oran sınırı) artık `getClientIp`'e devreder (denetim IP'si ile oran sınırı kovası aynı başlık sırasını kullanır); son ham `x-forwarded-for` okuması (`admin/cards/[id]/assign`) `getAuditRequestMeta`'ya geçti — app/api'de ham okuma 0.
+
+**Not (proxy/route yetki bölünmesi): KAPANDI.** Admin gizli kapısı `requireAuth` içinde API'de de uygulanıyor; `customer/innovation/nearby` artık oturum + kapı istiyor.
+
+### Yeni bulunan ve kapatılan regresyonlar
+
+- `lib/auth.ts` oturum güncelleme dalında tip hatası (`equippedCosmetics` dönüşümü) — tsc kırmızıydı.
+- `__tests__/api/remedy-integrity.test.ts` (3 test) ve `__tests__/api/admin-gate-outside-admin-api.test.ts` (3 test) dalga 3 değişiklikleriyle bayatlamıştı (işletme-içi alıcı kontrolünün `dealerStaff` sorgusu, `$transaction`, `getClientIp`, paylaşılan admin oran sınırı); kalıplar onarıldı.
+- Bildirim merkezinde HTTP hatasında sahte başarı (yukarıda B9).
+
+### Kalan maddeler
+
+1. **B12 kalın route'lar:** `ai/analyze` (1019 satır) ve `admin/users` (733 satır) use-case katmanına taşınmalı.
+2. **B9 kalıntısı:** 83 dosyada 167 ham `fetch('/api…')` (çoğu modül-yerel `fetchJson` yardımcılarının içinde, hata kontrollü); bunlar `lib/api-client`'tan türeyerek kademeli birleşmeli (şu an 1 tüketici: bildirim merkezi).
+3. **Sahipsiz eski uç:** `/api/dealer/action-items` (+ `[id]`) — sayfası `/dealer/inbox/assigned`'a yönlendirilmiş, hiçbir istemci çağırmıyor, `action_items` modül kapısı yok (yeni `dealer/queues/*` kapılı). guvenlik-bayi-api bu dosyayı ve testlerini (`__tests__/tenant/team-and-assignee.test.ts`) bu tur sertleştirdiği için dokunulmadı; testler `queues/tasks`'a taşınınca 410 yapılmalı.
+4. **Şema:** `ApiKey.keyHash @unique` + yaşam döngüsü sütunları (SCHEMA-REQUESTS.md).
+5. **Gürültü:** 751 route'ta `export const dynamic = 'force-dynamic'` (Next 16'da route handler varsayılanıyla aynı, `cacheComponents` kapalı → davranış farkı yok); paralel ajan çakışması riskine değmediği için toplu silinmedi.
+6. Bu boyut dışı, önceden kırık jest suite'leri (bu turun değişikliklerinden bağımsız): `menu-visibility-catalog`, `lib/auth.test`, `lib/landing-public` (fiyat CTA yolu), `admin/a-ozellik-deney/gate-bindings` (bağlama JSON'u yeniden üretilmeli), `api/data-safety-archive` (arşivlenmiş ödül yolu 500).
+
+### Yeni puan: **9/10**
+
+Gerekçe: Raporun YÜKSEK ve ORTA bulgularının tamamı kök nedenden kapandı ve geri dönmemeleri için CI korkulukları var (ESLint `getServerSession` yasağı; mimari testi: kimlik yolu, eski yardımcılar, İngilizce genel hata, şemasız gövde, oran sınırsız yazma, istemci→Prisma zinciri; sözleşme kayma testi). Tek route fabrikası 586/759 dosyada, zarf v2 tek standart; oran sınırı, modül kapısı ve kiracı çözümü deklaratif. 10 olmamasının nedeni B12'nin iki kalın route'u ve istemcide hâlâ 167 ham `fetch` çağrısının ortak istemciye bağlanmamış olması — ikisi de güvenlik/doğruluk riski değil, bakım maliyeti.
