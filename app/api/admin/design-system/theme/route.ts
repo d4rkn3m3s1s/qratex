@@ -5,7 +5,7 @@
  */
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { actionCtx } from '@/lib/admin-users/actions.server';
-import { PublishThemeBody } from '@/lib/design-system/theme-model';
+import { PublishThemeBody } from '@/lib/design-system/theme-schemas';
 import { getThemeOverview, publishTheme } from '@/lib/design-system/theme.server';
 
 export const dynamic = 'force-dynamic';

@@ -10,8 +10,10 @@
  *  - Önizleme köke YAZMAZ: `resolvePaletteTokens` çalışma zamanının (SSR `<style>` +
  *    lib/apply-runtime-theme.ts) yazacağı değerleri aynı türetmeyle hesaplar; önizleme tuvali ve
  *    kontrast raporu bu değerlerden çizilir → sızıntı sınıfı hatalar (Bulgu 3, 6) yok.
+ *
+ * zod şemaları AYRI dosyada (./theme-schemas): bu modül kök sağlayıcıdan (tema çalışma zamanı)
+ * her sayfanın ilk JS'ine giriyor; şemalar burada dururken zod (~13 KB gzip) da giriyordu.
  */
-import { z } from 'zod';
 import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, DEFAULT_CUSTOM_THEME_HEX, type ThemePresetId } from '@/lib/theme-presets';
 import { contrastRatio } from '@/lib/design/contrast';
 import { BASE_THEME_VARS, deriveThemeVars } from '@/lib/design/theme-derive';
@@ -106,66 +108,20 @@ export function normalizeHex(input: unknown): string | null {
   return /^[0-9a-f]{6}$/i.test(full) ? `#${full.toUpperCase()}` : null;
 }
 
-const HexSchema = z
-  .string()
-  .trim()
-  .transform((v, ctx) => {
-    const n = normalizeHex(v);
-    if (!n) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Renk #RRGGBB biçiminde olmalı.' });
-      return z.NEVER;
-    }
-    return n;
-  });
+/** Özel tema renkleri (doğrulanmış biçim; şema: ./theme-schemas). */
+export type ModeSurface = { background?: string; foreground?: string };
+export type CustomColors = {
+  primary: string;
+  secondary: string;
+  accent: string;
+  modes?: { light?: ModeSurface; dark?: ModeSurface };
+};
 
-const ModeSurfaceSchema = z
-  .object({ background: HexSchema.optional(), foreground: HexSchema.optional() })
-  .strict()
-  .refine((v) => !!v.background === !!v.foreground, { message: 'Zemin ve metin rengi birlikte verilmeli.' });
-
-export const CustomColorsSchema = z
-  .object({
-    primary: HexSchema,
-    secondary: HexSchema,
-    accent: HexSchema,
-    modes: z.object({ light: ModeSurfaceSchema.optional(), dark: ModeSurfaceSchema.optional() }).strict().optional(),
-  })
-  .strict();
-
-export type CustomColors = z.infer<typeof CustomColorsSchema>;
-
-export const ThemeDraftSchema = z
-  .object({
-    activeTheme: z.string().refine((v) => v === 'custom' || FAMILY_IDS.includes(v), { message: 'Bilinmeyen tema.' }),
-    customColors: CustomColorsSchema.nullable(),
-    defaultMode: z.enum(['system', 'light', 'dark']),
-  })
-  .strict()
-  .refine((v) => v.activeTheme !== 'custom' || v.customColors !== null, {
-    message: 'Özel tema için renkler gerekli.',
-    path: ['customColors'],
-  });
-
-export type ThemeDraft = z.infer<typeof ThemeDraftSchema>;
-
-export const PublishThemeBody = z
-  .object({
-    draft: ThemeDraftSchema,
-    /** Okunan sürüm (iyimser kilit); hiç kayıt yoksa null. */
-    baseVersion: z.string().max(64).nullable(),
-    note: z.string().trim().max(280).optional(),
-  })
-  .strict();
-export type PublishThemeInput = z.infer<typeof PublishThemeBody>;
-
-export const RollbackThemeBody = z
-  .object({ auditId: z.string().min(1).max(64), baseVersion: z.string().max(64).nullable() })
-  .strict();
-
-export const HistoryQuery = z.object({
-  page: z.coerce.number().int().min(1).max(500).default(1),
-  size: z.coerce.number().int().min(5).max(50).default(10),
-});
+export type ThemeDraft = {
+  activeTheme: string;
+  customColors: CustomColors | null;
+  defaultMode: DefaultMode;
+};
 
 // ───────────────────────────── Saklı değer okuma ─────────────────────────────
 

@@ -3,7 +3,7 @@
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { LazyMotion, domAnimation } from 'framer-motion';
+import { LazyMotion } from 'framer-motion';
 import { MotionPolicyConfig } from '@/lib/motion/motion-policy-config';
 import { useState, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
@@ -21,6 +21,8 @@ import { ConfettiProvider } from '@/components/providers/confetti-provider';
 import { AccessibilityClassSync } from '@/components/accessibility-class-sync';
 import { SeasonalConceptApplier } from '@/components/seasonal/seasonal-concept-applier';
 import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
+
+const loadDomAnimation = () => import('@/lib/motion/dom-animation').then((mod) => mod.default);
 
 interface ProvidersProps {
   children: ReactNode;
@@ -170,8 +172,9 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
                 <ConfettiProvider>
                   {/* GLOBAL LazyMotion (non-strict): tüm sayfalarda `m.` bileşenleri
                       per-sayfa sarmal olmadan çalışır → framer-motion bundle'ı ertelenir.
-                      Non-strict olduğu için çevrilmemiş `motion.` de çalışmaya devam eder. */}
-                  <LazyMotion features={domAnimation}>
+                      Non-strict olduğu için çevrilmemiş `motion.` de çalışmaya devam eder.
+                      Özellik paketi tembel (lib/motion/dom-animation): ilk JS'e girmez. */}
+                  <LazyMotion features={loadDomAnimation}>
                     {children}
                     <InstallBanner />
                     <OfflineBanner />

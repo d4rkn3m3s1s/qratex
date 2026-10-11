@@ -1,7 +1,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { SkipLink } from '@/components/ds/a11y';
+// Barrel yerine doğrudan dosya: bu layout'un istemci parçası ortak bir istemci modülünün
+// (AppLocaleBoundary) yüklenme listesine giriyor; barrel tüm a11y kitini her sayfaya taşıyordu.
+import { SkipLink } from '@/components/ds/a11y/skip-link';
 import { getServerLocale } from '@/lib/server-locale';
 import { getShareCopy } from '@/components/public/p-deneyim-anket/copy';
 import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';

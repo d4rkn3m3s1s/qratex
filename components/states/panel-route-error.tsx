@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import * as Sentry from '@sentry/nextjs';
+import { captureClientError } from '@/lib/observability/capture-client-error';
 import { LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from './error-state';
@@ -32,7 +32,7 @@ export function PanelRouteError({ error, reset, homeHref, scope, noindex = false
 
   useEffect(() => {
     console.error(`[${scope}] route error boundary:`, error);
-    Sentry.captureException(error);
+    captureClientError(error);
   }, [error, scope]);
 
   useEffect(() => {

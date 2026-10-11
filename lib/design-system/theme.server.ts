@@ -23,8 +23,8 @@ import {
   snapshotFromRows,
   type ThemeDraft,
   type ThemeSnapshot,
-  type PublishThemeInput,
 } from './theme-model';
+import type { PublishThemeInput } from './theme-schemas';
 
 export const THEME_AUDIT_ENTITY = 'ThemeSettings';
 export const THEME_AUDIT_ACTIONS = { publish: 'theme.publish', rollback: 'theme.rollback' } as const;

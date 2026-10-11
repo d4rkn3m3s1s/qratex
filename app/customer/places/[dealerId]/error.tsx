@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import * as Sentry from '@sentry/nextjs';
+import { captureClientError } from '@/lib/observability/capture-client-error';
 import { Compass } from 'lucide-react';
 import { ErrorState } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ export default function VenueDetailError({ error, reset }: { error: Error & { di
   const { locale } = useAppLocale();
   const copy = getVenueCopy(locale);
   useEffect(() => {
-    Sentry.captureException(error);
+    captureClientError(error);
   }, [error]);
   return (
     <ErrorState

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type CSSProperties } from 'react';
-import * as Sentry from '@sentry/nextjs';
+import { captureClientError } from '@/lib/observability/capture-client-error';
 
 /**
  * Root layout dışında patlayan hatalar (template/layout render hatası).
@@ -46,7 +46,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('Global error boundary:', error);
-    Sentry.captureException(error);
+    captureClientError(error);
   }, [error]);
 
   return (

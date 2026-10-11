@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import * as Sentry from '@sentry/nextjs';
+import { captureClientError } from '@/lib/observability/capture-client-error';
 import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppT } from '@/lib/app-locale';
@@ -20,7 +20,7 @@ export default function AuthSegmentError({
 
   useEffect(() => {
     console.error('Auth segment error:', error);
-    Sentry.captureException(error);
+    captureClientError(error);
   }, [error]);
 
   return (

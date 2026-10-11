@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import * as Sentry from '@sentry/nextjs';
+import { captureClientError } from '@/lib/observability/capture-client-error';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
@@ -16,7 +16,7 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error('App error boundary:', error);
-    Sentry.captureException(error);
+    captureClientError(error);
     const meta = document.createElement('meta');
     meta.name = 'robots';
     meta.content = 'noindex,nofollow';

@@ -30,9 +30,9 @@ const db = {
 jest.mock('@/lib/prisma', () => ({ prisma: db, isPrismaConnectivityError: () => false }));
 
 import { revalidateTag } from 'next/cache';
+import { PublishThemeBody } from '@/lib/design-system/theme-schemas';
 import {
   FAMILY_IDS,
-  PublishThemeBody,
   draftContrastReport,
   normalizeHex,
   paletteFor,
