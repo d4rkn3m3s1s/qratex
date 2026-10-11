@@ -91,7 +91,7 @@ async function writeConfig(
     const row = await tx.settings.findUnique({ where: { key: INNOVATION_PLATFORM_SETTINGS_KEY }, select: { updatedAt: true } });
     const current = row?.updatedAt ? row.updatedAt.toISOString() : null;
     if (current !== expectedVersion) {
-      throw new ApiError('CONFLICT', 'Ayarlar bu arada başka bir yönetici tarafından değiştirildi. Güncel hâli yüklendi; değişikliğinizi yeniden yapın.');
+      throw new ApiError('CONFLICT', 'Ayarlar bu arada başka bir yönetici tarafından değiştirildi. Güncel hâli yüklendi; değişikliğinizi yeniden yapın.', { messageEn: 'Another admin changed the settings meanwhile. The latest state is loaded; make your change again.' });
     }
     const cfg = await getInnovationPlatformConfig();
     const { next, oldData, newData } = mutate(cfg);
@@ -101,7 +101,7 @@ async function writeConfig(
         where: { key: INNOVATION_PLATFORM_SETTINGS_KEY, updatedAt: row.updatedAt },
         data: { value: next as unknown as Prisma.InputJsonValue },
       });
-      if (res.count === 0) throw new ApiError('CONFLICT', 'Ayarlar bu arada değişti. Lütfen yeniden deneyin.');
+      if (res.count === 0) throw new ApiError('CONFLICT', 'Ayarlar bu arada değişti. Lütfen yeniden deneyin.', { messageEn: 'The settings changed meanwhile. Please try again.' });
       saved = await tx.settings.findUniqueOrThrow({ where: { key: INNOVATION_PLATFORM_SETTINGS_KEY }, select: { updatedAt: true } });
     } else {
       saved = await tx.settings.create({
@@ -132,11 +132,12 @@ export async function patchModules(patch: ModulesPatch, expectedVersion: string 
     const url = patch.partnerDigest.url.trim();
     if (url && !isPublicHttpsUrl(url)) {
       throw new ApiError('VALIDATION', 'Webhook adresi herkese açık bir https adresi olmalı (iç ağ / localhost kabul edilmez).', {
+        messageEn: 'The webhook URL must be a public https address (internal network / localhost isn’t accepted).',
         details: [{ path: 'partnerDigest.url', message: 'public_https' }],
       });
     }
     if (patch.partnerDigest.enabled && !url) {
-      throw new ApiError('VALIDATION', 'Webhook’u açmak için önce adres girin.', { details: [{ path: 'partnerDigest.url', message: 'required' }] });
+      throw new ApiError('VALIDATION', 'Webhook’u açmak için önce adres girin.', { messageEn: 'Enter a URL before turning the webhook on.', details: [{ path: 'partnerDigest.url', message: 'required' }] });
     }
   }
 
@@ -146,7 +147,7 @@ export async function patchModules(patch: ModulesPatch, expectedVersion: string 
       const after = { ...before };
       for (const k of MODULE_FEATURE_KEYS) if (typeof patch.features[k] === 'boolean') after[k] = patch.features[k] as boolean;
       const changes = diffFlags(before, after);
-      if (!changes.length) throw new ApiError('BAD_REQUEST', 'Değişiklik yok.');
+      if (!changes.length) throw new ApiError('BAD_REQUEST', 'Değişiklik yok.', { messageEn: 'No changes.' });
       return {
         next: { ...cur, features: { ...cur.features, ...after } as InnovationPlatformConfig['features'] },
         oldData: { features: Object.fromEntries(changes.map((c) => [c.key, c.from])) },

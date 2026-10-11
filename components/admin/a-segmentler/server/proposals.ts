@@ -244,7 +244,7 @@ export async function getProposalDetail(id: string, now: Date = new Date()): Pro
       dealer: { select: { id: true, businessName: true, name: true, email: true, isDemo: true } },
     },
   });
-  if (!row) throw new ApiError('NOT_FOUND', 'Öneri bulunamadı.');
+  if (!row) throw new ApiError('NOT_FOUND', 'Öneri bulunamadı.', { messageEn: 'Proposal not found.' });
   const since = new Date(now.getTime() - 30 * 86_400_000);
   const [decorated] = await decorateRows([row], now);
 
@@ -311,7 +311,10 @@ export async function decideProposal(
     throw new ApiError(
       'VALIDATION',
       noteCheck.reason === 'too_long' ? 'Not en fazla 500 karakter olabilir.' : 'Ret için en az 5 karakterlik bir gerekçe yazın; bayiye iletilir.',
-      { details: [{ path: 'note', message: noteCheck.reason }] }
+      {
+        details: [{ path: 'note', message: noteCheck.reason }],
+        messageEn: noteCheck.reason === 'too_long' ? 'The note can be at most 500 characters.' : 'Write a reason of at least 5 characters to reject; it’s sent to the dealer.',
+      }
     );
   }
 
@@ -319,12 +322,12 @@ export async function decideProposal(
     where: { id },
     select: { id: true, status: true, title: true, segmentKey: true, dealerId: true, dealer: { select: { isDemo: true } } },
   });
-  if (!proposal) throw new ApiError('NOT_FOUND', 'Öneri bulunamadı.');
+  if (!proposal) throw new ApiError('NOT_FOUND', 'Öneri bulunamadı.', { messageEn: 'Proposal not found.' });
   if (proposal.status !== 'PENDING') {
-    throw new ApiError('CONFLICT', 'Bu öneri için zaten karar verilmiş. Liste yenilendi.', { details: { current: proposal.status } });
+    throw new ApiError('CONFLICT', 'Bu öneri için zaten karar verilmiş. Liste yenilendi.', { messageEn: 'A decision has already been made on this proposal. The list was refreshed.', details: { current: proposal.status } });
   }
   if (input.decision === 'APPROVED' && proposal.dealer.isDemo) {
-    throw new ApiError('FORBIDDEN', 'Demo işletmenin önerisi onaylanamaz; yalnız reddedilebilir.');
+    throw new ApiError('FORBIDDEN', 'Demo işletmenin önerisi onaylanamaz; yalnız reddedilebilir.', { messageEn: 'A demo business’s proposal can’t be approved; it can only be rejected.' });
   }
 
   await prisma.$transaction(async (tx) => {
@@ -336,6 +339,7 @@ export async function decideProposal(
     if (claim.count === 0) {
       const current = await tx.segmentCampaignProposal.findUnique({ where: { id }, select: { status: true } });
       throw new ApiError('CONFLICT', 'Bu öneri için az önce başka bir karar verildi. Liste yenilendi.', {
+        messageEn: 'Someone just made another decision on this proposal. The list was refreshed.',
         details: { current: current?.status ?? null },
       });
     }
