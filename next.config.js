@@ -125,6 +125,9 @@ function expandOutputFileTracingExcludes(globs) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Kalite kapısı ölçümü (scripts/quality-gates.mjs) üretim derlemesini ayrı klasöre alır;
+  // çalışan dev sunucusunun .next'i ezilmez. Ayarlanmamışsa Next varsayılanı (.next).
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   reactStrictMode: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
