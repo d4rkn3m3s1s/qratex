@@ -92,6 +92,15 @@ export const GAME_COPY: Record<string, GameCopy> = {
     scoreLabel: 'Vuruş',
     comeBackNote: 'Yeni dalga yarın çekirdeğe yürüyor. 🛡️',
   },
+  'core-defense': {
+    startCta: '🛡️ Savunmaya Geç',
+    startHint: '8 dalga: düşmanlara dokun, kalkanı doğru anda patlat, dalga aralarında yükseltme seç.',
+    loadingStart: 'Kalkanlar yükseliyor…',
+    winTitles: ['Çekirdek Korundu! 🛡️', 'Dalgalar Püskürtüldü!', 'Hat Tutuldu!'],
+    loseTitles: ['Savunma Yarıldı', 'Bu Dalga Ağır Geldi', 'Çekirdek Sarsıldı'],
+    scoreLabel: 'Skor',
+    comeBackNote: 'Yeni dalga yarın çekirdeğe yürüyor. Pratikte taktiğini dene. 🛡️',
+  },
   'data-miner': {
     startCta: '⛏️ Kazmaya Başla',
     startHint: 'Küpleri aç, değerli veriyi bul — ama bazılarında bot tuzağı var! Risk senin.',

@@ -1,24 +1,12 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { SpamDefenseGame } from '@/components/customer/games/spam-defense-game';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = { title: 'Spam Savunması | QRateX' };
-
-export default async function SpamDefensePage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
+/** Emekli rota: Çekirdek Savunması'na birleşti (§7.3 #6–7). Sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    if (Array.isArray(v)) v.forEach((x) => q.append(k, x));
+    else if (v !== undefined) q.set(k, v);
   }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Spam Savunması 🛡️"
-        description="Qratex Çekirdeği’ni spam botlarından koru! Gelen botlara ateş et, dalgalar zorlaştıkça hayatta kal. Günde 1 hak!"
-      />
-      <SpamDefenseGame />
-    </div>
-  );
+  const qs = q.toString();
+  permanentRedirect(`/customer/games/core-defense${qs ? `?${qs}` : ''}`);
 }

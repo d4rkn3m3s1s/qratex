@@ -183,6 +183,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 10,
     maxScorePerSec: 5,
     maxDurationSec: 140,
+    hidden: true,
+    hiddenReason: 'Çekirdek Savunması (core-defense) oyununa birleşti (§7.3 #6–7).',
   },
   {
     gameType: 'data-miner',
@@ -234,6 +236,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 10,
     maxScorePerSec: 3,
     maxDurationSec: 145,
+    hidden: true,
+    hiddenReason: 'Çekirdek Savunması (core-defense) oyununa birleşti (§7.3 #6–7).',
   },
   {
     gameType: 'network-defender',
@@ -461,19 +465,19 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'core_defense_game',
     title: 'Çekirdek Savunması',
     description:
-      'Qratex çekirdeğini spam ve trol dalgalarından koru: çekirdeğin canı var, dalgalar zorlaşır, aralarda yükseltme seç.',
+      'Qratex çekirdeğini spam ve trol dalgalarından koru: çekirdeğin canı var, 8 dalga zorlaşır, aralarda yükseltme seç.',
     emoji: '🛡️',
     accent: '#ef4444',
-    maxScore: 80,
-    rewardThreshold: 35,
+    // Skor sunucuda replay ile hesaplanır (deterministik doğrulayıcı); tavan yalnız güvenlik
+    // sınırı — usta oyun ≈ 900–1000 (kombo + kusursuz dalga), eşik ≈ 5.–6. dalga.
+    maxScore: 1200,
+    rewardThreshold: 250,
     rewardPoints: 170,
     rewardXp: 85,
-    minDurationSec: 20,
-    maxScorePerSec: 3.5,
-    maxDurationSec: 200,
-    hidden: true,
-    release: 'building',
-    hiddenReason: 'Yapım aşamasında: spam-defense + troll-slayer birleşimi (§7.3 #6–7).',
+    minDurationSec: 30,
+    maxScorePerSec: 12,
+    // 8 dalga ≈ 2–2,5 dk + yükseltme seçimleri + duraklatma payı.
+    maxDurationSec: 600,
   },
   {
     gameType: 'daily-word',
