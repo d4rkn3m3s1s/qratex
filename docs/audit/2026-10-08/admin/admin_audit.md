@@ -237,3 +237,72 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (salt okunur; DB, b
 | 2 | Sırlar audit'te düz metin | Doğrulandı, şiddet Orta (alan ölü; aynı veri settings GET ile zaten açık) |
 | 3 | Bitiş tarihi günü dışlıyor | Doğrulandı |
 | 4 | Filtreler kayıtları kaçırıyor | Doğrulandı |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** sunucu bileşeni `app/admin/audit/page.tsx` (özet + URL'deki süzgeçle ilk sayfa sunucuda) → istemci adası `components/admin/a-denetim/audit-center.tsx` (QDL v2 `PanelPage`/`PageHeader`/`MetricTile`/`DataTable`/`DetailSheet`, ops kaydı, 3B yok, hareket yalnız ds panel geçişleri + azaltılmış hareket). Çekirdek `lib/admin-audit/{catalog,contract,server}.ts`; BFF uçları `defineRoute` ile (ADMIN + yönetici kapısı `requireAuth` içinde, zod, rate limit): `GET /api/admin/audit` (liste), `/api/admin/audit/[id]` (detay), `/facets`, `/summary`, `/export`. Testler: `__tests__/lib/admin-audit.test.ts` (21 test).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | Sayfa ve tüm uçlar `requireAuth(['ADMIN'])` (yönetici kapısı artık `requireAuth` içinde). |
+| 2 | API yetkisi | ÇALIŞIYOR | `defineRoute` (rol + zod + `read` rate limit); kapı kontrolü API katmanında da var (B7 sistem genelinde kapanmış). |
+| 3 | Yükleniyor iskeleti | ÇALIŞIYOR | Başlık + 4 gösterge + görünüm çipleri + süzgeç kartı + tablo iskeleti. |
+| 4 | Başlık | ÇALIŞIYOR | `PageHeader` + eylemler (Canlı izle, Yenile, CSV indir). |
+| 5 | Varlık filtresi | ÇALIŞIYOR | Seçenekler son 90 günün gerçek değerlerinden (sayılarıyla, `settings`/`Settings` birleşik); eşleşme büyük/küçük harfe duyarsız; URL'de çoklu değer desteklenir. |
+| 6 | Eylem filtresi | ÇALIŞIYOR | Gerçek eylem kodları (facet) + katalog tabanlı Kategori (Silme ve arşiv, Güvenlik, Ekonomi…) ve Önem süzgeci; SQL koşulu sınıflandırmayla birebir (testli). |
+| 7 | Başlangıç tarihi | ÇALIŞIYOR | İstanbul günü başlangıcı. |
+| 8 | Bitiş tarihi | ÇALIŞIYOR | `lt (bitiş + 1 gün)` İstanbul; aynı gün tüm günü kapsar; ters aralık istemcide uyarı, sunucuda 400. Hazır dönemler: 1 saat / 24 saat / 7 gün / 30 gün. |
+| 9 | "Uygula" | KALDIRILDI | Süzgeç değişince URL güncellenir, tek istek atılır (TanStack Query anahtarı + AbortSignal); taslak/uygulanmış ayrımı ve yarış yok. |
+| 10 | Filtreleri sıfırla | ÇALIŞIYOR | Etkin süzgeç çipleri (tek tek kaldırılabilir) + "Süzgeçleri temizle". |
+| 11 | Aktör filtresi | ÇALIŞIYOR | Gerçek en aktif 30 aktör (facet) + `?aktor=<id>` derin bağlantı; ayrıca Aktör rolü ve Aktör türü (kullanıcı/sistem/zamanlanmış/silinmiş). |
+| 12 | Serbest metin arama | ÇALIŞIYOR | Kayıt kimliği, eylem, varlık, aktör e-posta/ad ve anlık görüntü e-postası. |
+| 13 | Kayıt sayısı | ÇALIŞIYOR | `tr-TR` biçimli; imleçli sayfalamada ilk sayfada hesaplanır. |
+| 14 | Yükleniyor (satır içi) | ÇALIŞIYOR | `DataTable` + `QueryState`. |
+| 15 | Boş durum | ÇALIŞIYOR | Süzgeçli/süzgeçsiz ayrı metin + "Süzgeçleri temizle". |
+| 16 | Hata durumu | ÇALIŞIYOR | Zarf hatası fırlatılır; 401/403/500/ağ ayrı hata durumu + "Tekrar dene"; "kayıt yok" yanılgısı yok. |
+| 17 | Tarih sütunu | ÇALIŞIYOR | Göreli zaman + İstanbul tarihi; `title`'da tam tarih. |
+| 18 | Aktör sütunu | ÇALIŞIYOR | Ad/e-posta + rol; silinmiş aktör anlık görüntüden "(silinmiş)"; detayda kullanıcı sayfası bağlantısı. |
+| 19 | Eylem sütunu | ÇALIŞIYOR | İnsan-okur etiket + kategori ikonu + ham kod; ayrı Önem rozeti (kritik dolgu). |
+| 20 | Varlık sütunu | ÇALIŞIYOR | Türkçe varlık adı; detayda hedef bağlantısı (kullanıcı, ayarlar). |
+| 21 | Varlık kimliği | ÇALIŞIYOR | Tam değer `title` + detayda kopyala. |
+| 22 | Detay / önce-sonra farkı | ÇALIŞIYOR | Sağdan açılan panel (`?kayit=` derin bağlantı, önceki/sonraki gezinme): özet cümle, alan bazlı fark (değişen önce, aynılar katlı), ham JSON + kopyala, ilgili kayıtlar, "bu aktörün/kaydın geçmişi" kısayolları. |
+| 23 | IP / User-Agent | ÇALIŞIYOR | Yalnız detayda; IP her zaman maskeli, cihaz özeti (tarayıcı · işletim sistemi). Liste ucu IP/UA/JSON döndürmez. |
+| 24 | Sayfalama | ÇALIŞIYOR | İmleçli (keyset) "Daha fazla göster"; ofset ve uygulanmamış süzgeç sızıntısı yok. |
+| 25 | "Sayfa X / Y" | KALDIRILDI | İmleçli sayfalamada anlamsız; yerine toplam sayı + "Tüm kayıtlar gösteriliyor (N)". |
+| 26 | Sayfa boyutu | ÇALIŞIYOR | 25 / 50 / 100. |
+| 27 | Sıralama | ÇALIŞIYOR | En yeni / en eski önce. |
+| 28 | URL'de durum | ÇALIŞIYOR | Tüm süzgeçler, sıralama, sayfa boyutu ve açık kayıt URL'de; hazır görünümler (Kritik 24 saat, Silme ve arşiv, Güvenlik, Ekonomi, Ayarlar, Yönetici işlemleri, Silinmiş aktörler). |
+| 29 | CSV dışa aktarma | ÇALIŞIYOR | Süzgece uyan tüm kayıtlar (en çok 20.000), UTF-8 BOM, `;`, formül kaçışı, maskeli IP, veri gövdesi YOK; dışa aktarma `AUDIT_EXPORT` olarak denetime yazılır. JSON dışa aktarma bilinçli olarak yok (gövde sızdırmamak için). |
+| 30 | Geri alma | ÇALIŞIYOR | Mevcut uçların kabul ettiği kayıtlarda (ayar toplu kaydı / geri alma satırı → `/api/admin/settings/rollback`; SEO ayar kaydı → `/api/admin/seo/rollback`) onaylı "Geri al"; diğer kayıtlarda gösterilmez (tekil ayar kaydını ayar uç yanlış yorumladığı için kapsam dışı tutuldu). |
+| 31 | Yenile / canlı | ÇALIŞIYOR | "Yenile" + "Canlı izle" (30 sn), yeni kayıtlar vurgulanır ve ekran okuyucuya duyurulur. |
+| 32 | i18n | ÇALIŞIYOR (TR) | Tüm metin tam Türkçe; karışık İngilizce başlıklar kaldırıldı. Bu yüzeyde EN anahtar seti yok (diğer Dalga 2 admin yüzeyleriyle aynı düzen). |
+| 33 | Mobil | ÇALIŞIYOR | Ek `p-6` yok; dar ekranda `DataTable` kart görünümü, süzgeçler katlanır ("Süzgeçler (n)"), ≥44px dokunma hedefleri, detay alttan tam genişlik. |
+| 34 | `audit_logs` modül anahtarı | AÇIK (sahiplik dışı) | `lib/module-controls.ts` modül yüzeyinin; anahtarı kaldırmak/kilitlemek geriye uyumlu-eklemeli bir değişiklik değil. |
+| 35 | Silinen kullanıcının izi | ÇALIŞIYOR | Şema dalgası: `userId` nullable + `SetNull` + `actorSnapshot`. Sayfa silinmiş aktörü anlık görüntüden gösterir; anlık görüntü yazılmamış eski satırlarda dürüst "kimlik bilinmiyor" notu; "Silinmiş aktörlü kayıt" göstergesi + süzgeci. |
+| 36 | Saklama politikası | AÇIK | Temizlik cron'u ortak dosya ve görev ödülü tekrar koruması denetime dayanıyor; sayfada en eski kayıt tarihi gösterilir. |
+| 37 | API girdi doğrulaması | ÇALIŞIYOR | zod: `limit` 10–100, geçersiz tarih/enum/kimlik 400, ters aralık 400, bozuk imleç ilk sayfaya düşer. |
+
+### Kapanan bulgular
+
+- **B1 (cascade):** şema dalgasında kapandı; sayfa anlık görüntüyü okur ve silinmiş aktörü işaretler.
+- **B2 (gizli değerler):** okuma tarafı kapandı. Liste ucu gövde döndürmez; detayda gizli anahtarlar (şifre, secret, API anahtarı, token, yönetici kapısı cevabı vb.) ve gizli tekil ayarın tamamı maskelenir (değişip değişmediği yine görünür); IP maskeli; CSV gövdesiz. Yazma tarafı redaksiyonu ve eski satır temizliği kalan iş.
+- **B3 (filtre/gerçek veri):** kapandı (facet + duyarsız eşleşme + kategori/önem).
+- **B4 (bitiş tarihi):** kapandı.
+- **B5 (hata/yarış):** kapandı.
+- **B6 (detay/diff):** kapandı.
+- **B7 (kapı API'de yok):** sistem genelinde `requireAuth` ile kapanmış; yeni uçlar bunu kullanır.
+- **B9 (performans):** liste ucu yalnız özet alanlar, imleçli, toplam yalnız ilk sayfada, facet'ler 5 dk önbellekli. Bileşik indeks / saklama kalan iş.
+- **B10 (a11y/i18n):** kapandı (etiket↔kontrol, `caption`/`scope`, canlı bölge, Türkçe metin).
+- **B12 (iskelet):** kapandı.
+
+### Kalanlar
+
+- **B8 (taksonomi/atomiklik):** 58 dosyadaki doğrudan `auditLog.create` çağrılarının ortak yazıcıya taşınması başka yüzeylerin dosyalarında. Okuma tarafındaki katalog farklı yazımları birleştirdiği için gezgin buna bağlı değil.
+- **B11:** `audit_logs` modül anahtarı (`lib/module-controls.ts`, modül yüzeyi).
+- Saklama politikası + bileşik indeksler `(entity, createdAt)`, `(userId, createdAt)`: ŞEMA İSTEĞİ / cron sahibi.
+- Ayar yazma uçlarında gizli değer redaksiyonu ve mevcut satırların tek seferlik temizliği (ayarlar yüzeyi + onaylı DB işi).
+- `/admin/compliance` gezgini ile birleştirme ve diğer widget'ların filtreli derin bağlantı vermesi. Bağlantı biçimi hazır: `/admin/audit?aktor=<id>`, `?varlik=<entity>&q=<id>`, `?onem=critical&donem=24s`, `?kayit=<id>`.
