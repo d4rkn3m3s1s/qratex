@@ -16,6 +16,7 @@ import { cmsPublicPath, type CmsListQuery, type CmsPageList, type CmsPageSummary
 import { cn } from '@/lib/utils';
 import { deletePage, errorText, fetchPages, pageKeys, publishPage } from './api';
 import { relTime } from './format';
+import { useSeoCopy } from './copy';
 
 const STATUS_TABS: Array<{ value: CmsListQuery['status']; label: string }> = [
   { value: 'all', label: 'Tümü' },
@@ -28,6 +29,7 @@ const STATUS_TABS: Array<{ value: CmsListQuery['status']; label: string }> = [
  * Yayın hattı gerçek: "Yayında" sayfa `/sayfa/<slug>` adresinde açılır ve sitemap'e girer.
  */
 export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList | null; initialQuery: CmsListQuery }) {
+  const sx = useSeoCopy();
   const url = useUrlState();
   const qc = useQueryClient();
   const reduced = useReducedMotionPref();
@@ -117,19 +119,19 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <label className="relative block sm:w-72">
-              <span className="sr-only">Başlık veya adreste ara</span>
+              <span className="sr-only">{sx.searchSr}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Başlık veya adreste ara" className="min-h-11 pl-9 sm:min-h-10" type="search" />
             </label>
             <label className="flex items-center gap-2 text-sm text-fg-muted">
-              <span>Sırala</span>
+              <span>{sx.sort}</span>
               <select
                 value={sort}
                 onChange={(e) => url.set({ sirala: e.target.value === 'title' ? 'title' : null, sayfa: null })}
                 className="min-h-11 rounded-control border border-border bg-surface-1 px-2 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-10"
               >
-                <option value="updated">Son güncellenen</option>
-                <option value="title">Başlık (A–Z)</option>
+                <option value="updated">{sx.sortUpdated}</option>
+                <option value="title">{sx.sortTitle}</option>
               </select>
             </label>
           </div>
@@ -200,6 +202,7 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
 }
 
 function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => unknown }) {
+  const sx = useSeoCopy();
   const publish = useMutation({
     mutationFn: () => publishPage(page.id, !page.isPublished, page.updatedAt),
     onSuccess: (r) => {
@@ -222,7 +225,7 @@ function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => u
           {page.noindex ? <StatusBadge size="sm" label="Aramada gizli" tone="info" icon={EyeOff} /> : null}
         </div>
         <p className="mt-0.5 font-mono text-xs text-fg-subtle">{cmsPublicPath(page.slug)}</p>
-        {page.excerpt ? <p className="mt-1.5 line-clamp-2 text-sm text-fg-muted">{page.excerpt}</p> : <p className="mt-1.5 text-sm italic text-fg-subtle">İçerik boş</p>}
+        {page.excerpt ? <p className="mt-1.5 line-clamp-2 text-sm text-fg-muted">{page.excerpt}</p> : <p className="mt-1.5 text-sm italic text-fg-subtle">{sx.emptyBody}</p>}
         <p className="mt-1.5 text-xs text-fg-subtle">
           {relTime(page.updatedAt)} güncellendi{page.lastEditor ? ` · ${page.lastEditor}` : ''} · {page.length.toLocaleString('tr-TR')} karakter
         </p>
@@ -236,7 +239,7 @@ function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => u
         {page.isPublished ? (
           <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
             <a href={cmsPublicPath(page.slug)} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4" aria-hidden /> Canlı görüntüle<span className="sr-only"> (yeni sekmede açılır)</span>
+              <ExternalLink className="h-4 w-4" aria-hidden /> {sx.viewLive}<span className="sr-only">{sx.newTab}</span>
             </a>
           </Button>
         ) : null}

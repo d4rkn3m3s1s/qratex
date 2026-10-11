@@ -8,6 +8,7 @@ import { ConfirmAction, QueryState } from '@/components/states';
 import type { SeoHistoryEntry } from '@/lib/admin-seo/contract';
 import { fetchSeoHistory, seoKeys } from './api';
 import { fmtAbs } from './format';
+import { useSeoCopy } from './copy';
 
 /**
  * Sürüm geçmişi çekmecesi: her kayıt = bir sürüm; alan bazlı fark (eski → yeni), kim/ne zaman.
@@ -25,6 +26,7 @@ export function SeoHistorySheet({
   dirty: boolean;
   onRestore: (entry: SeoHistoryEntry) => Promise<unknown>;
 }) {
+  const sx = useSeoCopy();
   const history = useInfiniteQuery({
     queryKey: seoKeys.history(),
     queryFn: ({ pageParam, signal }) => fetchSeoHistory(pageParam, signal),
@@ -40,7 +42,7 @@ export function SeoHistorySheet({
           <SheetTitle className="flex items-center gap-2">
             <History className="h-5 w-5" aria-hidden /> Sürüm geçmişi
           </SheetTitle>
-          <SheetDescription>Her kayıt bir sürümdür. Geri yükleme yeni bir kayıt olarak eklenir; hiçbir sürüm silinmez.</SheetDescription>
+          <SheetDescription>{sx.historyDesc}</SheetDescription>
         </SheetHeader>
         <div className="mt-4">
           <QueryState
@@ -57,7 +59,7 @@ export function SeoHistorySheet({
                       <div>
                         <p className="text-sm font-semibold text-fg">
                           {e.actionLabel}
-                          {i === 0 ? <span className="ml-2 rounded-chip bg-success-subtle px-1.5 py-0.5 text-xs font-medium text-success">Şu anki</span> : null}
+                          {i === 0 ? <span className="ml-2 rounded-chip bg-success-subtle px-1.5 py-0.5 text-xs font-medium text-success">{sx.current}</span> : null}
                         </p>
                         <p className="text-xs text-fg-subtle">{fmtAbs(e.createdAt)}{e.actor ? ` · ${e.actor}` : ''}</p>
                       </div>
@@ -101,7 +103,7 @@ export function SeoHistorySheet({
                         {e.changes.length > 12 ? <p className="text-fg-subtle">+{e.changes.length - 12} alan daha</p> : null}
                       </dl>
                     ) : (
-                      <p className="mt-2 text-xs text-fg-subtle">Alan değişikliği yok.</p>
+                      <p className="mt-2 text-xs text-fg-subtle">{sx.noFieldChange}</p>
                     )}
                   </li>
                 ))}

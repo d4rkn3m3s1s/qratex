@@ -9,6 +9,7 @@ import { Field } from '@/components/ds/form';
 import { CHANGE_FREQUENCIES, CHANGE_FREQUENCY_LABEL, SEO_ROUTES } from '@/lib/admin-seo/contract';
 import { cn } from '@/lib/utils';
 import { rowKey, type DraftOverride, type DraftSitemap } from './seo-draft';
+import { useSeoCopy } from './copy';
 
 /** Uzunluk göstergesi: ideal aralık yeşil, dışı uyarı (renk + metin). */
 export function LengthMeter({ length, min, max }: { length: number; min: number; max: number }) {
@@ -166,6 +167,7 @@ const selectCls =
   'min-h-11 w-full rounded-control border border-border bg-surface-1 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-10';
 
 export function SitemapRows({ rows, onChange, errors }: { rows: DraftSitemap[]; onChange: (r: DraftSitemap[]) => void; errors: Record<string, string> }) {
+  const sx = useSeoCopy();
   const set = (key: string, patch: Partial<DraftSitemap>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   return (
     <div className="space-y-3">
@@ -183,7 +185,7 @@ export function SitemapRows({ rows, onChange, errors }: { rows: DraftSitemap[]; 
             <Field id={`seo-sm-${r.key}-freq`} label="Sıklık" error={err('changeFrequency')}>
               {(c) => (
                 <select {...c} className={selectCls} value={r.changeFrequency} onChange={(e) => set(r.key, { changeFrequency: e.target.value })}>
-                  <option value="">Aylık (varsayılan)</option>
+                  <option value="">{sx.monthlyDefault}</option>
                   {CHANGE_FREQUENCIES.map((f) => <option key={f} value={f}>{CHANGE_FREQUENCY_LABEL[f]}</option>)}
                 </select>
               )}
@@ -215,6 +217,7 @@ export function OverrideRows({
   errors: Record<string, string>;
   onFocusRow: (path: string) => void;
 }) {
+  const sx = useSeoCopy();
   const used = new Set(rows.map((r) => r.path));
   const free = SEO_ROUTES.filter((r) => !used.has(r.path));
   const set = (key: string, patch: Partial<DraftOverride>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -235,7 +238,7 @@ export function OverrideRows({
               <Field id={`seo-ov-${r.key}-path`} label="Sayfa" error={err('path')}>
                 {(c) => (
                   <select {...c} className={selectCls} value={r.path} onChange={(e) => set(r.key, { path: e.target.value as DraftOverride['path'] })}>
-                    <option value="">Seçin…</option>
+                    <option value="">{sx.choose}</option>
                     {SEO_ROUTES.filter((x) => x.path === r.path || !used.has(x.path)).map((x) => (
                       <option key={x.path} value={x.path}>{`${x.label} (${x.path})`}</option>
                     ))}

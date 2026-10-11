@@ -5,6 +5,7 @@ import { Monitor, Smartphone } from 'lucide-react';
 import { SEO_ROUTES } from '@/lib/admin-seo/contract';
 import { cn } from '@/lib/utils';
 import type { Draft } from './seo-draft';
+import { useSeoCopy } from './copy';
 
 /**
  * Canlı önizleme: Google sonucu (gerçek düzen — site adı/URL üstte küçük, başlık mavi ve büyük;
@@ -42,6 +43,7 @@ const LIMITS = {
 } as const;
 
 export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Draft; base: string; focusPath: string; onFocusPath: (p: string) => void }) {
+  const sx = useSeoCopy();
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -106,8 +108,8 @@ export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Dra
         </div>
         <p className={cn('mt-2 text-info', device === 'desktop' ? 'text-xl leading-7' : 'text-lg leading-6')}>{shownTitle || 'Başlık'}</p>
         <p className="mt-1 text-sm leading-5 text-fg-muted">{shownDesc || (isHome ? 'Açıklama yok' : 'Açıklama sayfanın kendi metninden gelir.')}</p>
-        {!g.robotsIndex ? <p className="mt-2 text-xs font-medium text-danger">Noindex açık: bu sonuç Google'da görünmez.</p> : null}
-        <figcaption className="sr-only">Arama sonucunda görünecek başlık ve açıklama</figcaption>
+        {!g.robotsIndex ? <p className="mt-2 text-xs font-medium text-danger">{sx.noindexOn}</p> : null}
+        <figcaption className="sr-only">{sx.serpCaption}</figcaption>
       </figure>
 
       <figure className="overflow-hidden rounded-card border border-border bg-surface-1" aria-label="Sosyal paylaşım kartı önizlemesi">
@@ -120,7 +122,7 @@ export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Dra
             // eslint-disable-next-line @next/next/no-img-element
             <img src={ogSrc} alt="Paylaşım görseli" className="h-full w-full object-cover" loading="lazy" />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-fg-muted">Görsel yok</div>
+            <div className="flex h-full items-center justify-center text-sm text-fg-muted">{sx.noImage}</div>
           )}
         </div>
         <div className="space-y-0.5 border-t border-border p-3">

@@ -51,6 +51,7 @@ import { ChipInput, OverrideRows, PathListEditor, SitemapRows, TextRow } from '.
 import { SeoPreview } from './seo-preview';
 import { SeoHistorySheet } from './seo-history';
 import { sameAsSaved, toDraft, validateDraft, type Draft, type DraftGlobal } from './seo-draft';
+import { useSeoCopy } from './copy';
 
 const TABS: Array<{ value: SeoTab; label: string }> = [
   { value: 'genel', label: 'Genel' },
@@ -83,6 +84,7 @@ export function SeoConsole({ initial, envSiteUrl }: { initial: SeoBundle | null;
 }
 
 function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSiteUrl: string; refetch: () => Promise<SeoBundle | null> }) {
+  const sx = useSeoCopy();
   const qc = useQueryClient();
   const url = useUrlState();
   const [saved, setSaved] = useState<SeoState>(bundle.state);
@@ -204,7 +206,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
               <ImportExport saved={saved.payload} onApply={(p) => { setDraft(toDraft(p)); setSubmitted(true); }} />
               <Button asChild variant="ghost" className="min-h-11 sm:min-h-10">
                 <a href={base} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" aria-hidden /> Siteyi aç<span className="sr-only"> (yeni sekmede)</span>
+                  <ExternalLink className="h-4 w-4" aria-hidden /> {sx.openSite}<span className="sr-only">{sx.newTabShort}</span>
                 </a>
               </Button>
             </div>
@@ -264,8 +266,8 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
                     <Field id="seo-twitterCard" label="X kart tipi" error={errors.twitterCard}>
                       {(c) => (
                         <select {...c} value={g.twitterCard} onChange={(e) => setG({ twitterCard: e.target.value as DraftGlobal['twitterCard'] })} className="min-h-11 w-full rounded-control border border-border bg-surface-1 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-10">
-                          <option value="summary_large_image">Büyük görselli kart</option>
-                          <option value="summary">Küçük kart</option>
+                          <option value="summary_large_image">{sx.cardLarge}</option>
+                          <option value="summary">{sx.cardSmall}</option>
                         </select>
                       )}
                     </Field>
@@ -280,7 +282,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
                   <TextRow name="organizationDescription" label="Kuruluş açıklaması" multiline value={g.organizationDescription} onChange={(v) => setG({ organizationDescription: v })} error={errors.organizationDescription} />
                   <TextRow name="websiteDescription" label="Web sitesi açıklaması" multiline value={g.websiteDescription} onChange={(v) => setG({ websiteDescription: v })} error={errors.websiteDescription} />
                   <div>
-                    <p className="mb-1 text-sm font-medium text-fg">Ana sayfada yayınlanacak JSON-LD</p>
+                    <p className="mb-1 text-sm font-medium text-fg">{sx.jsonLd}</p>
                     <pre className="max-h-72 overflow-auto rounded-control border border-border bg-surface-2 p-3 text-xs text-fg" tabIndex={0} aria-label="JSON-LD önizlemesi">
                       {JSON.stringify(
                         {
@@ -311,7 +313,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
                   <PathListEditor value={g.robotsDisallow} onChange={(v) => setG({ robotsDisallow: v })} error={errors.robotsDisallow ?? Object.entries(errors).find(([k]) => k.startsWith('robotsDisallow'))?.[1]} />
                   {g.robotsDisallow.length === 0 ? <p className="text-xs text-fg-muted">Liste boş: varsayılan {DEFAULT_DISALLOW.join(', ')} engellenir.</p> : null}
                   <div>
-                    <p className="mb-1 text-sm font-medium text-fg">Yayınlanacak robots.txt</p>
+                    <p className="mb-1 text-sm font-medium text-fg">{sx.robotsTxt}</p>
                     <pre className="overflow-auto rounded-control border border-border bg-surface-2 p-3 font-mono text-xs text-fg" tabIndex={0} aria-label="robots.txt önizlemesi">
                       {renderRobotsTxt({ ...saved.payload.global, ...(validation.ok ? validation.data.global : {}), robotsDisallow: g.robotsDisallow.filter((x) => x.trim()), sitemapEnabled: g.sitemapEnabled }, { demo: saved.demoSite, base })}
                     </pre>
@@ -319,7 +321,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
                   <DangerSwitch id="seo-sitemapEnabled" label="Sitemap yayında" description="Kapatmak /sitemap.xml'i boşaltır ve robots.txt'den sitemap satırını kaldırır." checked={g.sitemapEnabled} onChange={(v) => setG({ sitemapEnabled: v })} />
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-fg">Ek sitemap adresleri</p>
-                    <p className="text-xs text-fg-muted">Otomatik eklenenler: ana sayfa, giriş/kayıt, Güven, Neden QRateX, yasal belgeler, blog yazıları ve yayındaki içerik sayfaları. Buraya yalnız bunların dışındaki adresleri ekleyin.</p>
+                    <p className="text-xs text-fg-muted">{sx.sitemapAuto}</p>
                     <SitemapRows rows={g.extraSitemapUrls} onChange={(rows) => setG({ extraSitemapUrls: rows })} errors={errors} />
                   </div>
                 </>
@@ -382,24 +384,25 @@ function DangerSwitch({ id, label, description, checked, onChange }: { id: strin
 }
 
 function StatusStrip({ saved, health, onHistory }: { saved: SeoState; health: HealthReport | null; onHistory: () => void }) {
+  const sx = useSeoCopy();
   const g = saved.payload.global;
   const indexable = g.robotsIndex && !g.robotsDisallow.some((p) => p.trim() === '/') && !saved.demoSite;
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <div className={cn('rounded-card border p-3', indexable ? TONE_CALLOUT.success : TONE_CALLOUT.danger)}>
-        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">İndeksleme</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.indexing}</p>
         <p className="mt-1 flex items-center gap-1.5 font-semibold text-fg">
           {indexable ? <Globe className="h-4 w-4 text-success" aria-hidden /> : <ShieldAlert className="h-4 w-4 text-danger" aria-hidden />}
           {indexable ? 'Yayında · indekslenebilir' : saved.demoSite ? 'Demo ortamı · engelli' : 'Arama motorlarına kapalı'}
         </p>
       </div>
       <div className="rounded-card border border-border bg-surface-1 p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">Sağlık skoru</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.healthScore}</p>
         <p className="mt-1 font-semibold text-fg">{health ? <ScoreText score={health.score} /> : 'Henüz kontrol edilmedi'}</p>
         {health ? <p className="text-xs text-fg-subtle">{relTime(health.checkedAt)}{health.checkedBy ? ` · ${health.checkedBy}` : ''}</p> : null}
       </div>
       <button type="button" onClick={onHistory} className="rounded-card border border-border bg-surface-1 p-3 text-left hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">Son değişiklik</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.lastChange}</p>
         <p className="mt-1 font-semibold text-fg">{saved.lastChange ? relTime(saved.lastChange.at) : 'Hiç kaydedilmedi (varsayılanlar)'}</p>
         {saved.lastChange?.actor ? <p className="text-xs text-fg-subtle">{saved.lastChange.actor} · geçmişi gör</p> : null}
       </button>
@@ -420,6 +423,7 @@ const SEV_LABEL: Record<HealthCheck['severity'], string> = { critical: 'Kritik',
 const SEV_TONE = { critical: 'danger', warning: 'warning', info: 'info' } as const;
 
 function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthReport | null; running: boolean; dirty: boolean; onRun: () => void; onFix: (c: HealthCheck) => void }) {
+  const sx = useSeoCopy();
   const [onlyFailed, setOnlyFailed] = useState(true);
   const reduced = useReducedMotionPref();
   const checks = useMemo(() => {
@@ -431,7 +435,7 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
     <section aria-labelledby="seo-health-title" className="rounded-card border border-border bg-surface-1 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id="seo-health-title" className="font-semibold text-fg">Sağlık kontrolü</h2>
+          <h2 id="seo-health-title" className="font-semibold text-fg">{sx.healthCheck}</h2>
           <p className="text-xs text-fg-muted">
             {report ? `${report.passedCount} geçti · ${report.failedCount} sorun · ${fmtAbs(report.checkedAt)}` : 'Kayıtlı ayarları ve canlı robots.txt / sitemap.xml çıktısını denetler.'}
             {dirty ? ' Kaydedilmemiş değişiklikler denetlenmez.' : ''}
@@ -488,6 +492,7 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
 }
 
 function ExternalTools({ base, kind }: { base: string; kind: 'social' | 'rich' }) {
+  const sx = useSeoCopy();
   const u = encodeURIComponent(base);
   const links =
     kind === 'rich'
@@ -498,7 +503,7 @@ function ExternalTools({ base, kind }: { base: string; kind: 'social' | 'rich' }
       {links.map((l) => (
         <Button key={l.href} asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
           <a href={l.href} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4" aria-hidden /> {l.label}<span className="sr-only"> (yeni sekmede, kayıtlı site adresiyle)</span>
+            <ExternalLink className="h-4 w-4" aria-hidden /> {l.label}<span className="sr-only">{sx.newTabSite}</span>
           </a>
         </Button>
       ))}
@@ -508,6 +513,7 @@ function ExternalTools({ base, kind }: { base: string; kind: 'social' | 'rich' }
 
 /** Kayıtlı ayarları dışa aktarır; içe aktarma şemayla doğrulanır, fark önizlenir, yalnız TASLAĞA uygulanır. */
 function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoPayload) => void }) {
+  const sx = useSeoCopy();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ payload: SeoPayload | null; errors: Array<{ path: string; message: string }> } | null>(null);
   const exportJson = () => {
@@ -547,7 +553,7 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileJson className="h-5 w-5" aria-hidden /> İçe aktarma önizlemesi</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><FileJson className="h-5 w-5" aria-hidden /> {sx.importPreview}</DialogTitle>
             <DialogDescription>
               {pending?.payload ? 'Değişiklikler taslağa uygulanır; kaydedene kadar yayına çıkmaz.' : 'Dosya doğrulamadan geçemedi; hiçbir şey uygulanmadı.'}
             </DialogDescription>
@@ -566,10 +572,10 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
               ))}
             </dl>
           ) : pending?.payload ? (
-            <p className="text-sm text-fg-muted">Dosya kayıtlı ayarlarla aynı.</p>
+            <p className="text-sm text-fg-muted">{sx.importSame}</p>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPending(null)}>Vazgeç</Button>
+            <Button variant="outline" onClick={() => setPending(null)}>{sx.cancel}</Button>
             {pending?.payload && changes.length ? (
               <Button onClick={() => { onApply(pending.payload as SeoPayload); setPending(null); toast.message('Taslağa uygulandı. Kontrol edip kaydedin.'); }}>
                 Taslağa uygula

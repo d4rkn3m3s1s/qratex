@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { CmsContent } from './cms-content';
 import { createPage, fetchPage, fetchPageHistory, pageKeys, updatePage } from './api';
 import { fmtAbs, relTime } from './format';
+import { useSeoCopy } from './copy';
 
 const EMPTY: CmsPageFormParsed = { title: '', slug: '', body: '', seoTitle: '', description: '', noindex: false, isPublished: false };
 
@@ -79,6 +80,7 @@ export function PageEditor({ id, initial }: { id: string | null; initial: CmsPag
 }
 
 function EditorHeader({ page }: { page: CmsPageDetail | null }) {
+  const sx = useSeoCopy();
   return (
     <PageHeader
       eyebrow="İçerik sayfaları"
@@ -95,7 +97,7 @@ function EditorHeader({ page }: { page: CmsPageDetail | null }) {
         page?.isPublished ? (
           <Button asChild variant="outline" className="min-h-11 sm:min-h-10">
             <a href={cmsPublicPath(page.slug)} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4" aria-hidden /> Canlı görüntüle<span className="sr-only"> (yeni sekmede açılır)</span>
+              <ExternalLink className="h-4 w-4" aria-hidden /> {sx.viewLive}<span className="sr-only">{sx.newTab}</span>
             </a>
           </Button>
         ) : null
@@ -113,6 +115,7 @@ function EditorBody({
   onSaved: (p: CmsPageDetail) => void;
   reload: () => Promise<CmsPageDetail | null>;
 }) {
+  const sx = useSeoCopy();
   const form = useZodForm(cmsPageFormSchema, { defaultValues: page ? toForm(page) : EMPTY });
   const [version, setVersion] = useState(page?.updatedAt ?? null);
   const [slugTouched, setSlugTouched] = useState(!!page);
@@ -219,16 +222,16 @@ function EditorBody({
 
         <section aria-label="Canlı önizleme" className={cn('space-y-4 lg:sticky lg:top-20 lg:self-start', view === 'edit' && 'hidden lg:block')}>
           <div className="rounded-card border border-border bg-surface-1 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">Google'da görünüm</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{sx.googleView}</p>
             <p className="mt-2 truncate text-xs text-fg-muted">qratex.com › sayfa › {values.slug || 'adres'}</p>
             <p className="truncate text-lg leading-6 text-info">{values.seoTitle || values.title || 'Sayfa başlığı'}</p>
             <p className="line-clamp-2 text-sm text-fg-muted">{desc || 'Açıklama içerikten üretilecek.'}</p>
-            {values.noindex ? <p className="mt-2 text-xs text-warning">Bu sayfa arama sonuçlarında görünmeyecek (noindex).</p> : null}
+            {values.noindex ? <p className="mt-2 text-xs text-warning">{sx.noindexWarn}</p> : null}
           </div>
           <div className="max-h-[70vh] overflow-auto rounded-card border border-border bg-background p-5">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fg-subtle">Sayfa önizlemesi</p>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fg-subtle">{sx.pagePreview}</p>
             <h1 className="text-2xl font-semibold tracking-tight text-fg">{values.title || 'Başlık'}</h1>
-            {values.body?.trim() ? <CmsContent body={values.body} className="mt-4" /> : <p className="mt-4 text-sm italic text-fg-subtle">İçerik yazdıkça burada görünür.</p>}
+            {values.body?.trim() ? <CmsContent body={values.body} className="mt-4" /> : <p className="mt-4 text-sm italic text-fg-subtle">{sx.bodyPlaceholder}</p>}
           </div>
           {page ? <HistoryPanel pageId={page.id} onLoad={(v) => {
             form.setValue('title', v.title, { shouldDirty: true });
