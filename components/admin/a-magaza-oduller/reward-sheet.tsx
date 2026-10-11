@@ -14,6 +14,7 @@ import { POOL_MAX, REWARD_TYPE_LABEL, splitCodes, type RewardDetail, type Reward
 import { errorText, fetchReward, poolAction, rewardAction, storeKeys } from './api';
 import { REDEMPTION_STATUS, REWARD_STATUS, fieldLabel, fmtDate, fmtDateTime, fmtNumber, rulesSummary, showValue, stockLabel } from './format';
 import { RewardIcon } from './parts';
+import { useStoreCopy } from './copy';
 
 export function RewardDetailBody({ id, onEdit, onOpenOther }: { id: string; onEdit: (r: RewardListItem) => void; onOpenOther: (id: string) => void }) {
   const q = useQuery({ queryKey: storeKeys.reward(id), queryFn: () => fetchReward(id), staleTime: 15_000 });
@@ -171,6 +172,7 @@ function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r
 }
 
 function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown }) {
+  const sx = useStoreCopy();
   const [delta, setDelta] = useState('');
   const [busy, setBusy] = useState(false);
   const n = Number.parseInt(delta, 10);
@@ -209,7 +211,7 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
           }}
         >
           <div className="space-y-1.5">
-            <Label htmlFor={`stock-${r.id}`}>Ekle (+) / düş (−)</Label>
+            <Label htmlFor={`stock-${r.id}`}>{sx.stockDelta}</Label>
             <Input id={`stock-${r.id}`} inputMode="numeric" className="min-h-11 w-32" value={delta} onChange={(e) => setDelta(e.target.value.replace(/[^\d-]/g, ''))} placeholder="+50" />
           </div>
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={!valid || busy}>
@@ -228,6 +230,7 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
 }
 
 function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) {
+  const sx = useStoreCopy();
   const r = d.item;
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -257,7 +260,7 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
     >
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label htmlFor={`pool-${r.id}`}>Kodlar (satır, virgül ya da boşlukla ayırın)</Label>
+          <Label htmlFor={`pool-${r.id}`}>{sx.codesInput}</Label>
           <Textarea id={`pool-${r.id}`} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={'PARTNER-AB12\nPARTNER-CD34'} className="font-mono" />
           <p className="text-xs text-fg-muted">
             {fmtNumber(codes.length)} kod algılandı · harf, rakam, tire ve alt çizgi; 3–64 karakter · havuz en fazla {fmtNumber(POOL_MAX)} kod.

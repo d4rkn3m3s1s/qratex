@@ -25,6 +25,7 @@ import {
 import { changedFields, createCosmetic, errorText, fetchCosmetic, updateCosmetic, uploadStoreImage } from './api';
 import { ADMIN_PREVIEW_USER } from './cosmetics-tab';
 import { fmtNumber } from './format';
+import { useStoreCopy } from './copy';
 
 const EMPTY: CosmeticUpsertValues = {
   name: '',
@@ -174,6 +175,7 @@ function SlugField({ form }: { form: UseFormReturn<CosmeticUpsertValues> }) {
 }
 
 function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertValues>; setAsset: (v: string) => void }) {
+  const sx = useStoreCopy();
   const type = useWatch({ control, name: 'type' });
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -186,7 +188,7 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
       name="asset"
       render={({ field, fieldState }) => (
         <fieldset className="space-y-2" aria-describedby={fieldState.error ? 'asset-err' : undefined}>
-          <legend className="text-sm font-medium text-fg">Görünüm</legend>
+          <legend className="text-sm font-medium text-fg">{sx.appearance}</legend>
           {presets.length ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Hazır görünümler">
               {presets.map((p) => {
@@ -242,7 +244,7 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
                 {uploading ? 'Yükleniyor…' : type === 'profile_background' ? 'Arka plan görseli yükle' : 'Özel rozet görseli yükle'}
               </Button>
-              {isImageSrc(field.value) ? <span className="truncate text-xs text-fg-muted">Yüklü görsel kullanılıyor</span> : null}
+              {isImageSrc(field.value) ? <span className="truncate text-xs text-fg-muted">{sx.uploadedImage}</span> : null}
             </div>
           ) : null}
           <p className="text-xs text-fg-muted">
@@ -264,6 +266,7 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
 }
 
 function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
+  const sx = useStoreCopy();
   return (
     <Controller
       control={control}
@@ -289,7 +292,7 @@ function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
               </button>
             ))}
           </div>
-          <p className="text-xs text-fg-muted">Efsanevi ürünler vitrinde parıltıyla öne çıkar ve sıralamada üstte durur.</p>
+          <p className="text-xs text-fg-muted">{sx.legendaryHint}</p>
         </fieldset>
       )}
     />
@@ -297,18 +300,19 @@ function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
 }
 
 function Preview({ control }: { control: Control<CosmeticUpsertValues> }) {
+  const sx = useStoreCopy();
   const [name, type, asset, rarity, price] = useWatch({ control, name: ['name', 'type', 'asset', 'rarity', 'price'] });
   return (
     <aside aria-label="Müşteri önizlemesi" className="order-first lg:order-none">
       <div className="group sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center" tabIndex={0}>
-        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">Müşteri vitrini</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.storefront}</span>
         <CosmeticPreview item={{ type, asset: asset || null, name: name || 'Ürün' }} preview={ADMIN_PREVIEW_USER} size="lg" />
         <span className="line-clamp-2 font-semibold text-fg">{name || 'Ürün adı'}</span>
         <RarityBadge rarity={rarity} />
         <span className="rounded-full bg-brand-subtle px-3 py-1 text-sm font-semibold tabular-nums text-brand">
           {Number(price) > 0 ? `${fmtNumber(Number(price))} puan` : 'Ücretsiz'}
         </span>
-        <span className="text-xs text-fg-muted">Efektler üzerine gelince ya da odakta oynar.</span>
+        <span className="text-xs text-fg-muted">{sx.effectsHint}</span>
       </div>
     </aside>
   );

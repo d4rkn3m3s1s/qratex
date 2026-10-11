@@ -24,6 +24,7 @@ import {
 import { errorText, fetchRedemptions, redemptionAction, storeKeys } from './api';
 import { REDEMPTION_STATUS, fmtDateTime, fmtNumber } from './format';
 import { RewardIcon } from './parts';
+import { useStoreCopy } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -34,6 +35,7 @@ const FIELDS: FilterField[] = [
 ];
 
 export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: RedemptionStats | undefined; statsError: unknown; onRetryStats: () => void }) {
+  const sx = useStoreCopy();
   const qc = useQueryClient();
   const filters = useFilterState(FIELDS);
   const { get, set } = useUrlState();
@@ -100,7 +102,7 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
               {row.original.refundedPoints > 0 ? <span className="block text-xs text-success">{fmtNumber(row.original.refundedPoints)} iade</span> : null}
             </div>
           ) : (
-            <span className="text-xs text-fg-muted">Ödemesiz (hediye)</span>
+            <span className="text-xs text-fg-muted">{sx.freeGift}</span>
           ),
       },
       {
@@ -199,6 +201,7 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
 }
 
 function RowActions({ x, onDone }: { x: RedemptionItem; onDone: () => unknown }) {
+  const sx = useStoreCopy();
   const [reason, setReason] = useState('');
   const isPhysical = x.reward.type === 'physical';
   return (
@@ -230,7 +233,7 @@ function RowActions({ x, onDone }: { x: RedemptionItem; onDone: () => unknown })
               Sınırlı stoklu ödülde stok bir artar.
             </p>
             <div className="space-y-1.5">
-              <Label htmlFor={`cancel-${x.id}`}>Gerekçe (müşteriye gösterilir)</Label>
+              <Label htmlFor={`cancel-${x.id}`}>{sx.cancelReason}</Label>
               <Textarea id={`cancel-${x.id}`} rows={2} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Örn: Stokta kalmadı" />
             </div>
           </div>

@@ -20,6 +20,7 @@ import {
 import { changedFields, createReward, errorText, fetchReward, updateReward, uploadStoreImage } from './api';
 import { fmtNumber, stockLabel } from './format';
 import { RewardIcon } from './parts';
+import { useStoreCopy } from './copy';
 
 const EMPTY: RewardUpsertValues = {
   name: '',
@@ -79,6 +80,7 @@ export type RewardEditorProps = {
  * yalnız değişen alanlar + iyimser kilit gider (B6). Stok burada değil, ayrıntıdaki stok hareketiyle değişir.
  */
 export function RewardEditor({ open, onOpenChange, reward, onSaved }: RewardEditorProps) {
+  const sx = useStoreCopy();
   const [base, setBase] = useState<RewardListItem | null>(reward);
   const form = useZodForm<RewardUpsertValues>(rewardUpsertSchema, { defaultValues: reward ? toValues(reward) : EMPTY });
   const { reset } = form;
@@ -158,7 +160,7 @@ export function RewardEditor({ open, onOpenChange, reward, onSaved }: RewardEdit
           )}
 
           <fieldset className="space-y-3 rounded-lg border border-border p-3">
-            <legend className="px-1 text-sm font-medium text-fg">Kurallar (isteğe bağlı)</legend>
+            <legend className="px-1 text-sm font-medium text-fg">{sx.rulesOptional}</legend>
             <NumberField control={form.control} name="perUserLimit" label="Kişi başı en fazla" min={1} max={1000} optional description="Boş = sınırsız." />
             <div className="grid gap-4 sm:grid-cols-2">
               <DateTimeField control={form.control} name="validFrom" label="Başlangıç (İstanbul saati)" />
@@ -267,12 +269,13 @@ function IconField({ control }: { control: Control<RewardUpsertValues> }) {
 }
 
 function PreviewCard({ control }: { control: Control<RewardUpsertValues> }) {
+  const sx = useStoreCopy();
   const [name, description, icon, cost, stock, type] = useWatch({ control, name: ['name', 'description', 'icon', 'cost', 'stock', 'type'] });
   const s = stockLabel(Number(stock));
   return (
     <aside aria-label="Önizleme" className="order-first lg:order-none">
       <div className="sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center">
-        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">Müşteri kartı</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.customerCard}</span>
         <RewardIcon icon={icon} name={name || 'Ödül'} size="lg" />
         <span className="line-clamp-2 font-semibold text-fg">{name || 'Ödül adı'}</span>
         <span className="line-clamp-3 text-xs text-fg-muted">{description || 'Açıklama'}</span>
