@@ -59,6 +59,7 @@ const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '
  * görevi "Bitti"ye geçiremez — onay yöneticidedir. Son 30 günün çalışma/hata sayısı görünür.
  */
 export default function AutomationsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const [form, setForm] = useState(EMPTY);
@@ -73,7 +74,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
     if (!value) return '';
     if (type === 'status_changed' || type === 'set_status') return STATUS_META[value as keyof typeof STATUS_META]?.label ?? value;
     if (type === 'set_priority') return PRIORITY_META[value as keyof typeof PRIORITY_META]?.label ?? value;
-    if (type === 'assign' || type === 'assigned') return displayName(members.find((m) => m.id === value) ?? null, 'ayrılmış üye');
+    if (type === 'assign' || type === 'assigned') return displayName(members.find((m) => m.id === value) ?? null, tu.ayrilmisUye);
     return value;
   };
 
@@ -86,7 +87,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           method: 'PUT',
           json: { name: form.name.trim(), triggerValue: form.triggerValue || null, actionValue: form.actionValue || null, department: form.department || null },
         });
-        toast.success('Kural güncellendi');
+        toast.success(tu.kuralGuncellendi);
       } else {
         await teamFetch(`${API}/automations`, {
           method: 'POST',
@@ -99,7 +100,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
             department: form.department || null,
           },
         });
-        toast.success('Kural oluşturuldu');
+        toast.success(tu.kuralOlusturuldu);
       }
       setForm(EMPTY);
       void list.refetch();
@@ -122,7 +123,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
   const triggerValueControl =
     form.triggerType === 'status_changed' ? (
       <Select value={form.triggerValue || '__any'} onValueChange={(v) => setForm({ ...form, triggerValue: v === '__any' ? '' : v })}>
-        <SelectTrigger className="h-10" aria-label="Hangi duruma geçince">
+        <SelectTrigger className="h-10" aria-label={tu.hangiDurumaGecince}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -136,7 +137,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
       </Select>
     ) : form.triggerType === 'assigned' ? (
       <Select value={form.triggerValue || '__any'} onValueChange={(v) => setForm({ ...form, triggerValue: v === '__any' ? '' : v })}>
-        <SelectTrigger className="h-10" aria-label="Kime atanınca">
+        <SelectTrigger className="h-10" aria-label={tu.kimeAtaninca}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -152,11 +153,11 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
 
   const actionValueControl =
     form.actionType === 'add_tag' ? (
-      <Input value={form.actionValue} onChange={(e) => setForm({ ...form, actionValue: e.target.value })} placeholder="Etiket" aria-label="Eklenecek etiket" maxLength={40} className="h-10" />
+      <Input value={form.actionValue} onChange={(e) => setForm({ ...form, actionValue: e.target.value })} placeholder={tu.etiket} aria-label={tu.eklenecekEtiket} maxLength={40} className="h-10" />
     ) : form.actionType === 'set_priority' ? (
       <Select value={form.actionValue || undefined} onValueChange={(v) => setForm({ ...form, actionValue: v })}>
-        <SelectTrigger className="h-10" aria-label="Atanacak öncelik">
-          <SelectValue placeholder="Öncelik seç" />
+        <SelectTrigger className="h-10" aria-label={tu.atanacakOncelik}>
+          <SelectValue placeholder={tu.oncelikSec} />
         </SelectTrigger>
         <SelectContent>
           {TASK_PRIORITIES.map((p) => (
@@ -168,8 +169,8 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
       </Select>
     ) : form.actionType === 'assign' ? (
       <Select value={form.actionValue || undefined} onValueChange={(v) => setForm({ ...form, actionValue: v })}>
-        <SelectTrigger className="h-10" aria-label="Atanacak kişi">
-          <SelectValue placeholder="Kişi seç" />
+        <SelectTrigger className="h-10" aria-label={tu.atanacakKisi}>
+          <SelectValue placeholder={tu.kisiSec} />
         </SelectTrigger>
         <SelectContent>
           {team.map((m) => (
@@ -181,8 +182,8 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
       </Select>
     ) : form.actionType === 'set_status' ? (
       <Select value={form.actionValue || undefined} onValueChange={(v) => setForm({ ...form, actionValue: v })}>
-        <SelectTrigger className="h-10" aria-label="Yeni durum">
-          <SelectValue placeholder="Durum seç" />
+        <SelectTrigger className="h-10" aria-label={tu.yeniDurum}>
+          <SelectValue placeholder={tu.durumSec} />
         </SelectTrigger>
         <SelectContent>
           {SET_STATUS_TARGETS.map((s) => (
@@ -206,7 +207,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           query={list}
           skeleton="list"
           isEmpty={(d) => d.items.length === 0}
-          empty={{ compact: true, title: 'Henüz kural yok', description: 'Aşağıdan ilk kuralını oluştur.' }}
+          empty={{ compact: true, title: tu.henuzKuralYok, description: tu.asagidanIlkKuraliniOlustur }}
         >
           {(d) => (
             <ul className="space-y-2">
@@ -259,11 +260,11 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
             void save();
           }}
         >
-          <p className="qx-small font-semibold text-fg">{editing ? 'Kuralı düzenle' : 'Yeni kural'}</p>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Kural adı" aria-label="Kural adı" maxLength={80} required />
+          <p className="qx-small font-semibold text-fg">{editing ? tu.kuraliDuzenle : 'Yeni kural'}</p>
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tu.kuralAdi} aria-label={tu.kuralAdi} maxLength={80} required />
           <div className="grid gap-2 sm:grid-cols-2">
             <Select value={form.triggerType} disabled={editing} onValueChange={(v) => setForm({ ...form, triggerType: v, triggerValue: '' })}>
-              <SelectTrigger className="h-10" aria-label="Tetik">
+              <SelectTrigger className="h-10" aria-label={tu.tetik}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -276,7 +277,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
             </Select>
             {triggerValueControl ?? <span className="qx-caption self-center text-fg-muted">{tx.triggerNoValue}</span>}
             <Select value={form.actionType} disabled={editing} onValueChange={(v) => setForm({ ...form, actionType: v, actionValue: '' })}>
-              <SelectTrigger className="h-10" aria-label="Aksiyon">
+              <SelectTrigger className="h-10" aria-label={tu.aksiyon}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -289,7 +290,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
             </Select>
             {actionValueControl ?? <span className="qx-caption self-center text-fg-muted">{tx.notifyAllManagers}</span>}
             <Select value={form.department || '__all'} onValueChange={(v) => setForm({ ...form, department: v === '__all' ? '' : v })}>
-              <SelectTrigger className="h-10" aria-label="Departman kapsamı">
+              <SelectTrigger className="h-10" aria-label={tu.departmanKapsami}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -307,11 +308,11 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           {error && <InlineError variant="banner">{error}</InlineError>}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" className="gap-1.5" disabled={saving || !form.name.trim()}>
-              <Plus className="h-4 w-4" aria-hidden /> {editing ? 'Değişiklikleri kaydet' : 'Kuralı oluştur'}
+              <Plus className="h-4 w-4" aria-hidden /> {editing ? tu.degisiklikleriKaydet : tu.kuraliOlustur}
             </Button>
             {editing && (
               <Button type="button" variant="ghost" onClick={() => setForm(EMPTY)}>
-                Vazgeç
+                {tu.vazgec}
               </Button>
             )}
           </div>
@@ -320,9 +321,9 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
         <ConfirmAction
           open={!!deleting}
           onOpenChange={(o) => !o && setDeleting(null)}
-          title="Kural silinsin mi?"
+          title={tu.kuralSilinsinMi}
           tone="warning"
-          confirmLabel="Sil"
+          confirmLabel={tu.sil}
           onConfirm={async () => {
             if (!deleting) return;
             await teamFetch(`${API}/automations?id=${encodeURIComponent(deleting.id)}`, { method: 'DELETE' });

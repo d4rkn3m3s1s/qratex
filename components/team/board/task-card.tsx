@@ -34,6 +34,7 @@ type Props = {
  * Onaya gönder, yönetici için Onayla / Revizyon iste.
  */
 export const TaskCard = memo(function TaskCard({ task, selectable, selected, onToggleSelect, draggable, onDragStart, onPickTag, compact }: Props) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { teamViewer, can, departments, tags, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
@@ -58,13 +59,13 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
     if (task.status === 'todo') {
       primary = (
         <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled={busy} onClick={() => run(() => actions.move(task, 'in_progress'))}>
-          <Play className="h-3.5 w-3.5" aria-hidden /> Başla
+          <Play className="h-3.5 w-3.5" aria-hidden /> {tu.basla}
         </Button>
       );
     } else if (task.status === 'in_progress') {
       primary = (
         <Button size="sm" className="h-9 gap-1.5" disabled={busy} onClick={() => run(() => actions.move(task, 'review'))}>
-          <Send className="h-3.5 w-3.5" aria-hidden /> Onaya gönder
+          <Send className="h-3.5 w-3.5" aria-hidden /> {tu.onayaGonder}
         </Button>
       );
     } else if (task.status === 'review') {
@@ -108,7 +109,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1">
             <PriorityBadge priority={task.priority} hideLow />
-            {task.revisionRequested && <StatusBadge label="Revizyon istendi" tone="warning" icon={Undo2} size="sm" />}
+            {task.revisionRequested && <StatusBadge label={tu.revizyonIstendi} tone="warning" icon={Undo2} size="sm" />}
             {task.carriedOver && <StatusBadge label={`Devreden · ${task.weekKey?.split('-W')[1] ?? ''}. hafta`} tone="neutral" icon={RefreshCcw} size="sm" />}
             {compact && isTaskStatus(task.status) && <span className="qx-caption text-fg-muted">{STATUS_META[task.status].label}</span>}
           </div>
@@ -141,7 +142,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <DueBadge dueAt={task.dueAt} done={done} />
         <DeptChip slug={task.department} departments={departments} />
-        {task.recurrence && <StatusBadge label={RECURRENCE_LABEL[task.recurrence] ?? 'Tekrarlı'} tone="neutral" icon={RefreshCcw} size="sm" />}
+        {task.recurrence && <StatusBadge label={RECURRENCE_LABEL[task.recurrence] ?? tu.tekrarli} tone="neutral" icon={RefreshCcw} size="sm" />}
         <TagChips csv={task.tags} pool={tags} onPick={onPickTag} max={2} />
       </div>
 
@@ -152,28 +153,28 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
         </div>
         <div className="qx-caption flex shrink-0 items-center gap-2 text-fg-subtle">
           {task._count.checklist > 0 && (
-            <span className="inline-flex items-center gap-0.5" title="Alt görev">
+            <span className="inline-flex items-center gap-0.5" title={tu.altGorev}>
               <ListChecks className="h-3 w-3" aria-hidden />
               <span className="qx-num">{task._count.checklist}</span>
               <span className="sr-only">{tx.subtaskSr}</span>
             </span>
           )}
           {task._count.comments > 0 && (
-            <span className="inline-flex items-center gap-0.5" title="Yorum">
+            <span className="inline-flex items-center gap-0.5" title={tu.yorum}>
               <MessageSquare className="h-3 w-3" aria-hidden />
               <span className="qx-num">{task._count.comments}</span>
               <span className="sr-only"> yorum</span>
             </span>
           )}
           {task._count.attachments > 0 && (
-            <span className="inline-flex items-center gap-0.5" title="Dosya">
+            <span className="inline-flex items-center gap-0.5" title={tu.dosya}>
               <Paperclip className="h-3 w-3" aria-hidden />
               <span className="qx-num">{task._count.attachments}</span>
               <span className="sr-only"> dosya</span>
             </span>
           )}
           {(task.estimateMin || task.spentMin > 0) && (
-            <span className="inline-flex items-center gap-0.5" title="Harcanan / tahmini süre">
+            <span className="inline-flex items-center gap-0.5" title={tu.harcananTahminiSure}>
               <Timer className="h-3 w-3" aria-hidden />
               <span className="qx-num">
                 {task.spentMin > 0 ? formatMinutes(task.spentMin) : '0'}
@@ -195,11 +196,11 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
       <NoteDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        title="Revizyon iste"
+        title={tu.revizyonIste}
         description={`"${task.title}" görevi düzeltme için ${displayName(task.assignedTo, 'üyeye')} geri döner.`}
-        label="Ne düzeltilmeli?"
-        quickNotes={['Kanıt yetersiz', 'Eksik alt görev var', 'Açıklamadaki kapsam karşılanmadı']}
-        confirmLabel="Revizyona gönder"
+        label={tu.neDuzeltilmeli}
+        quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
+        confirmLabel={tu.revizyonaGonder}
         onConfirm={(note) => actions.move(task, 'in_progress', note)}
       />
     </>

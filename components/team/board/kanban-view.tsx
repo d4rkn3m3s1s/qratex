@@ -9,6 +9,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { STATUS_ICON } from '../shared';
 import { TaskCard } from './task-card';
 import type { TaskDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 /**
  * Kanban — 4 kolon (Yapılacak · Devam · Onayda · Bitti). Masaüstünde sürükle-bırak; aynı geçiş
@@ -28,6 +29,7 @@ export function KanbanView({
   onToggleSelect: (id: string) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tu = useTeamCopy().ui;
   const { teamViewer, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
   const [dragTask, setDragTask] = useState<TaskDto | null>(null);
@@ -110,7 +112,7 @@ export function KanbanView({
               ))}
               {items.length === 0 && (
                 <p className="qx-small rounded-control border border-dashed border-subtle px-3 py-6 text-center text-fg-subtle">
-                  {droppable ? 'Buraya bırak' : col === 'review' ? 'Onay bekleyen görev yok' : col === 'done' ? 'Henüz biten görev yok' : 'Görev yok'}
+                  {droppable ? tu.burayaBirak : col === 'review' ? tu.onayBekleyenGorevYok : col === 'done' ? tu.henuzBitenGorevYok : tu.gorevYok}
                 </p>
               )}
             </div>

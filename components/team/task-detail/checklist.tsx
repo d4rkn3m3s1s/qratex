@@ -24,6 +24,7 @@ import { useTeamCopy } from '../copy';
  * (denetim #66: N paralel istek aynı sıra numarasını üretiyordu).
  */
 export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
   const { members, can: caps, weekKey } = useWorkspace();
@@ -54,7 +55,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
         json: { op: 'suggest_checklist', title: task.title, description: task.description ?? '' },
       });
       if (res.items.length === 0) {
-        toast('AI bu görev için alt görev önermedi.');
+        toast(tu.aiBuGorevIcin);
         return;
       }
       if (await act({ op: 'add_checklist_many', items: res.items })) toast.success(`${res.items.length} alt görev eklendi`);
@@ -80,7 +81,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
         </h3>
         {editable && caps.aiAssist && (
           <Button size="sm" variant="ghost" className="h-9 gap-1.5" disabled={aiBusy} onClick={suggest}>
-            <Sparkles className="h-3.5 w-3.5" aria-hidden /> {aiBusy ? 'Öneriliyor…' : 'AI ile öner'}
+            <Sparkles className="h-3.5 w-3.5" aria-hidden /> {aiBusy ? tu.oneriliyor : tu.aiIleOner}
           </Button>
         )}
       </div>
@@ -139,7 +140,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
             setBusy(false);
           }}
         >
-          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Alt görev ekle" aria-label="Yeni alt görev" maxLength={300} className="h-10" />
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={tu.altGorevEkle} aria-label={tu.yeniAltGorev} maxLength={300} className="h-10" />
           <Button type="submit" variant="outline" className="h-10 gap-1.5" disabled={busy || !text.trim()}>
             <Plus className="h-4 w-4" aria-hidden /> Ekle
           </Button>

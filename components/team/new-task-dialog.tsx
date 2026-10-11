@@ -40,6 +40,7 @@ const EMPTY = {
  * (denetim #83). "Bana ata" ADMIN'in ekip rolü olmasa da çalışır (denetim #76).
  */
 export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { departments, members, tags, viewer, weekKey, currentWeekKey, can } = useWorkspace();
   const qc = useQueryClient();
@@ -76,7 +77,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
 
   const suggest = async (op: 'suggest_assignment' | 'suggest_checklist') => {
     if (!form.title.trim()) {
-      setError('Önce başlık yaz.');
+      setError(tu.onceBaslikYaz);
       return;
     }
     setAi(op === 'suggest_assignment' ? 'assign' : 'checklist');
@@ -88,10 +89,10 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           json: { op, title: form.title, description: form.description },
         });
         setForm((f) => ({ ...f, department: r.department ?? f.department, assignedToId: r.assignedToId ?? f.assignedToId }));
-        toast(r.reason ? `AI önerisi: ${r.reason}` : 'AI önerisi uygulandı');
+        toast(r.reason ? `AI önerisi: ${r.reason}` : tu.aiOnerisiUygulandi);
       } else {
         const r = await teamFetch<{ items: string[] }>(`${API}/ai`, { method: 'POST', json: { op, title: form.title, description: form.description } });
-        if (r.items.length === 0) toast('AI alt görev önermedi.');
+        if (r.items.length === 0) toast(tu.aiAltGorevOnermedi);
         setChecklist((c) => [...c, ...r.items].slice(0, 30));
       }
     } catch (err) {
@@ -103,7 +104,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
 
   const submit = async () => {
     if (!form.title.trim()) {
-      setError('Başlık gerekli.');
+      setError(tu.baslikGerekli);
       return;
     }
     setSaving(true);
@@ -126,7 +127,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           checklist,
         },
       });
-      toast.success('Görev oluşturuldu', { description: form.title.trim() });
+      toast.success(tu.gorevOlusturuldu, { description: form.title.trim() });
       invalidateTasks(qc);
       onOpenChange(false);
     } catch (err) {
@@ -158,13 +159,13 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           </div>
           <div className="space-y-1.5">
             <label htmlFor={ids.desc} className="qx-small font-medium text-fg">
-              Açıklama
+              {tu.aciklama}
             </label>
             <Textarea id={ids.desc} value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} maxLength={8000} />
           </div>
           <div className="space-y-1.5">
             <span id={`${ids.title}-p`} className="qx-small font-medium text-fg">
-              Öncelik
+              {tu.oncelik}
             </span>
             <ChoiceChips
               aria-labelledby={`${ids.title}-p`}
@@ -179,7 +180,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
               <span className="qx-small font-medium text-fg">Atanan</span>
               <div className="flex gap-2">
                 <Select value={form.assignedToId || '__none'} onValueChange={(v) => set('assignedToId', v === '__none' ? '' : v)}>
-                  <SelectTrigger className="h-10" aria-label="Atanan kişi">
+                  <SelectTrigger className="h-10" aria-label={tu.atananKisi}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -200,7 +201,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             <div className="space-y-1.5">
               <span className="qx-small font-medium text-fg">Departman</span>
               <Select value={form.department || '__none'} onValueChange={(v) => set('department', v === '__none' ? '' : v)}>
-                <SelectTrigger className="h-10" aria-label="Departman">
+                <SelectTrigger className="h-10" aria-label={tu.departman}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -217,14 +218,14 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             </div>
             <div className="space-y-1.5">
               <label htmlFor={ids.due} className="qx-small font-medium text-fg">
-                Bitiş günü
+                {tu.bitisGunu}
               </label>
               <Input id={ids.due} type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} className="h-10" />
             </div>
             <div className="space-y-1.5">
               <span className="qx-small font-medium text-fg">Hafta</span>
               <Select value={week} onValueChange={setWeek}>
-                <SelectTrigger className="h-10" aria-label="Hafta">
+                <SelectTrigger className="h-10" aria-label={tu.hafta}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,7 +240,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             </div>
             <div className="space-y-1.5">
               <label htmlFor={ids.est} className="qx-small font-medium text-fg">
-                Tahmini süre (dk)
+                {tu.tahminiSureDk}
               </label>
               <Input
                 id={ids.est}
@@ -252,7 +253,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             <div className="space-y-1.5">
               <span className="qx-small font-medium text-fg">Tekrar</span>
               <Select value={form.recurrence || '__none'} onValueChange={(v) => set('recurrence', v === '__none' ? '' : v)}>
-                <SelectTrigger className="h-10" aria-label="Tekrar">
+                <SelectTrigger className="h-10" aria-label={tu.tekrar}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -267,7 +268,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             <label htmlFor={ids.tags} className="qx-small font-medium text-fg">
               Etiketler
             </label>
-            <Input id={ids.tags} list={`${ids.tags}-pool`} value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder="virgülle ayır: tasarım, acil" />
+            <Input id={ids.tags} list={`${ids.tags}-pool`} value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder={tu.virgulleAyirTasarimAcil} />
             <datalist id={`${ids.tags}-pool`}>
               {tags.map((t) => (
                 <option key={t.slug} value={t.label} />
@@ -279,11 +280,11 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             {form.blockedById ? (
               <div className="qx-small flex items-center gap-2 rounded-control border border-subtle px-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate">{form.blockedTitle}</span>
-                <IconButton aria-label="Bağımlılığı kaldır" icon={<X />} size="sm" onClick={() => setForm((f) => ({ ...f, blockedById: '', blockedTitle: '' }))} />
+                <IconButton aria-label={tu.bagimliligiKaldir} icon={<X />} size="sm" onClick={() => setForm((f) => ({ ...f, blockedById: '', blockedTitle: '' }))} />
               </div>
             ) : (
               <div className="space-y-1">
-                <Input type="search" value={depQ} onChange={(e) => setDepQ(e.target.value)} placeholder="Ara (isteğe bağlı, en az 2 harf)" aria-label="Bağlanacak görevi ara" />
+                <Input type="search" value={depQ} onChange={(e) => setDepQ(e.target.value)} placeholder={tu.araIstegeBagliEn} aria-label={tu.baglanacakGoreviAra} />
                 {depQ.trim().length >= 2 && (
                   <ul className="max-h-40 overflow-y-auto rounded-control border border-subtle" aria-live="polite">
                     {(depSearch.data?.items ?? []).map((t) => (
@@ -305,14 +306,14 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           </div>
           <div className="space-y-2 rounded-card border border-subtle p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="qx-small font-semibold text-fg">Alt görevler {checklist.length > 0 && <span className="qx-num font-normal text-fg-muted">{checklist.length}</span>}</span>
+              <span className="qx-small font-semibold text-fg">{tu.altGorevler} {checklist.length > 0 && <span className="qx-num font-normal text-fg-muted">{checklist.length}</span>}</span>
               {can.aiAssist && (
                 <div className="flex flex-wrap gap-1.5">
                   <Button type="button" size="sm" variant="ghost" className="h-9 gap-1.5" disabled={!!ai} onClick={() => void suggest('suggest_checklist')}>
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden /> {ai === 'checklist' ? 'Öneriliyor…' : 'AI alt görev'}
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden /> {ai === 'checklist' ? tu.oneriliyor : tu.aiAltGorev}
                   </Button>
                   <Button type="button" size="sm" variant="ghost" className="h-9 gap-1.5" disabled={!!ai} onClick={() => void suggest('suggest_assignment')}>
-                    <Wand2 className="h-3.5 w-3.5" aria-hidden /> {ai === 'assign' ? 'Öneriliyor…' : 'AI ata'}
+                    <Wand2 className="h-3.5 w-3.5" aria-hidden /> {ai === 'assign' ? tu.oneriliyor : 'AI ata'}
                   </Button>
                 </div>
               )}
@@ -340,8 +341,8 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                     }
                   }
                 }}
-                placeholder="Alt görev ekle"
-                aria-label="Alt görev ekle"
+                placeholder={tu.altGorevEkle}
+                aria-label={tu.altGorevEkle}
                 maxLength={300}
               />
               <Button
@@ -361,10 +362,10 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           {error && <InlineError variant="banner">{error}</InlineError>}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-              Vazgeç
+              {tu.vazgec}
             </Button>
             <Button type="submit" disabled={saving || !form.title.trim()}>
-              {saving ? 'Oluşturuluyor…' : 'Görevi oluştur'}
+              {saving ? tu.olusturuluyor : tu.goreviOlustur}
             </Button>
           </DialogFooter>
         </form>

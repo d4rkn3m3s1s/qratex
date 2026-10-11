@@ -5,20 +5,22 @@ import { Timeline } from '@/components/ds/data';
 import { QueryState } from '@/components/states';
 import { qs } from '../lib/api';
 import { API, useCursorList } from '../lib/queries';
+import { useTeamCopy } from '../copy';
 
 type AuditRow = { id: string; at: string; actorName: string; entity: string; target: string | null; action: string };
 
 /** Ekip yönetimi değişiklik geçmişi (kim, kimi, ne zaman) — audit zaten yazılıyordu, görüntüleyicisi yoktu. */
 export function AuditPanel() {
+  const tu = useTeamCopy().ui;
   const list = useCursorList<AuditRow>(['team', 'audit'], (cursor) => `${API}/audit${qs({ cursor })}`);
   const items = (list.data?.pages ?? []).flatMap((p) => p.items);
   return (
-    <QueryState query={{ ...list, data: list.data ? { items } : undefined }} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: 'Henüz değişiklik yok' }}>
+    <QueryState query={{ ...list, data: list.data ? { items } : undefined }} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: tu.henuzDegisiklikYok }}>
       {() => (
         <div className="space-y-3">
           <Timeline
             groupByDay
-            ariaLabel="Ekip değişiklik geçmişi"
+            ariaLabel={tu.ekipDegisiklikGecmisi}
             events={items.map((r) => ({
               id: r.id,
               at: r.at,
@@ -29,7 +31,7 @@ export function AuditPanel() {
           {list.hasNextPage && (
             <div className="flex justify-center">
               <Button variant="outline" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-                {list.isFetchingNextPage ? 'Yükleniyor…' : 'Daha fazla yükle'}
+                {list.isFetchingNextPage ? tu.yukleniyor : tu.dahaFazlaYukle}
               </Button>
             </div>
           )}

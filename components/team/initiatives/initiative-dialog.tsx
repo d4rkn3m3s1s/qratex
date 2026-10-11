@@ -18,6 +18,7 @@ import { useTeamCopy } from '../copy';
 
 /** Yeni girişim (yönetici). Kilometre taşları satır satır; ilerleme bunlardan hesaplanır. */
 export default function InitiativeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const qc = useQueryClient();
@@ -45,7 +46,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
             .slice(0, 30),
         },
       });
-      toast.success('Girişim eklendi', { description: f.title.trim() });
+      toast.success(tu.girisimEklendi, { description: f.title.trim() });
       void qc.invalidateQueries({ queryKey: ['team', 'initiatives'] });
       onOpenChange(false);
     } catch (err) {
@@ -69,11 +70,11 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
             void submit();
           }}
         >
-          <Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Başlık *" aria-label="Başlık" maxLength={200} autoFocus required />
-          <Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Açıklama" aria-label="Açıklama" rows={3} />
+          <Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={tu.baslik} aria-label={tu.baslik2} maxLength={200} autoFocus required />
+          <Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder={tu.aciklama} aria-label={tu.aciklama} rows={3} />
           <div className="grid gap-2 sm:grid-cols-2">
             <Select value={f.phase} onValueChange={(v) => setF({ ...f, phase: v })}>
-              <SelectTrigger className="h-10" aria-label="Aşama">
+              <SelectTrigger className="h-10" aria-label={tu.asama}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -85,7 +86,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
               </SelectContent>
             </Select>
             <Select value={f.ownerId || '__none'} onValueChange={(v) => setF({ ...f, ownerId: v === '__none' ? '' : v })}>
-              <SelectTrigger className="h-10" aria-label="Sorumlu">
+              <SelectTrigger className="h-10" aria-label={tu.sorumlu}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -99,9 +100,9 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
                   ))}
               </SelectContent>
             </Select>
-            <Input type="date" value={f.targetDate} onChange={(e) => setF({ ...f, targetDate: e.target.value })} aria-label="Hedef tarih" className="h-10" />
+            <Input type="date" value={f.targetDate} onChange={(e) => setF({ ...f, targetDate: e.target.value })} aria-label={tu.hedefTarih} className="h-10" />
             <Select value={f.department || '__none'} onValueChange={(v) => setF({ ...f, department: v === '__none' ? '' : v })}>
-              <SelectTrigger className="h-10" aria-label="Tema departmanı">
+              <SelectTrigger className="h-10" aria-label={tu.temaDepartmani}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -119,17 +120,17 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
           <Textarea
             value={f.milestones}
             onChange={(e) => setF({ ...f, milestones: e.target.value })}
-            placeholder={'Kilometre taşları — her satıra bir tane'}
-            aria-label="Kilometre taşları (her satıra bir tane)"
+            placeholder={tu.kilometreTaslariHerSatira}
+            aria-label={tu.kilometreTaslariHerSatira2}
             rows={4}
           />
           {error && <InlineError variant="banner">{error}</InlineError>}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-              Vazgeç
+              {tu.vazgec}
             </Button>
             <Button type="submit" disabled={saving || f.title.trim().length < 2}>
-              {saving ? 'Ekleniyor…' : 'Girişimi ekle'}
+              {saving ? 'Ekleniyor…' : tu.girisimiEkle}
             </Button>
           </DialogFooter>
         </form>

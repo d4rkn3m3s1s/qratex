@@ -20,6 +20,7 @@ import { useTeamCopy } from '../copy';
  * (denetim SAHTE #16). Silme hatası görünür.
  */
 export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
   const list = useTags();
@@ -54,12 +55,12 @@ export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOp
           }}
         >
           <div className="flex gap-2">
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Etiket adı" aria-label="Etiket adı" maxLength={40} />
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={tu.etiketAdi} aria-label={tu.etiketAdi} maxLength={40} />
             <Button type="submit" className="shrink-0 gap-1.5" disabled={busy || !label.trim()}>
               <Plus className="h-4 w-4" aria-hidden /> Ekle
             </Button>
           </div>
-          <div role="group" aria-label="Etiket rengi" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label={tu.etiketRengi} className="flex flex-wrap gap-1.5">
             {DEPARTMENT_COLORS.map((c) => (
               <button
                 key={c}
@@ -73,7 +74,7 @@ export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOp
             ))}
           </div>
         </form>
-        <QueryState query={list} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ compact: true, title: 'Havuz boş', description: 'Sık kullandığın etiketleri ekle.' }}>
+        <QueryState query={list} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ compact: true, title: tu.havuzBos, description: tu.sikKullandiginEtiketleriEkle }}>
           {(d) => (
             <ul className="divide-y divide-[hsl(var(--border-subtle))] rounded-card border border-subtle">
               {d.items.map((t) => (

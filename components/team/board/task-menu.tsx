@@ -22,12 +22,14 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { NoteDialog } from '../note-dialog';
 import { STATUS_ICON } from '../shared';
 import type { TaskDto } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 /**
  * Kart menüsü — her ekranda ve klavyeyle erişilir ("Taşı" artık yalnız mobilde değil; denetim
  * Y7/Bulgu 14: kopyala/arşivle/sil yalnız hover ile görünüyordu, masaüstünde klavye taşıması yoktu).
  */
 export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequired?: (id: string) => void }) {
+  const tu = useTeamCopy().ui;
   const { teamViewer, can, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired, weekKey });
   const [reopenOpen, setReopenOpen] = useState(false);
@@ -45,12 +47,12 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
         <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuLabel className="truncate">{task.title}</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => openTask(task.id)}>
-            <ExternalLink className="mr-2 h-4 w-4" aria-hidden /> Aç
+            <ExternalLink className="mr-2 h-4 w-4" aria-hidden /> {tu.ac}
           </DropdownMenuItem>
           {!archived && targets.length > 0 && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden /> Taşı
+                <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden /> {tu.tasi}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 {targets.map((s) => {
@@ -72,7 +74,7 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
           )}
           {!archived && task.status === 'done' && can.approve && (
             <DropdownMenuItem onSelect={() => setReopenOpen(true)}>
-              <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> Yeniden aç…
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> {tu.yenidenAc}
             </DropdownMenuItem>
           )}
           {can.editAnyTask && (
@@ -85,11 +87,11 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
               )}
               <DropdownMenuItem onSelect={() => void actions.archive(task, !archived)}>
                 {archived ? <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> : <Archive className="mr-2 h-4 w-4" aria-hidden />}
-                {archived ? 'Arşivden çıkar' : 'Arşivle'}
+                {archived ? tu.arsivdenCikar : tu.arsivle}
               </DropdownMenuItem>
               {archived && can.hardDelete && (
                 <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => setDeleteOpen(true)}>
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden /> Kalıcı olarak sil…
+                  <Trash2 className="mr-2 h-4 w-4" aria-hidden /> {tu.kaliciOlarakSil2}
                 </DropdownMenuItem>
               )}
             </>
@@ -100,34 +102,34 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
       <NoteDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        title="Revizyon iste"
+        title={tu.revizyonIste}
         description={`"${task.title}" görevi düzeltme için üyeye geri döner.`}
-        label="Ne düzeltilmeli?"
-        quickNotes={['Kanıt yetersiz', 'Eksik alt görev var', 'Açıklamadaki kapsam karşılanmadı']}
-        confirmLabel="Revizyona gönder"
+        label={tu.neDuzeltilmeli}
+        quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
+        confirmLabel={tu.revizyonaGonder}
         onConfirm={(note) => actions.move(task, 'in_progress', note)}
       />
       <NoteDialog
         open={reopenOpen}
         onOpenChange={setReopenOpen}
-        title="Görevi yeniden aç"
-        description="Onaylanmış görev Devam ediyor durumuna döner ve onay damgası kaldırılır."
-        label="Gerekçe"
+        title={tu.goreviYenidenAc}
+        description={tu.onaylanmisGorevDevamEdiyor}
+        label={tu.gerekce}
         required
-        confirmLabel="Yeniden aç"
+        confirmLabel={tu.yenidenAc2}
         onConfirm={(note) => actions.move(task, 'in_progress', note)}
       />
       <ConfirmAction
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Görev kalıcı olarak silinsin mi?"
-        description="Yorumlar, alt görevler, dosyalar ve geçmiş de silinir."
+        title={tu.gorevKaliciOlarakSilinsin}
+        description={tu.yorumlarAltGorevlerDosyalar}
         impact={[
-          { label: 'Yorum', value: task._count.comments },
-          { label: 'Dosya', value: task._count.attachments, emphasis: task._count.attachments > 0 },
-          { label: 'Alt görev', value: task._count.checklist },
+          { label: tu.yorum, value: task._count.comments },
+          { label: tu.dosya, value: task._count.attachments, emphasis: task._count.attachments > 0 },
+          { label: tu.altGorev, value: task._count.checklist },
         ]}
-        confirmLabel="Kalıcı olarak sil"
+        confirmLabel={tu.kaliciOlarakSil}
         onConfirm={() => actions.hardDelete(task)}
       />
     </>

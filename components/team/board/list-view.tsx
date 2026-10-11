@@ -37,6 +37,7 @@ export function ListView({
   onToggleAll: (ids: string[], on: boolean) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { departments, tags, openTask } = useWorkspace();
 
@@ -45,7 +46,7 @@ export function ListView({
     const map = new Map<string, Group>();
     for (const t of tasks) {
       let key = 'none';
-      let label = 'Diğer';
+      let label = tu.diger;
       let order = 99;
       if (groupBy === 'status') {
         key = t.status;
@@ -62,7 +63,7 @@ export function ListView({
       } else if (groupBy === 'department') {
         key = t.department ?? 'none';
         const d = departments.find((x) => x.slug === t.department);
-        label = d?.name ?? (t.department ? 'Kaldırılmış departman' : 'Departmansız (genel)');
+        label = d?.name ?? (t.department ? tu.kaldirilmisDepartman : tu.departmansizGenel);
         order = d ? d.order : 999;
       }
       if (!map.has(key)) map.set(key, { key, label, items: [], order });
@@ -83,7 +84,7 @@ export function ListView({
             <SelectionCheckbox
               checked={allSelected ? true : someSelected ? 'indeterminate' : false}
               onCheckedChange={(on) => onToggleAll(allIds, on)}
-              aria-label="Tümünü seç"
+              aria-label={tu.tumunuSec}
             />
           )}
         </span>
@@ -95,7 +96,7 @@ export function ListView({
         <span className="sr-only">{tx.colActions}</span>
       </div>
       {groups.map((g) => (
-        <section key={g.key} aria-label={g.label || 'Görevler'}>
+        <section key={g.key} aria-label={g.label || tu.gorevler}>
           {groupBy !== 'none' && (
             <h3 className="qx-small flex items-center justify-between gap-2 border-b border-subtle bg-surface-2 px-3 py-1.5 font-semibold text-fg">
               <span className="truncate">{g.label}</span>
@@ -136,8 +137,8 @@ export function ListView({
                         {t.title}
                       </button>
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                        {t.revisionRequested && <StatusBadge label="Revizyon istendi" tone="warning" icon={Undo2} size="sm" />}
-                        {t.carriedOver && <StatusBadge label="Devreden" tone="neutral" icon={RefreshCcw} size="sm" />}
+                        {t.revisionRequested && <StatusBadge label={tu.revizyonIstendi} tone="warning" icon={Undo2} size="sm" />}
+                        {t.carriedOver && <StatusBadge label={tu.devreden} tone="neutral" icon={RefreshCcw} size="sm" />}
                         <DeptChip slug={t.department} departments={departments} />
                         <TagChips csv={t.tags} pool={tags} onPick={onPickTag} max={3} />
                       </div>

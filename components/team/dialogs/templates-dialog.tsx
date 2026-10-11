@@ -42,6 +42,7 @@ type Template = {
  * denetim kaydı ve atama bildirimi alır.
  */
 export default function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, members, departments } = useWorkspace();
   const qc = useQueryClient();
@@ -61,7 +62,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
     setBusyKey(key);
     try {
       await teamFetch(`${API}/templates`, { method: 'PUT', json: { ...body, weekKey, assignedToId: assignee || null, dueDate: due || null } });
-      toast.success('Şablondan görev oluşturuldu');
+      toast.success(tu.sablondanGorevOlusturuldu);
       invalidateTasks(qc);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -85,7 +86,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
           checklist: draft.checklist.trim() || null,
         },
       });
-      toast.success('Şablon kaydedildi');
+      toast.success(tu.sablonKaydedildi);
       setDraft({ name: '', title: '', description: '', priority: 'medium', department: '', tags: '', estimateMin: '', checklist: '' });
       void list.refetch();
       setTab('mine');
@@ -97,7 +98,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
   const assignBar = (
     <div className="grid gap-2 rounded-card border border-subtle bg-surface-2 p-2 sm:grid-cols-2">
       <Select value={assignee || '__none'} onValueChange={(v) => setAssignee(v === '__none' ? '' : v)}>
-        <SelectTrigger className="h-10" aria-label="Üretilecek görevin atanacağı kişi">
+        <SelectTrigger className="h-10" aria-label={tu.uretilecekGorevinAtanacagiKisi}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -111,7 +112,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
             ))}
         </SelectContent>
       </Select>
-      <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Bitiş günü (isteğe bağlı)" className="h-10" />
+      <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label={tu.bitisGunuIstegeBagli} className="h-10" />
     </div>
   );
 
@@ -126,11 +127,11 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
           value={tab}
           onValueChange={setTab}
           variant="pill"
-          ariaLabel="Şablon bölümleri"
+          ariaLabel={tu.sablonBolumleri}
           tabs={[
-            { value: 'gallery', label: 'Hazır galeri', count: TEAM_TASK_PRESETS.length },
-            { value: 'mine', label: 'Şablonlarım', count: list.data?.items.length },
-            { value: 'new', label: 'Yeni şablon' },
+            { value: 'gallery', label: tu.hazirGaleri, count: TEAM_TASK_PRESETS.length },
+            { value: 'mine', label: tu.sablonlarim, count: list.data?.items.length },
+            { value: 'new', label: tu.yeniSablon },
           ]}
         >
           {(active) =>
@@ -154,7 +155,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                         </span>
                       </div>
                       <Button size="sm" className="mt-auto h-9" disabled={!!busyKey} onClick={() => void apply({ presetKey: p.key }, p.key)}>
-                        {busyKey === p.key ? 'Oluşturuluyor…' : 'Görev oluştur'}
+                        {busyKey === p.key ? tu.olusturuluyor : tu.gorevOlustur}
                       </Button>
                     </li>
                   ))}
@@ -167,7 +168,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                   query={list}
                   skeleton="list"
                   isEmpty={(d) => d.items.length === 0}
-                  empty={{ title: 'Kayıtlı şablon yok', description: 'Sık yinelenen görevler için "Yeni şablon" sekmesinden ekle.' }}
+                  empty={{ title: tu.kayitliSablonYok, description: tu.sikYinelenenGorevlerIcin }}
                 >
                   {(d) => (
                     <ul className="space-y-2">
@@ -181,7 +182,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                             </p>
                           </div>
                           <Button size="sm" className="h-9" disabled={!!busyKey} onClick={() => void apply({ templateId: t.id }, t.id)}>
-                            {busyKey === t.id ? 'Oluşturuluyor…' : 'Uygula'}
+                            {busyKey === t.id ? tu.olusturuluyor : 'Uygula'}
                           </Button>
                           <IconButton aria-label={`${t.name} şablonunu sil`} icon={<Trash2 />} size="sm" onClick={() => setDeleting(t)} />
                         </li>
@@ -199,13 +200,13 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                 }}
               >
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Şablon adı *" aria-label="Şablon adı" maxLength={120} required />
-                  <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Görev başlığı *" aria-label="Görev başlığı" maxLength={200} required />
+                  <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={tu.sablonAdi} aria-label={tu.sablonAdi2} maxLength={120} required />
+                  <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder={tu.gorevBasligi} aria-label={tu.gorevBasligi2} maxLength={200} required />
                 </div>
-                <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Açıklama" aria-label="Açıklama" rows={3} />
+                <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder={tu.aciklama} aria-label={tu.aciklama} rows={3} />
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Select value={draft.priority} onValueChange={(v) => setDraft({ ...draft, priority: v as TaskPriority })}>
-                    <SelectTrigger className="h-10" aria-label="Öncelik">
+                    <SelectTrigger className="h-10" aria-label={tu.oncelik}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -217,7 +218,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                     </SelectContent>
                   </Select>
                   <Select value={draft.department || '__none'} onValueChange={(v) => setDraft({ ...draft, department: v === '__none' ? '' : v })}>
-                    <SelectTrigger className="h-10" aria-label="Departman">
+                    <SelectTrigger className="h-10" aria-label={tu.departman}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -235,21 +236,21 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                     inputMode="numeric"
                     value={draft.estimateMin}
                     onChange={(e) => setDraft({ ...draft, estimateMin: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) })}
-                    placeholder="Tahmini dk"
-                    aria-label="Tahmini süre (dakika)"
+                    placeholder={tu.tahminiDk}
+                    aria-label={tu.tahminiSureDakika}
                     className="h-10"
                   />
                 </div>
-                <Input value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} placeholder="Etiketler (virgülle)" aria-label="Etiketler" />
+                <Input value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} placeholder={tu.etiketlerVirgulle} aria-label={tu.etiketler} />
                 <Textarea
                   value={draft.checklist}
                   onChange={(e) => setDraft({ ...draft, checklist: e.target.value })}
-                  placeholder={'Alt görevler — her satıra bir tane'}
-                  aria-label="Alt görevler (her satıra bir tane)"
+                  placeholder={tu.altGorevlerHerSatira}
+                  aria-label={tu.altGorevlerHerSatira2}
                   rows={4}
                 />
                 <Button type="submit" className="gap-1.5" disabled={!draft.name.trim() || !draft.title.trim()}>
-                  <Plus className="h-4 w-4" aria-hidden /> Şablonu kaydet
+                  <Plus className="h-4 w-4" aria-hidden /> {tu.sablonuKaydet}
                 </Button>
               </form>
             )
@@ -258,14 +259,14 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
         <ConfirmAction
           open={!!deleting}
           onOpenChange={(o) => !o && setDeleting(null)}
-          title="Şablon silinsin mi?"
-          description="Bu şablondan üretilmiş görevler etkilenmez."
+          title={tu.sablonSilinsinMi}
+          description={tu.buSablondanUretilmisGorevler}
           tone="warning"
-          confirmLabel="Sil"
+          confirmLabel={tu.sil}
           onConfirm={async () => {
             if (!deleting) return;
             await teamFetch(`${API}/templates?id=${encodeURIComponent(deleting.id)}`, { method: 'DELETE' });
-            toast.success('Şablon silindi');
+            toast.success(tu.sablonSilindi);
             setDeleting(null);
             void list.refetch();
           }}

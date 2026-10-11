@@ -34,6 +34,7 @@ export function TeamDepartments(props: { basePath: '/admin/ekip' | '/customer/ek
 }
 
 function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: ClientViewer; initialMeta: TeamMeta | undefined }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const meta = useTeamMeta(initialMeta);
   const qc = useQueryClient();
@@ -60,7 +61,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
     setCreateError(null);
     try {
       await teamFetch(`${API}/departments`, { method: 'POST', json: { name: name.trim(), color, description: desc.trim() || null } });
-      toast.success('Departman oluşturuldu', { description: name.trim() });
+      toast.success(tu.departmanOlusturuldu, { description: name.trim() });
       setName('');
       setDesc('');
       void refresh();
@@ -74,7 +75,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
   const seed = async () => {
     try {
       const r = await teamFetch<{ seeded: number }>(`${API}/departments?seed=1`, { method: 'POST' });
-      toast.success(r.seeded ? `${r.seeded} departman eklendi` : 'Varsayılan departmanlar zaten var');
+      toast.success(r.seeded ? `${r.seeded} departman eklendi` : tu.varsayilanDepartmanlarZatenVar);
       void refresh();
     } catch (err) {
       toast.error(errorMessage(err));
@@ -87,10 +88,10 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
       width="wide"
       header={
         <PageHeader
-          title={manage ? 'Departmanlar ve üyeler' : 'Ekip rehberi'}
-          description={manage ? 'Ekibin yapısı, roller ve erişim. Her değişiklik geçmişe yazılır.' : 'Kim hangi departmanda; kime danışabilirsin.'}
+          title={manage ? tu.departmanlarVeUyeler : 'Ekip rehberi'}
+          description={manage ? tu.ekibinYapisiRollerVe : tu.kimHangiDepartmandaKime}
           icon={<Building2 />}
-          back={{ href: basePath, label: 'Ekip' }}
+          back={{ href: basePath, label: tu.ekip }}
         />
       }
     >
@@ -98,8 +99,8 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
         {() => (
           <div className="space-y-4">
             <MetricGrid cols={4}>
-              <MetricTile label="Ekip üyesi" metric={{ value: members.length }} icon={<Users2 />} size="compact" />
-              <MetricTile label="Yönetici" metric={{ value: managers.length }} icon={<Crown />} size="compact" hint="Platform yöneticileri her zaman yönetici sayılır" />
+              <MetricTile label={tu.ekipUyesi} metric={{ value: members.length }} icon={<Users2 />} size="compact" />
+              <MetricTile label={tu.yonetici} metric={{ value: managers.length }} icon={<Crown />} size="compact" hint={tu.platformYoneticileriHerZaman} />
               <button
                 type="button"
                 className="rounded-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -108,10 +109,10 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                   setTab('members');
                 }}
               >
-                <MetricTile label="Departmansız" metric={{ value: noDept.length }} icon={<UserX />} tone={noDept.length ? 'warning' : 'neutral'} size="compact" hint="Listeyi aç" />
+                <MetricTile label={tu.departmansiz} metric={{ value: noDept.length }} icon={<UserX />} tone={noDept.length ? 'warning' : 'neutral'} size="compact" hint={tu.listeyiAc} />
               </button>
               <MetricTile
-                label="Aktif departman"
+                label={tu.aktifDepartman}
                 metric={{ value: active.length }}
                 icon={<Building2 />}
                 size="compact"
@@ -123,12 +124,12 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
             <SectionTabs
               value={tab}
               onValueChange={setTab}
-              ariaLabel="Ekip yapısı bölümleri"
+              ariaLabel={tu.ekipYapisiBolumleri}
               touchTarget
               tabs={[
-                { value: 'departments', label: 'Departmanlar', count: departments.length },
-                { value: 'members', label: 'Üyeler', count: members.length },
-                ...(manage ? [{ value: 'audit', label: 'Değişiklik geçmişi' }] : []),
+                { value: 'departments', label: tu.departmanlar, count: departments.length },
+                { value: 'members', label: tu.uyeler, count: members.length },
+                ...(manage ? [{ value: 'audit', label: tu.degisiklikGecmisi }] : []),
               ]}
             >
               {(t) =>
@@ -146,21 +147,21 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                         <div className="flex flex-col gap-2 sm:flex-row">
                           <div className="flex-1 space-y-1">
                             <label htmlFor="dept-name" className="sr-only">
-                              Departman adı
+                              {tu.departmanAdi}
                             </label>
-                            <Input id="dept-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad (ör. İnsan Kaynakları)" maxLength={60} />
+                            <Input id="dept-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tu.adOrInsanKaynaklari} maxLength={60} />
                           </div>
                           <div className="flex-1">
                             <label htmlFor="dept-desc" className="sr-only">
-                              Açıklama
+                              {tu.aciklama}
                             </label>
-                            <Input id="dept-desc" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Kısa açıklama (isteğe bağlı)" maxLength={300} />
+                            <Input id="dept-desc" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={tu.kisaAciklamaIstegeBagli} maxLength={300} />
                           </div>
                           <Button type="submit" className="gap-1.5" disabled={creating || name.trim().length < 2}>
-                            <Plus className="h-4 w-4" aria-hidden /> Oluştur
+                            <Plus className="h-4 w-4" aria-hidden /> {tu.olustur}
                           </Button>
                         </div>
-                        <div role="group" aria-label="Departman rengi" className="flex flex-wrap gap-1.5">
+                        <div role="group" aria-label={tu.departmanRengi} className="flex flex-wrap gap-1.5">
                           {DEPARTMENT_COLORS.map((c) => (
                             <button
                               key={c}
@@ -179,8 +180,8 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                     {departments.length === 0 ? (
                       <EmptyState
                         variant="first-use"
-                        title="Henüz departman yok"
-                        description={manage ? 'Kendi departmanını oluştur ya da şirketin 8 varsayılan departmanını yükle.' : 'Yöneticiler departman oluşturduğunda burada görünür.'}
+                        title={tu.henuzDepartmanYok}
+                        description={manage ? tu.kendiDepartmaniniOlusturYa : tu.yoneticilerDepartmanOlusturdugundaBurada}
                         action={manage ? <Button onClick={seed}>{tx.seedDepts}</Button> : undefined}
                       />
                     ) : (

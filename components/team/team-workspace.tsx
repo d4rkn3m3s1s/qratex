@@ -96,6 +96,7 @@ export function TeamWorkspace(props: TeamWorkspaceProps) {
 }
 
 function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamWorkspaceProps) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const url = useUrlState();
   const qc = useQueryClient();
@@ -126,20 +127,20 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
   // ── Filtreler (URL) ──
   const fields: FilterField[] = useMemo(
     () => [
-      { type: 'search', key: 'q', label: 'Ara', placeholder: 'Görev, açıklama ya da etiket' },
-      { type: 'select', key: 'status', label: 'Durum', allLabel: 'Tüm durumlar', options: TASK_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].label })) },
-      { type: 'select', key: 'priority', label: 'Öncelik', allLabel: 'Tüm öncelikler', options: TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label })) },
-      { type: 'select', key: 'mine', label: 'Kapsam', allLabel: 'Tüm görevler', options: [{ value: '1', label: 'Yalnız bana atananlar' }] },
+      { type: 'search', key: 'q', label: tu.ara, placeholder: tu.gorevAciklamaYaDa },
+      { type: 'select', key: 'status', label: tu.durum, allLabel: tu.tumDurumlar, options: TASK_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].label })) },
+      { type: 'select', key: 'priority', label: tu.oncelik, allLabel: tu.tumOncelikler, options: TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label })) },
+      { type: 'select', key: 'mine', label: tu.kapsam, allLabel: tu.tumGorevler, options: [{ value: '1', label: tu.yalnizBanaAtananlar }] },
       {
         type: 'select',
         key: 'assignedTo',
-        label: 'Atanan',
-        allLabel: 'Herkes',
-        options: [{ value: 'unassigned', label: 'Atanmamış' }, ...members.filter((m) => m.inTeam || m.isAdmin).map((m) => ({ value: m.id, label: displayName(m) }))],
+        label: tu.atanan,
+        allLabel: tu.herkes,
+        options: [{ value: 'unassigned', label: tu.atanmamis }, ...members.filter((m) => m.inTeam || m.isAdmin).map((m) => ({ value: m.id, label: displayName(m) }))],
       },
-      { type: 'select', key: 'tag', label: 'Etiket', allLabel: 'Tüm etiketler', options: tags.map((t) => ({ value: t.label, label: `#${t.label}` })) },
+      { type: 'select', key: 'tag', label: tu.etiket, allLabel: tu.tumEtiketler, options: tags.map((t) => ({ value: t.label, label: `#${t.label}` })) },
       ...(viewer.isManager
-        ? ([{ type: 'select', key: 'department', label: 'Departman', allLabel: 'Tüm departmanlar', options: departments.map((d) => ({ value: d.slug, label: d.name })) }] as FilterField[])
+        ? ([{ type: 'select', key: 'department', label: tu.departman, allLabel: tu.tumDepartmanlar, options: departments.map((d) => ({ value: d.slug, label: d.name })) }] as FilterField[])
         : []),
     ],
     [members, tags, departments, viewer.isManager]
@@ -202,35 +203,35 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
     const patch: Record<string, string | null> = {};
     for (const k of VIEW_KEYS) patch[k] = config[k] ?? null;
     url.set(patch);
-    toast.success('Görünüm uygulandı');
+    toast.success(tu.gorunumUygulandi);
   };
   const currentConfig: Record<string, string> = Object.fromEntries(VIEW_KEYS.map((k) => [k, url.get(k) ?? '']));
 
-  const roleLabel = viewer.isAdmin ? 'Platform yöneticisi' : viewer.teamRole === 'yonetici' ? 'Ekip yöneticisi' : 'Ekip üyesi';
+  const roleLabel = viewer.isAdmin ? tu.platformYoneticisi : viewer.teamRole === 'yonetici' ? tu.ekipYoneticisi : tu.ekipUyesi;
   const deptNames = viewer.departments.map((s) => departments.find((d) => d.slug === s)?.name).filter(Boolean).join(', ');
   const reviewCount = summary.data?.reviewQueue ?? 0;
 
   const tabs = [
-    { value: 'mine', label: 'Benim işlerim', icon: <ListChecks className="h-4 w-4" />, count: summary.data?.mine.open },
-    { value: 'board', label: 'Pano', icon: <KanbanSquare className="h-4 w-4" /> },
-    { value: 'list', label: 'Liste', icon: <LayoutList className="h-4 w-4" /> },
-    { value: 'calendar', label: 'Takvim', icon: <CalendarDays className="h-4 w-4" /> },
-    ...(can.approve ? [{ value: 'review', label: 'Onay kuyruğu', icon: <CheckSquare className="h-4 w-4" />, count: reviewCount || undefined }] : []),
-    { value: 'initiatives', label: 'Girişimler', icon: <Flag className="h-4 w-4" /> },
-    { value: 'files', label: 'Dosyalar', icon: <FolderOpen className="h-4 w-4" /> },
+    { value: 'mine', label: tu.benimIslerim, icon: <ListChecks className="h-4 w-4" />, count: summary.data?.mine.open },
+    { value: 'board', label: tu.pano, icon: <KanbanSquare className="h-4 w-4" /> },
+    { value: 'list', label: tu.liste, icon: <LayoutList className="h-4 w-4" /> },
+    { value: 'calendar', label: tu.takvim, icon: <CalendarDays className="h-4 w-4" /> },
+    ...(can.approve ? [{ value: 'review', label: tu.onayKuyrugu, icon: <CheckSquare className="h-4 w-4" />, count: reviewCount || undefined }] : []),
+    { value: 'initiatives', label: tu.girisimler, icon: <Flag className="h-4 w-4" /> },
+    { value: 'files', label: tu.dosyalar, icon: <FolderOpen className="h-4 w-4" /> },
     ...(can.reports
       ? [
-          { value: 'reports', label: 'Rapor', icon: <ClipboardList className="h-4 w-4" /> },
-          { value: 'archive', label: 'Arşiv', icon: <Archive className="h-4 w-4" /> },
+          { value: 'reports', label: tu.rapor, icon: <ClipboardList className="h-4 w-4" /> },
+          { value: 'archive', label: tu.arsiv, icon: <Archive className="h-4 w-4" /> },
         ]
       : []),
   ];
 
   const toolbar = TASK_TABS.includes(tab) ? (
-    <FilterBar fields={fields} resetKeys={[]} ariaLabel="Görev filtreleri">
+    <FilterBar fields={fields} resetKeys={[]} ariaLabel={tu.gorevFiltreleri}>
       {tab !== 'calendar' && (
         <Select value={sort} onValueChange={(v) => url.set({ sort: v === 'default' ? null : v })}>
-          <SelectTrigger className="h-11 w-[11rem] sm:h-10" aria-label="Sıralama">
+          <SelectTrigger className="h-11 w-[11rem] sm:h-10" aria-label={tu.siralama}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -246,7 +247,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
       )}
       {(tab === 'list' || tab === 'archive') && (
         <Select value={group} onValueChange={(v) => url.set({ group: v === 'none' ? null : v })}>
-          <SelectTrigger className="h-11 w-[10rem] sm:h-10" aria-label="Gruplama">
+          <SelectTrigger className="h-11 w-[10rem] sm:h-10" aria-label={tu.gruplama}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -261,7 +262,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
       <SavedViews current={currentConfig} onApply={applyView} />
       {can.bulk && (tab === 'board' || tab === 'list' || tab === 'archive') && (
         <Button variant={selectMode ? 'secondary' : 'outline'} className="h-11 gap-1.5 sm:h-10" aria-pressed={selectMode} onClick={() => setSelectMode((v) => !v)}>
-          <CheckSquare className="h-4 w-4" aria-hidden /> Seç
+          <CheckSquare className="h-4 w-4" aria-hidden /> {tu.sec}
         </Button>
       )}
     </FilterBar>
@@ -270,7 +271,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
   const moreMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-11 gap-1.5 sm:h-10" aria-label="Diğer araçlar">
+        <Button variant="outline" className="h-11 gap-1.5 sm:h-10" aria-label={tu.digerAraclar}>
           <MoreHorizontal className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">{tx.tools}</span>
         </Button>
       </DropdownMenuTrigger>
@@ -281,7 +282,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         </DropdownMenuItem>
         {can.aiSummary && (
           <DropdownMenuItem onSelect={() => setDialog('summary')}>
-            <Sparkles className="mr-2 h-4 w-4" aria-hidden /> Haftalık özet
+            <Sparkles className="mr-2 h-4 w-4" aria-hidden /> {tu.haftalikOzet}
           </DropdownMenuItem>
         )}
         {(can.templates || can.automations || can.tags || can.autotask) && (
@@ -290,7 +291,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             <DropdownMenuLabel>{tx.management}</DropdownMenuLabel>
             {can.templates && (
               <DropdownMenuItem onSelect={() => setDialog('templates')}>
-                <FileStack className="mr-2 h-4 w-4" aria-hidden /> Şablonlar
+                <FileStack className="mr-2 h-4 w-4" aria-hidden /> {tu.sablonlar}
               </DropdownMenuItem>
             )}
             {can.automations && (
@@ -305,7 +306,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             )}
             {can.autotask && (
               <DropdownMenuItem onSelect={() => setDialog('autotask')}>
-                <Factory className="mr-2 h-4 w-4" aria-hidden /> İşletme verisinden görev üret
+                <Factory className="mr-2 h-4 w-4" aria-hidden /> {tu.isletmeVerisindenGorevUret}
               </DropdownMenuItem>
             )}
           </>
@@ -319,13 +320,13 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
               toast.success(`${items.length} görev dışa aktarıldı`);
             }}
           >
-            <Download className="mr-2 h-4 w-4" aria-hidden /> Görünen görevleri CSV indir
+            <Download className="mr-2 h-4 w-4" aria-hidden /> {tu.gorunenGorevleriCsvIndir}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem asChild>
           <Link href={`${basePath}/departmanlar`}>
             {can.manageDepartments ? <Building2 className="mr-2 h-4 w-4" aria-hidden /> : <Users2 className="mr-2 h-4 w-4" aria-hidden />}
-            {can.manageDepartments ? 'Departmanlar ve üyeler' : 'Ekip rehberi'}
+            {can.manageDepartments ? tu.departmanlarVeUyeler : 'Ekip rehberi'}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -339,15 +340,15 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         width="wide"
         header={
           <PageHeader
-            title="Ekip"
+            title={tu.ekip}
             eyebrow={`${roleLabel}${deptNames ? ` · ${deptNames}` : ''}`}
-            description={viewer.isManager ? 'Haftalık iş akışı, onay kuyruğu, girişimler ve ekip raporları.' : 'Sana atanan işler, ekibinin haftası ve girişimler.'}
+            description={viewer.isManager ? tu.haftalikIsAkisiOnay : tu.sanaAtananIslerEkibinin}
             icon={<Users2 />}
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {can.createTask && (
                   <Button className="h-11 gap-1.5 sm:h-10" onClick={() => setDialog('new')} aria-keyshortcuts="n">
-                    <Plus className="h-4 w-4" aria-hidden /> Yeni görev
+                    <Plus className="h-4 w-4" aria-hidden /> {tu.yeniGorev}
                   </Button>
                 )}
                 {moreMenu}
@@ -358,7 +359,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         }
       >
         {meta.isError && !meta.data && (
-          <QueryState query={meta} error={{ title: 'Ekip bilgileri yüklenemedi', description: errorMessage(meta.error) }}>
+          <QueryState query={meta} error={{ title: tu.ekipBilgileriYuklenemedi, description: errorMessage(meta.error) }}>
             {() => null}
           </QueryState>
         )}
@@ -368,7 +369,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
           paramKey="tab"
           defaultValue={defaultTab}
           resetKeys={['task']}
-          ariaLabel="Ekip görünümleri"
+          ariaLabel={tu.ekipGorunumleri}
           touchTarget
         >
           {() => (
@@ -395,15 +396,15 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
                   isEmpty={(d) => d.items.length === 0}
                   empty={{
                     variant: filters.activeCount > 0 ? 'filtered' : tab === 'archive' ? 'default' : 'first-use',
-                    title: filters.activeCount > 0 ? 'Filtreye uyan görev yok' : tab === 'archive' ? 'Arşiv boş' : 'Bu hafta görev yok',
+                    title: filters.activeCount > 0 ? tu.filtreyeUyanGorevYok : tab === 'archive' ? tu.arsivBos : tu.buHaftaGorevYok,
                     description:
                       filters.activeCount > 0
                         ? 'Filtreleri temizleyip tekrar dene.'
                         : tab === 'archive'
-                          ? 'Arşivlenen görevler burada geri alınabilir şekilde durur.'
+                          ? tu.arsivlenenGorevlerBuradaGeri
                           : can.createTask
-                            ? 'Yeni görev ekle, bir şablon uygula ya da işletme verisinden üret.'
-                            : 'Yöneticin görev atadığında burada göreceksin.',
+                            ? tu.yeniGorevEkleBir
+                            : tu.yoneticinGorevAtadigindaBurada,
                     action:
                       filters.activeCount > 0 ? (
                         <Button variant="outline" onClick={filters.clear}>
@@ -472,22 +473,22 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
           open={dialog === 'autotask'}
           onOpenChange={(o) => !o && setDialog(null)}
           tone="brand"
-          title="İşletme verisinden görev üret"
-          description="Açık yüksek/kritik olaylar ve bekleyen yüksek öncelikli aksiyon maddeleri görev olur. Daha önce üretilenler atlanır."
+          title={tu.isletmeVerisindenGorevUret}
+          description={tu.acikYuksekKritikOlaylar}
           loadImpact={async () => {
             const r = await teamFetch<{ candidates: { incidents: number; actionItems: number } }>(`${API}/autotask`);
             return {
               items: [
-                { label: 'Olaydan', value: r.candidates.incidents, emphasis: r.candidates.incidents > 0 },
-                { label: 'Aksiyon maddesinden', value: r.candidates.actionItems, emphasis: r.candidates.actionItems > 0 },
+                { label: tu.olaydan, value: r.candidates.incidents, emphasis: r.candidates.incidents > 0 },
+                { label: tu.aksiyonMaddesinden, value: r.candidates.actionItems, emphasis: r.candidates.actionItems > 0 },
               ],
-              warning: r.candidates.incidents + r.candidates.actionItems === 0 ? 'Üretilecek yeni görev yok.' : undefined,
+              warning: r.candidates.incidents + r.candidates.actionItems === 0 ? tu.uretilecekYeniGorevYok : undefined,
             };
           }}
-          confirmLabel="Görevleri üret"
+          confirmLabel={tu.gorevleriUret}
           onConfirm={async () => {
             const r = await teamFetch<{ total: number }>(`${API}/autotask`, { method: 'POST', json: { weekKey } });
-            toast.success(r.total > 0 ? `${r.total} görev üretildi` : 'Yeni kaynak bulunamadı');
+            toast.success(r.total > 0 ? `${r.total} görev üretildi` : tu.yeniKaynakBulunamadi);
             invalidateTasks(qc);
             setDialog(null);
           }}

@@ -13,6 +13,7 @@ import { NoteDialog } from './note-dialog';
 import { DueBadge, MemberAvatar, displayName } from './shared';
 import { TaskDetail } from './task-detail/task-detail';
 import type { TaskDto } from './lib/types';
+import { useTeamCopy } from './copy';
 
 /**
  * Onay kuyruğu (yönetici) — tüm haftalardan "Onayda" bekleyenler, en eski gönderim önce
@@ -20,6 +21,7 @@ import type { TaskDto } from './lib/types';
  * + sağda kanıtla birlikte detay; klavye: J/K gez, A onayla, R revizyon iste.
  */
 export function ReviewQueue() {
+  const tu = useTeamCopy().ui;
   const { openTask, weekKey } = useWorkspace();
   const q = useTasks({ view: 'review' });
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
@@ -50,7 +52,7 @@ export function ReviewQueue() {
       query={q}
       skeleton="list"
       isEmpty={(d) => d.items.length === 0}
-      empty={{ variant: 'default', title: 'Onay bekleyen görev yok', description: 'Üyeler bir görevi onaya gönderdiğinde burada sıraya girer.' }}
+      empty={{ variant: 'default', title: tu.onayBekleyenGorevYok, description: tu.uyelerBirGoreviOnaya }}
     >
       {() => (
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
@@ -59,7 +61,7 @@ export function ReviewQueue() {
               {items.length} görev onay bekliyor · <kbd className="rounded border border-subtle px-1">J</kbd>/<kbd className="rounded border border-subtle px-1">K</kbd> gez,{' '}
               <kbd className="rounded border border-subtle px-1">A</kbd> onayla, <kbd className="rounded border border-subtle px-1">R</kbd> revizyon
             </p>
-            <ul className="space-y-2" aria-label="Onay kuyruğu">
+            <ul className="space-y-2" aria-label={tu.onayKuyrugu}>
               {items.map((t) => {
                 const selected = active?.id === t.id;
                 return (
@@ -100,7 +102,7 @@ export function ReviewQueue() {
                           <Undo2 className="h-3.5 w-3.5" aria-hidden /> Revizyon
                         </Button>
                         <Button size="sm" variant="ghost" className="h-9 gap-1.5 lg:hidden" onClick={() => openTask(t.id)}>
-                          <Eye className="h-3.5 w-3.5" aria-hidden /> İncele
+                          <Eye className="h-3.5 w-3.5" aria-hidden /> {tu.incele}
                         </Button>
                       </div>
                     </div>
@@ -115,11 +117,11 @@ export function ReviewQueue() {
           <NoteDialog
             open={!!rejecting}
             onOpenChange={(o) => !o && setRejecting(null)}
-            title="Revizyon iste"
+            title={tu.revizyonIste}
             description={rejecting ? `"${rejecting.title}" görevi düzeltme için geri döner.` : undefined}
-            label="Ne düzeltilmeli?"
-            quickNotes={['Kanıt yetersiz', 'Eksik alt görev var', 'Açıklamadaki kapsam karşılanmadı']}
-            confirmLabel="Revizyona gönder"
+            label={tu.neDuzeltilmeli}
+            quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
+            confirmLabel={tu.revizyonaGonder}
             onConfirm={async (note) => {
               if (rejecting) await actions.move(rejecting, 'in_progress', note);
             }}

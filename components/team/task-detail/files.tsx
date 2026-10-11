@@ -15,6 +15,7 @@ import { relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import type { TaskDetailPayload } from '../lib/types';
+import { useTeamCopy } from '../copy';
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -35,6 +36,7 @@ export async function uploadTaskFile(taskId: string, file: File, onProgress: (p:
 
 /** Görev dosyaları — yükleme (tıkla/sürükle, ilerleme), önizleme, silme (onaylı). */
 export function TaskFiles({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const { task, can } = data;
   const qc = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
@@ -91,7 +93,7 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
             }}
           />
           <Button type="button" variant="outline" className="h-10 gap-1.5" disabled={pct !== null} onClick={() => input.current?.click()}>
-            <Upload className="h-4 w-4" aria-hidden /> Dosya seç
+            <Upload className="h-4 w-4" aria-hidden /> {tu.dosyaSec}
           </Button>
           <p className="qx-caption mt-1.5 text-fg-muted">
             ya da buraya sürükle · görsel, PDF, video, Office, metin, arşiv · en fazla {TEAM_ATTACHMENT_MAX_LABEL}
@@ -123,7 +125,7 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
                   <span className="min-w-0">
                     <span className="qx-small block truncate font-medium text-fg">{a.filename}</span>
                     <span className="qx-caption block truncate text-fg-muted">
-                      {formatBytes(a.size)} · {a.uploadedByName ?? 'Silinmiş kullanıcı'} · {relativeTeamTime(a.createdAt)}
+                      {formatBytes(a.size)} · {a.uploadedByName ?? tu.silinmisKullanici} · {relativeTeamTime(a.createdAt)}
                     </span>
                   </span>
                 </a>
@@ -138,9 +140,9 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
       <ConfirmAction
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title="Dosya silinsin mi?"
+        title={tu.dosyaSilinsinMi}
         description={deleting ? `"${deleting.filename}" görevden ve depodan kaldırılır.` : undefined}
-        confirmLabel="Sil"
+        confirmLabel={tu.sil}
         onConfirm={async () => {
           if (!deleting) return;
           await teamFetch(`${API}/tasks/${encodeURIComponent(task.id)}/attachments?attachmentId=${encodeURIComponent(deleting.id)}`, { method: 'DELETE' });

@@ -24,6 +24,7 @@ type Result = { affected: number; skipped: Array<{ id: string; title: string; re
  * arşiv görünümünde ve tipli onayla (denetim Bulgu 41: onaysız 200 göreve kadar siliyordu).
  */
 export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveView: boolean; onDone: () => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
   const qc = useQueryClient();
@@ -70,8 +71,8 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
       {!archiveView ? (
         <>
           <Select disabled={busy} onValueChange={(v) => run({ op: 'status', value: v })}>
-            <SelectTrigger className="h-9 w-[9.5rem]" aria-label="Durum ata">
-              <SelectValue placeholder="Durum" />
+            <SelectTrigger className="h-9 w-[9.5rem]" aria-label={tu.durumAta}>
+              <SelectValue placeholder={tu.durum} />
             </SelectTrigger>
             <SelectContent>
               {TASK_STATUSES.map((s) => (
@@ -82,8 +83,8 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             </SelectContent>
           </Select>
           <Select disabled={busy} onValueChange={(v) => run({ op: 'priority', value: v })}>
-            <SelectTrigger className="h-9 w-[8.5rem]" aria-label="Öncelik ata">
-              <SelectValue placeholder="Öncelik" />
+            <SelectTrigger className="h-9 w-[8.5rem]" aria-label={tu.oncelikAta}>
+              <SelectValue placeholder={tu.oncelik} />
             </SelectTrigger>
             <SelectContent>
               {TASK_PRIORITIES.map((p) => (
@@ -94,8 +95,8 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             </SelectContent>
           </Select>
           <Select disabled={busy} onValueChange={(v) => run({ op: 'assign', value: v === '__none' ? null : v })}>
-            <SelectTrigger className="h-9 w-[10rem]" aria-label="Kişiye ata">
-              <SelectValue placeholder="Ata" />
+            <SelectTrigger className="h-9 w-[10rem]" aria-label={tu.kisiyeAta}>
+              <SelectValue placeholder={tu.ata} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none">{tx.removeAssignee}</SelectItem>
@@ -107,8 +108,8 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             </SelectContent>
           </Select>
           <Select disabled={busy} onValueChange={(v) => run({ op: 'department', value: v === '__none' ? null : v })}>
-            <SelectTrigger className="h-9 w-[10rem]" aria-label="Departman ata">
-              <SelectValue placeholder="Departman" />
+            <SelectTrigger className="h-9 w-[10rem]" aria-label={tu.departmanAta}>
+              <SelectValue placeholder={tu.departman} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none">{tx.noDepartment}</SelectItem>
@@ -135,7 +136,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
                 }}
                 className="flex gap-2"
               >
-                <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="etiket" aria-label="Eklenecek etiket" maxLength={40} />
+                <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="etiket" aria-label={tu.eklenecekEtiket} maxLength={40} />
                 <Button type="submit" size="sm" disabled={!tag.trim() || busy}>
                   Ekle
                 </Button>
@@ -143,30 +144,30 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             </PopoverContent>
           </Popover>
           <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled={busy} onClick={() => run({ op: 'archive', value: true })}>
-            <Archive className="h-3.5 w-3.5" aria-hidden /> Arşivle
+            <Archive className="h-3.5 w-3.5" aria-hidden /> {tu.arsivle}
           </Button>
         </>
       ) : (
         <>
           <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled={busy} onClick={() => run({ op: 'archive', value: false })}>
-            <ArchiveRestore className="h-3.5 w-3.5" aria-hidden /> Arşivden çıkar
+            <ArchiveRestore className="h-3.5 w-3.5" aria-hidden /> {tu.arsivdenCikar}
           </Button>
           <Button size="sm" variant="destructive" className="h-9 gap-1.5" disabled={busy} onClick={() => setConfirmDelete(true)}>
-            <Trash2 className="h-3.5 w-3.5" aria-hidden /> Kalıcı sil
+            <Trash2 className="h-3.5 w-3.5" aria-hidden /> {tu.kaliciSil}
           </Button>
         </>
       )}
       <Button size="sm" variant="ghost" className="ml-auto h-9 gap-1.5" onClick={onDone}>
-        <X className="h-3.5 w-3.5" aria-hidden /> Seçimi bırak
+        <X className="h-3.5 w-3.5" aria-hidden /> {tu.secimiBirak}
       </Button>
       <ConfirmAction
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`${ids.length} görev kalıcı olarak silinsin mi?`}
-        description="Yorumlar, alt görevler, dosyalar ve geçmiş de silinir."
-        impact={[{ label: 'Silinecek görev', value: ids.length, emphasis: true }]}
+        description={tu.yorumlarAltGorevlerDosyalar}
+        impact={[{ label: tu.silinecekGorev, value: ids.length, emphasis: true }]}
         confirmPhrase="sil"
-        confirmLabel="Kalıcı olarak sil"
+        confirmLabel={tu.kaliciOlarakSil}
         onConfirm={() => run({ op: 'delete' })}
       />
     </div>

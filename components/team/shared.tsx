@@ -17,6 +17,7 @@ import { cn, getInitials } from '@/lib/utils';
 import { PHASE_META, PRIORITY_META, STATUS_META, isInitiativePhase, isTaskPriority, isTaskStatus, parseTags } from '@/lib/team/constants';
 import { dueInfo } from '@/lib/team/dates';
 import type { TeamDepartment, TeamTag } from './lib/types';
+import { useTeamCopy } from './copy';
 
 export const STATUS_ICON: Record<string, LucideIcon> = {
   todo: Circle,
@@ -33,22 +34,25 @@ export function TaskStatusBadge({ status, size = 'sm' }: { status: string; size?
 }
 
 export function PriorityBadge({ priority, size = 'sm', hideLow = false }: { priority: string; size?: 'sm' | 'md'; hideLow?: boolean }) {
+  const tu = useTeamCopy().ui;
   if (!isTaskPriority(priority)) return null;
   if (hideLow && priority === 'low') return null;
   const meta = PRIORITY_META[priority];
-  return <StatusBadge label={meta.label} tone={meta.tone} icon={PRIORITY_ICON[priority]} size={size} srPrefix="Öncelik" />;
+  return <StatusBadge label={meta.label} tone={meta.tone} icon={PRIORITY_ICON[priority]} size={size} srPrefix={tu.oncelik} />;
 }
 
 export function PhaseBadge({ phase, size = 'sm' }: { phase: string; size?: 'sm' | 'md' }) {
+  const tu = useTeamCopy().ui;
   const p = isInitiativePhase(phase) ? phase : 'later';
   const meta = PHASE_META[p];
-  return <StatusBadge label={meta.label} tone={meta.tone} size={size} srPrefix="Aşama" />;
+  return <StatusBadge label={meta.label} tone={meta.tone} size={size} srPrefix={tu.asama} />;
 }
 
 export function DueBadge({ dueAt, done, size = 'sm' }: { dueAt: string | null; done: boolean; size?: 'sm' | 'md' }) {
+  const tu = useTeamCopy().ui;
   const info = dueInfo(dueAt, done);
   if (!info) return null;
-  return <StatusBadge label={info.label} tone={info.tone} icon={Clock3} size={size} srPrefix="Bitiş" title={`Bitiş günü: ${info.day}`} />;
+  return <StatusBadge label={info.label} tone={info.tone} icon={Clock3} size={size} srPrefix={tu.bitis} title={`Bitiş günü: ${info.day}`} />;
 }
 
 export function MemberAvatar({
@@ -78,12 +82,13 @@ export function MemberAvatar({
 
 /** Departman çipi: renkli nokta + nötr zemin (renkli zemin + beyaz metin AA'yı geçmiyordu). */
 export function DeptChip({ slug, departments, className }: { slug: string | null; departments: TeamDepartment[]; className?: string }) {
+  const tu = useTeamCopy().ui;
   if (!slug) return null;
   const d = departments.find((x) => x.slug === slug);
   return (
     <span className={cn('qx-caption inline-flex max-w-full items-center gap-1.5 rounded-chip border border-subtle bg-surface-2 px-1.5 py-0.5 text-fg-muted', className)}>
       <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d?.color ?? '#6b7280' }} />
-      <span className="truncate">{d?.name ?? 'Kaldırılmış departman'}</span>
+      <span className="truncate">{d?.name ?? tu.kaldirilmisDepartman}</span>
     </span>
   );
 }

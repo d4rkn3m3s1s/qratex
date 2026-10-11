@@ -18,6 +18,7 @@ import { useTeamCopy } from '../copy';
  * gösterilir ("1 not · 0 dosya").
  */
 export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, proof, can } = data;
   const { weekKey } = useWorkspace();
@@ -60,7 +61,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
     } else if (can.move && !archived) {
       actionsNode = (
         <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled={busy} onClick={() => run(() => actions.move(task, 'in_progress'))}>
-          <Undo2 className="h-4 w-4" aria-hidden /> Onaydan geri çek
+          <Undo2 className="h-4 w-4" aria-hidden /> {tu.onaydanGeriCek}
         </Button>
       );
     }
@@ -69,12 +70,12 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
     icon = <CheckCircle2 className="h-4 w-4" aria-hidden />;
     title = task.approvedAt
       ? `Onaylandı · ${task.approvedBy?.name ?? 'Sistem (bitiş gününden sonra otomatik)'} · ${formatTeamDateTime(task.approvedAt)}`
-      : 'Tamamlandı';
+      : tu.tamamlandi;
     body = task.reviewNote ? <span className="qx-small">Not: {task.reviewNote}</span> : null;
     if (can.approve && !archived) {
       actionsNode = (
         <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => setReopenOpen(true)}>
-          <RotateCcw className="h-4 w-4" aria-hidden /> Yeniden aç
+          <RotateCcw className="h-4 w-4" aria-hidden /> {tu.yenidenAc2}
         </Button>
       );
     }
@@ -86,7 +87,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
       title = 'Revizyon istendi';
       body = <span className="qx-small whitespace-pre-wrap">{task.reviewNote}</span>;
     } else if (can.move) {
-      title = task.status === 'todo' ? 'Henüz başlanmadı' : 'Devam ediyor';
+      title = task.status === 'todo' ? tu.henuzBaslanmadi : 'Devam ediyor';
       body = <span className="qx-small">Onaya göndermek için kanıt gerekir: {proofText}</span>;
     }
     if (can.move && !archived) {
@@ -94,17 +95,17 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
         <>
           {task.status === 'todo' && (
             <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled={busy} onClick={() => run(() => actions.move(task, 'in_progress'))}>
-              <Play className="h-4 w-4" aria-hidden /> Başla
+              <Play className="h-4 w-4" aria-hidden /> {tu.basla}
             </Button>
           )}
           <Button
             size="sm"
             className="h-9 gap-1.5"
             disabled={busy || !proof.ok}
-            title={proof.ok ? undefined : 'Önce aşağıya ne yaptığını yaz ya da bir dosya ekle'}
+            title={proof.ok ? undefined : tu.onceAsagiyaNeYaptigini}
             onClick={() => run(() => actions.move(task, 'review'))}
           >
-            <Send className="h-4 w-4" aria-hidden /> {revision ? 'Düzelttim, onaya gönder' : 'Onaya gönder'}
+            <Send className="h-4 w-4" aria-hidden /> {revision ? tu.duzelttimOnayaGonder : tu.onayaGonder}
           </Button>
         </>
       );
@@ -114,7 +115,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
   if (!title && !actionsNode) return null;
 
   return (
-    <section aria-label="Onay durumu" className={cn('rounded-card border p-3', TONE_CALLOUT[tone])}>
+    <section aria-label={tu.onayDurumu} className={cn('rounded-card border p-3', TONE_CALLOUT[tone])}>
       <div className="flex items-start gap-2">
         <span className="mt-0.5 shrink-0">{icon}</span>
         <div className="min-w-0 flex-1 space-y-1">
@@ -129,21 +130,21 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
       <NoteDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        title="Revizyon iste"
-        description="Görev düzeltme için atanan kişiye geri döner; not görev panelinde görünür."
-        label="Ne düzeltilmeli?"
-        quickNotes={['Kanıt yetersiz', 'Eksik alt görev var', 'Açıklamadaki kapsam karşılanmadı']}
-        confirmLabel="Revizyona gönder"
+        title={tu.revizyonIste}
+        description={tu.gorevDuzeltmeIcinAtanan}
+        label={tu.neDuzeltilmeli}
+        quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
+        confirmLabel={tu.revizyonaGonder}
         onConfirm={(note) => actions.move(task, 'in_progress', note)}
       />
       <NoteDialog
         open={reopenOpen}
         onOpenChange={setReopenOpen}
-        title="Görevi yeniden aç"
-        description="Onay damgası kaldırılır ve görev Devam ediyor durumuna döner."
-        label="Gerekçe"
+        title={tu.goreviYenidenAc}
+        description={tu.onayDamgasiKaldirilirVe}
+        label={tu.gerekce}
         required
-        confirmLabel="Yeniden aç"
+        confirmLabel={tu.yenidenAc2}
         onConfirm={(note) => actions.move(task, 'in_progress', note)}
       />
     </section>

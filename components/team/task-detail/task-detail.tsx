@@ -20,8 +20,9 @@ import { useTeamCopy } from '../copy';
 
 /** Detay çekmecesi başlığı (önbellekteki veriden; yüklenirken nötr metin). */
 export function TaskDetailTitle({ id }: { id: string }) {
+  const tu = useTeamCopy().ui;
   const q = useTaskDetail(id);
-  return <>{q.data?.task.title ?? (q.isError ? 'Görev açılamadı' : 'Görev')}</>;
+  return <>{q.data?.task.title ?? (q.isError ? tu.gorevAcilamadi : tu.gorev)}</>;
 }
 
 /**
@@ -29,17 +30,18 @@ export function TaskDetailTitle({ id }: { id: string }) {
  * (denetim O7/#60): 404/403 için açıklamalı boş durum gösterilir.
  */
 export function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const tu = useTeamCopy().ui;
   const q = useTaskDetail(id);
   return (
     <QueryState
       query={q}
       skeleton="detail"
       error={{
-        title: 'Görev açılamadı',
-        description: 'Görev silinmiş, arşivden kaldırılmış ya da senin kapsamında olmayabilir.',
+        title: tu.gorevAcilamadi,
+        description: tu.gorevSilinmisArsivdenKaldirilmis,
         action: (
           <Button variant="outline" onClick={onClose}>
-            Panoya dön
+            {tu.panoyaDon}
           </Button>
         ),
       }}
@@ -50,6 +52,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
   const { weekKey } = useWorkspace();
@@ -66,11 +69,11 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
       {task.archivedAt && (
         <div className="qx-small flex flex-wrap items-center justify-between gap-2 rounded-card border border-subtle bg-surface-2 p-3 text-fg-muted">
           <span className="inline-flex items-center gap-1.5">
-            <Archive className="h-4 w-4" aria-hidden /> Bu görev arşivde.
+            <Archive className="h-4 w-4" aria-hidden /> {tu.buGorevArsivde}
           </span>
           {can.archive && (
             <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => void actions.archive(task, false)}>
-              <ArchiveRestore className="h-4 w-4" aria-hidden /> Arşivden çıkar
+              <ArchiveRestore className="h-4 w-4" aria-hidden /> {tu.arsivdenCikar}
             </Button>
           )}
         </div>
@@ -79,7 +82,7 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
       {editable && (
         <div>
           <label htmlFor={`t-${task.id}`} className="sr-only">
-            Görev başlığı
+            {tu.gorevBasligi2}
           </label>
           <Input
             id={`t-${task.id}`}
@@ -105,10 +108,10 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
 
       <ReviewStrip data={data} />
 
-      <section aria-label="Açıklama">
+      <section aria-label={tu.aciklama}>
         {editable && editingDesc ? (
           <div className="space-y-2">
-            <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={6} maxLength={8000} aria-label="Açıklama" autoFocus />
+            <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={6} maxLength={8000} aria-label={tu.aciklama} autoFocus />
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -128,7 +131,7 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
                   setEditingDesc(false);
                 }}
               >
-                Vazgeç
+                {tu.vazgec}
               </Button>
             </div>
           </div>
@@ -137,13 +140,13 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
             <p className="qx-body whitespace-pre-wrap break-words text-fg">{task.description}</p>
             {editable && (
               <Button size="sm" variant="ghost" className="mt-1 h-9" onClick={() => setEditingDesc(true)}>
-                Açıklamayı düzenle
+                {tu.aciklamayiDuzenle}
               </Button>
             )}
           </div>
         ) : editable ? (
           <Button size="sm" variant="outline" className="h-9" onClick={() => setEditingDesc(true)}>
-            Açıklama ekle
+            {tu.aciklamaEkle}
           </Button>
         ) : (
           <p className="qx-small text-fg-muted">{tx.noDescription}</p>
@@ -162,8 +165,8 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
           <Timeline
             dense
             groupByDay
-            ariaLabel="Görev geçmişi"
-            emptyLabel="Kayıt yok"
+            ariaLabel={tu.gorevGecmisi}
+            emptyLabel={tu.kayitYok}
             events={task.activities.map((a) => ({
               id: a.id,
               at: a.createdAt,

@@ -39,18 +39,20 @@ function useInitiative(id: string) {
 }
 
 export function InitiativeTitle({ id }: { id: string }) {
+  const tu = useTeamCopy().ui;
   const q = useInitiative(id);
-  return <>{q.data?.item.title ?? (q.isError ? 'Girişim açılamadı' : 'Girişim')}</>;
+  return <>{q.data?.item.title ?? (q.isError ? tu.girisimAcilamadi : tu.girisim)}</>;
 }
 
 /** Girişim detayı: düzenleme (yönetici), kilometre taşları, karar notları, değişiklik geçmişi. */
 export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const tu = useTeamCopy().ui;
   const q = useInitiative(id);
   return (
     <QueryState
       query={q}
       skeleton="detail"
-      error={{ title: 'Girişim açılamadı', description: 'Silinmiş olabilir.', action: <Button variant="outline" onClick={onClose}>Kapat</Button> }}
+      error={{ title: tu.girisimAcilamadi, description: tu.silinmisOlabilir, action: <Button variant="outline" onClick={onClose}>Kapat</Button> }}
     >
       {(d) => <Body d={d} />}
     </QueryState>
@@ -58,6 +60,7 @@ export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => v
 }
 
 function Body({ d }: { d: Detail }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can, members, departments } = useWorkspace();
   const qc = useQueryClient();
@@ -106,18 +109,18 @@ function Body({ d }: { d: Detail }) {
             if (v.length >= 2 && v !== item.title) void patch({ title: v });
             else setTitle(item.title);
           }}
-          aria-label="Girişim başlığı"
+          aria-label={tu.girisimBasligi}
           className="qx-body h-11 font-semibold"
           maxLength={200}
         />
       ) : null}
 
-      <section className="grid gap-3 rounded-card border border-subtle p-3 sm:grid-cols-2" aria-label="Girişim özellikleri">
+      <section className="grid gap-3 rounded-card border border-subtle p-3 sm:grid-cols-2" aria-label={tu.girisimOzellikleri}>
         <div className="space-y-1">
           <span className="qx-caption text-fg-muted">{tx.stage}</span>
           {edit ? (
             <Select value={item.phase} onValueChange={(v) => void patch({ phase: v })}>
-              <SelectTrigger className="h-9" aria-label="Aşama">
+              <SelectTrigger className="h-9" aria-label={tu.asama}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -138,7 +141,7 @@ function Body({ d }: { d: Detail }) {
           <span className="qx-caption text-fg-muted">Sorumlu</span>
           {edit ? (
             <Select value={item.owner?.id ?? '__none'} onValueChange={(v) => void patch({ ownerId: v === '__none' ? null : v })}>
-              <SelectTrigger className="h-9" aria-label="Sorumlu">
+              <SelectTrigger className="h-9" aria-label={tu.sorumlu}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -172,7 +175,7 @@ function Body({ d }: { d: Detail }) {
           <span className="qx-caption text-fg-muted">Tema (departman)</span>
           {edit ? (
             <Select value={item.department ?? '__none'} onValueChange={(v) => void patch({ department: v === '__none' ? null : v })}>
-              <SelectTrigger className="h-9" aria-label="Tema departmanı">
+              <SelectTrigger className="h-9" aria-label={tu.temaDepartmani}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -193,7 +196,7 @@ function Body({ d }: { d: Detail }) {
         {item.shippedAt && <p className="qx-caption text-success sm:col-span-2">Yayına çıktı: {relativeTeamTime(item.shippedAt)}</p>}
       </section>
 
-      <section aria-label="Açıklama" className="space-y-2">
+      <section aria-label={tu.aciklama} className="space-y-2">
         {edit ? (
           <Textarea
             value={desc}
@@ -202,11 +205,11 @@ function Body({ d }: { d: Detail }) {
               if ((desc.trim() || '') !== (item.description ?? '')) void patch({ description: desc.trim() || null });
             }}
             rows={4}
-            placeholder="Neden önemli, başarı nasıl ölçülecek?"
-            aria-label="Açıklama"
+            placeholder={tu.nedenOnemliBasariNasil}
+            aria-label={tu.aciklama}
           />
         ) : (
-          <p className="qx-body whitespace-pre-wrap text-fg">{item.description || 'Açıklama yok.'}</p>
+          <p className="qx-body whitespace-pre-wrap text-fg">{item.description || tu.aciklamaYok}</p>
         )}
       </section>
 
@@ -240,7 +243,7 @@ function Body({ d }: { d: Detail }) {
               setBusy(false);
             }}
           >
-            <Input value={milestone} onChange={(e) => setMilestone(e.target.value)} placeholder="Kilometre taşı ekle" aria-label="Yeni kilometre taşı" maxLength={300} />
+            <Input value={milestone} onChange={(e) => setMilestone(e.target.value)} placeholder={tu.kilometreTasiEkle} aria-label={tu.yeniKilometreTasi} maxLength={300} />
             <Button type="submit" variant="outline" className="shrink-0 gap-1.5" disabled={busy || !milestone.trim()}>
               <Plus className="h-4 w-4" aria-hidden /> Ekle
             </Button>
@@ -262,7 +265,7 @@ function Body({ d }: { d: Detail }) {
             setBusy(false);
           }}
         >
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Karar, risk ya da bağlam notu" aria-label="Not" maxLength={4000} />
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={tu.kararRiskYaDa} aria-label={tu.not} maxLength={4000} />
           <Button type="submit" size="sm" className="h-9" disabled={busy || !note.trim()}>
             Not ekle
           </Button>
@@ -273,11 +276,11 @@ function Body({ d }: { d: Detail }) {
               <MemberAvatar user={n.author} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="qx-caption text-fg-muted">
-                  <span className="font-semibold text-fg">{displayName(n.author, 'Silinmiş kullanıcı')}</span> · {relativeTeamTime(n.createdAt)}
+                  <span className="font-semibold text-fg">{displayName(n.author, tu.silinmisKullanici)}</span> · {relativeTeamTime(n.createdAt)}
                 </p>
                 <p className="qx-small whitespace-pre-wrap text-fg">{n.text}</p>
               </div>
-              {n.canDelete && <IconButton aria-label="Notu sil" icon={<Trash2 />} size="sm" onClick={() => void op({ op: 'delete_note', noteId: n.id })} />}
+              {n.canDelete && <IconButton aria-label={tu.notuSil} icon={<Trash2 />} size="sm" onClick={() => void op({ op: 'delete_note', noteId: n.id })} />}
             </li>
           ))}
         </ul>
@@ -286,7 +289,7 @@ function Body({ d }: { d: Detail }) {
       <details className="rounded-card border border-subtle">
         <summary className="qx-small flex min-h-11 cursor-pointer items-center px-3 font-semibold text-fg">Değişiklik geçmişi ({d.history.length})</summary>
         <div className="border-t border-subtle px-3 py-2">
-          <Timeline dense groupByDay ariaLabel="Girişim geçmişi" events={d.history.map((h) => ({ id: h.id, at: h.createdAt, title: h.detail ?? '', actor: h.actorName }))} />
+          <Timeline dense groupByDay ariaLabel={tu.girisimGecmisi} events={d.history.map((h) => ({ id: h.id, at: h.createdAt, title: h.detail ?? '', actor: h.actorName }))} />
         </div>
       </details>
     </div>

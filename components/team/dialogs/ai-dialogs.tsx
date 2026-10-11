@@ -21,6 +21,7 @@ type Turn = { q: string; a: string };
  * gider (takip soruları çalışır).
  */
 export function AiAskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -55,7 +56,7 @@ export function AiAskDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         <div className="space-y-3" aria-live="polite">
           {turns.length === 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {['Bu hafta kimin en çok açık işi var?', 'Geciken görevleri listele', 'Onay bekleyen kaç görev var?'].map((s) => (
+              {[tu.buHaftaKiminEn, tu.gecikenGorevleriListele, tu.onayBekleyenKacGorev].map((s) => (
                 <Button key={s} type="button" size="sm" variant="outline" className="h-9" onClick={() => setQuestion(s)}>
                   {s}
                 </Button>
@@ -89,8 +90,8 @@ export function AiAskDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             }}
             rows={2}
             maxLength={500}
-            placeholder="Sorunu yaz (Enter ile gönder)"
-            aria-label="Soru"
+            placeholder={tu.sorunuYazEnterIle}
+            aria-label={tu.soru}
           />
           <Button type="submit" className="h-11 shrink-0 gap-1.5" disabled={busy || question.trim().length < 3}>
             <Send className="h-4 w-4" aria-hidden /> Sor
@@ -105,6 +106,7 @@ type Summary = { summary: string | null; stats: { total: number; done: number; r
 
 /** AI haftalık özet (yönetici) — sayılar koddan, anlatım LLM'den; arşiv hariç. */
 export function AiSummaryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey } = useWorkspace();
   const [data, setData] = useState<Summary | null>(null);
@@ -134,19 +136,19 @@ export function AiSummaryDialog({ open, onOpenChange }: { open: boolean; onOpenC
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-brand" aria-hidden /> Haftalık özet
+            <Sparkles className="h-4 w-4 text-brand" aria-hidden /> {tu.haftalikOzet}
           </DialogTitle>
           <DialogDescription>{weekKeyLabel(weekKey)}</DialogDescription>
         </DialogHeader>
         {busy && !data && <SkeletonBlock className="h-40" />}
-        {error != null && <ErrorState title="Özet üretilemedi" description={errorMessage(error)} onRetry={run} />}
+        {error != null && <ErrorState title={tu.ozetUretilemedi} description={errorMessage(error)} onRetry={run} />}
         {data && (
           <div className="space-y-3" aria-live="polite">
             <MetricGrid cols={4}>
-              <MetricTile label="Toplam" metric={{ value: data.stats.total }} size="compact" />
-              <MetricTile label="Biten" metric={{ value: data.stats.done }} tone="success" size="compact" />
-              <MetricTile label="Onayda" metric={{ value: data.stats.review }} tone="info" size="compact" />
-              <MetricTile label="Geciken" metric={{ value: data.stats.overdue }} tone={data.stats.overdue ? 'danger' : 'neutral'} size="compact" />
+              <MetricTile label={tu.toplam} metric={{ value: data.stats.total }} size="compact" />
+              <MetricTile label={tu.biten} metric={{ value: data.stats.done }} tone="success" size="compact" />
+              <MetricTile label={tu.onayda} metric={{ value: data.stats.review }} tone="info" size="compact" />
+              <MetricTile label={tu.geciken} metric={{ value: data.stats.overdue }} tone={data.stats.overdue ? 'danger' : 'neutral'} size="compact" />
             </MetricGrid>
             {data.summary ? (
               <p className="qx-body whitespace-pre-wrap text-fg">{data.summary}</p>
@@ -154,7 +156,7 @@ export function AiSummaryDialog({ open, onOpenChange }: { open: boolean; onOpenC
               <p className="qx-small text-fg-muted">{tx.aiNoTasks}</p>
             )}
             <Button variant="outline" size="sm" className="h-9" disabled={busy} onClick={run}>
-              {busy ? 'Yenileniyor…' : 'Yeniden üret'}
+              {busy ? 'Yenileniyor…' : tu.yenidenUret}
             </Button>
           </div>
         )}

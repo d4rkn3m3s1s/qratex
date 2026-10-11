@@ -20,17 +20,18 @@ import { useTeamCopy } from './copy';
 
 /** Rapor (yönetici): Kişiler · Performans · Akış. Grafikler panodan buraya taşındı (denetim vizyonu). */
 export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
+  const tu = useTeamCopy().ui;
   const [tab, setTab] = useState('people');
   return (
     <SectionTabs
       value={tab}
       onValueChange={setTab}
       variant="pill"
-      ariaLabel="Rapor bölümleri"
+      ariaLabel={tu.raporBolumleri}
       tabs={[
-        { value: 'people', label: 'Kişiler (bu görünüm)' },
-        { value: 'performance', label: 'Performans' },
-        { value: 'activity', label: 'Akış' },
+        { value: 'people', label: tu.kisilerBuGorunum },
+        { value: 'performance', label: tu.performans },
+        { value: 'activity', label: tu.akis },
       ]}
     >
       {(active) => (active === 'people' ? <PeopleView tasks={tasks} /> : active === 'performance' ? <PerformanceView /> : <ActivityView />)}
@@ -40,6 +41,7 @@ export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
 
 /** Kişi başı iş yükü — panodaki (filtreli) görevlerden; durum dağılımı yalnız renge dayanmaz. */
 function PeopleView({ tasks }: { tasks: TaskDto[] }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { openTask } = useWorkspace();
   const rows = useMemo(() => {
@@ -61,7 +63,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
   if (rows.length === 0) return <p className="qx-small text-fg-muted">{tx.noTasksInView}</p>;
   return (
     <div className="space-y-3">
-      <SectionCard title="Durum dağılımı" density="compact">
+      <SectionCard title={tu.durumDagilimi} density="compact">
         <div className="flex h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={TASK_STATUSES.map((s) => `${STATUS_META[s].label} ${tasks.filter((t) => t.status === s).length}`).join(', ')}>
           {TASK_STATUSES.map((s) => {
             const n = tasks.filter((t) => t.status === s).length;
@@ -140,6 +142,7 @@ type PerfRow = {
 
 /** Performans — seçili haftada biten son N hafta, departman kapsamlı (denetim #73). */
 function PerformanceView() {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, departments } = useWorkspace();
   const [weeks, setWeeks] = useState('4');
@@ -155,7 +158,7 @@ function PerformanceView() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Select value={weeks} onValueChange={setWeeks}>
-          <SelectTrigger className="h-10 w-40" aria-label="Dönem">
+          <SelectTrigger className="h-10 w-40" aria-label={tu.donem}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -167,7 +170,7 @@ function PerformanceView() {
           </SelectContent>
         </Select>
         <Select value={dep} onValueChange={setDep}>
-          <SelectTrigger className="h-10 w-56" aria-label="Departman">
+          <SelectTrigger className="h-10 w-56" aria-label={tu.departman}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -185,15 +188,15 @@ function PerformanceView() {
           </span>
         )}
       </div>
-      <QueryState query={q} skeleton="table" isEmpty={(d) => d.members.length === 0} empty={{ title: 'Ekipte üye yok' }}>
+      <QueryState query={q} skeleton="table" isEmpty={(d) => d.members.length === 0} empty={{ title: tu.ekipteUyeYok }}>
         {(d) => (
           <div className="space-y-3">
             <MetricGrid cols={4}>
-              <MetricTile label="Görev" metric={{ value: d.totals.total }} size="compact" />
-              <MetricTile label="Biten" metric={{ value: d.totals.done }} tone="success" size="compact" />
-              <MetricTile label="Açık geciken" metric={{ value: d.totals.overdue }} tone={d.totals.overdue ? 'danger' : 'neutral'} size="compact" />
+              <MetricTile label={tu.gorevler} metric={{ value: d.totals.total }} size="compact" />
+              <MetricTile label={tu.biten} metric={{ value: d.totals.done }} tone="success" size="compact" />
+              <MetricTile label={tu.acikGeciken} metric={{ value: d.totals.overdue }} tone={d.totals.overdue ? 'danger' : 'neutral'} size="compact" />
               <MetricTile
-                label="Harcanan / tahmin"
+                label={tu.harcananTahmin}
                 metric={{ value: d.totals.estimateMin ? Math.round((d.totals.spentMin / d.totals.estimateMin) * 100) : null, format: 'percent' }}
                 hint={`${formatMinutes(d.totals.spentMin)} / ${formatMinutes(d.totals.estimateMin)}`}
                 size="compact"
@@ -267,6 +270,7 @@ const GROUPS = [
 
 /** Akış — kişi ve tür filtresi, "daha fazla yükle" (denetim #72). Odakta yenilenir. */
 function ActivityView() {
+  const tu = useTeamCopy().ui;
   const { members, openTask } = useWorkspace();
   const [actor, setActor] = useState('all');
   const [group, setGroup] = useState('all');
@@ -278,7 +282,7 @@ function ActivityView() {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <Select value={actor} onValueChange={setActor}>
-          <SelectTrigger className="h-10 w-52" aria-label="Kişi">
+          <SelectTrigger className="h-10 w-52" aria-label={tu.kisi}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -291,7 +295,7 @@ function ActivityView() {
           </SelectContent>
         </Select>
         <Select value={group} onValueChange={setGroup}>
-          <SelectTrigger className="h-10 w-52" aria-label="Tür">
+          <SelectTrigger className="h-10 w-52" aria-label={tu.tur}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -303,12 +307,12 @@ function ActivityView() {
           </SelectContent>
         </Select>
       </div>
-      <QueryState query={{ ...list, data: list.data ? { items } : undefined }} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: 'Kayıt yok' }}>
+      <QueryState query={{ ...list, data: list.data ? { items } : undefined }} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: tu.kayitYok }}>
         {() => (
           <>
             <Timeline
               groupByDay
-              ariaLabel="Ekip akışı"
+              ariaLabel={tu.ekipAkisi}
               events={items.map((a) => ({
                 id: a.id,
                 at: a.createdAt,
@@ -332,7 +336,7 @@ function ActivityView() {
             {list.hasNextPage && (
               <div className="flex justify-center">
                 <Button variant="outline" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-                  {list.isFetchingNextPage ? 'Yükleniyor…' : 'Daha fazla yükle'}
+                  {list.isFetchingNextPage ? tu.yukleniyor : tu.dahaFazlaYukle}
                 </Button>
               </div>
             )}

@@ -38,6 +38,7 @@ const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: fal
  * yönetici düzenler. Aşama değişikliği menüden (klavye) ya da masaüstünde sürükleyerek.
  */
 export function InitiativesView() {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can, departments } = useWorkspace();
   const qc = useQueryClient();
@@ -97,8 +98,8 @@ export function InitiativesView() {
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void patch(i, { archived: !i.archivedAt }, i.archivedAt ? 'Arşivden çıkarıldı' : 'Arşivlendi')}>
-                  <Archive className="mr-2 h-4 w-4" aria-hidden /> {i.archivedAt ? 'Arşivden çıkar' : 'Arşivle'}
+                <DropdownMenuItem onSelect={() => void patch(i, { archived: !i.archivedAt }, i.archivedAt ? tu.arsivdenCikarildi : tu.arsivlendi)}>
+                  <Archive className="mr-2 h-4 w-4" aria-hidden /> {i.archivedAt ? tu.arsivdenCikar : tu.arsivle}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -141,11 +142,11 @@ export function InitiativesView() {
         <p className="qx-small text-fg-muted">{tx.initiativesIntro}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant={showArchived ? 'secondary' : 'outline'} size="sm" className="h-9 gap-1.5" aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
-            <Archive className="h-3.5 w-3.5" aria-hidden /> Arşiv
+            <Archive className="h-3.5 w-3.5" aria-hidden /> {tu.arsiv}
           </Button>
           {can.manageInitiatives && (
             <Button size="sm" className="h-9 gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" aria-hidden /> Girişim ekle
+              <Plus className="h-3.5 w-3.5" aria-hidden /> {tu.girisimEkle}
             </Button>
           )}
         </div>
@@ -156,8 +157,8 @@ export function InitiativesView() {
         isEmpty={(d) => d.items.length === 0}
         empty={{
           variant: 'first-use',
-          title: showArchived ? 'Arşivde girişim yok' : 'Henüz girişim yok',
-          description: showArchived ? undefined : can.manageInitiatives ? 'İlk girişimi ekle: başlık, aşama, sorumlu ve kilometre taşları.' : 'Yöneticiler girişim eklediğinde burada görünür.',
+          title: showArchived ? tu.arsivdeGirisimYok : tu.henuzGirisimYok,
+          description: showArchived ? undefined : can.manageInitiatives ? tu.ilkGirisimiEkleBaslik : tu.yoneticilerGirisimEkledigindeBurada,
           action: can.manageInitiatives && !showArchived ? <Button onClick={() => setCreateOpen(true)}>{tx.addInitiative}</Button> : undefined,
         }}
       >

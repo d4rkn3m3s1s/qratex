@@ -19,6 +19,7 @@ const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
  * panelindeki tarih alanıyla klavyeyle de yapılır.
  */
 export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, can, openTask } = useWorkspace();
   const actions = useTaskActions({ weekKey });
@@ -120,7 +121,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
       {(byDay.undated.length > 0 || byDay.outside.length > 0) && (
         <div className="grid gap-2 md:grid-cols-2">
           {byDay.undated.length > 0 && (
-            <section aria-label="Bitiş tarihi olmayanlar" className="rounded-card border border-dashed border-subtle p-2">
+            <section aria-label={tu.bitisTarihiOlmayanlar} className="rounded-card border border-dashed border-subtle p-2">
               <h3 className="qx-small mb-1.5 px-0.5 font-semibold text-fg-muted">Tarihsiz ({byDay.undated.length})</h3>
               <ul className="grid gap-1.5 sm:grid-cols-2">
                 {byDay.undated.map(renderItem)}
@@ -128,7 +129,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
             </section>
           )}
           {byDay.outside.length > 0 && (
-            <section aria-label="Bu hafta dışında bitenler" className="rounded-card border border-dashed border-subtle p-2">
+            <section aria-label={tu.buHaftaDisindaBitenler} className="rounded-card border border-dashed border-subtle p-2">
               <h3 className="qx-small mb-1.5 px-0.5 font-semibold text-fg-muted">Bitişi bu hafta dışında ({byDay.outside.length})</h3>
               <ul className="grid gap-1.5 sm:grid-cols-2">
                 {byDay.outside.map(renderItem)}

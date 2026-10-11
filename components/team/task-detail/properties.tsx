@@ -41,6 +41,7 @@ function Row({ label, children, htmlFor }: { label: string; children: React.Reac
  * durum ve süre kaydı kendi görevinde açıktır.
  */
 export function TaskProperties({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
   const { members, departments, tags, currentWeekKey, weekKey } = useWorkspace();
@@ -72,11 +73,11 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
   };
 
   return (
-    <section aria-label="Görev özellikleri" className="divide-y divide-[hsl(var(--border-subtle))] rounded-card border border-subtle px-3">
-      <Row label="Durum">
+    <section aria-label={tu.gorevOzellikleri} className="divide-y divide-[hsl(var(--border-subtle))] rounded-card border border-subtle px-3">
+      <Row label={tu.durum}>
         {can.move && !task.archivedAt && statusOptions.length > 1 ? (
           <Select value={task.status} onValueChange={(v) => void actions.move(task, v as TaskStatus)}>
-            <SelectTrigger className="h-9 w-full sm:w-52" aria-label="Durumu değiştir">
+            <SelectTrigger className="h-9 w-full sm:w-52" aria-label={tu.durumuDegistir}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -91,10 +92,10 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <TaskStatusBadge status={task.status} size="md" />
         )}
       </Row>
-      <Row label="Öncelik">
+      <Row label={tu.oncelik}>
         {edit ? (
           <Select value={task.priority} onValueChange={(v) => void save({ priority: v })}>
-            <SelectTrigger className="h-9 w-full sm:w-52" aria-label="Öncelik">
+            <SelectTrigger className="h-9 w-full sm:w-52" aria-label={tu.oncelik}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -109,10 +110,10 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <PriorityBadge priority={task.priority} size="md" />
         )}
       </Row>
-      <Row label="Atanan">
+      <Row label={tu.atanan}>
         {edit ? (
           <Select value={task.assignedToId ?? '__none'} onValueChange={(v) => void save({ assignedToId: v === '__none' ? null : v })}>
-            <SelectTrigger className="h-9 w-full sm:w-64" aria-label="Atanan kişi">
+            <SelectTrigger className="h-9 w-full sm:w-64" aria-label={tu.atananKisi}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -132,10 +133,10 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           </span>
         )}
       </Row>
-      <Row label="Departman">
+      <Row label={tu.departman}>
         {edit ? (
           <Select value={task.department ?? '__none'} onValueChange={(v) => void save({ department: v === '__none' ? null : v })}>
-            <SelectTrigger className="h-9 w-full sm:w-64" aria-label="Departman">
+            <SelectTrigger className="h-9 w-full sm:w-64" aria-label={tu.departman}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -155,7 +156,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <span className="qx-small text-fg-muted">Genel</span>
         )}
       </Row>
-      <Row label="Bitiş" htmlFor={edit ? ids.due : undefined}>
+      <Row label={tu.bitis} htmlFor={edit ? ids.due : undefined}>
         {edit ? (
           <div className="flex items-center gap-2">
             <Input
@@ -173,10 +174,10 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <span className="qx-small text-fg-muted">Yok</span>
         )}
       </Row>
-      <Row label="Hafta">
+      <Row label={tu.hafta}>
         {edit ? (
-          <Select value={task.weekKey ?? currentWeekKey} onValueChange={(v) => void save({ weekKey: v }, 'Görev taşındı')}>
-            <SelectTrigger className="h-9 w-full sm:w-64" aria-label="Hafta">
+          <Select value={task.weekKey ?? currentWeekKey} onValueChange={(v) => void save({ weekKey: v }, tu.gorevTasindi)}>
+            <SelectTrigger className="h-9 w-full sm:w-64" aria-label={tu.hafta}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -192,7 +193,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <span className="qx-small text-fg">{task.weekKey ? weekKeyLabel(task.weekKey) : '—'}</span>
         )}
       </Row>
-      <Row label="Süre" htmlFor={can.logTime ? ids.time : undefined}>
+      <Row label={tu.sure} htmlFor={can.logTime ? ids.time : undefined}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="qx-small qx-num inline-flex items-center gap-1 text-fg">
             <Timer className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
@@ -214,17 +215,17 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
                 className="h-9 w-20"
                 value={minutes}
                 onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                aria-label="Eklenecek dakika"
+                aria-label={tu.eklenecekDakika}
               />
               <Button type="submit" size="sm" variant="outline" className="h-9" disabled={!minutes}>
-                Süre ekle
+                {tu.sureEkle}
               </Button>
             </form>
           )}
         </div>
       </Row>
       {edit && (
-        <Row label="Tahmin (dk)" htmlFor={ids.est}>
+        <Row label={tu.tahminDk} htmlFor={ids.est}>
           <Input
             id={ids.est}
             inputMode="numeric"
@@ -238,10 +239,10 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           />
         </Row>
       )}
-      <Row label="Tekrar">
+      <Row label={tu.tekrar}>
         {edit ? (
           <Select value={task.recurrence === 'daily' ? 'weekly' : task.recurrence ?? '__none'} onValueChange={(v) => void save({ recurrence: v === '__none' ? null : v })}>
-            <SelectTrigger className="h-9 w-full sm:w-52" aria-label="Tekrar">
+            <SelectTrigger className="h-9 w-full sm:w-52" aria-label={tu.tekrar}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -254,14 +255,14 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <span className="qx-small text-fg">{task.recurrence ? RECURRENCE_LABEL[task.recurrence] : 'Tekrarlanmaz'}</span>
         )}
       </Row>
-      <Row label="Etiketler" htmlFor={edit ? ids.tags : undefined}>
+      <Row label={tu.etiketler} htmlFor={edit ? ids.tags : undefined}>
         {edit ? (
           <>
             <Input
               id={ids.tags}
               list={`${ids.tags}-pool`}
               className="h-9"
-              placeholder="virgülle ayır: tasarım, acil"
+              placeholder={tu.virgulleAyirTasarimAcil}
               value={tagText}
               onChange={(e) => setTagText(e.target.value)}
               onBlur={() => {
@@ -280,17 +281,17 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
           <span className="qx-small text-fg-muted">Yok</span>
         )}
       </Row>
-      <Row label="Bağımlılık">
+      <Row label={tu.bagimlilik}>
         <DependencyField data={data} editable={edit} />
       </Row>
       {task.source && (
-        <Row label="Kaynak">
+        <Row label={tu.kaynak}>
           <span className="qx-small text-fg">{task.source.label}</span>
         </Row>
       )}
-      <Row label="Oluşturan">
+      <Row label={tu.olusturan}>
         <span className="qx-small text-fg-muted">
-          {task.createdBy?.name ?? 'Silinmiş kullanıcı'} · {formatTeamDate(task.createdAt)}
+          {task.createdBy?.name ?? tu.silinmisKullanici} · {formatTeamDate(task.createdAt)}
         </span>
       </Row>
     </section>
@@ -298,6 +299,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
 }
 
 function DependencyField({ data, editable }: { data: TaskDetailPayload; editable: boolean }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task } = data;
   const { weekKey } = useWorkspace();
@@ -328,17 +330,17 @@ function DependencyField({ data, editable }: { data: TaskDetailPayload; editable
         <span className="qx-small text-fg-muted">Yok</span>
       )}
       {editable && task.blockedBy && (
-        <IconButton aria-label="Bağımlılığı kaldır" icon={<X />} size="sm" onClick={() => void actions.update(task.id, { blockedById: null }, 'Bağımlılık kaldırıldı')} />
+        <IconButton aria-label={tu.bagimliligiKaldir} icon={<X />} size="sm" onClick={() => void actions.update(task.id, { blockedById: null }, tu.bagimlilikKaldirildi)} />
       )}
       {editable && (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button size="sm" variant="outline" className="h-9 gap-1.5">
-              <Search className="h-3.5 w-3.5" aria-hidden /> {task.blockedBy ? 'Değiştir' : 'Bağla'}
+              <Search className="h-3.5 w-3.5" aria-hidden /> {task.blockedBy ? tu.degistir : tu.bagla}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 space-y-2" align="start">
-            <Input type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Görev ara (en az 2 harf)" aria-label="Bağlanacak görevi ara" />
+            <Input type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tu.gorevAraEnAz} aria-label={tu.baglanacakGoreviAra} />
             <ul className="max-h-64 space-y-1 overflow-y-auto" aria-live="polite">
               {debounced.length < 2 && <li className="qx-caption px-1 text-fg-muted">{tx.searchesAllWeeks}</li>}
               {search.isFetching && <li className="qx-caption px-1 text-fg-muted">{tx.searching}</li>}
@@ -352,7 +354,7 @@ function DependencyField({ data, editable }: { data: TaskDetailPayload; editable
                     type="button"
                     className="flex w-full items-center justify-between gap-2 rounded-control px-2 py-2 text-left hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={async () => {
-                      const ok = await actions.update(task.id, { blockedById: c.id }, 'Bağımlılık eklendi');
+                      const ok = await actions.update(task.id, { blockedById: c.id }, tu.bagimlilikEklendi);
                       if (ok) setOpen(false);
                     }}
                   >

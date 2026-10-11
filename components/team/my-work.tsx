@@ -11,6 +11,7 @@ import { useSummary, useTasks } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { TaskCard } from './board/task-card';
 import type { TaskDto } from './lib/types';
+import { useTeamCopy } from './copy';
 
 /**
  * "Benim işlerim" — üyenin açılış ekranı (denetim Y2/#21, eksik özellik "Bugünüm"): üye artık
@@ -19,6 +20,7 @@ import type { TaskDto } from './lib/types';
  * olmayan iş haftayla birlikte kaybolmaz).
  */
 export function MyWork({ onPickTag }: { onPickTag: (tag: string) => void }) {
+  const tu = useTeamCopy().ui;
   const { weekKey, currentWeekKey } = useWorkspace();
   const tasks = useTasks({ view: 'mine', weekKey: currentWeekKey });
   const summary = useSummary(currentWeekKey);
@@ -37,28 +39,28 @@ export function MyWork({ onPickTag }: { onPickTag: (tag: string) => void }) {
   }, [tasks.data]);
 
   const groups: Array<{ key: string; title: string; items: TaskDto[]; tone: 'warning' | 'danger' | 'neutral' | 'info' | 'success'; icon: React.ReactNode; hint?: string }> = [
-    { key: 'revision', title: 'Revizyon istendi', items: buckets.revision, tone: 'warning', icon: <Undo2 className="h-4 w-4" aria-hidden />, hint: 'Yöneticinin notunu okuyup düzelt, yeniden onaya gönder.' },
-    { key: 'overdue', title: 'Gecikenler', items: buckets.overdue, tone: 'danger', icon: <AlertTriangle className="h-4 w-4" aria-hidden /> },
-    { key: 'next', title: 'Sıradakiler', items: buckets.next, tone: 'neutral', icon: <ListTodo className="h-4 w-4" aria-hidden /> },
-    { key: 'review', title: 'Onayda', items: buckets.review, tone: 'info', icon: <Clock3 className="h-4 w-4" aria-hidden /> },
-    { key: 'done', title: 'Bu hafta onaylananlar', items: buckets.done, tone: 'success', icon: <CheckCircle2 className="h-4 w-4" aria-hidden /> },
+    { key: 'revision', title: tu.revizyonIstendi, items: buckets.revision, tone: 'warning', icon: <Undo2 className="h-4 w-4" aria-hidden />, hint: tu.yoneticininNotunuOkuyupDuzelt },
+    { key: 'overdue', title: tu.gecikenler, items: buckets.overdue, tone: 'danger', icon: <AlertTriangle className="h-4 w-4" aria-hidden /> },
+    { key: 'next', title: tu.siradakiler, items: buckets.next, tone: 'neutral', icon: <ListTodo className="h-4 w-4" aria-hidden /> },
+    { key: 'review', title: tu.onayda, items: buckets.review, tone: 'info', icon: <Clock3 className="h-4 w-4" aria-hidden /> },
+    { key: 'done', title: tu.buHaftaOnaylananlar, items: buckets.done, tone: 'success', icon: <CheckCircle2 className="h-4 w-4" aria-hidden /> },
   ];
 
   const s = summary.data?.mine;
   return (
     <div className="space-y-4">
       <MetricGrid cols={4}>
-        <MetricTile label="Açık işim" metric={{ value: s?.open ?? null }} loading={summary.isLoading} icon={<ListTodo />} size="compact" />
-        <MetricTile label="Revizyon istenen" metric={{ value: s?.revision ?? null }} loading={summary.isLoading} icon={<Undo2 />} tone="warning" size="compact" />
-        <MetricTile label="Geciken" metric={{ value: s?.overdue ?? null }} loading={summary.isLoading} icon={<AlertTriangle />} tone="danger" size="compact" />
+        <MetricTile label={tu.acikIsim} metric={{ value: s?.open ?? null }} loading={summary.isLoading} icon={<ListTodo />} size="compact" />
+        <MetricTile label={tu.revizyonIstenen} metric={{ value: s?.revision ?? null }} loading={summary.isLoading} icon={<Undo2 />} tone="warning" size="compact" />
+        <MetricTile label={tu.geciken} metric={{ value: s?.overdue ?? null }} loading={summary.isLoading} icon={<AlertTriangle />} tone="danger" size="compact" />
         <MetricTile
-          label="Bu hafta onaylanan"
+          label={tu.buHaftaOnaylanan}
           metric={{ value: s?.approvedThisWeek ?? null }}
           loading={summary.isLoading}
           icon={<CheckCircle2 />}
           tone="success"
           size="compact"
-          hint={weekKey === currentWeekKey ? undefined : 'İçinde bulunulan hafta'}
+          hint={weekKey === currentWeekKey ? undefined : tu.icindeBulunulanHafta}
         />
       </MetricGrid>
 
@@ -66,7 +68,7 @@ export function MyWork({ onPickTag }: { onPickTag: (tag: string) => void }) {
         query={tasks}
         skeleton="cards"
         isEmpty={(d) => d.items.length === 0}
-        empty={{ variant: 'first-use', title: 'Açık işin yok', description: 'Sana bir görev atandığında burada ve bildirimlerinde göreceksin.' }}
+        empty={{ variant: 'first-use', title: tu.acikIsinYok, description: tu.sanaBirGorevAtandiginda }}
       >
         {() => (
           <div className="space-y-4">

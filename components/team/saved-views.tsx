@@ -22,6 +22,7 @@ export const VIEW_KEYS = ['tab', 'department', 'status', 'priority', 'assignedTo
  * URL'yi değiştirir → görünüm bağlantıyla paylaşılabilir (#34).
  */
 export function SavedViews({ current, onApply }: { current: Record<string, string>; onApply: (config: Record<string, string>) => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can } = useWorkspace();
   const qc = useQueryClient();
@@ -37,7 +38,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
     try {
       const config = Object.fromEntries(Object.entries(current).filter(([k, v]) => (VIEW_KEYS as readonly string[]).includes(k) && v));
       await teamFetch(`${API}/views`, { method: 'POST', json: { name: name.trim(), config, isShared: shared } });
-      toast.success('Görünüm kaydedildi');
+      toast.success(tu.gorunumKaydedildi);
       setName('');
       setShared(false);
       void qc.invalidateQueries({ queryKey: teamKeys.views });
@@ -62,7 +63,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="h-11 gap-1.5 sm:h-10">
-          <Bookmark className="h-4 w-4" aria-hidden /> Görünümler
+          <Bookmark className="h-4 w-4" aria-hidden /> {tu.gorunumler}
           {items.length > 0 && <span className="qx-caption qx-num text-fg-muted">{items.length}</span>}
         </Button>
       </PopoverTrigger>
@@ -81,7 +82,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
                     setOpen(false);
                   }}
                 >
-                  {v.isShared && <Users className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-label="Ekiple paylaşılan" />}
+                  {v.isShared && <Users className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-label={tu.ekiplePaylasilan} />}
                   <span className="truncate">{v.name}</span>
                   {!v.mine && v.ownerName && <span className="qx-caption truncate text-fg-muted">· {v.ownerName}</span>}
                 </button>
@@ -98,12 +99,12 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
           }}
         >
           <label htmlFor="team-view-name" className="qx-caption font-semibold text-fg">
-            Şu anki filtreleri kaydet
+            {tu.suAnkiFiltreleriKaydet}
           </label>
-          <Input id="team-view-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Görünüm adı" maxLength={60} />
+          <Input id="team-view-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tu.gorunumAdi} maxLength={60} />
           {can.shareViews && (
             <label className="qx-small flex items-center gap-2">
-              <Checkbox checked={shared} onCheckedChange={(v) => setShared(v === true)} /> Ekiple paylaş
+              <Checkbox checked={shared} onCheckedChange={(v) => setShared(v === true)} /> {tu.ekiplePaylas}
             </label>
           )}
           <Button type="submit" size="sm" className="h-9 w-full" disabled={busy || !name.trim()}>

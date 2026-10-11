@@ -51,6 +51,7 @@ export function DepartmentCard({
   manage: boolean;
   onShowMembers: () => void;
 }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
   const inDept = members.filter((m) => m.departmentSlugs.includes(dept.slug));
@@ -79,7 +80,7 @@ export function DepartmentCard({
           <h3 className="qx-small font-semibold text-fg">{dept.name}</h3>
           {dept.description && <p className="qx-caption mt-0.5 line-clamp-2 text-fg-muted">{dept.description}</p>}
         </div>
-        {!dept.isActive && <StatusBadge label="Arşivde" tone="neutral" icon={Archive} size="sm" />}
+        {!dept.isActive && <StatusBadge label={tu.arsivde} tone="neutral" icon={Archive} size="sm" />}
         {manage && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -87,21 +88,21 @@ export function DepartmentCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                <Pencil className="mr-2 h-4 w-4" aria-hidden /> Düzenle
+                <Pencil className="mr-2 h-4 w-4" aria-hidden /> {tu.duzenle}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={index === 0} onSelect={() => void patch({ move: 'up' }, 'Sıra değişti')}>
-                <ArrowUp className="mr-2 h-4 w-4" aria-hidden /> Yukarı taşı
+              <DropdownMenuItem disabled={index === 0} onSelect={() => void patch({ move: 'up' }, tu.siraDegisti)}>
+                <ArrowUp className="mr-2 h-4 w-4" aria-hidden /> {tu.yukariTasi}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={index === total - 1} onSelect={() => void patch({ move: 'down' }, 'Sıra değişti')}>
-                <ArrowDown className="mr-2 h-4 w-4" aria-hidden /> Aşağı taşı
+              <DropdownMenuItem disabled={index === total - 1} onSelect={() => void patch({ move: 'down' }, tu.siraDegisti)}>
+                <ArrowDown className="mr-2 h-4 w-4" aria-hidden /> {tu.asagiTasi}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void patch({ isActive: !dept.isActive }, dept.isActive ? 'Departman arşivlendi' : 'Departman arşivden çıkarıldı')}>
+              <DropdownMenuItem onSelect={() => void patch({ isActive: !dept.isActive }, dept.isActive ? tu.departmanArsivlendi : tu.departmanArsivdenCikarildi)}>
                 {dept.isActive ? <Archive className="mr-2 h-4 w-4" aria-hidden /> : <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden />}
-                {dept.isActive ? 'Arşivle' : 'Arşivden çıkar'}
+                {dept.isActive ? tu.arsivle : tu.arsivdenCikar}
               </DropdownMenuItem>
               <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => setDeleteOpen(true)}>
-                <Trash2 className="mr-2 h-4 w-4" aria-hidden /> Sil ya da birleştir…
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden /> {tu.silYaDaBirlestir}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -109,10 +110,10 @@ export function DepartmentCard({
       </div>
       <div className="qx-caption flex flex-wrap gap-3 text-fg-muted">
         <span>
-          <span className="qx-num font-semibold text-fg">{dept.memberCount}</span> üye
+          <span className="qx-num font-semibold text-fg">{dept.memberCount}</span> {tu.uye}
         </span>
         <span>
-          <span className="qx-num font-semibold text-fg">{dept.openTaskCount}</span> açık görev
+          <span className="qx-num font-semibold text-fg">{dept.openTaskCount}</span> {tu.acikGorev}
         </span>
         {leads.length > 0 ? (
           <span>Yönetici: {leads.map((l) => displayName(l)).join(', ')}</span>
@@ -130,7 +131,7 @@ export function DepartmentCard({
           )}
         </div>
         <Button size="sm" variant="ghost" className="h-9 gap-1.5" onClick={onShowMembers}>
-          <Users2 className="h-3.5 w-3.5" aria-hidden /> Üyeleri gör
+          <Users2 className="h-3.5 w-3.5" aria-hidden /> {tu.uyeleriGor}
         </Button>
       </div>
 
@@ -141,6 +142,7 @@ export function DepartmentCard({
 }
 
 function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose: () => void; onSaved: () => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [name, setName] = useState(dept.name);
   const [desc, setDesc] = useState(dept.description ?? '');
@@ -166,7 +168,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
                 method: 'PATCH',
                 json: { name: name.trim(), description: desc.trim() || null, color },
               });
-              toast.success('Departman güncellendi');
+              toast.success(tu.departmanGuncellendi);
               onSaved();
               onClose();
             } catch (err) {
@@ -184,7 +186,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
             <span className="font-medium text-fg">{tx.description}</span>
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} maxLength={300} />
           </label>
-          <div role="group" aria-label="Renk" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label={tu.renk} className="flex flex-wrap gap-1.5">
             {palette.map((c) => (
               <button
                 key={c}
@@ -200,7 +202,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
           {error && <InlineError variant="banner">{error}</InlineError>}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-              Vazgeç
+              {tu.vazgec}
             </Button>
             <Button type="submit" disabled={busy || name.trim().length < 2}>
               Kaydet
@@ -213,6 +215,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
 }
 
 function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepartment; departments: TeamDepartment[]; onClose: () => void; onDone: () => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [impact, setImpact] = useState<Impact | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -236,10 +239,10 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
         {impact && (
           <dl className="grid grid-cols-2 gap-2 rounded-card border border-subtle p-3">
             {[
-              ['Üye', impact.members],
-              ['Açık görev', impact.openTasks],
-              ['Tüm görev', impact.allTasks],
-              ['Şablon', impact.templates],
+              [tu.uye2, impact.members],
+              [tu.acikGorev2, impact.openTasks],
+              [tu.tumGorev, impact.allTasks],
+              [tu.sablon, impact.templates],
               ['Otomasyon', impact.automations],
             ].map(([k, v]) => (
               <div key={k as string} className="flex justify-between gap-2">
@@ -253,8 +256,8 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
           <div className="space-y-1">
             <span className="qx-small font-medium text-fg">{tx.moveAllTo}</span>
             <Select value={target || undefined} onValueChange={setTarget}>
-              <SelectTrigger aria-label="Birleştirilecek departman">
-                <SelectValue placeholder="Departman seç" />
+              <SelectTrigger aria-label={tu.birlestirilecekDepartman}>
+                <SelectValue placeholder={tu.departmanSec} />
               </SelectTrigger>
               <SelectContent>
                 {targets.map((d) => (
@@ -269,7 +272,7 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
         {error && <InlineError variant="banner">{error}</InlineError>}
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-            Vazgeç
+            {tu.vazgec}
           </Button>
           <Button
             type="button"
@@ -280,7 +283,7 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
               setError(null);
               try {
                 await teamFetch(`${API}/departments?slug=${encodeURIComponent(dept.slug)}${target ? `&mergeInto=${encodeURIComponent(target)}` : ''}`, { method: 'DELETE' });
-                toast.success(target ? 'Departmanlar birleştirildi' : 'Departman silindi');
+                toast.success(target ? tu.departmanlarBirlestirildi : 'Departman silindi');
                 onDone();
                 onClose();
               } catch (err) {
@@ -290,7 +293,7 @@ function DeleteDialog({ dept, departments, onClose, onDone }: { dept: TeamDepart
               }
             }}
           >
-            {impact?.referenced ? 'Birleştir ve sil' : 'Sil'}
+            {impact?.referenced ? tu.birlestirVeSil : 'Sil'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -50,6 +50,7 @@ function renderText(text: string, handles: Set<string>) {
  * yalnız bu göreve yüklenmiş ekin kimliğiyle bağlanır (serbest URL enjeksiyonu kapandı).
  */
 export function TaskComments({ data }: { data: TaskDetailPayload }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task } = data;
   const { members, viewer, weekKey } = useWorkspace();
@@ -120,7 +121,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
       setReplyTo(null);
       setFile(null);
     } catch (err) {
-      toast.error(errorMessage(err), { description: 'Yorumun silinmedi; tekrar gönderebilirsin.' });
+      toast.error(errorMessage(err), { description: tu.yorumunSilinmediTekrarGonderebilirsin });
     } finally {
       setSending(false);
     }
@@ -136,7 +137,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
         <MemberAvatar user={c.author} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="qx-small font-semibold text-fg">{displayName(c.author, 'Silinmiş kullanıcı')}</span>
+            <span className="qx-small font-semibold text-fg">{displayName(c.author, tu.silinmisKullanici)}</span>
             <time className="qx-caption text-fg-muted" dateTime={c.createdAt} title={formatTeamDateTime(c.createdAt)}>
               {relativeTeamTime(c.createdAt)}
             </time>
@@ -156,13 +157,13 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
                 }
               }}
             >
-              <Textarea value={editing.text} onChange={(e) => setEditing({ id: c.id, text: e.target.value })} rows={3} aria-label="Yorumu düzenle" autoFocus />
+              <Textarea value={editing.text} onChange={(e) => setEditing({ id: c.id, text: e.target.value })} rows={3} aria-label={tu.yorumuDuzenle} autoFocus />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-9">
                   Kaydet
                 </Button>
                 <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => setEditing(null)}>
-                  Vazgeç
+                  {tu.vazgec}
                 </Button>
               </div>
             </form>
@@ -189,7 +190,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
             ))}
             <Popover>
               <PopoverTrigger asChild>
-                <IconButton aria-label="Tepki ekle" icon={<SmilePlus />} size="sm" />
+                <IconButton aria-label={tu.tepkiEkle} icon={<SmilePlus />} size="sm" />
               </PopoverTrigger>
               <PopoverContent className="flex w-auto gap-1 p-1.5" align="start">
                 {REACTIONS.map((e) => (
@@ -201,7 +202,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
             </Popover>
             {!nested && (
               <IconButton
-                aria-label="Yanıtla"
+                aria-label={tu.yanitla}
                 icon={<Reply />}
                 size="sm"
                 onClick={() => {
@@ -210,8 +211,8 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
                 }}
               />
             )}
-            {c.canEdit && <IconButton aria-label="Düzenle" icon={<Pencil />} size="sm" onClick={() => setEditing({ id: c.id, text: c.text })} />}
-            {c.canDelete && <IconButton aria-label="Sil" icon={<Trash2 />} size="sm" onClick={() => setDeleting(c)} />}
+            {c.canEdit && <IconButton aria-label={tu.duzenle} icon={<Pencil />} size="sm" onClick={() => setEditing({ id: c.id, text: c.text })} />}
+            {c.canDelete && <IconButton aria-label={tu.sil} icon={<Trash2 />} size="sm" onClick={() => setDeleting(c)} />}
           </div>
           {!nested && replies(c.id).length > 0 && <ul className="mt-2 space-y-3">{replies(c.id).map((r) => renderComment(r, true))}</ul>}
         </div>
@@ -240,7 +241,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
         {replyTo && (
           <p className="qx-caption flex items-center gap-1 text-fg-muted">
             <CornerDownRight className="h-3 w-3" aria-hidden /> {displayName(replyTo.author, 'yorum')} kişisine yanıt
-            <IconButton aria-label="Yanıtı iptal et" icon={<X />} size="sm" onClick={() => setReplyTo(null)} />
+            <IconButton aria-label={tu.yanitiIptalEt} icon={<X />} size="sm" onClick={() => setReplyTo(null)} />
           </p>
         )}
         <div className="relative">
@@ -269,13 +270,13 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
             }}
             rows={2}
             maxLength={4000}
-            placeholder="Not yaz… (@ ile birini etiketle, Ctrl+Enter ile gönder)"
-            aria-label="Yorum yaz"
+            placeholder={tu.notYazIleBirini}
+            aria-label={tu.yorumYaz}
             aria-autocomplete="list"
             aria-expanded={mentionList.length > 0}
           />
           {mentionList.length > 0 && (
-            <ul role="listbox" aria-label="Etiketlenecek kişi" className="absolute bottom-full left-0 z-popover mb-1 w-64 rounded-control border border-subtle bg-surface-1 p-1 qx-elevation-2">
+            <ul role="listbox" aria-label={tu.etiketlenecekKisi} className="absolute bottom-full left-0 z-popover mb-1 w-64 rounded-control border border-subtle bg-surface-1 p-1 qx-elevation-2">
               {mentionList.map((m, i) => (
                 <li key={m.id} role="option" aria-selected={i === mentionIdx}>
                   <button
@@ -319,7 +320,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
                     }
                   }}
                 />
-                <IconButton aria-label="Yoruma dosya ekle" icon={<Paperclip />} size="sm" loading={uploadPct !== null} onClick={() => fileRef.current?.click()} />
+                <IconButton aria-label={tu.yorumaDosyaEkle} icon={<Paperclip />} size="sm" loading={uploadPct !== null} onClick={() => fileRef.current?.click()} />
               </>
             )}
             {uploadPct !== null && <span className="qx-caption qx-num text-fg-muted">%{uploadPct}</span>}
@@ -327,14 +328,14 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
               <span className="qx-caption inline-flex min-w-0 items-center gap-1 rounded-chip bg-surface-2 px-1.5 py-0.5 text-fg">
                 <Paperclip className="h-3 w-3 shrink-0" aria-hidden />
                 <span className="truncate">{file.filename}</span>
-                <button type="button" aria-label="Eki kaldır" onClick={() => setFile(null)} className="grid h-5 w-5 place-items-center">
+                <button type="button" aria-label={tu.ekiKaldir} onClick={() => setFile(null)} className="grid h-5 w-5 place-items-center">
                   <X className="h-3 w-3" aria-hidden />
                 </button>
               </span>
             )}
           </div>
           <Button type="submit" size="sm" className="h-10 gap-1.5" disabled={sending || (!text.trim() && !file)}>
-            <Send className="h-4 w-4" aria-hidden /> {sending ? 'Gönderiliyor…' : 'Gönder'}
+            <Send className="h-4 w-4" aria-hidden /> {sending ? tu.gonderiliyor : tu.gonder}
           </Button>
         </div>
       </form>
@@ -342,9 +343,9 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
       <ConfirmAction
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title="Yorum silinsin mi?"
+        title={tu.yorumSilinsinMi}
         tone="warning"
-        confirmLabel="Sil"
+        confirmLabel={tu.sil}
         onConfirm={async () => {
           if (!deleting) return;
           await actions.act(task.id, { op: 'delete_comment', commentId: deleting.id });

@@ -7,6 +7,7 @@ import { formatMinutes } from '@/lib/team/dates';
 import { weekKeyLabel } from '@/lib/team-week';
 import { errorMessage } from './lib/api';
 import type { TeamSummary } from './lib/types';
+import { useTeamCopy } from './copy';
 
 /**
  * Hafta özeti — sayılar sunucuda, FİLTRESİZ ve seçili haftaya göre (denetim Bulgu 43/44/15).
@@ -26,6 +27,7 @@ export function SummaryStrip({
   onOpenReview?: () => void;
   showReview: boolean;
 }) {
+  const tu = useTeamCopy().ui;
   if (error && !summary) return <InlineError variant="banner">Özet yüklenemedi: {errorMessage(error)}</InlineError>;
   const w = summary?.week;
   const trend = summary?.trend ?? [];
@@ -48,7 +50,7 @@ export function SummaryStrip({
           hint={w ? `${w.done}/${w.total} görev bitti${w.carried ? ` · ${w.carried} devreden` : ''}` : undefined}
         />
         <MetricTile
-          label="Devam eden"
+          label={tu.devamEden}
           metric={{ value: w ? w.inProgress + w.todo : null }}
           loading={loading}
           icon={<CircleDashed />}
@@ -58,20 +60,20 @@ export function SummaryStrip({
         {showReview ? (
           <button type="button" onClick={onOpenReview} className="rounded-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <MetricTile
-              label="Onay bekleyen"
+              label={tu.onayBekleyen}
               metric={{ value: summary?.reviewQueue ?? null }}
               loading={loading}
               icon={<Clock3 />}
               tone="info"
               size="compact"
-              hint="Tüm haftalar · kuyruğu aç"
+              hint={tu.tumHaftalarKuyruguAc}
             />
           </button>
         ) : (
-          <MetricTile label="Onayda" metric={{ value: w?.review ?? null }} loading={loading} icon={<Clock3 />} tone="info" size="compact" />
+          <MetricTile label={tu.onayda} metric={{ value: w?.review ?? null }} loading={loading} icon={<Clock3 />} tone="info" size="compact" />
         )}
         <MetricTile
-          label="Geciken"
+          label={tu.geciken}
           metric={{ value: w?.overdue ?? null }}
           loading={loading}
           icon={<AlertTriangle />}

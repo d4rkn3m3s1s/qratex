@@ -31,6 +31,7 @@ export function NoteDialog({
   confirmLabel: string;
   onConfirm: (note: string) => Promise<unknown> | unknown;
 }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const id = useId();
   const [note, setNote] = useState('');
@@ -62,7 +63,7 @@ export function NoteDialog({
           }}
         >
           {quickNotes && quickNotes.length > 0 && (
-            <div role="group" aria-label="Hazır notlar" className="flex flex-wrap gap-1.5">
+            <div role="group" aria-label={tu.hazirNotlar} className="flex flex-wrap gap-1.5">
               {quickNotes.map((q) => (
                 <Button
                   key={q}
@@ -84,7 +85,7 @@ export function NoteDialog({
           <Textarea id={id} value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000} autoFocus />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-              Vazgeç
+              {tu.vazgec}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {busy ? 'Kaydediliyor…' : confirmLabel}

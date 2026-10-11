@@ -37,6 +37,7 @@ export function MembersPanel({
   deptFilter: string;
   onDeptFilter: (v: string) => void;
 }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
   const manage = viewer.isManager;
@@ -71,10 +72,10 @@ export function MembersPanel({
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="relative lg:w-72">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-          <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Üye ara" aria-label="Üye ara" className="h-11 pl-9" />
+          <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tu.uyeAra} aria-label={tu.uyeAra} className="h-11 pl-9" />
         </div>
         <Select value={deptFilter} onValueChange={onDeptFilter}>
-          <SelectTrigger className="h-11 lg:w-64" aria-label="Departman filtresi">
+          <SelectTrigger className="h-11 lg:w-64" aria-label={tu.departmanFiltresi}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -88,7 +89,7 @@ export function MembersPanel({
           </SelectContent>
         </Select>
         <Select value={role} onValueChange={setRole}>
-          <SelectTrigger className="h-11 lg:w-44" aria-label="Rol filtresi">
+          <SelectTrigger className="h-11 lg:w-44" aria-label={tu.rolFiltresi}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -101,7 +102,7 @@ export function MembersPanel({
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState variant={q || role !== 'all' || deptFilter !== 'all' ? 'filtered' : 'default'} title="Üye bulunamadı" compact />
+        <EmptyState variant={q || role !== 'all' || deptFilter !== 'all' ? 'filtered' : 'default'} title={tu.uyeBulunamadi} compact />
       ) : (
         <ul className="divide-y divide-[hsl(var(--border-subtle))] rounded-card border border-subtle bg-surface-1">
           {rows.map((m) => {
@@ -115,8 +116,8 @@ export function MembersPanel({
                   <div className="min-w-0">
                     <p className="qx-small flex flex-wrap items-center gap-1.5 font-semibold text-fg">
                       {displayName(m)}
-                      {m.isSelf && <StatusBadge label="Sen" tone="brand" icon={null} size="sm" />}
-                      {m.isAdmin && <StatusBadge label="Platform yöneticisi" tone="neutral" icon={null} size="sm" />}
+                      {m.isSelf && <StatusBadge label={tu.sen} tone="brand" icon={null} size="sm" />}
+                      {m.isAdmin && <StatusBadge label={tu.platformYoneticisi} tone="neutral" icon={null} size="sm" />}
                     </p>
                     {m.email && <p className="qx-caption truncate text-fg-muted">{m.email}</p>}
                   </div>
@@ -126,15 +127,15 @@ export function MembersPanel({
                   {m.departmentSlugs.map((s, i) => (
                     <span key={s} className="qx-caption inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-0.5 pl-1.5 pr-0.5 text-fg">
                       <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: departments.find((d) => d.slug === s)?.color ?? '#6b7280' }} />
-                      {i === 0 && m.departmentSlugs.length > 1 && <Star className="h-3 w-3 text-warning" aria-label="Birincil departman" />}
+                      {i === 0 && m.departmentSlugs.length > 1 && <Star className="h-3 w-3 text-warning" aria-label={tu.birincilDepartman} />}
                       {deptName(s)}
                       {canDept && i !== 0 && (
-                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${deptName(s)} departmanını birincil yap`} onClick={() => void put({ id: m.id, primaryDepartment: s }, 'Birincil departman güncellendi')}>
+                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${deptName(s)} departmanını birincil yap`} onClick={() => void put({ id: m.id, primaryDepartment: s }, tu.birincilDepartmanGuncellendi)}>
                           <Star className="h-3 w-3" aria-hidden />
                         </button>
                       )}
                       {canDept && (
-                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${displayName(m)} kişisini ${deptName(s)} departmanından çıkar`} onClick={() => void put({ id: m.id, removeDepartment: s }, 'Departmandan çıkarıldı')}>
+                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${displayName(m)} kişisini ${deptName(s)} departmanından çıkar`} onClick={() => void put({ id: m.id, removeDepartment: s }, tu.departmandanCikarildi)}>
                           <X className="h-3 w-3" aria-hidden />
                         </button>
                       )}
@@ -167,7 +168,7 @@ export function MembersPanel({
                 </div>
                 <div className="flex items-center gap-2">
                   {canRole ? (
-                    <Select value={m.teamRole ?? 'uye'} onValueChange={(v) => void put({ id: m.id, teamRole: v }, 'Rol güncellendi')}>
+                    <Select value={m.teamRole ?? 'uye'} onValueChange={(v) => void put({ id: m.id, teamRole: v }, tu.rolGuncellendi)}>
                       <SelectTrigger className="h-10 w-32" aria-label={`${displayName(m)} ekip rolü`}>
                         <SelectValue />
                       </SelectTrigger>
@@ -177,7 +178,7 @@ export function MembersPanel({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <StatusBadge label={m.teamRole === 'yonetici' ? 'Yönetici' : 'Üye'} tone={m.teamRole === 'yonetici' ? 'brand' : 'neutral'} icon={null} size="md" />
+                    <StatusBadge label={m.teamRole === 'yonetici' ? tu.yonetici : tu.uye2} tone={m.teamRole === 'yonetici' ? 'brand' : 'neutral'} icon={null} size="md" />
                   )}
                   {canRemove && <IconButton aria-label={`${displayName(m)} kişisini ekipten çıkar`} icon={<UserMinus />} size="sm" onClick={() => setRemoving(m)} />}
                 </div>
@@ -191,13 +192,13 @@ export function MembersPanel({
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={removing ? `${displayName(removing)} ekipten çıkarılsın mı?` : ''}
-        description="Görevleri silinmez; atamalar yerinde kalır. Ekip paneline erişimi hemen kapanır."
+        description={tu.gorevleriSilinmezAtamalarYerinde}
         tone="warning"
-        confirmLabel="Ekipten çıkar"
+        confirmLabel={tu.ekiptenCikar}
         onConfirm={async () => {
           if (!removing) return;
           await teamFetch(`${API}/members?id=${encodeURIComponent(removing.id)}`, { method: 'DELETE' });
-          toast.success('Ekipten çıkarıldı');
+          toast.success(tu.ekiptenCikarildi);
           setRemoving(null);
           void refresh();
         }}
@@ -212,6 +213,7 @@ export function MembersPanel({
  * eklerken seçilir (denetim #25: departman parametresi hiç verilmiyordu).
  */
 function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: TeamMeta; onAdded: () => void }) {
+  const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -282,14 +284,14 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button className="h-11 gap-1.5 lg:ml-auto">
-          <UserPlus className="h-4 w-4" aria-hidden /> Üye ekle
+          <UserPlus className="h-4 w-4" aria-hidden /> {tu.uyeEkle}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(92vw,22rem)] space-y-3">
         {!pick ? (
           <>
             <label htmlFor="add-member-q" className="qx-small font-semibold text-fg">
-              {viewer.isAdmin ? 'Ad ya da e-posta ile ara' : 'Kişinin e-posta adresini tam yaz'}
+              {viewer.isAdmin ? 'Ad ya da e-posta ile ara' : tu.kisininEPostaAdresini}
             </label>
             <Input id="add-member-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={viewer.isAdmin ? 'en az 3 karakter' : 'ornek@alan.com'} autoFocus />
             <div aria-live="polite" className="space-y-1">
@@ -318,11 +320,11 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
             <div className="flex items-center gap-2">
               <MemberAvatar user={pick} size="sm" />
               <span className="qx-small min-w-0 flex-1 truncate font-semibold">{displayName(pick)}</span>
-              <IconButton aria-label="Başka kişi seç" icon={<X />} size="sm" onClick={() => setPick(null)} />
+              <IconButton aria-label={tu.baskaKisiSec} icon={<X />} size="sm" onClick={() => setPick(null)} />
             </div>
             {viewer.isAdmin && (
               <Select value={teamRole} onValueChange={(v) => setTeamRole(v as 'uye' | 'yonetici')}>
-                <SelectTrigger aria-label="Ekip rolü">
+                <SelectTrigger aria-label={tu.ekipRolu}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
