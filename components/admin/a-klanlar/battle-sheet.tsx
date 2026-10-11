@@ -13,6 +13,7 @@ import { AUDIT_ACTION_LABEL, LEDGER_SOURCE_LABEL, type BattleDetail } from '@/li
 import { battleAction, fetchBattle, squadsKeys } from './api';
 import { BATTLE_VIEW, fmtDateTime, fmtNumber, fmtRemaining } from './format';
 import { FormField, ImpactList, ReasonDialog, ScoreBar } from './parts';
+import { AdminKlanlarText } from './copy';
 
 const EXTEND_PRESETS = [1, 6, 12, 24, 48] as const;
 
@@ -268,7 +269,7 @@ function BattleDetailView({ d }: { d: BattleDetail }) {
         }}
       >
         <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-fg">Ne kadar uzatılsın?</legend>
+          <legend className="text-sm font-medium text-fg"><AdminKlanlarText k="extendBy" /></legend>
           <div className="flex flex-wrap gap-2">
             {EXTEND_PRESETS.map((h) => (
               <Button key={h} type="button" size="sm" variant={extendHours === h ? 'default' : 'outline'} className="min-h-11 sm:min-h-9" aria-pressed={extendHours === h} onClick={() => setExtendHours(h)}>

@@ -14,6 +14,7 @@ import { SQUAD_MAX_MEMBERS, SQUAD_NAME_MAX } from '@/lib/squads/rules';
 import { fetchSquad, squadAction, squadsKeys } from './api';
 import { BATTLE_VIEW, displayName, fmtDate, fmtDateTime, fmtNumber } from './format';
 import { FormField, ImpactList, ReasonDialog } from './parts';
+import { AdminKlanlarText } from './copy';
 
 type Pending =
   | { kind: 'freeze' }
@@ -172,7 +173,7 @@ function SquadDetailView({ d }: { d: SquadDetail }) {
                     onClick={() => setPending({ kind: 'remove_member', userId: mb.userId, name: displayName(mb) })}
                   >
                     <UserMinus className="h-4 w-4" aria-hidden />
-                    <span className="hidden sm:inline">Çıkar</span>
+                    <span className="hidden sm:inline"><AdminKlanlarText k="remove" /></span>
                   </Button>
                 </div>
               ) : null}
@@ -188,12 +189,12 @@ function SquadDetailView({ d }: { d: SquadDetail }) {
         headingLevel="h3"
         actions={
           <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
-            <Link href={`/admin/squads?tab=battles&squadId=${encodeURIComponent(d.id)}`}>Tümü</Link>
+            <Link href={`/admin/squads?tab=battles&squadId=${encodeURIComponent(d.id)}`}><AdminKlanlarText k="all" /></Link>
           </Button>
         }
       >
         {d.battles.length === 0 ? (
-          <p className="text-sm text-fg-muted">Bu klan henüz bir savaşa girmedi.</p>
+          <p className="text-sm text-fg-muted"><AdminKlanlarText k="noBattles" /></p>
         ) : (
           <ul className="divide-y divide-subtle">
             {d.battles.map((b) => {

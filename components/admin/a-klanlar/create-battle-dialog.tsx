@@ -12,6 +12,7 @@ import { BATTLE_DURATION_PRESETS, type SquadOption } from '@/lib/admin-squads/co
 import { cn } from '@/lib/utils';
 import { createBattle, errorText, fetchOptions, fieldError, squadsKeys } from './api';
 import { fmtNumber } from './format';
+import { AdminKlanlarText } from './copy';
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -76,9 +77,9 @@ function SquadPicker({
             {opts.isError ? (
               <p className="p-3 text-sm text-danger">{errorText(opts.error)}</p>
             ) : opts.isLoading ? (
-              <p className="p-3 text-sm text-fg-muted">Yükleniyor…</p>
+              <p className="p-3 text-sm text-fg-muted"><AdminKlanlarText k="loading" /></p>
             ) : items.length === 0 ? (
-              <p className="p-3 text-sm text-fg-muted">Eşleşen klan yok.</p>
+              <p className="p-3 text-sm text-fg-muted"><AdminKlanlarText k="noClans" /></p>
             ) : (
               items.map((o) => {
                 const why = o.isFrozen ? 'Dondurulmuş' : o.hasOpenBattle ? 'Açık savaşı var' : o.memberCount === 0 ? 'Üyesi yok' : null;
@@ -160,7 +161,7 @@ export function CreateBattleDialog({ open, onOpenChange, onCreated }: { open: bo
           }}
         >
           <DialogHeader>
-            <DialogTitle>Onur savaşı planla</DialogTitle>
+            <DialogTitle><AdminKlanlarText k="planBattle" /></DialogTitle>
             <DialogDescription>
               Yönetici savaşları ödülsüzdür: puan basılmaz, zafer klan siciline yazılır. Ödül havuzu yalnız liderlerin kendi puanıyla açtığı meydan okumalarda olur.
             </DialogDescription>
@@ -172,7 +173,7 @@ export function CreateBattleDialog({ open, onOpenChange, onCreated }: { open: bo
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-fg">Süre</legend>
+            <legend className="text-sm font-medium text-fg"><AdminKlanlarText k="duration" /></legend>
             <div className="flex flex-wrap gap-2">
               {BATTLE_DURATION_PRESETS.map((h) => (
                 <Button key={h} type="button" size="sm" variant={hours === h ? 'default' : 'outline'} className="min-h-11 sm:min-h-9" aria-pressed={hours === h} onClick={() => setHours(h)}>
@@ -183,7 +184,7 @@ export function CreateBattleDialog({ open, onOpenChange, onCreated }: { open: bo
           </fieldset>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-fg">Başlangıç</legend>
+            <legend className="text-sm font-medium text-fg"><AdminKlanlarText k="start" /></legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {(
                 [

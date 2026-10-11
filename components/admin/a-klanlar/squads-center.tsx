@@ -43,6 +43,7 @@ import { CreateBattleDialog } from './create-battle-dialog';
 import { BATTLE_VIEW, BATTLE_VIEW_TABS, displayName, fmtDate, fmtDateTime, fmtNumber, fmtRemaining } from './format';
 import { Pager, ScoreBar } from './parts';
 import { SquadDetailBody } from './squad-sheet';
+import { AdminKlanlarText } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -443,7 +444,7 @@ function BattlesTab({ initial, onOpen }: { initial: SquadsInitial['battles']; on
       <FilterBar fields={BATTLE_FIELDS} resetKeys={['bpage']} ariaLabel="Savaş filtreleri" />
       {squadId ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-fg-muted">Klan süzgeci:</span>
+          <span className="text-fg-muted"><AdminKlanlarText k="clanFilter" /></span>
           <span className="font-medium text-fg">{squadName ?? 'Seçili klan'}</span>
           <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={() => set({ squadId: null, bpage: null })} aria-label="Klan süzgecini kaldır">
             <X className="h-4 w-4" aria-hidden />
