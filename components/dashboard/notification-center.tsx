@@ -113,15 +113,23 @@ export function NotificationCenter() {
     const firstLoadRef = useRef(true);
 
     // ── Fetch ───
-    const fetchNotifications = useCallback(async () => {
-        if (!session?.user?.id) return;
+    // Son liste imzası: yoklama sonucu DEĞİŞMEDİYSE aralık seyreltilir (arka plan O6).
+    const lastSignatureRef = useRef<string | null>(null);
+    /** Listeyi tazeler. Dönüş: liste ya da okunmamış sayısı değişti mi (yoklama geri çekilmesi için). */
+    const fetchNotifications = useCallback(async (): Promise<boolean> => {
+        if (!session?.user?.id) return false;
         try {
             const res = await fetch('/api/notifications?limit=30', { credentials: 'same-origin', cache: 'no-store' });
             // Geçici hata (ağ/5xx/429) listeyi "bildirim yok" diye SİLMEZ: son bilinen liste kalır.
-            if (!res.ok) return;
+            if (!res.ok) return false;
             const data = await res.json().catch(() => ({}));
             if (data?.success && Array.isArray(data.notifications)) {
                 const items = data.notifications as Notification[];
+                const signature = `${typeof data.unreadCount === 'number' ? data.unreadCount : 0}|${items
+                    .map((n) => `${n.id}:${n.isRead ? 1 : 0}`)
+                    .join(',')}`;
+                const changed = signature !== lastSignatureRef.current;
+                lastSignatureRef.current = signature;
                 if (firstLoadRef.current) {
                     // İlk yükleme: mevcut bildirimler toast'sız "görüldü" sayılır.
                     markNotificationsSeen(items.map((n) => n.id));
@@ -142,30 +150,53 @@ export function NotificationCenter() {
                 setNotifications(items);
                 setUnreadCount(typeof data.unreadCount === 'number' ? data.unreadCount : 0);
                 firstLoadRef.current = false;
+                return changed;
             }
         } catch {
             /* ağ hatası: son bilinen liste korunur, bir sonraki turda yeniden denenir */
         }
+        return false;
     }, [session?.user?.id]);
 
     // Yoklama yalnız GÖRÜNÜR sekmede (mimari-api B9): gizli sekme sunucuya istek atmaz;
     // sekmeye dönüldüğünde hemen tazelenir.
+    //
+    // GERİ ÇEKİLME (arka plan O6): görünür ama boşta duran panel (ör. sürekli açık bayi/yönetim
+    // ekranı) 20 sn'de bir DB'ye gidip Neon compute'unu 7/24 uyanık tutuyordu. Art arda değişiklik
+    // getirmeyen her turda aralık ikiye katlanır (20 sn → 40 → 80 → … en fazla 5 dk); yeni bildirim,
+    // sekmeye dönüş ya da pencere odağı aralığı yeniden 20 sn'ye indirir.
     useEffect(() => {
         if (!session?.user?.id) return;
-        let poll: ReturnType<typeof setInterval> | null = null;
+        const BASE_MS = 20_000;
+        const MAX_IDLE_MS = 300_000;
+        let poll: ReturnType<typeof setTimeout> | null = null;
+        let delay = BASE_MS;
+        let disposed = false;
         const stop = () => {
-            if (poll) clearInterval(poll);
+            if (poll) clearTimeout(poll);
             poll = null;
         };
         // Tek kanal (perf Y5): bayi SSE akışı canlıyken liste akış olayıyla tazelenir; yoklama yalnız
-        // seyrek güvenlik turu (5 dk). Akış yoksa/koptuysa eski 20 sn yoklama.
+        // seyrek güvenlik turu (5 dk). Akış yoksa/koptuysa geri çekilmeli yoklama.
         const schedule = () => {
             stop();
-            poll = setInterval(fetchNotifications, isNotificationStreamLive() ? 300_000 : 20_000);
+            if (disposed) return;
+            const wait = isNotificationStreamLive() ? MAX_IDLE_MS : delay;
+            poll = setTimeout(async () => {
+                poll = null;
+                const changed = await fetchNotifications();
+                delay = changed ? BASE_MS : Math.min(MAX_IDLE_MS, delay * 2);
+                if (!disposed && document.visibilityState === 'visible') schedule();
+            }, wait);
         };
         const start = () => {
-            fetchNotifications();
+            delay = BASE_MS;
+            void fetchNotifications();
             schedule();
+        };
+        const onFocus = () => {
+            // Kullanıcı geri döndü: uzun boşta aralıktaysa hemen tazele, ritmi sıfırla.
+            if (document.visibilityState === 'visible' && delay > BASE_MS) start();
         };
         const onVisibility = () => {
             if (document.visibilityState === 'visible') start();
@@ -184,16 +215,19 @@ export function NotificationCenter() {
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => {
                 refreshTimer = null;
-                fetchNotifications();
+                void fetchNotifications();
             }, 400);
         });
         if (document.visibilityState === 'visible') start();
         document.addEventListener('visibilitychange', onVisibility);
+        window.addEventListener('focus', onFocus);
         return () => {
+            disposed = true;
             stop();
             if (refreshTimer) clearTimeout(refreshTimer);
             unsubscribe();
             document.removeEventListener('visibilitychange', onVisibility);
+            window.removeEventListener('focus', onFocus);
         };
     }, [session?.user?.id, fetchNotifications]);
 
@@ -424,7 +458,7 @@ export function NotificationCenter() {
                                                         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
                                                         <div className="mt-1.5 flex items-center justify-between">
                                                             <p className="text-[11px] text-muted-foreground/70">{formatTime(n.createdAt)}</p>
-                                                            <span className="flex items-center gap-0.5 text-[11px] text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                                                            <span className="flex items-center gap-0.5 text-[11px] text-primary transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100">
                                                                 {t('notificationCenter.detail')} <ExternalLink className="h-2.5 w-2.5" />
                                                             </span>
                                                         </div>
@@ -447,7 +481,7 @@ export function NotificationCenter() {
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="mt-0.5 h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                                                        className="mt-0.5 h-8 w-8 transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100"
                                                         onClick={(e) => deleteNotification(n.id, e)}
                                                         aria-label={t('common.delete')}
                                                     >

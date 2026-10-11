@@ -26,8 +26,10 @@ test.describe('Smoke', () => {
     const res = await request.get('/api/health');
     expect(res.status()).toBeLessThan(500);
     const json = await res.json();
-    expect(json).toHaveProperty('runtime');
-    expect(json.runtime).toHaveProperty('uptimeSeconds');
+    // Anonim yanıt minimal (keşif yüzeyi yok): yalnız durum + DB kontrolü; ayrıntı Bearer ister.
+    expect(json).toHaveProperty('status');
+    expect(json.checks).toHaveProperty('database');
+    expect(json).not.toHaveProperty('runtime');
   });
 
   test('demo admin ile Grok Konseyi sayfası açılır', async ({ page }) => {

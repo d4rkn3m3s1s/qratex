@@ -9,44 +9,48 @@ const HEALTH_DB_ERROR_HEADERS: Record<string, string> = {
   'Retry-After': '10',
 };
 
+/** Anonim yanıtta ham DB hata metni yerine (bağlantı dizesi/sunucu adı sızmasın — arka plan D5). */
+const PUBLIC_DB_ERROR = 'Veritabanına şu an ulaşılamıyor.';
+
+function mailCheck(mail: ReturnType<typeof getMailDeliverySummary>) {
+  if (!mail.configured) return { status: 'warn' as const, message: 'SMTP veya RESEND_API_KEY tanımlanmadı' };
+  if (mail.resendSandboxSender) {
+    return { status: 'warn' as const, message: 'Resend gönderen adresi sandbox (onboarding@resend.dev) — RESEND_FROM doğrulanmış alan adı olmalı' };
+  }
+  return { status: 'ok' as const, message: 'İşlem e-postası (SMTP veya Resend) yapılandırıldı' };
+}
+
 /**
- * Sağlık kontrolü: DB bağlantısı ve uygulama durumu.
- * Uptime checker veya load balancer için kullanılabilir.
- * ?light=1 → readiness: sadece DB ping, minimal yanıt (deployment probe için).
+ * Sağlık kontrolü.
+ *  - `?live=1` → LIVENESS: veritabanına DOKUNMAZ (süreç ayakta mı). Dış uptime izleyicileri bunu
+ *    kullanmalı: dakikalık DB pingi Neon compute'unu 7/24 uyanık tutar (arka plan D5).
+ *  - `?light=1` → READINESS: yalnız DB ping, minimal yanıt (deployment probe, landing canlı durum).
+ *  - parametresiz → DB + (yalnız yetkili çağrıda) e-posta/sürüm/çalışma süresi ayrıntısı.
+ * Ayrıntılar ve ham hata metni yalnız iç iş sırrıyla (Bearer) gelen çağrıya verilir; anonim
+ * yanıt her durumda minimal kalır (keşif yüzeyi açılmaz).
  */
 export async function GET(request: NextRequest) {
-  const light = request.nextUrl.searchParams.get('light') === '1';
+  const params = request.nextUrl.searchParams;
+  if (params.get('live') === '1') {
+    return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() }, { status: 200, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+  const light = params.get('light') === '1';
+  const authorized = authorizeInternalJobRequest(request);
   const start = Date.now();
 
   try {
     await prisma.$queryRaw`SELECT 1`;
     const latencyMs = Date.now() - start;
-    const mail = getMailDeliverySummary();
     if (light) {
-      return NextResponse.json(
-        { status: 'ok', latencyMs },
-        { status: 200, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+      return NextResponse.json({ status: 'ok', latencyMs }, { status: 200, headers: PRIVATE_NO_STORE_HEADERS });
     }
-    // Recon yüzeyini daralt: version/runtime/mail detayları yalnızca yetkili
-    // (internal job secret) çağrılara verilir; anonim sağlık kontrolü minimal kalır.
-    const authorized = authorizeInternalJobRequest(request);
     return NextResponse.json(
       {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         checks: {
           database: { status: 'ok', latencyMs },
-          ...(authorized
-            ? {
-                transactionalEmail: {
-                  status: mail.configured ? 'ok' : 'warn',
-                  message: mail.configured
-                    ? 'İşlem e-postası (SMTP veya Resend) yapılandırıldı'
-                    : 'SMTP veya RESEND_API_KEY tanımlanmadı',
-                },
-              }
-            : {}),
+          ...(authorized ? { transactionalEmail: mailCheck(getMailDeliverySummary()) } : {}),
         },
         ...(authorized
           ? {
@@ -61,13 +65,11 @@ export async function GET(request: NextRequest) {
       { status: 200, headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'Database unreachable';
-    const mail = getMailDeliverySummary();
+    const rawError = e instanceof Error ? e.message : 'Database unreachable';
+    if (!authorized) console.error('[health] DB ping başarısız:', rawError);
+    const error = authorized ? rawError : PUBLIC_DB_ERROR;
     if (light) {
-      return NextResponse.json(
-        { status: 'error', error },
-        { status: 503, headers: HEALTH_DB_ERROR_HEADERS }
-      );
+      return NextResponse.json({ status: 'error', error }, { status: 503, headers: HEALTH_DB_ERROR_HEADERS });
     }
     return NextResponse.json(
       {
@@ -75,18 +77,17 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
         checks: {
           database: { status: 'error', error },
-          transactionalEmail: {
-            status: mail.configured ? 'ok' : 'warn',
-            message: mail.configured
-              ? 'İşlem e-postası yapılandırıldı (veritabanı hariç)'
-              : 'SMTP veya RESEND_API_KEY tanımlanmadı',
-          },
+          ...(authorized ? { transactionalEmail: mailCheck(getMailDeliverySummary()) } : {}),
         },
-        version: process.env.npm_package_version ?? '1.0.0',
-        runtime: {
-          nodeEnv: process.env.NODE_ENV,
-          uptimeSeconds: Math.round(process.uptime()),
-        },
+        ...(authorized
+          ? {
+              version: process.env.npm_package_version ?? '1.0.0',
+              runtime: {
+                nodeEnv: process.env.NODE_ENV,
+                uptimeSeconds: Math.round(process.uptime()),
+              },
+            }
+          : {}),
       },
       { status: 503, headers: HEALTH_DB_ERROR_HEADERS }
     );

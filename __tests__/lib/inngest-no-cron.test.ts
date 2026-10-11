@@ -9,7 +9,7 @@
  * Bu test iki yönü de korur: Inngest'te periyodik tetikleyici yok ve gerekli işler günlük
  * orkestratörün kayıt defterinde.
  */
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 
 const root = path.resolve(__dirname, '..', '..');
@@ -76,6 +76,17 @@ describe('günlük kayıt defteri', () => {
     expect(names).not.toContain('synthetic-monitor');
     expect(names).not.toContain('rate-limit-cleanup');
     expect(names).not.toContain('squad-battles-finish');
+  });
+
+  it('her iç iş ucu bağlı: ya günlük kayıtta ya Inngest olay işlevinde (sahipsiz uç yok)', () => {
+    // Arka plan denetimi (uygulama sonrası): taşınmayan `rate-limit-cleanup` ve
+    // `squad-battles-finish` uçları hiçbir tetikleyicisi olmadan yetkili POST'a açık kalmıştı.
+    const dirs = readdirSync(path.join(root, 'app/api/internal/inngest'), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+    const fns = read('lib/inngest/functions.ts');
+    const orphans = dirs.filter((d) => !names.includes(d) && !fns.includes(`/api/internal/inngest/${d}`));
+    expect(orphans).toEqual([]);
   });
 
   it('vercel.json yalnız günlük orkestratörü tetikler', () => {

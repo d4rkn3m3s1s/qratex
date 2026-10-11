@@ -22,10 +22,12 @@ export const maxDuration = 60;
  * yoklar; ardışık boş turlarda aralığı kademeli MAX_POLL_MS'e çıkarır. Böylece
  * aktivite anında gecikme düşer (~1.2sn) ama boştaki bağlantılarda DB yükü artmaz.
  * Aralıklar env ile ayarlanabilir (NOTIF_STREAM_MIN_MS / NOTIF_STREAM_MAX_MS).
+ * Boştaki tavan 15 sn (arka plan O6): eski 5 sn tavanı açık her bayi sekmesinde dakikada ~12
+ * DB sorgusu demekti; bildirim gecikmesi en kötü 15 sn, sorgu yükü üçte bire iner.
  */
 const MIN_POLL_MS = parsePositiveIntEnv(process.env.NOTIF_STREAM_MIN_MS, 1200);
-const MAX_POLL_MS = Math.max(MIN_POLL_MS, parsePositiveIntEnv(process.env.NOTIF_STREAM_MAX_MS, 5000));
-const BACKOFF_STEP_MS = 800;
+const MAX_POLL_MS = Math.max(MIN_POLL_MS, parsePositiveIntEnv(process.env.NOTIF_STREAM_MAX_MS, 15000));
+const BACKOFF_STEP_MS = 1500;
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN', 'STAFF']);
