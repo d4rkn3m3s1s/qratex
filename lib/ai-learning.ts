@@ -82,8 +82,10 @@ async function groqFeatureEmbedding(text: string, dealerId?: string): Promise<nu
       'Bir müşteri geri bildirimini semantik aramaya uygun, NORMALİZE anahtar ' +
       'özelliklere indir. Eş anlamlıları tek köke indir (ör. "yavaştı/geç/bekledik" ' +
       '→ "yavaş_servis"). Türkçe, küçük harf, snake_case. SADECE şu JSON: ' +
-      '{"themes":[...3-6 tema...],"intent":"...tek kelime...","keywords":[...4-8 anahtar kelime...]}',
-    user: text.slice(0, 1500),
+      '{"themes":[...3-6 tema...],"intent":"...tek kelime...","keywords":[...4-8 anahtar kelime...]}\n' +
+      UNTRUSTED_DATA_RULE,
+    // Ham metin değil: sınırlayıcılı + kişisel veri maskeli (aynı metin analiz yolunda da böyle gider).
+    user: wrapUntrusted('musteri_yorumu', text, 1500),
     temperature: 0,
     maxTokens: 220,
     jsonMode: true,
