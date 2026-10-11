@@ -17,6 +17,7 @@ import {
 } from '@/lib/admin-feedbacks/contract';
 import { feedbackKeys, fetchItem } from './api';
 import { FlagBadges, SentimentBadge, Stars, fmtDateTime, fmtHours, fmtNumber, fmtPercent01 } from './parts';
+import { AdminGeriBildirimlerText } from './copy';
 
 /** Detay çekmecesinin gövdesi: kendi sorgusu + QueryState (hata boş içerik gibi görünmez). */
 export function FeedbackDetail({ feedKey }: { feedKey: string }) {
@@ -62,7 +63,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
         {d.text ? (
           <blockquote className="whitespace-pre-wrap break-words rounded-control border-l-4 border-border-strong bg-surface-2 p-3 text-fg">{d.text}</blockquote>
         ) : (
-          <p className="text-sm text-fg-muted">Müşteri yalnız puan verdi, yorum yazmadı.</p>
+          <p className="text-sm text-fg-muted"><AdminGeriBildirimlerText k="ratingOnly" /></p>
         )}
         {d.mediaCount > 0 ? <p className="text-xs text-fg-muted">{fmtNumber(d.mediaCount)} medya eki var.</p> : null}
       </div>
@@ -185,7 +186,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
             ) : null}
             {d.ai.actionSuggestions.length ? (
               <div>
-                <p className="mb-1 text-xs font-medium text-fg-muted">Önerilen aksiyonlar (bayiye)</p>
+                <p className="mb-1 text-xs font-medium text-fg-muted"><AdminGeriBildirimlerText k="suggestedActions" /></p>
                 <ul className="list-disc space-y-1 pl-5 text-sm">
                   {d.ai.actionSuggestions.map((s, i) => (
                     <li key={i}>{s.action}</li>
@@ -195,7 +196,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-fg-muted">Bu kayıt için kayıtlı bir yapay zekâ analizi yok.</p>
+          <p className="text-sm text-fg-muted"><AdminGeriBildirimlerText k="noAi" /></p>
         )}
       </SectionCard>
 
@@ -221,7 +222,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-fg-muted">Bu yoruma telafi teklifi yapılmadı.</p>
+          <p className="text-sm text-fg-muted"><AdminGeriBildirimlerText k="noRemedy" /></p>
         )}
       </SectionCard>
 
@@ -238,7 +239,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
             }))}
           />
         ) : (
-          <p className="text-sm text-fg-muted">Bu kayıtta henüz moderasyon işlemi yapılmadı.</p>
+          <p className="text-sm text-fg-muted"><AdminGeriBildirimlerText k="noModeration" /></p>
         )}
       </SectionCard>
     </div>

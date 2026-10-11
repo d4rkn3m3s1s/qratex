@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useUrlState } from '@/components/ds/page';
 import { cn } from '@/lib/utils';
 import { errorText, feedbackKeys, fetchDealerOptions } from './api';
+import { AdminGeriBildirimlerText } from './copy';
 
 /**
  * Aranabilir bayi seçici (sunucu araması, en fazla 20 sonuç). Değer URL'de `?dealer=`;
@@ -94,7 +95,7 @@ export function DealerFilter() {
                 {errorText(options.error, 'Bayiler yüklenemedi.')}
               </li>
             ) : options.data && options.data.length === 0 ? (
-              <li className="px-2 py-3 text-sm text-fg-muted">Eşleşen bayi yok.</li>
+              <li className="px-2 py-3 text-sm text-fg-muted"><AdminGeriBildirimlerText k="noDealerMatch" /></li>
             ) : (
               options.data?.map((d) => (
                 <li key={d.id} role="option" aria-selected={d.id === dealer}>

@@ -88,6 +88,7 @@ import { errorText, feedbackKeys, fetchFeed, fetchStats, runBulk } from './api';
 import { DealerFilter } from './dealer-filter';
 import { DetailActions, FeedbackDetail } from './detail-panel';
 import { FlagBadges, ReasonDialog, SentimentBadge, Stars, fmtDateTime, fmtHours, fmtNumber, fmtRelative } from './parts';
+import { AdminGeriBildirimlerText } from './copy';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'q', label: 'Ara', placeholder: 'Yorum, müşteri, e-posta, bayi, QR ya da ürün', minLength: 2, debounceMs: 350 },
@@ -243,7 +244,7 @@ export function FeedbacksScreen({ initial }: { initial: FeedbacksInitial }) {
               {f.text ? (
                 <p className="line-clamp-2 break-words text-sm text-fg">{f.text}</p>
               ) : (
-                <p className="text-sm italic text-fg-muted">Yalnız puan, yorum yok</p>
+                <p className="text-sm italic text-fg-muted"><AdminGeriBildirimlerText k="ratingNoComment" /></p>
               )}
               {f.topics.length ? <p className="truncate text-xs text-fg-muted">Konular: {f.topics.join(' · ')}</p> : null}
             </div>
@@ -652,7 +653,7 @@ function RatingStrip({
         <div className="flex shrink-0 items-center gap-4 border-t border-border pt-2 text-sm md:border-l md:border-t-0 md:pl-4 md:pt-0">
           <span className="inline-flex items-center gap-1.5">
             <Gauge className="h-4 w-4 text-fg-muted" aria-hidden />
-            <span className="text-fg-muted">NPS (yalnız QR)</span>
+            <span className="text-fg-muted"><AdminGeriBildirimlerText k="npsQrOnly" /></span>
             <span className="qx-num font-semibold text-fg">{stats.nps.value == null ? '—' : stats.nps.value}</span>
             <span className="text-xs text-fg-muted">n = {fmtNumber(stats.nps.n)}</span>
           </span>

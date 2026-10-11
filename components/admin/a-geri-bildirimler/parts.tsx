@@ -10,6 +10,7 @@ import { InlineError } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { FRAUD_FLAG_THRESHOLD, SENTIMENT_LABEL, type FeedSentiment } from '@/lib/admin-feedbacks/contract';
 import { errorText } from './api';
+import { AdminGeriBildirimlerText } from './copy';
 
 export const SENTIMENT = defineStatusMap({
   positive: { label: SENTIMENT_LABEL.positive, tone: 'success' },
@@ -141,7 +142,7 @@ export function ReasonDialog({
           </DialogHeader>
           <div className="space-y-1.5">
             <label htmlFor={id} className="qx-small font-medium text-fg">
-              Gerekçe <span className="text-fg-muted">(denetim kaydına yazılır)</span>
+              Gerekçe <span className="text-fg-muted"><AdminGeriBildirimlerText k="audited" /></span>
             </label>
             <Textarea
               id={id}
