@@ -10,7 +10,8 @@
  *  - campaign.app / campaign.push → lib/marketing-delivery.ts (bayi kampanya, win-back, risk
  *    segmenti, segment önerisi; fail-closed) + lib/surprise-badges.ts (uygulama içi)
  *  - character.app / character.email → lib/character-badges.ts
- *  - reminder.app → lib/customer-reminders.ts (yorum hatırlatmaları)
+ *  - reminder.app → lib/customer-reminders.ts (yorum hatırlatmaları) + lib/gamification-nudges.ts
+ *    (seri tehlikede, açılmamış sürpriz kutu)
  *  - team.app / team.push → lib/team-notify.ts (yalnız ekip üyeleri)
  *  - reply.email → lib/notify-email.ts `emailDealerReply` (`Settings.notifications.emailReply`)
  *
