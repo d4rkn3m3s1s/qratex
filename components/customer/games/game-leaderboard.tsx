@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { m as Motion } from 'framer-motion';
 import { Crown, Medal, Loader2, RotateCw } from 'lucide-react';
 import { useMotionPolicy } from '@/lib/motion';
+import { useGamesCopy } from './copy';
 
 interface Row {
   rank: number;
@@ -32,6 +33,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const { reduce } = useMotionPolicy();
+  const t = useGamesCopy().leaderboard;
 
   useEffect(() => {
     let alive = true;
@@ -64,7 +66,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
   if (loading) {
     return (
       <div role="status" className="flex items-center justify-center gap-2 py-6 text-sm text-white/60">
-        <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> Liderlik yükleniyor…
+        <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> {t.loading}
       </div>
     );
   }
@@ -72,13 +74,13 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
   if (failed) {
     return (
       <div role="alert" className="flex flex-col items-center gap-2 py-4 text-center text-xs text-white/70">
-        <span>Liderlik tablosu şu an alınamadı.</span>
+        <span>{t.failed}</span>
         <button
           type="button"
           onClick={() => setReloadKey((k) => k + 1)}
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 font-medium text-white/90 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
         >
-          <RotateCw className="h-3.5 w-3.5" aria-hidden /> Tekrar dene
+          <RotateCw className="h-3.5 w-3.5" aria-hidden /> {t.retry}
         </button>
       </div>
     );
@@ -87,7 +89,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
   if (rows.length === 0) {
     return (
       <p className="py-4 text-center text-xs text-white/40">
-        Henüz skor yok — ilk rekoru sen kır! 🏁
+        {t.empty}
       </p>
     );
   }
@@ -103,8 +105,8 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
   return (
     <div className="w-full max-w-sm space-y-1.5">
       <div className="mb-1 flex items-center justify-between px-1 text-[11px] uppercase tracking-wider text-white/40">
-        <span>Liderlik · tüm zamanlar</span>
-        <span>{capped ? `${total}+` : total} oyuncu</span>
+        <span>{t.title}</span>
+        <span>{t.players(capped ? `${total}+` : String(total))}</span>
       </div>
       {rows.map((r, i) => (
         <Motion.div
@@ -120,7 +122,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
         >
           <span className="flex w-5 justify-center">{medal(r.rank)}</span>
           <span className="flex-1 truncate font-medium text-white/90">
-            {r.name} {r.isMe && <span className="text-[10px] text-white/50">(sen)</span>}
+            {r.name} {r.isMe && <span className="text-[10px] text-white/50">{t.youTag}</span>}
           </span>
           <span className="font-bold tabular-nums" style={{ color: accent }}>
             {r.score}
@@ -135,7 +137,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
           style={{ background: `${accent}1f`, border: `1px solid ${accent}66` }}
         >
           <span className="min-w-5 text-center text-[11px] tabular-nums text-white/60">{me.rank ?? `${total}+`}</span>
-          <span className="flex-1 truncate font-medium text-white/90">Sen</span>
+          <span className="flex-1 truncate font-medium text-white/90">{t.you}</span>
           <span className="font-bold tabular-nums" style={{ color: accent }}>
             {me.score}
           </span>

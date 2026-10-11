@@ -28,6 +28,7 @@ import { pickVariant, type GameCopy } from '@/lib/minigame-copy';
 import { confetti } from '@/lib/moments/effects';
 import { useMotionPolicy } from '@/lib/motion';
 import { useGamePrefs } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from './copy';
 
 /**
  * Ödül kazanınca neon konfeti (accent renge uyumlu). TEK efekt cephesi üzerinden:
@@ -39,8 +40,6 @@ function celebrate(accent: string) {
   confetti('sides', { colors: [accent, '#ffffff', '#fbbf24'] });
 }
 
-/** Günlük sıralı hakkın yenilendiği an (gün anahtarı Europe/Istanbul takvim günü). */
-const DAILY_RESET_NOTE = 'Yeni sıralı hak her gece 00:00’da (Türkiye saati) açılır';
 
 /**
  * Tüm mini oyunların ortak kabuğu (play kaydı: koyu arena, glow). Başlat / oynanış /
@@ -114,6 +113,7 @@ export function GameShell({
   controls,
 }: GameShellProps) {
   const { reduce } = useMotionPolicy();
+  const t = useGamesCopy().shell;
   const playing = phase === 'playing';
   const loading = phase === 'starting' || phase === 'submitting';
   const showResult = phase === 'done' && !!result;
@@ -129,10 +129,10 @@ export function GameShell({
   const resultTitle = useMemo(() => {
     if (!result) return '';
     return result.won
-      ? pickVariant(copy?.winTitles, 'Kazandın! 🎉')
-      : pickVariant(copy?.loseTitles, 'Bu sefer olmadı');
+      ? pickVariant(copy?.winTitles, t.winTitle)
+      : pickVariant(copy?.loseTitles, t.loseTitle);
     // result objesi her tamamlamada yenilenir → o zaman yeni varyant seçilir.
-  }, [result, copy]);
+  }, [result, copy, t]);
 
   // Ödül kazanıldığında bir kez konfeti patlat.
   const celebratedRef = useRef(false);
@@ -167,8 +167,8 @@ export function GameShell({
   }, [pauseOpen, onResume]);
 
   const startHint = practice
-    ? 'Pratik: sınırsız, ödülsüz — liderliğe girmez.'
-    : copy?.startHint ?? 'Günde 1 hak — kazan, puan + XP kap!';
+    ? t.practiceHint
+    : copy?.startHint ?? t.rankedHint;
 
   return (
     <div
@@ -214,7 +214,7 @@ export function GameShell({
             <button
               type="button"
               onClick={onPause}
-              aria-label="Oyunu duraklat"
+              aria-label={t.pause}
               className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
               <Pause className="h-5 w-5" aria-hidden />
@@ -251,7 +251,7 @@ export function GameShell({
           >
             <div className="flex w-full max-w-xs flex-col items-stretch gap-3 p-4 text-center">
               <h2 id="game-pause-title" className="text-xl font-bold text-white">
-                Duraklatıldı
+                {t.paused}
               </h2>
               {controls && <p className="text-xs leading-relaxed text-white/70">{controls}</p>}
               <Button
@@ -260,7 +260,7 @@ export function GameShell({
                 className="h-12 text-base font-bold"
                 style={{ background: accent, color: onAccent }}
               >
-                <Play className="mr-2 h-4 w-4" aria-hidden /> Devam et
+                <Play className="mr-2 h-4 w-4" aria-hidden /> {t.resume}
               </Button>
               {onQuit && (
                 <Button
@@ -275,7 +275,7 @@ export function GameShell({
                   className="h-12 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 >
                   <LogOut className="mr-2 h-4 w-4" aria-hidden />
-                  {practice ? 'Turu bitir' : confirmQuit ? 'Eminim, bitir (deneme kullanılır)' : 'Turu bitir (deneme kullanılır)'}
+                  {practice ? t.endRound : confirmQuit ? t.endRoundConfirm : t.endRoundRanked}
                 </Button>
               )}
             </div>
@@ -296,8 +296,8 @@ export function GameShell({
               <Loader2 className={reduce ? 'h-8 w-8' : 'h-8 w-8 animate-spin'} style={{ color: accent }} aria-hidden />
               <p className="text-sm">
                 {phase === 'submitting'
-                  ? copy?.loadingSubmit ?? 'Sonuç kaydediliyor…'
-                  : copy?.loadingStart ?? 'Oyun başlatılıyor…'}
+                  ? copy?.loadingSubmit ?? t.loadingSubmit
+                  : copy?.loadingStart ?? t.loadingStart}
               </p>
             </Motion.div>
           )}
@@ -352,13 +352,13 @@ export function GameShell({
                   className="relative px-9 py-6 text-base font-bold"
                   style={{ background: accent, color: onAccent, boxShadow: `0 0 30px ${accent}88` }}
                 >
-                  {practice ? '▶ Pratik yap' : copy?.startCta ?? '▶ Oyna'}
+                  {practice ? t.startPractice : copy?.startCta ?? t.startRanked}
                 </Button>
               </Motion.div>
 
               {controls && (
                 <p className="text-xs text-white/60">
-                  <span className="font-semibold text-white/75">Kontroller:</span> {controls}
+                  <span className="font-semibold text-white/75">{t.controls}</span> {controls}
                 </p>
               )}
 
@@ -426,12 +426,12 @@ export function GameShell({
                 </Motion.h2>
 
                 <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-1.5 text-sm text-white/80">
-                  <Star className="h-4 w-4" style={{ color: accent }} aria-hidden /> {copy?.scoreLabel ?? 'Skorun'}:{' '}
+                  <Star className="h-4 w-4" style={{ color: accent }} aria-hidden /> {copy?.scoreLabel ?? t.scoreLabel}:{' '}
                   <span className="font-bold tabular-nums text-white">{result.score}</span>
                 </div>
 
                 {result.practice ? (
-                  <p className="text-xs text-white/70">Pratik turu — ödül ve liderlik yok. İstediğin kadar tekrar oyna.</p>
+                  <p className="text-xs text-white/70">{t.practiceResult}</p>
                 ) : result.rewarded ? (
                   <Motion.div
                     initial={{ scale: reduce ? 1 : 0.6, opacity: 0 }}
@@ -445,13 +445,13 @@ export function GameShell({
                     }}
                   >
                     <Trophy className="h-5 w-5" style={{ color: accent }} aria-hidden />
-                    +{result.rewardPoints} puan · +{result.rewardXp} XP
+                    {t.reward(result.rewardPoints, result.rewardXp)}
                   </Motion.div>
                 ) : (
                   <p className="text-xs text-white/65">
                     {result.reason ??
                       copy?.rewardMissNote ??
-                      `Ödül için ${rewardThreshold ?? '—'} skor gerekiyordu. Yarın yeni hakla tekrar dene!`}
+                      t.rewardMiss(rewardThreshold ?? '—')}
                   </p>
                 )}
               </div>
@@ -459,7 +459,7 @@ export function GameShell({
               {result.practice ? (
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button onClick={onStart} className="h-11 font-bold" style={{ background: accent, color: onAccent }}>
-                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> Tekrar oyna
+                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> {t.playAgain}
                   </Button>
                   {canPractice && !alreadyPlayed && (
                     <Button
@@ -467,14 +467,14 @@ export function GameShell({
                       onClick={() => onModeChange?.('ranked')}
                       className="h-11 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
                     >
-                      <Medal className="mr-2 h-4 w-4" aria-hidden /> Sıralıya geç
+                      <Medal className="mr-2 h-4 w-4" aria-hidden /> {t.switchRanked}
                     </Button>
                   )}
                 </div>
               ) : (
                 <>
                   <p className="mt-1 text-xs text-white/55">
-                    {copy?.comeBackNote ?? 'Yarın yeni bir hak için tekrar gel. 🌙'}
+                    {copy?.comeBackNote ?? t.comeBack}
                   </p>
                   {canPractice && (
                     <Button
@@ -482,7 +482,7 @@ export function GameShell({
                       onClick={() => onModeChange?.('practice')}
                       className="h-11 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
                     >
-                      <Dumbbell className="mr-2 h-4 w-4" aria-hidden /> Pratik yap (ödülsüz)
+                      <Dumbbell className="mr-2 h-4 w-4" aria-hidden /> {t.practiceNoReward}
                     </Button>
                   )}
                 </>
@@ -506,13 +506,13 @@ export function GameShell({
             >
               <Lock className="h-12 w-12 text-white/60" aria-hidden />
               <h2 className="text-xl font-bold text-white">
-                {copy?.lockedTitle ?? 'Bugünün oyununu oynadın'}
+                {copy?.lockedTitle ?? t.lockedTitle}
               </h2>
               <p className="text-sm text-white/70">
-                {copy?.lockedNote ?? copy?.comeBackNote ?? 'Yarın yeni bir hakla tekrar gel. 🌙'}
+                {copy?.lockedNote ?? copy?.comeBackNote ?? t.comeBack}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-white/55">
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden /> {DAILY_RESET_NOTE}
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden /> {t.dailyResetNote}
               </div>
               {canPractice && (
                 <Button
@@ -520,7 +520,7 @@ export function GameShell({
                   className="h-11 font-bold"
                   style={{ background: accent, color: onAccent }}
                 >
-                  <Dumbbell className="mr-2 h-4 w-4" aria-hidden /> Pratik modunda oyna
+                  <Dumbbell className="mr-2 h-4 w-4" aria-hidden /> {t.playPractice}
                 </Button>
               )}
 
@@ -549,9 +549,10 @@ function ModeSwitch({
   accent: string;
   rankedUsed: boolean;
 }) {
+  const t = useGamesCopy().shell;
   const options: { value: MiniGameMode; label: string; hint: string; Icon: typeof Medal }[] = [
-    { value: 'ranked', label: 'Sıralı', hint: rankedUsed ? 'Bugünkü hak kullanıldı' : 'Günde 1 · ödüllü', Icon: Medal },
-    { value: 'practice', label: 'Pratik', hint: 'Sınırsız · ödülsüz', Icon: Dumbbell },
+    { value: 'ranked', label: t.ranked, hint: rankedUsed ? t.rankedUsed : t.rankedHintShort, Icon: Medal },
+    { value: 'practice', label: t.practice, hint: t.practiceHintShort, Icon: Dumbbell },
   ];
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -562,7 +563,7 @@ function ModeSwitch({
   return (
     <div
       role="radiogroup"
-      aria-label="Oyun modu"
+      aria-label={t.mode}
       onKeyDown={onKeyDown}
       className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/5 p-1"
     >
@@ -593,6 +594,7 @@ function ModeSwitch({
 /** Ses / titreşim anahtarları (kalıcı; motorun `fx` cephesi uygular). */
 function GamePrefsToggles() {
   const [prefs, setPrefs] = useGamePrefs();
+  const t = useGamesCopy().shell;
   const base =
     'inline-flex h-11 w-11 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80';
   return (
@@ -601,7 +603,7 @@ function GamePrefsToggles() {
         type="button"
         className={base}
         aria-pressed={prefs.sound}
-        aria-label={prefs.sound ? 'Oyun sesini kapat' : 'Oyun sesini aç'}
+        aria-label={prefs.sound ? t.soundOff : t.soundOn}
         onClick={() => setPrefs({ sound: !prefs.sound })}
       >
         {prefs.sound ? <Volume2 className="h-5 w-5" aria-hidden /> : <VolumeX className="h-5 w-5" aria-hidden />}
@@ -610,7 +612,7 @@ function GamePrefsToggles() {
         type="button"
         className={base}
         aria-pressed={prefs.haptics}
-        aria-label={prefs.haptics ? 'Titreşimi kapat' : 'Titreşimi aç'}
+        aria-label={prefs.haptics ? t.hapticsOff : t.hapticsOn}
         onClick={() => setPrefs({ haptics: !prefs.haptics })}
       >
         {prefs.haptics ? <Vibrate className="h-5 w-5" aria-hidden /> : <VibrateOff className="h-5 w-5" aria-hidden />}

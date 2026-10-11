@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { m as Motion } from 'framer-motion';
 import { Trophy, Crown, Medal, Loader2, Gift, Timer } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { useGamesCopy } from './copy';
 
 interface Row {
   rank: number;
@@ -36,14 +37,12 @@ interface TournamentData {
 }
 
 /** ms → "3g 14s" / "5s 20d" / "12d" biçimi (geri sayım). */
-function fmtCountdown(ms: number): string {
+function fmtCountdown(ms: number, fmt: (d: number, h: number, m: number) => string): string {
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}g ${h}s`;
-  if (h > 0) return `${h}s ${m}d`;
-  return `${m}d`;
+  return fmt(d, h, m);
 }
 
 const rankIcon = (rank: number) => {
@@ -62,6 +61,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [remainingMs, setRemainingMs] = useState(0);
+  const t = useGamesCopy().tournament;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -93,11 +93,11 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
     try {
       const res = await fetch(`/api/customer/tournament?game=${gameType}`, { method: 'POST' });
       const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || 'Ödül alınamadı');
-      toast.success(`🏆 ${j.rank}. oldun — +${j.points} puan!`);
+      if (!res.ok) throw new Error(j?.error || t.claimFailed);
+      toast.success(t.claimed(j.rank, j.points));
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Ödül alınamadı');
+      toast.error(e instanceof Error ? e.message : t.claimFailed);
     } finally {
       setClaiming(false);
     }
@@ -118,11 +118,11 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: accent }}>
           <Trophy className="h-4 w-4" />
-          Haftalık Turnuva
+          {t.title}
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Timer className="h-3.5 w-3.5" />
-          {remainingMs > 0 ? `${fmtCountdown(remainingMs)} kaldı` : 'Kapanıyor'}
+          {remainingMs > 0 ? t.remaining(fmtCountdown(remainingMs, t.countdown)) : t.closing}
         </div>
       </div>
 
@@ -139,20 +139,20 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
             <Gift className="h-5 w-5 text-yellow-500" />
             <div>
               <p className="text-sm font-bold">
-                Geçen hafta{data.pendingReward.gameTitle ? ` ${data.pendingReward.gameTitle} turnuvasında` : ''} {data.pendingReward.rank}. oldun!
+                {t.lastWeek(data.pendingReward.rank, data.pendingReward.gameTitle)}
               </p>
-              <p className="text-xs text-muted-foreground">+{data.pendingReward.points} puan seni bekliyor</p>
+              <p className="text-xs text-muted-foreground">{t.waiting(data.pendingReward.points)}</p>
             </div>
           </div>
-          {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="text-xs font-bold text-yellow-600">Ödülü al →</span>}
+          {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="text-xs font-bold text-yellow-600">{t.claim}</span>}
         </Motion.button>
       )}
 
       {/* Ödül havuzu — yalnız haftanın öne çıkan oyununda */}
       {data.isFeatured === false ? (
         <p className="text-center text-xs text-muted-foreground">
-          Bu oyunun sıralaması ödülsüz.{' '}
-          {data.featured ? `Bu haftanın ödüllü turnuvası: ${data.featured.emoji} ${data.featured.title}` : ''}
+          {t.unrewarded}{' '}
+          {data.featured ? t.featured(data.featured.emoji, data.featured.title) : ''}
         </p>
       ) : (
         <div className="space-y-1">
@@ -163,7 +163,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
           </div>
           {!!data.participantsNeeded && data.participantsNeeded > 0 && (
             <p className="text-center text-[11px] text-muted-foreground">
-              Ödüller için en az {data.minParticipants} oyuncu gerekli — {data.participantsNeeded} oyuncu daha!
+              {t.minPlayers(data.minParticipants, data.participantsNeeded)}
             </p>
           )}
         </div>
@@ -172,7 +172,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
       {/* Bu haftanın sıralaması */}
       {data.leaderboard.length === 0 ? (
         <p className="py-4 text-center text-xs text-muted-foreground">
-          Bu hafta ilk skoru sen yap, lider ol! 🎯
+          {t.empty}
         </p>
       ) : (
         <div className="space-y-1">
@@ -184,7 +184,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
               }`}
             >
               <span className="grid w-5 place-items-center">{rankIcon(row.rank)}</span>
-              <span className="min-w-0 flex-1 truncate">{row.isMe ? 'Sen' : row.name}</span>
+              <span className="min-w-0 flex-1 truncate">{row.isMe ? t.you : row.name}</span>
               {row.prize > 0 && <span className="text-[10px] text-yellow-600">+{row.prize}p</span>}
               <span className="font-mono text-xs tabular-nums">{row.score}⭐</span>
             </div>
@@ -196,7 +196,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
       {data.me && !data.leaderboard.some((r) => r.isMe) && (
         <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-sm">
           <span className="w-5 text-center text-xs font-bold text-muted-foreground">{data.me.rank}</span>
-          <span className="min-w-0 flex-1 truncate font-semibold">Sen</span>
+          <span className="min-w-0 flex-1 truncate font-semibold">{t.you}</span>
           <span className="font-mono text-xs tabular-nums">{data.me.score}⭐</span>
         </div>
       )}

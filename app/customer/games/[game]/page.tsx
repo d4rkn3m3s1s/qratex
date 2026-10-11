@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/ds/page';
 import { EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { GameHost } from './game-host';
+import { getServerLocale } from '@/lib/server-locale';
+import { gamesCopy } from '@/components/customer/games/copy';
 
 /**
  * Tek dinamik oyun sayfası (yol haritası F4.2: 21 kopya `page.tsx` → 1).
@@ -88,6 +90,7 @@ export default async function GamePage({ params, searchParams }: PageProps) {
 
   const { entry } = decision;
   const eff = await effectiveSafe(entry.gameType);
+  const t = gamesCopy(await getServerLocale()).page;
   // Sunucu kuralı gizlediyse (emekli/yapım) oyun açılmaz.
   if (eff?.hidden) redirect(GAMES_HUB_PATH);
 
@@ -98,15 +101,15 @@ export default async function GamePage({ params, searchParams }: PageProps) {
   return (
     <div className="space-y-6 pb-10">
       {/* Tek h1 her ekranda (eski DashboardPageHeading mobilde gizliydi → mobilde başlıksız sayfa). */}
-      <PageHeader title={`${title} ${emoji}`} description={description} back={{ href: GAMES_HUB_PATH, label: 'Oyun Merkezi' }} />
+      <PageHeader title={`${title} ${emoji}`} description={description} back={{ href: GAMES_HUB_PATH, label: t.hub }} />
       {eff && !eff.enabled ? (
         <EmptyState
           variant="permission"
-          title="Bu oyun şu anda kapalı"
-          description="Oyun yönetici tarafından geçici olarak kapatıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin."
+          title={t.disabledTitle}
+          description={t.disabledDesc}
           action={
             <Button asChild>
-              <Link href={GAMES_HUB_PATH}>Oyun Merkezi’ne dön</Link>
+              <Link href={GAMES_HUB_PATH}>{t.backToHub}</Link>
             </Button>
           }
         />
