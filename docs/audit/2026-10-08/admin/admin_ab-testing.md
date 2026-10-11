@@ -214,3 +214,64 @@ Yöntem: İddialar çürütülmeye çalışılarak kod baştan okundu (`proxy.ts
 - Yeniden üretim: Rolü (kazara/kötü niyetle) ADMIN yapılmış ama cevabı bilmeyen hesap, oturum çerezleriyle `GET /api/admin/settings/admin-gate` çağırır → yanıtta `answer` gelir → `/admin-gate`'e bu rakamı girer → panele tam erişim. Alternatif olarak hiç panele girmeden `POST /api/admin/bootstrap {"action":"clear_suspicious_activities"}` veya `assign_ab_cohorts` gibi mutasyonları doğrudan çalıştırır; ayrıca `PUT /api/admin/settings/admin-gate` ile cevabı değiştirip gerçek kurucuları kilitleyebilir.
 - Sonuç: Kapının "rol yetmez" tehdit modeli (proje belleği: admin-gate-security) API düzeyinde fiilen geçersiz. Bilinçli bir tercih olduğuna dair kodda işaret yok; tersine `settings/admin-gate` GET yorumu gate'in API'yi de koruduğunu varsayıyor.
 - Öneri: `requireAuth`'a (veya ayrı `requireAdmin()` yardımcısına) ADMIN rolü için `verifyGateCookie(cookies().get('admin_gate'), userId, gate.answer)` kontrolü eklenmeli (`/api/admin/gate` GET/POST hariç); gate cevabı Redis'te kısa TTL ile önbelleklenip DB yükü sınırlanmalı. En azından `settings/admin-gate` GET cevabı döndürmemeli (yalnız soru + "cevap ayarlı" bayrağı), PUT ise mevcut cevabın yeniden girilmesini istemeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/admin/ab-testing` emekli; `permanentRedirect` ile **`/admin/features?tab=deneyler`** adresine yönlenir. **Bulgu 1 kararı:** tedavisi hiçbir yerde uygulanmayan bayi kohort "deneyi" (A/B/C XP çarpanı) **kaldırıldı**. Farkları tamamen gürültüydü ve puan basan bir çarpanı ekonomi değişmezleri dışında eklemek doğru olmazdı. Yerine sistemde **gerçekten çalışan** A/B altyapısı (eski `/admin/innovation` "kampanya deneyleri": `Settings.innovationPlatform.campaignAb`, hash tabanlı yapışkan atama, `innovation_ab_impression/conversion` olayları) tam bir deney ürününe dönüştü.
+
+- **Yaşam döngüsü:** taslak → çalışıyor → duraklatıldı → tamamlandı (kazanan + karar notu). Her geçiş gerekçeli, `Settings.updatedAt` iyimser kilitli (409) ve `entity: Experiment` olarak denetlenir. Başlamış deneyde varyant, boyut ve pay kilitli (atama bozulmasın, SRM). Yalnız taslak silinebilir.
+- **Atama:** `sha256("<kullanıcı>:<deney>") % 100 < B payı` (varyant ucuyla birebir; testte `pickAbVariant` ile eşitlik doğrulanır). "Atama denetleyicisi" kimlik ya da e-postayla kullanıcının kovasını ve varyantını gösterir.
+- **Sonuç (sunucuda, `lib/admin-flags/stats.ts`):** deney penceresiyle sınırlı (`startedAt…endedAt`), **tekil kullanıcı** bazlı dönüşüm oranı; varyant başına %95 Wilson aralığı, B − A farkı için Newcombe aralığı, göreli lift, iki oran z-testi p, **SRM** (ki-kare, p < 0,001) ve yetersiz örneklemde "yorum yapmayın" (varyant başına en az 100 kullanıcı, toplam 10 dönüşüm). Günlük gösterim serisi (İstanbul günleri) + erişilebilir tablo. Redis önbelleği 60 sn (tamamlanan deney 10 dk).
+- **Kill-switch:** `ab_testing` modül anahtarı artık gerçek: kapalıyken varyant ucu herkese A verir ve gösterim yazmaz. Dönüşüm ucu yalnız çalışan deney için yazar (rastgele kimlikle istatistik kirletilemez) ve IP başına hız sınırı uygular.
+
+Sunucu: `lib/admin-flags/experiments.server.ts`. BFF: `GET/POST /api/admin/feature-control/experiments`, `PATCH …/experiments/:id`, `GET …/experiments/:id/results`, `GET …/experiments/:id/assignment`. Müşteri uçları `app/api/customer/innovation/ab/{variant,event}` `defineRoute`'a taşındı (geriye uyumlu `legacySpread`). Eski `GET /api/admin/ab-testing/overview` silindi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | |
+| 2 | API yetkisi | ÇALIŞIYOR | `defineRoute` ADMIN + rate limit. |
+| 3 | Hero başlık/açıklama | ÇALIŞIYOR | Doğru içerik: hash atama, pencere sınırlı tekil kullanıcı sonuçları. |
+| 4 | "Deneysel mod" rozeti | KALDIRILDI | Dekordu; yerine gerçek durum rozeti ("Çalışıyor · 14. gün"). |
+| 5 | Yenile | ÇALIŞIYOR | Yenilemede veri korunur (yerinde güncelleme). |
+| 6 | "Boş cohortları ata" | KALDIRILDI | Sıralı round-robin yerine hash ataması; elle atama gerekmez. |
+| 7 | Atama butonu koşulu | KALDIRILDI | Bkz. 6. |
+| 8 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState` (aria-busy, statik). |
+| 9 | Kohort etiketi | KALDIRILDI | Deney nesnesi var (ad, anahtar, hipotez, metrik). |
+| 10 | "XP çarpanı x{n}" | KALDIRILDI | Sahteydi (Bulgu 1). |
+| 11 | Kohort bayi sayısı | KALDIRILDI | Yerine varyant başına gören tekil kullanıcı. |
+| 12 | Geri bildirim sayısı | KALDIRILDI | Tedavi öncesi veriyle kirliydi; yerine pencere sınırlı gösterim/dönüşüm. |
+| 13 | Ortalama puan | KALDIRILDI | Tedaviyle ilişkisiz. |
+| 14 | Yanıt oranı | KALDIRILDI | Nedensel bağı yoktu. |
+| 15 | Kart köşe dekoru | KALDIRILDI | Ops kaydı. |
+| 16 | "Etki özeti" kartı | ÇALIŞIYOR | Sonuç: karar bandı + fark/GA/lift/p + varyant tablosu + GA çubukları + SRM uyarısı. |
+| 17 | Boş durum | ÇALIŞIYOR | "Henüz deney yok" ile "bu pencerede gösterim yok, entegrasyonu kontrol edin" ayrı. |
+| 18 | Hata durumu | ÇALIŞIYOR | `QueryState` + "Tekrar dene"; hata "veri yok" ile karışmaz. |
+| 19 | Toplam bayi sayısı | KALDIRILDI | Kohort modeliyle birlikte. |
+| 20 | Atanmamış bayi sayısı | KALDIRILDI | Bkz. 6. |
+| 21 | Bayi adları (çekilip atılan) | KALDIRILDI | |
+| 22 | `ab_testing` modül kontrolü | ÇALIŞIYOR | Varyant ve dönüşüm uçları okur (taranan bağlarda "API kapısı · 2 uç"). |
+| 23 | Ayarlar'daki ikinci "A/B cohort ata" butonu | KALAN (sahiplik dışı) | `settings-client.tsx` + `bootstrap` `assign_ab_cohorts` aksiyonu Ayarlar/Demo yüzeyinin; tedavisiz olduğu için kaldırılmalı. |
+| 24 | Playbook bağlantısı | ÇALIŞIYOR | `/admin/ab-testing` yeni sekmeye yönlenir. |
+| 25 | i18n | KALAN | Terimler sabitlendi ("Deney", "Varyant", "Kontrol"), metinler tam Türkçe; `messages/*` anahtarlarına taşınmadı. |
+| 26 | Toast metinleri | ÇALIŞIYOR | `sonner`, Türkçe karakterli. |
+| 27 | Mobil yerleşim | ÇALIŞIYOR | DataTable kart görünümü, sonuç tablosu yatay kaydırmalı. |
+| 28 | Azaltılmış hareket | ÇALIŞIYOR | Yalnız `motion-safe:` spinner; sonsuz animasyon yok. |
+| 29 | Ölü import | KALDIRILDI | Sayfa yeniden yazıldı. |
+| 30 | Deney yaşam döngüsü | ÇALIŞIYOR | Yukarıda. Kazanan otomatik yayılmaz (bilinçli; ekranın varsayılanı ayrıca güncellenir). |
+| 31 | İstatistiksel anlamlılık | ÇALIŞIYOR | Wilson/Newcombe/z-testi/SRM + minimum örneklem. Güç hesabı ("kalan süre") yok. |
+| 32 | Zaman serisi | ÇALIŞIYOR | Günlük gösterim sparkline'ları + tablo (son 30 gün). |
+| 33 | Atama yönetimi | ÇALIŞIYOR | Hash ataması + atama denetleyicisi; tekil kullanıcı override'ı yok. |
+| 34 | Denetim kaydı | ÇALIŞIYOR | Her oluşturma/düzenleme/geçiş; "Değişiklik geçmişi" sekmesi. |
+| 35 | CSV dışa aktarma | KALAN | Sonuçlar ekranda ve tablo olarak; dosya dışa aktarma eklenmedi. |
+
+### Kapanan bulgular (9 tam, 1 kısmi, 1 başka dalgada)
+1 (sahte deney kaldırıldı, gerçek deney ürünü), 2 (hash ataması), 3 (pencere sınırlı tekil kullanıcı metrikleri), 4 (lift/GA/anlamlılık/SRM sunucuda), 5 (onaylı, gerekçeli, denetimli yaşam döngüsü; Ayarlar'daki kopya buton hariç), 7 (hata ve yenileme), 8 (`ab_testing` gerçek), 9 (görsel kusurlar), 11 (SQL `GROUP BY`, Redis önbelleği, ölü import). 10 kısmi: terminoloji ve Türkçe tamam, i18n kaldı. 6 sistem geneli: gizli kapı denetimi `requireAuth` içinde (başka dalga).
+
+### Kalanlar
+- Guardrail metrikleri ve otomatik durdurma; güç hesabı ve tahmini kalan süre.
+- `User.abCohort` alanı artık hiçbir yerde anlamlı değil. Ayarlar/bootstrap'taki atama butonu kaldırılmalı, alan bir şema dalgasında düşürülmeli (**ŞEMA İSTEĞİ**, acil değil).
+- Bugün `/api/customer/innovation/ab/variant` ucunu çağıran müşteri ekranı yok; deney oluşturmak tek başına kimseyi etkilemez. Sonuç ekranı bunu "bu pencerede gösterim yok" diye dürüstçe söyler. Bir ekranın bu uca bağlanması ilgili müşteri yüzeyinin işi.

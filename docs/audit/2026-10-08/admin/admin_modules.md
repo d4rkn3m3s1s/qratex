@@ -223,3 +223,58 @@ Yöntem: her iddia çürütülmeye çalışıldı. `lib/module-controls.ts`, `li
 - `detailHref` değerlerinden 13'ü `/customer/*` (lib/module-controls.ts:18-30), 15'i `/dealer/*` (lib/module-controls.ts:31-45). `detailHref` taşıyan 39 kaydın 28'i bu iki gruba giriyor (yaklaşık %72).
 - `proxy.ts:124` matcher'ı `/customer/:path*` ve `/dealer/:path*` yollarını kapsıyor. `proxy.ts:60-71` bölümünde ADMIN rolü `'CUSTOMER'`/`'DEALER'` ile eşleşmediği için `roleRedirects.ADMIN = '/admin'` adresine yönlendiriliyor.
 - **Yeniden üretim:** Admin `/admin/modules` sayfasında "Bağışlar → Detay sayfasını aç" seçeneğine tıklar. `/customer/donations` isteği proxy tarafından `/admin` dashboard'una 307 ile yönlendirilir. Aynı kusur Ayar Merkezi'ndeki "Detay sayfasına git" linklerinde de var (app/admin/settings/settings-client.tsx:1886-1893).
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/admin/modules` emekli; `permanentRedirect` ile **`/admin/features?tab=moduller`** (Özellik ve Deney Kontrolü → "Modül anahtarları") adresine sorgu parametreleri korunarak yönlenir. Yeniden tasarım vizyonundaki "Modül Kontrol Düzlemi" burada: gözlem ve yönetim tek ekranda, ekran durumu değil **etkiyi** gösteriyor.
+
+- **Zorlama seviyesi koddan taranır (B1/B4):** `lib/admin-flags/gate-scan.ts`, `app/**` ve `lib/**` içindeki `assert*Module*`/`is*Module*` çağrılarını (literal, aynı dosyadaki sabit, argümansız sarmalayıcılar ör. `assertInviteModule`), `defineRoute({ module })` seçeneğini, `moduleControls.<key>` okumalarını ve menü kaydındaki `moduleKey`'i tarar; sonuç `lib/data/module-gate-bindings.json`. `__tests__/admin/a-ozellik-deney/gate-bindings.test.ts` JSON'un kodla senkron olduğunu doğrular (CI kontrolü; yeniden üretim: `UPDATE_GATE_BINDINGS=1 npx jest <test>`). Seviyeler: API kapısı · Sayfa kapısı · Sunucu mantığı · Açık site · Yalnız menü · **Etkisiz**. Etkisiz anahtar sunucuda kapatılamaz (409) ve arayüzde kilitli. Katalog dışı kapı anahtarları uyarı olarak listelenir (bugün 0).
+- **Yerinde aç/kapa (B7):** `PATCH /api/admin/feature-control/modules/:key` — tek modül, gerekçe zorunlu, `Settings.updatedAt` iyimser kilidi (409), mutasyon + denetim (`entity: ModuleControl`) aynı işlemde, `revalidateTag(module-gate-settings)` ile kapı önbelleği anında tazelenir. Diyalog etki önizlemesi gösterir (zorlama, bağlı uç, sayfa/menü, 24 sa engelleme, açılış kuralı); **kritik** modülü kapatmak anahtarı yazarak onay ister.
+- **Engelleme sayımı (B5):** SQL `GROUP BY moduleKey, reason, userId IS NULL` (2000 satır kesmesi yok); gerekçe kırılımı (genel / rol / kademeli açılış). `lib/module-gate.ts` artık **oturumsuz engellemeleri veritabanına yazmıyor** (yazma büyütme vektörü kapandı; 403 yine döner).
+- **Rol matrisi (B6):** müşteri / bayi / sistem görünürlüğü satırda ve çekmecede; düzenleme için Ayar Merkezi'ne derin link (`?tab=page-settings`).
+- **Kademeli açılış:** modül açıkken yüzde/allowlist kuralı, modül kapısında uygulanır (bkz. `admin_features.md` Dalga 2).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık + açıklama | ÇALIŞIYOR | QDL `PageHeader`; sunucu `metadata`. |
+| 2 | Yenile | ÇALIŞIYOR | TanStack Query; hata görünür, veri yenilenirken korunur; 60 sn arka plan tazeleme (sekme gizliyken durur). |
+| 3 | "Ayar Merkezi" linki | KALDIRILDI | Yönetim artık burada. Rol görünürlüğü için doğru sekmeye derin link (`?tab=page-settings`). |
+| 4 | İlk yükleme | ÇALIŞIYOR | Sunucuda ön yüklenir (`initialData`); sıfır flaşı yok. |
+| 5 | Hata durumu | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; "0 kullanıcı" yok. |
+| 6 | Rol dağılımı kartı | KALDIRILDI | Bu yüzeyin amacıyla ilgisiz; `/admin/users` ve Komuta Merkezi'nde var. |
+| 7 | Modül arama | ÇALIŞIYOR | Ad/anahtar/açıklama, Türkçe duyarlı, URL'de kalıcı; boş durum var. |
+| 8 | Açık/Kapalı rozeti | ÇALIŞIYOR | Switch + metin; zorlama seviyesi ve rol matrisiyle birlikte (etkisizlik açıkça görünür). |
+| 9 | Açıklama | ÇALIŞIYOR | Çekmecede. |
+| 10 | Kapsam rozeti | ÇALIŞIYOR | Türkçe (Müşteri/Bayi/Yönetim/Platform). |
+| 11 | Önem rozeti | ÇALIŞIYOR | Türkçe, ikon + metin; kritik kapatma ek onay ister. |
+| 12 | Anahtar rozeti | ÇALIŞIYOR | `font-mono`, kopyalanabilir. |
+| 13 | "kayıt: N" metriği | KALDIRILDI | Tutarsız ve etiketsizdi (B8). Yerine karşılaştırılabilir tek sinyal: gerekçe kırılımlı 24 sa engelleme. |
+| 14 | Etkilenen endpoint sayısı | ÇALIŞIYOR | Taranmış bağlardan (her modül için, açık/kapalı fark etmeksizin). |
+| 15 | 24 sa 403 sayısı | ÇALIŞIYOR | SQL, gerekçe kırılımlı, yalnız oturumlu istekler. |
+| 16 | "Detay sayfasını aç" | ÇALIŞIYOR | `adminHref` yalnız var olan admin yönetim sayfasına; müşteri/bayi ekran yolu tıklanmaz, kopyalanabilir metin (B2). |
+| 17 | Endpoint → modül tablosu | ÇALIŞIYOR | Elle yazılmış tablo yerine taranmış bağlar, modül çekmecesinde metotlarıyla. |
+| 18 | HTTP metot rozetleri | ÇALIŞIYOR | Route dosyasının dışa aktardığı metotlardan türetilir. |
+| 19 | Buradan aç/kapa | ÇALIŞIYOR | Yukarıda. |
+| 20 | Filtre | ÇALIŞIYOR | Kapsam, durum (açık/kapalı/rol için kapalı), zorlama, önem — URL'de. |
+| 21 | Sıralama | ÇALIŞIYOR | Katalog / en çok engelleyen / önem / son değişen. |
+| 22 | Boş durum | ÇALIŞIYOR | Filtreli ve filtresiz ayrı metin. |
+| 23 | Değişiklik geçmişi | ÇALIŞIYOR | Modül başına zaman çizelgesi (çekmece) + `?tab=gecmis`; eski Ayar Merkezi tam-harita yazımları modül bazında farka çözülür. |
+| 24 | Yetki (sayfa) | ÇALIŞIYOR | Proxy (rol + gizli kapı) + sayfada `requireAuth`. |
+| 25 | Yetki (API) | ÇALIŞIYOR | `defineRoute` ADMIN + rate limit; gizli kapı denetimi `requireAuth` içinde (sistem geneli, başka dalga). |
+| 26 | Önbellek başlıkları | ÇALIŞIYOR | `defineRoute` `private, no-store`. |
+| 27 | Mobil yerleşim | ÇALIŞIYOR | DataTable mobil kart görünümü, rozetler sarar, ≥44px dokunma hedefi. |
+| 28 | Sayfa metadata | ÇALIŞIYOR | Sunucu bileşeni. |
+| 29 | `/admin/modules/ai-tones` | KALDIRILDI (sahiplik dışı) | Prompt ve Model Stüdyosu dalgasında yönlendirmeye çevrildi; dokunulmadı. |
+
+### Kapanan bulgular (6 tam, 3 kısmi, 1 başka dalgada)
+B2, B3, B4, B5, B6, B8 tam. B1 kısmi: etkisizlik görünür ve kilitli, `feature_flags` ve `ab_testing` artık gerçekten okunuyor; kalan etkisiz anahtarların koda bağlanması ilgili yüzeylerin işi. B7 kısmi: yönetim burada; Ayar Merkezi'ndeki eski "Modüller" sekmesi ve toplu "tümünü kapat" butonları Ayarlar yüzeyinde duruyor, orada yönlendirme kartına indirilmeli. B9 kısmi: mobil, erişilebilirlik ve terimler kapandı, i18n kaldı. B10 başka dalgada kapandı.
+
+### Kalanlar
+- Bugün etkisiz görünen anahtarlar (güncel liste ekranda "Zorlama: Etkisiz" filtresiyle): ya ilgili yüzeyin API'sine `defineRoute({ module })` eklenmeli ya da katalogdan çıkarılmalı. Bu yüzeyin sahipliğinde değil.
+- Ayar Merkezi `?tab=modules` sekmesi (sahiplik dışı) hâlâ tüm haritayı tek PUT ile ve iyimser kilitsiz yazıyor.
+- Modül başına 7 günlük kullanım metriği ve zamanlı kapatma/bakım penceresi eklenmedi (her modül için ayrı veri tanımı gerekiyor).
+- Bağ dosyası eşzamanlı geliştirmede eskiyebilir; jest testi bunu yakalar, `UPDATE_GATE_BINDINGS=1` ile yenilenir.

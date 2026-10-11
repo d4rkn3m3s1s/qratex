@@ -219,3 +219,58 @@
 - **Çürütme denemesi:** POST (`route.ts:83-105`), PUT (`158-174`), PATCH (`209-224`) ve DELETE (`261-275`) uçlarının hepsinde mutasyon ile `auditLog.create` iki ayrı `await` olarak yazılıyor. `$transaction` kullanılmıyor ve ortak `catch` bloğu 500 döndürüyor. İstemcide `toggleFeature` 500 aldığında state'i değiştirmiyor (`page.tsx:101-106`). `handleDelete` de kartı listeden kaldırmıyor (`page.tsx:140-143`). Audit yazımının deterministik olarak başarısız olabileceği bir yol arandı. `getAuditRequestMeta` yalnızca nullable string döndürüyor (`lib/request-metadata.ts:28-33`), `newData`/`oldData` düz Prisma nesneleri, şema uyumlu. Bulunabilen tek deterministik yol şu: `requireAuth` → `getServerSession` kullanıcının DB'de var olup olmadığına bakmıyor (`lib/api-auth.ts:20-29, 52-80`, `lib/auth.ts:285-299` token'dan dolduruyor) ve `AuditLog.userId` bir FK (`schema.prisma:1118`). Admin kullanıcısının satırı silinmiş ama JWT'si hâlâ geçerliyse mutasyon başarılı olur, audit FK hatası (P2003) verir ve istemci 500 alır. Bunun dışında yalnızca iki sorgu arasında oluşan geçici DB/bağlantı hatası (Neon pooler kopması, zaman aşımı) aynı sonucu doğurur.
 - **Yeniden üretim:** PATCH sırasında `featureFlag.update` commit edildikten sonra `auditLog.create` başarısız olur (FK veya geçici bağlantı hatası). DB'de bayrak değişmiştir ama denetim kaydı yoktur. İstemci "Özellik bayrağı güncellenemedi" toast'ı görür ve switch eski konumda kalır. Kullanıcı yeniden tıklarsa gönderilen `!currentState` değeri DB'dekiyle zaten aynıdır, bu yüzden tutarlılık kendiliğinden düzelir ama hiçbir audit kaydı oluşmaz. DELETE'te kayıt silinir, audit yazılmaz, UI kartı göstermeye devam eder. Kart yeniden silinmek istendiğinde 404 alınır.
 - **Not:** Bu senaryo nadir bir altyapı hatası ya da kenar durum gerektiriyor. Bayraklar tüketilmediği için de ürün etkisi yok. Önemi ana rapordaki "orta" seviyesinden de düşük, iddia edildiği gibi kritik veya yüksek değil. Önerilen `prisma.$transaction([mutasyon, auditLog.create])` düzeltmesi küçük ve doğru; istemcinin sunucunun döndürdüğü `feature` nesnesiyle senkronlanması da (bulgu 5 ile birlikte) uygulanmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/admin/features` artık **Özellik ve Deney Kontrolü** yüzeyi (eski `/admin/modules` ve `/admin/ab-testing` buraya `permanentRedirect` ile, sorgu parametreleri korunarak yönlenir). Bulgu 1 için **(B) gerçek değerlendirme katmanı, (A)'nın güvencesiyle** seçildi: `FeatureFlag` satırı artık serbest anahtarlı ölü bir kayıt değil, **bir katalog modülünün kademeli açılış kuralı** (yüzde + allowlist + bitiş). Kural, 55+ noktada zaten uygulanan `assertModuleEnabled` içinde değerlendirilir (`lib/admin-flags/rollout.server.ts` → `lib/module-gate.ts`). Anahtar yalnız katalogdaki ve kullanıcı başına kapısı olan (API/sayfa) bir modül olabilir; böylece "kodda okunmayan bayrak" oluşturmak yapısal olarak imkânsız.
+
+Sunucu: `lib/admin-flags/{contract,rollout,rollout.server,flags.server,modules.server}.ts`; BFF: `GET /api/admin/feature-control/rollouts`, `PUT /api/admin/feature-control/rollouts/:key`, `POST /api/admin/feature-control/flags/:id/archive` (hepsi `defineRoute`, ADMIN, zod, rate limit). Eski `/api/admin/features` bütün metotlarda **410**. Arayüz: `components/admin/a-ozellik-deney/rollouts-tab.tsx` (sekme `?tab=acilis`). Testler: `__tests__/admin/a-ozellik-deney/{server,stats-rollout}.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR | QDL `PageHeader` "Özellik ve Deney Kontrolü" + sunucu `metadata`. |
+| 2 | "Özellik mantığı" bilgi kartı | KALDIRILDI | Yanlış iddiaydı. Yerine her satırda gerçek etki (zorlama seviyesi, bağlı uç sayısı) ve sekme açıklaması. |
+| 3 | "Teknoloji Ekle" linki | KALDIRILDI | Kopya akış; ucu 410. `/admin/tech/add` Entegrasyonlar yüzeyinin işi. |
+| 4 | İstatistik: Toplam | ÇALIŞIYOR | KPI şeridinde modül/kural/deney sayıları. |
+| 5 | İstatistik: Aktif | ÇALIŞIYOR | "Aktif kademeli açılış" artık gerçekten kapıda uygulanan kural sayısı. |
+| 6 | İstatistik: Pasif | ÇALIŞIYOR | "Kapalı modül" sayısı (gerçek kapı durumu). |
+| 7 | Arama | ÇALIŞIYOR | Ad + anahtar + açıklama, `tr-TR` duyarlı normalizasyon, URL'de kalıcı, FilterBar temizleme. |
+| 8 | "Yeni" diyaloğu | ÇALIŞIYOR | Kural editörü; modül katalogdan seçilir (yalnız kapılı modüller). |
+| 9 | Key alanı + normalleştirme | ÇALIŞIYOR | Serbest anahtar yok; katalog anahtarı (`^[a-z0-9_]{2,64}$` route param doğrulaması). |
+| 10 | Ad alanı | ÇALIŞIYOR | Katalog etiketinden gelir. |
+| 11 | Açıklama alanı | ÇALIŞIYOR | "Not" alanı (300 karakter, sunucu zod). |
+| 12 | Varsayılan durum | ÇALIŞIYOR | Yeni kural **kapalı** doğar; "Etkin" açıkça seçilmeli. |
+| 13 | İptal | ÇALIŞIYOR | |
+| 14 | Oluştur | ÇALIŞIYOR | Bekleme durumu, Türkçe zod mesajları, `P2002`/iyimser kilit → 409, hata diyalogda kalır. |
+| 15 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState` statik iskelet. |
+| 16 | Boş durum | ÇALIŞIYOR | "Kural yok" ile "filtreye uyan yok" ayrı. |
+| 17 | Hata durumu | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; JSON olmayan yanıt güvenli ayrıştırılır. |
+| 18 | Kart ikonu tahmini | KALDIRILDI | Alt dize tahmini yanlış sınıflıyordu; kapsam etiketi gösterilir. |
+| 19 | Kart içeriği | ÇALIŞIYOR | Anahtar `font-mono truncate`. |
+| 20 | Aç/kapa switch | ÇALIŞIYOR | Kural modül kapısında uygulanır (kova `sha256(key:userId)%100`, yapışkan). Bayat closure yok (TanStack Query + sunucudan tazeleme). |
+| 21 | Sil | KALDIRILDI | Kalıcı silme yok. Yetim kayıtlar için **arşiv** (gerekçe + anahtarı yazarak onay + denetim; `metadata.archivedAt`). Kural "durdurulur". |
+| 22 | Kart stagger animasyonu | KALDIRILDI | Yoğun ops listesi; motion dili §4.2 kural 3. |
+| 23 | Denetim kaydı | ÇALIŞIYOR | Mutasyonla aynı `$transaction`; "Değişiklik geçmişi" sekmesinde görünür. |
+| 24 | Yetki | ÇALIŞIYOR | `defineRoute` ADMIN + rate limit; sayfa proxy + `requireAuth`. |
+| 25 | Süre sonu | ÇALIŞIYOR | Arayüzde (İstanbul saati); süre çalışma zamanında karşılaştırılır, Inngest'e bağlı değil. |
+| 26 | Düzenleme | ÇALIŞIYOR | Aynı editör, `updatedAt` iyimser kilidi. |
+| 27 | Sahip ve metadata | ÇALIŞIYOR | Sahip (son düzenleyen) ve not listede. |
+| 28 | Çalışma zamanı değerlendirme | ÇALIŞIYOR | `checkModuleRollout` (60 sn önbellek, modül kapısıyla aynı etiket; yazınca anında tazelenir; DB hatasında kural yok sayılır). |
+| 29 | `feature_flags` kill-switch | ÇALIŞIYOR | Kapatılınca **bütün açılış kuralları yok sayılır** (acil durdurma); ekranda uyarı bandı. |
+| 30 | Zaman bilgisi | ÇALIŞIYOR | `updatedAt` göreli zamanla; hayalet `createdAt` alanı kaldırıldı. |
+| 31 | Değişiklik geçmişi | ÇALIŞIYOR | `?tab=gecmis` + modül çekmecesindeki zaman çizelgesi. |
+| 32 | i18n | KALAN | Metinler tam Türkçe ve tutarlı; `messages/*` anahtarlarına taşınmadı (yüzey tek dilli admin aracı). |
+| 33 | Hedefleme / yüzdesel yayın | ÇALIŞIYOR | Yüzde + allowlist + bitiş. Rol hedeflemesi mevcut rol görünürlüğü matrisiyle gösterilir (Ayar Merkezi'nde yönetilir). Ortam (preview/prod) hedeflemesi yok. |
+| 34 | Admin ana sayfa özet kartı | KALAN (sahiplik dışı) | `admin-dashboard-client.tsx` / `tech-summary` Komuta Merkezi yüzeyinin; yetim bayrak sayımı yerine kapalı modül/kural sayısına çevrilmeli. |
+
+### Kapanan bulgular (12/13)
+1 (tüketicisi olmayan bayrak), 2 (onaysız kalıcı silme → arşiv), 3 (açık doğan bayrak), 4 (`feature_flags` sahte kill-switch → gerçek acil durdurma), 5 (bayat closure), 6 (mutasyon + denetim aynı işlemde), 7 (yarış, bekleme, İngilizce zod, format kuralı), 8 (hata/boş ayrımı, güvenli JSON), 9 (düzenleme, süre sonu, sahip), 10 (switch `aria-label`, etiket–alan bağları), 11 (ikon tahmini), 12 (mobil: DataTable kart görünümü, truncate). 13 kısmen: kopya oluşturma akışı 410 ile kapandı; i18n kaldı.
+
+### Kalanlar
+- i18n anahtarları (yukarıda).
+- Admin ana sayfa ve `tech-summary` sayaçları (sahiplik dışı).
+- Bayrak başına değerlendirme sayısı (PostHog `$feature_flag_called` benzeri) eklenmedi; engellenen istek sayısı (`module_rollout_excluded`) modül çekmecesinde görünür.
