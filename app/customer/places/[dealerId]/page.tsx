@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { Compass, Lock, Store } from 'lucide-react';
+import { Compass, Store } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getModuleControls } from '@/lib/module-gate';
@@ -88,7 +88,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
 
   if (session.user.role !== 'CUSTOMER') {
     return (
-      <EmptyState variant="permission" icon={Lock} title={copy.forbiddenTitle} description={copy.forbiddenBody} headingLevel="h2" />
+      <EmptyState variant="permission" title={copy.forbiddenTitle} description={copy.forbiddenBody} headingLevel="h2" />
     );
   }
 
@@ -97,7 +97,6 @@ export default async function VenueDetailPage({ params }: PageProps) {
     return (
       <EmptyState
         variant="permission"
-        icon={Lock}
         title={copy.moduleOffTitle}
         description={copy.moduleOffBody}
         headingLevel="h2"

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Compass, MapPinOff } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import { EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { getServerLocale } from '@/lib/server-locale';
@@ -9,7 +9,7 @@ export default async function VenueNotFound() {
   const copy = getVenueCopy(await getServerLocale());
   return (
     <EmptyState
-      icon={MapPinOff}
+      variant="no-results"
       title={copy.notFoundTitle}
       description={copy.notFoundBody}
       headingLevel="h2"
