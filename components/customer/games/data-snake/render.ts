@@ -6,6 +6,7 @@
  *   bot duvarı = çapraz taralı kare (turuncu-kızıl), devriye botu = antenli robot yüzü (pembe).
  * `Math.random` burada serbest (parçacık saçılımı); mantık `sim.ts`'te.
  */
+import { SNAKE_CANVAS_TEXTS_TR, type SnakeCanvasTexts } from './copy';
 import {
   CELL,
   COUNTDOWN_TICKS,
@@ -120,7 +121,13 @@ function lerpCell(from: number | undefined, to: number, t: number) {
   return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
 }
 
-export function drawFrame(ctx: CanvasRenderingContext2D, sim: SnakeSim, fx: FxState, opts: { smooth: boolean; now: number }) {
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  sim: SnakeSim,
+  fx: FxState,
+  opts: { smooth: boolean; now: number; texts?: SnakeCanvasTexts }
+) {
+  const texts = opts.texts ?? SNAKE_CANVAS_TEXTS_TR;
   ctx.save();
   if (fx.shake > 0) ctx.translate((Math.random() - 0.5) * fx.shake * 2, (Math.random() - 0.5) * fx.shake * 2);
 
@@ -283,16 +290,16 @@ export function drawFrame(ctx: CanvasRenderingContext2D, sim: SnakeSim, fx: FxSt
     ctx.font = `900 ${Math.round(72 * k)}px system-ui, sans-serif`;
     ctx.fillText(String(n), DS_W / 2, DS_H / 2 - 10);
     ctx.font = '600 14px system-ui, sans-serif';
-    ctx.fillText(sim.phaseTicks > COUNTDOWN_TICKS - 20 ? 'Hazır ol' : 'Yön seçebilirsin', DS_W / 2, DS_H / 2 + 42);
+    ctx.fillText(sim.phaseTicks > COUNTDOWN_TICKS - 20 ? texts.ready : texts.pickDirection, DS_W / 2, DS_H / 2 + 42);
   } else if (sim.phase === 'levelup') {
     ctx.fillStyle = 'rgba(11,16,32,0.45)';
     ctx.fillRect(0, DS_H / 2 - 40, DS_W, 80);
     ctx.fillStyle = PALETTE.text;
     ctx.font = '800 26px system-ui, sans-serif';
-    ctx.fillText(`Seviye ${sim.level}`, DS_W / 2, DS_H / 2 - 8);
+    ctx.fillText(texts.level(sim.level), DS_W / 2, DS_H / 2 - 8);
     ctx.font = '600 13px system-ui, sans-serif';
     ctx.fillText(
-      sim.bots.length ? 'Devriye botları sahada — yollarına girme' : 'Yeni bot duvarları belirdi',
+      sim.bots.length ? texts.botsOut : texts.newWalls,
       DS_W / 2,
       DS_H / 2 + 18
     );

@@ -9,7 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, Diamond, Pause, Share2, Star, Trophy, Waypoints } from 'lucide-react';
-import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useDataSnakeCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -101,6 +103,10 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
     readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useDataSnakeCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
+  const cRef = useLatestRef(c);
   const boardRef = useRef<HTMLDivElement>(null);
   const surface = useCanvasSurface(canvasRef, { width: DS_W, height: DS_H });
   const [simObj] = useState<SnakeSim>(() => createSnakeSim(seed, { events: true, threshold }));
@@ -127,29 +133,27 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
             break;
           case 'go':
             fx.sfx(() => sfxPowerUp());
-            setAnnounce('Başla!');
+            setAnnounce(cRef.current.start);
             break;
           case 'eat':
             fx.sfx(() => sfxCollectStar(e.score % PACKETS_PER_LEVEL));
             fx.haptic('tap');
-            if (e.score % 5 === 0) setAnnounce(`${e.score} paket.`);
+            if (e.score % 5 === 0) setAnnounce(tRef.current.packets(e.score));
             break;
           case 'threshold':
             fx.sfx(() => sfxWin());
             fx.haptic('success');
-            setAnnounce(`Ödül eşiği ${threshold} geçildi. Artık çarpsan da skorun sayılır.`);
+            setAnnounce(tRef.current.thresholdAnnounce(threshold));
             break;
           case 'level':
             fx.sfx(() => sfxFanfare());
             fx.haptic('success');
-            setAnnounce(
-              `Seviye ${e.level} / ${LEVELS}. ${e.level >= 4 ? 'Devriye botları sahada.' : 'Yeni bot duvarları belirdi.'}`
-            );
+            setAnnounce(tRef.current.levelAnnounce(e.level, LEVELS, e.level >= 4));
             break;
           case 'die':
             fx.sfx(() => sfxHit());
             fx.haptic('big');
-            setAnnounce(`${DEATH_TEXT[e.cause]}.`);
+            setAnnounce(`${tRef.current.death[e.cause] ?? DEATH_TEXT[e.cause]}.`);
             break;
           case 'clear':
             fx.sfx(() => sfxFanfare());
@@ -182,8 +186,9 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
     setSummary(s);
     setHud(snapshot(sim));
     setStage('summary');
+    const tt = tRef.current;
     setAnnounce(
-      `${s.won ? 'Tüm seviyeler tamamlandı' : s.cause ? DEATH_TEXT[s.cause] : 'Oyun bitti'}. Skor ${s.score}. ${s.stars} yıldız.`
+      tt.endAnnounce(s.won ? tt.allLevels : s.cause ? tt.death[s.cause] : cRef.current.gameOver, s.score, s.stars)
     );
   }, [mode, threshold, simObj]);
 
@@ -201,7 +206,7 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
     render: () => {
       const s = surface.current;
       if (!s) return;
-      drawFrame(s.beginFrame(), simObj, fxRef.current, { smooth: rich, now: performance.now() });
+      drawFrame(s.beginFrame(), simObj, fxRef.current, { smooth: rich, now: performance.now(), texts: tRef.current.canvas });
     },
   });
 
@@ -300,27 +305,27 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/data-snake`;
     const text = summary.won
-      ? `Qratex Veri Yılanı'nda ${LEVELS} seviyenin hepsini bitirdim: ${summary.score} paket, ${summary.stars} yıldız!`
-      : `Qratex Veri Yılanı'nda ${summary.level}. seviyede ${summary.score} paket topladım. Sen geçebilir misin?`;
+      ? t.shareWon(LEVELS, summary.score, summary.stars)
+      : t.shareLost(summary.level, summary.score);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Veri Yılanı', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
   const progress = Math.min(1, hud.score / Math.max(1, threshold));
   const hudSummary = useMemo(
     () =>
-      `Seviye ${hud.level} / ${LEVELS}, bu seviyede ${hud.eatenInLevel} / ${PACKETS_PER_LEVEL} paket. Skor ${hud.score}, ödül eşiği ${threshold}.`,
-    [hud.level, hud.eatenInLevel, hud.score, threshold]
+      t.hudSummary(hud.level, LEVELS, hud.eatenInLevel, PACKETS_PER_LEVEL, hud.score, threshold),
+    [hud.level, hud.eatenInLevel, hud.score, threshold, t]
   );
 
   const dpad = (action: 'up' | 'down' | 'left' | 'right', label: string, Icon: typeof ArrowUp) => (
@@ -350,21 +355,21 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between text-xs text-white/75">
             <span>
-              Seviye <b className="tabular-nums text-white">{hud.level}</b>/{LEVELS}
+              {t.level} <b className="tabular-nums text-white">{hud.level}</b>/{LEVELS}
               <span className="text-white/60">
                 {' '}
                 · {hud.eatenInLevel}/{PACKETS_PER_LEVEL}
               </span>
             </span>
             <span>
-              Skor <b className="tabular-nums text-white">{hud.score}</b>
-              <span className="text-white/60"> · eşik {threshold}</span>
+              {t.score} <b className="tabular-nums text-white">{hud.score}</b>
+              <span className="text-white/60">{c.thresholdSuffix(threshold)}</span>
             </span>
           </div>
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -376,15 +381,15 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
           </div>
           <p className="mt-1 text-[11px] text-white/65">
             {hud.score >= threshold
-              ? 'Eşik geçildi — çarpsan da skorun sayılır. 30 = tam tur.'
-              : `${threshold} paketten sonra çarpsan da ödül hakkın kalır.`}
+              ? t.passedHint
+              : t.safeHint(threshold)}
           </p>
         </div>
         <button
           type="button"
           onClick={onPauseRequest}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -394,14 +399,14 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
         {announce}
       </p>
       <p id="ds-rules" className="sr-only">
-        {hudSummary} Ok tuşları ya da WASD ile yön ver, dokunmatikte kaydır ya da yön düğmelerini kullan. Esc duraklatır.
+        {hudSummary} {t.rules}
       </p>
 
       <div
         ref={boardRef}
         tabIndex={0}
         role="application"
-        aria-label="Veri Yılanı oyun alanı"
+        aria-label={t.arena}
         aria-describedby="ds-rules"
         className="relative aspect-square w-full touch-none overflow-hidden rounded-2xl border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         style={{ background: PALETTE.bg }}
@@ -417,38 +422,40 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
             className="absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto bg-[#0b1020]/92 p-5 text-white"
           >
             <h3 id="ds-tut-title" className="text-center text-xl font-bold">
-              Nasıl oynanır?
+              {c.howTo}
             </h3>
             <ol className="space-y-3 text-sm">
               <li className="flex gap-3">
                 <Diamond className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.food }} aria-hidden />
                 <span>
-                  <b>Sarı veri paketlerini yut.</b> Her paket 1 skor; her 6 pakette seviye atlarsın ({LEVELS} seviye,
-                  toplam {TOTAL_PACKETS}).
+                  <b>{t.eatTitle}</b>
+                  {t.eatBody(LEVELS, TOTAL_PACKETS)}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Waypoints className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.wall }} aria-hidden />
                 <span>
-                  <b>Bot duvarlarından kaç.</b> Çapraz taralı turuncu kareler 2. seviyede belirir; kenara ve kendi
-                  kuyruğuna da çarpma.
+                  <b>{t.wallTitle}</b>
+                  {t.wallBody}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Bot className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.bot }} aria-hidden />
                 <span>
-                  <b>Devriye botları</b> 4. seviyeden itibaren soluk yollarında gidip gelir. Hız her seviyede artar.
+                  <b>{t.botTitle}</b>
+                  {t.botBody}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Trophy className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.head }} aria-hidden />
                 <span>
-                  <b>Ödül eşiği {threshold}.</b> Eşiği geçtikten sonra çarpsan bile skorun sayılır.
+                  <b>{t.thresholdTitle(threshold)}</b>
+                  {t.thresholdBody}
                 </span>
               </li>
             </ol>
             <p className="text-center text-xs text-white/65">
-              {coarse ? 'Kaydır ya da alttaki yön düğmelerini kullan.' : 'Ok tuşları / WASD · Esc duraklat'}
+              {coarse ? t.touchKeys : t.keys}
             </p>
             <button
               type="button"
@@ -457,7 +464,7 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
               className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               style={{ background: PALETTE.head }}
             >
-              Anladım, başla
+              {c.gotIt}
             </button>
           </div>
         )}
@@ -471,9 +478,9 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
             className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 overflow-y-auto bg-[#0b1020]/92 p-5 text-center text-white"
           >
             <h3 id="ds-sum-title" className="text-xl font-bold">
-              {summary.won ? 'Tam tur! Tüm seviyeler bitti' : summary.cause ? DEATH_TEXT[summary.cause] : 'Oyun bitti'}
+              {summary.won ? t.won : summary.cause ? t.death[summary.cause] : c.gameOver}
             </h3>
-            <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+            <div className="flex gap-1" role="img" aria-label={c.stars(summary.stars)}>
               {[1, 2, 3].map((n) => (
                 <Star
                   key={n}
@@ -487,16 +494,16 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
             <p className="text-4xl font-black tabular-nums">{summary.score}</p>
             <p className="text-xs text-white/70">
               {summary.prevBest === null
-                ? 'İlk skorun bu cihazda kaydedildi.'
+                ? c.firstScore
                 : summary.score > summary.prevBest
-                  ? `Yeni kişisel rekor! (önceki ${summary.prevBest})`
-                  : `En iyin: ${summary.prevBest}`}
-              {mode === 'practice' ? ' · Pratik' : ''}
+                  ? c.newBest(summary.prevBest)
+                  : c.best(summary.prevBest)}
+              {mode === 'practice' ? c.practiceSuffix : ''}
             </p>
             <dl className="grid w-full max-w-xs grid-cols-2 gap-2 text-xs">
               {[
-                ['Seviye', `${summary.level}/${LEVELS}`],
-                ['Uzunluk', String(summary.length)],
+                [t.statLevel, `${summary.level}/${LEVELS}`],
+                [t.statLength, String(summary.length)],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-white/5 px-2 py-1.5">
                   <dt className="text-white/60">{k}</dt>
@@ -507,9 +514,9 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
             <p className="text-xs text-white/70">
               {summary.score >= threshold
                 ? mode === 'ranked'
-                  ? 'Ödül eşiğini geçtin — sunucu oyunu yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                  : 'Eşiği geçtin. Sıralı modda bu skor ödül getirirdi.'
-                : `Ödül eşiği ${threshold}; ${threshold - summary.score} paket kaldı.`}
+                  ? t.passedRanked
+                  : c.passedPractice
+                : t.remaining(threshold, threshold - summary.score)}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -517,7 +524,7 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
                 onClick={share}
                 className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                <Share2 className="h-4 w-4" aria-hidden /> {c.share}
               </button>
               <button
                 type="button"
@@ -527,7 +534,7 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
                 style={{ background: PALETTE.head }}
               >
                 <Trophy className="h-4 w-4" aria-hidden />
-                {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                {mode === 'ranked' ? c.save(autoLeft) : c.cont}
               </button>
             </div>
             <p className="min-h-[1rem] text-xs text-white/70" aria-live="polite">
@@ -539,20 +546,20 @@ export function DataSnakeGame({ mode, seed, config, paused, onPauseRequest, onFi
 
       {/* Dokunmatik D-pad: ekran genişliğiyle değil işaretçi türüyle gösterilir. */}
       {coarse && stage === 'playing' && (
-        <div className="mt-3 grid grid-cols-3 justify-items-center gap-2" role="group" aria-label="Yön düğmeleri">
+        <div className="mt-3 grid grid-cols-3 justify-items-center gap-2" role="group" aria-label={c.dpad}>
           <span />
-          {dpad('up', 'Yukarı', ArrowUp)}
+          {dpad('up', c.up, ArrowUp)}
           <span />
-          {dpad('left', 'Sola', ArrowLeft)}
-          {dpad('down', 'Aşağı', ArrowDown)}
-          {dpad('right', 'Sağa', ArrowRight)}
+          {dpad('left', c.left, ArrowLeft)}
+          {dpad('down', c.down, ArrowDown)}
+          {dpad('right', c.right, ArrowRight)}
         </div>
       )}
 
       <p className="mt-2 text-center text-xs text-white/65">
         {mode === 'practice'
-          ? 'Pratik: ödülsüz, liderliğe girmez.'
-          : 'Sıralı: skor sunucuda yeniden oynatılarak doğrulanır.'}
+          ? c.footPractice
+          : c.footRanked}
       </p>
     </div>
   );

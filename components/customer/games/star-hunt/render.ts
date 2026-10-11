@@ -9,6 +9,7 @@
  * boynuz, düz tepe, anten), korkmuş hayalet kesik kenarlı ve zikzak ağızlı; yıldız beş köşeli,
  * güç kapsülü halka. Palet Okabe–Ito (renk körü güvenli).
  */
+import { STAR_CANVAS_TEXTS_TR, type StarCanvasTexts } from './copy';
 import {
   CELL_PX,
   CELL_U,
@@ -82,7 +83,12 @@ function burst(fx: FxState, x: number, y: number, color: string, n: number) {
 }
 
 /** Simülasyon olaylarını görsel efekte çevirir. `shake(px)` politika süzgecidir (azaltılmışta 0). */
-export function applyEventsToFx(fx: FxState, events: SimEvent[], shake: (px: number) => number) {
+export function applyEventsToFx(
+  fx: FxState,
+  events: SimEvent[],
+  shake: (px: number) => number,
+  texts: StarCanvasTexts = STAR_CANVAS_TEXTS_TR
+) {
   for (const e of events) {
     switch (e.t) {
       case 'star': {
@@ -102,7 +108,7 @@ export function applyEventsToFx(fx: FxState, events: SimEvent[], shake: (px: num
         const x = e.x * CELL_PX + CELL_PX / 2;
         const y = e.y * CELL_PX + CELL_PX / 2;
         burst(fx, x, y, PALETTE.scared, 20);
-        fx.floaters.push({ x, y, text: e.chain > 1 ? `Yakalandı ×${e.chain}` : 'Yakalandı!', life: 55, color: PALETTE.pellet });
+        fx.floaters.push({ x, y, text: texts.caught(e.chain), life: 55, color: PALETTE.pellet });
         fx.shake = Math.max(fx.shake, shake(4));
         break;
       }
@@ -295,7 +301,14 @@ function drawGhost(ctx: CanvasRenderingContext2D, x: number, y: number, id: numb
 
 const ANGLE: readonly number[] = [0, -Math.PI / 2, Math.PI / 2, Math.PI, 0];
 
-export function drawFrame(ctx: CanvasRenderingContext2D, scale: number, sim: StarHuntSim, fx: FxState, lastDir: number) {
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+  sim: StarHuntSim,
+  fx: FxState,
+  lastDir: number,
+  texts: StarCanvasTexts = STAR_CANVAS_TEXTS_TR
+) {
   ctx.fillStyle = PALETTE.bg;
   ctx.fillRect(0, 0, SH_W, SH_H);
   ctx.save();
@@ -417,7 +430,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, scale: number, sim: Sta
       ctx.fillText(sub, SH_W / 2, SH_H / 2 + 16);
     }
   };
-  if (sim.phase === 'ready') banner(`Seviye ${sim.level} · ${sim.maze.name}`, 'Hazır ol — yön ver');
-  else if (sim.phase === 'clear') banner(`Seviye ${sim.level} temiz!`, sim.level < 5 ? 'Sıradaki labirent geliyor' : 'Tüm seviyeler bitti');
-  else if (sim.phase === 'caught') banner('Yakalandın!', sim.lives > 0 ? `${sim.lives} can kaldı` : 'Canın bitti');
+  if (sim.phase === 'ready') banner(texts.ready(sim.level, sim.maze.name), texts.readySub);
+  else if (sim.phase === 'clear') banner(texts.clear(sim.level), sim.level < 5 ? texts.nextMaze : texts.allDone);
+  else if (sim.phase === 'caught') banner(texts.caughtBanner, sim.lives > 0 ? texts.livesLeft(sim.lives) : texts.noLives);
 }

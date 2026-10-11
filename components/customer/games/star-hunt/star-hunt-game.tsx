@@ -15,7 +15,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Ghost, Heart, Pause, Share2, Star, Trophy, Zap } from 'lucide-react';
-import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useStarHuntCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -117,6 +119,9 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
     readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useStarHuntCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
   const surface = useCanvasSurface(canvasRef, { width: SH_W, height: SH_H });
   const [simObj] = useState<StarHuntSim>(() => createStarHuntSim(seed, { events: true, threshold }));
   const recRef = useRef(createInputRecorder());
@@ -133,22 +138,22 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
   const handleEvents = useCallback(
     (events: SimEvent[]) => {
       if (events.length === 0) return;
-      applyEventsToFx(fxState, events, (px) => fx.shake(px));
+      applyEventsToFx(fxState, events, (px) => fx.shake(px), tRef.current.canvas);
       for (const e of events) {
         switch (e.t) {
           case 'star':
             fx.sfx(() => sfxCollectStar(e.levelStars - 1));
             fx.haptic('tap');
-            setAnnounce(`Yıldız: seviyede ${e.levelStars} / ${STARS_PER_LEVEL}, toplam ${e.total}.`);
+            setAnnounce(tRef.current.star(e.levelStars, STARS_PER_LEVEL, e.total));
             break;
           case 'pellet':
             fx.sfx(() => sfxPowerUp());
             fx.haptic('success');
-            setAnnounce('Güç kapsülü! Hayaletler kısa süre korkuyor, onları yakalayabilirsin.');
+            setAnnounce(tRef.current.pellet);
             break;
           case 'power-warn':
             fx.sfx(() => sfxWarn());
-            setAnnounce('Güç bitmek üzere.');
+            setAnnounce(tRef.current.powerWarn);
             break;
           case 'eat':
             fx.sfx(() => (e.chain > 1 ? sfxCombo(Math.min(4, e.chain)) : sfxEatGhost()));
@@ -157,18 +162,18 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
           case 'caught':
             fx.sfx(() => sfxHit());
             fx.haptic('big');
-            setAnnounce(e.lives > 0 ? `Yakalandın. ${e.lives} can kaldı.` : 'Yakalandın. Canın bitti.');
+            setAnnounce(tRef.current.caught(e.lives));
             break;
           case 'clear':
             fx.sfx(() => sfxWin());
             fx.haptic('success');
-            setAnnounce(`Seviye ${e.level} temizlendi.`);
+            setAnnounce(tRef.current.cleared(e.level));
             break;
           case 'level':
-            setAnnounce(`Seviye ${e.level} / ${TOTAL_LEVELS} başlıyor.`);
+            setAnnounce(tRef.current.levelStart(e.level, TOTAL_LEVELS));
             break;
           case 'threshold':
-            setAnnounce('Ödül eşiği geçildi.');
+            setAnnounce(tRef.current.thresholdAnnounce);
             break;
           default:
             break;
@@ -197,9 +202,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
     setSummary(s);
     setHud(snapshot(sim));
     setStage('summary');
-    setAnnounce(
-      `${s.won ? 'Tüm seviyeler tamamlandı' : `Oyun bitti, seviye ${s.level}`}. ${s.score} yıldız. ${s.trophies} kupa.`
-    );
+    setAnnounce(tRef.current.endAnnounce(s.won, s.level, s.score, s.trophies));
   }, [mode, threshold, simObj]);
 
   useGameLoop({
@@ -218,7 +221,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
       if (!s) return;
       // Kozmetik efekt adımı çizimle (duraklatmada donar).
       if (!paused) stepFx(fxState);
-      drawFrame(s.beginFrame(), s.scale, simObj, fxState, lastDirRef.current);
+      drawFrame(s.beginFrame(), s.scale, simObj, fxState, lastDirRef.current, tRef.current.canvas);
     },
   });
 
@@ -304,27 +307,27 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/star-hunt`;
     const text = summary.won
-      ? `Qratex Yıldız Avı'nda ${TOTAL_LEVELS} labirentin hepsini bitirdim: ${summary.score} yıldız!`
-      : `Qratex Yıldız Avı'nda ${summary.level}. seviyeye kadar gittim: ${summary.score} yıldız. Sen geçebilir misin?`;
+      ? t.shareWon(TOTAL_LEVELS, summary.score)
+      : t.shareLost(summary.level, summary.score);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Yıldız Avı', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
   const progress = Math.min(1, hud.score / Math.max(1, threshold));
   const hudSummary = useMemo(
     () =>
-      `Seviye ${hud.level} / ${TOTAL_LEVELS}. Bu seviyede ${hud.levelStars} / ${STARS_PER_LEVEL} yıldız, toplam ${hud.score}, ödül eşiği ${threshold}. ${hud.lives} can.`,
-    [hud.level, hud.levelStars, hud.score, hud.lives, threshold]
+      t.hudSummary(hud.level, TOTAL_LEVELS, hud.levelStars, STARS_PER_LEVEL, hud.score, threshold, hud.lives),
+    [hud.level, hud.levelStars, hud.score, hud.lives, threshold, t]
   );
 
   const pad = (label: string, code: number, Icon: typeof ArrowUp, cls: string) => (
@@ -353,9 +356,9 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between text-xs text-white/75">
             <span>
-              Seviye <b className="tabular-nums text-white">{hud.level}</b>/{TOTAL_LEVELS}
+              {t.level} <b className="tabular-nums text-white">{hud.level}</b>/{TOTAL_LEVELS}
             </span>
-            <span className="flex items-center gap-0.5" aria-label={`Bu seviyede ${hud.levelStars} yıldız`}>
+            <span className="flex items-center gap-0.5" aria-label={t.levelStars(hud.levelStars)}>
               {Array.from({ length: STARS_PER_LEVEL }, (_, i) => (
                 <Star
                   key={i}
@@ -381,7 +384,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -393,12 +396,12 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
           </div>
           <div className="mt-1 flex items-center justify-between text-xs text-white/75">
             <span>
-              Toplam <b className="tabular-nums text-white">{hud.score}</b>
-              <span className="text-white/60"> · eşik {threshold}</span>
+              {t.total} <b className="tabular-nums text-white">{hud.score}</b>
+              <span className="text-white/60">{c.thresholdSuffix(threshold)}</span>
             </span>
             {hud.power > 0 && (
               <span className="flex items-center gap-1 font-semibold" style={{ color: PALETTE.pellet }}>
-                <Zap className="h-3.5 w-3.5" aria-hidden /> Güç {hud.powerSec} sn
+                <Zap className="h-3.5 w-3.5" aria-hidden /> {t.power(hud.powerSec)}
               </span>
             )}
           </div>
@@ -407,7 +410,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
           type="button"
           onClick={onPauseRequest}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -417,8 +420,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
         {announce}
       </p>
       <p id="sh-rules" className="sr-only">
-        {hudSummary} Ok tuşları ya da W, A, S, D ile yön ver; Esc duraklatır. Turuncu beş köşeli yıldızları topla,
-        hayaletlere değme. Mavi halka güç kapsülüdür: alınca hayaletler kısa süre korkar ve yakalanabilir.
+        {hudSummary} {t.rules}
       </p>
 
       <div className="relative aspect-[13/15] w-full overflow-hidden rounded-2xl border border-white/10" style={{ background: PALETTE.bg }}>
@@ -426,7 +428,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
           ref={canvasRef}
           tabIndex={0}
           role="application"
-          aria-label="Yıldız Avı labirenti"
+          aria-label={t.arena}
           aria-describedby="sh-rules"
           className="absolute inset-0 h-full w-full touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70"
         />
@@ -435,33 +437,33 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
         {stage === 'tutorial' && (
           <div role="dialog" aria-modal="true" aria-labelledby="sh-tut-title" className="absolute inset-0 flex flex-col justify-center gap-3 bg-[#0b1020]/92 p-5 text-white">
             <h3 id="sh-tut-title" className="text-center text-xl font-bold">
-              Nasıl oynanır?
+              {c.howTo}
             </h3>
             <ol className="space-y-3 text-sm">
               <li className="flex gap-3">
                 <Star className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.star }} fill={PALETTE.star} aria-hidden />
                 <span>
-                  <b>5 yıldızı topla, seviyeyi geç.</b> {TOTAL_LEVELS} labirent var; her biri biraz daha zor. İlk{' '}
-                  {threshold} yıldız ödül eşiği.
+                  <b>{t.starTitle}</b>
+                  {t.starBody(TOTAL_LEVELS, threshold)}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Ghost className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.danger }} aria-hidden />
                 <span>
-                  <b>Hayaletlere değme.</b> {START_LIVES} canın var; her hayaletin kendi biçimi ve huyu var (kovalayan,
-                  önünü kesen, gezinen, çekingen).
+                  <b>{t.ghostTitle}</b>
+                  {t.ghostBody(START_LIVES)}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Zap className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.pellet }} aria-hidden />
                 <span>
-                  <b>Mavi halka = güç.</b> Alınca hayaletler solup kesik kenarlı olur; o sürede onları yakalayıp eve
-                  gönderebilirsin.
+                  <b>{t.powerTitle}</b>
+                  {t.powerBody}
                 </span>
               </li>
             </ol>
             <p className="text-center text-xs text-white/65">
-              {coarse ? 'Kaydır ya da alttaki yön tuşlarını kullan.' : 'Klavye: ok tuşları / WASD · Esc duraklat'}
+              {coarse ? t.touchKeys : t.keys}
             </p>
             <button
               type="button"
@@ -470,7 +472,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
               className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               style={{ background: PALETTE.player }}
             >
-              Anladım, başla
+              {c.gotIt}
             </button>
           </div>
         )}
@@ -479,9 +481,9 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
         {stage === 'summary' && summary && (
           <div role="dialog" aria-modal="true" aria-labelledby="sh-sum-title" className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-[#0b1020]/92 p-5 text-center text-white">
             <h3 id="sh-sum-title" className="text-xl font-bold">
-              {summary.won ? 'Tüm labirentler bitti!' : `Oyun bitti — seviye ${summary.level}`}
+              {summary.won ? t.won : t.lost(summary.level)}
             </h3>
-            <div className="flex gap-1" role="img" aria-label={`3 kupadan ${summary.trophies}`}>
+            <div className="flex gap-1" role="img" aria-label={t.trophies(summary.trophies)}>
               {[1, 2, 3].map((n) => (
                 <Trophy
                   key={n}
@@ -494,21 +496,21 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
             </div>
             <p className="text-4xl font-black tabular-nums">
               {summary.score}
-              <span className="text-base font-semibold text-white/60"> / {MAX_SCORE} yıldız</span>
+              <span className="text-base font-semibold text-white/60">{t.ofMax(MAX_SCORE)}</span>
             </p>
             <p className="text-xs text-white/70">
               {summary.prevBest === null
-                ? 'İlk skorun bu cihazda kaydedildi.'
+                ? c.firstScore
                 : summary.score > summary.prevBest
-                  ? `Yeni kişisel rekor! (önceki ${summary.prevBest})`
-                  : `En iyin: ${summary.prevBest}`}
-              {mode === 'practice' ? ' · Pratik' : ''}
+                  ? c.newBest(summary.prevBest)
+                  : c.best(summary.prevBest)}
+              {mode === 'practice' ? c.practiceSuffix : ''}
             </p>
             <dl className="grid w-full max-w-xs grid-cols-3 gap-2 text-xs">
               {[
-                ['Seviye', `${summary.won ? TOTAL_LEVELS : summary.level}/${TOTAL_LEVELS}`],
-                ['Yakalanan', String(summary.ghostsEaten)],
-                ['Süre', `${summary.seconds} sn`],
+                [t.statLevel, `${summary.won ? TOTAL_LEVELS : summary.level}/${TOTAL_LEVELS}`],
+                [t.statCaught, String(summary.ghostsEaten)],
+                [t.statTime, t.seconds(summary.seconds)],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-white/5 px-2 py-1.5">
                   <dt className="text-white/60">{k}</dt>
@@ -519,9 +521,9 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
             <p className="text-xs text-white/70">
               {summary.score >= threshold
                 ? mode === 'ranked'
-                  ? 'Ödül eşiğini geçtin — oyun sunucuda yeniden oynatılıp doğrulandıktan sonra ödül hesaplanır.'
-                  : 'Eşiği geçtin. Sıralı modda bu skor ödül getirirdi.'
-                : `Ödül eşiği ${threshold} yıldız; ${threshold - summary.score} yıldız kaldı.`}
+                  ? t.passedRanked
+                  : c.passedPractice
+                : t.remaining(threshold, threshold - summary.score)}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -529,7 +531,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
                 onClick={share}
                 className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                <Share2 className="h-4 w-4" aria-hidden /> {c.share}
               </button>
               <button
                 type="button"
@@ -539,7 +541,7 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
                 style={{ background: PALETTE.player }}
               >
                 <Trophy className="h-4 w-4" aria-hidden />
-                {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                {mode === 'ranked' ? c.save(autoLeft) : c.cont}
               </button>
             </div>
             <p className="min-h-[1rem] text-xs text-white/70" aria-live="polite">
@@ -551,15 +553,15 @@ export function StarHuntGame({ mode, seed, config, paused, onPauseRequest, onFin
 
       {/* Sanal yön tuşları: dokunmatik cihazlarda (genişlikten bağımsız), başparmak bölgesinde. */}
       {coarse && stage === 'playing' && (
-        <div className="mt-3 grid grid-cols-3 grid-rows-2 justify-center gap-2 [grid-template-columns:repeat(3,3.5rem)] mx-auto w-max" role="group" aria-label="Yön tuşları">
-          {pad('Yukarı', SH_CODE.UP, ArrowUp, 'col-start-2 row-start-1')}
-          {pad('Sola', SH_CODE.LEFT, ArrowLeft, 'col-start-1 row-start-2')}
-          {pad('Aşağı', SH_CODE.DOWN, ArrowDown, 'col-start-2 row-start-2')}
-          {pad('Sağa', SH_CODE.RIGHT, ArrowRight, 'col-start-3 row-start-2')}
+        <div className="mt-3 grid grid-cols-3 grid-rows-2 justify-center gap-2 [grid-template-columns:repeat(3,3.5rem)] mx-auto w-max" role="group" aria-label={t.dpad}>
+          {pad(c.up, SH_CODE.UP, ArrowUp, 'col-start-2 row-start-1')}
+          {pad(c.left, SH_CODE.LEFT, ArrowLeft, 'col-start-1 row-start-2')}
+          {pad(c.down, SH_CODE.DOWN, ArrowDown, 'col-start-2 row-start-2')}
+          {pad(c.right, SH_CODE.RIGHT, ArrowRight, 'col-start-3 row-start-2')}
         </div>
       )}
       <p className="mt-2 text-center text-xs text-white/65">
-        {mode === 'practice' ? 'Pratik: ödülsüz, liderliğe girmez.' : 'Sıralı: oyun sunucuda yeniden oynatılarak doğrulanır.'}
+        {mode === 'practice' ? c.footPractice : t.footRanked}
       </p>
     </div>
   );
