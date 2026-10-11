@@ -175,3 +175,46 @@
 Yeniden üretim: Yönetici `/admin/agent-council/agents`'ta Harper'ı 3.0, diğerlerini 0.1 yapıp kaydeder → "Ajan profilleri kaydedildi" toast'ı ve AuditLog satırı oluşur → `/admin/agent-council`'da aynı hedefle koşu başlatır → `winnerAgent` ve `consensusScore` ağırlık değişikliğinden önceki koşuyla aynı formülle (ham skor / düz ortalama) üretilir. Ayar hiçbir çıktıyı etkilemez.
 
 Etki değerlendirmesi: Güvenlik açığı veya veri bozulması değil; bir **işlevsel doğruluk / yanıltıcı kontrol** hatası. Yönetici, konsey kararlarını ayarladığına inanarak bu ekrana güvenip yanlış sonuç çıkarabilir. Bu nedenle "yüksek" önem derecesi ürün güveni açısından savunulabilir; "kritik" değildir. Raporun önerisi (motora bağla — `getCouncilConfig()` + ağırlıklı kazanan/konsensüs + koşuya `configSnapshot` — ya da sayfayı kaldır) yerinde.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota emekli: `/admin/agent-council/agents` → `permanentRedirect('/admin/agent-council?tab=ayarlar')`. **Ajan ağırlıkları kaldırıldı**: hiçbir yerde okunmuyordu ve dürüst bir karşılığı yoktu. Yerine konsey motorunun GERÇEKTEN okuduğu ayarlar geldi: tartışma turu (1–3), konuşan uzmanlar (Kaptan her zaman açık), veri paketi aç/kapat, kurum talimatı (tüm istemlere eklenir). Ayarlar `Settings['agent_council_config']` altında; `GET/PUT /api/admin/council/config` (zod, `expectedUpdatedAt` 409, rate limit, AuditLog). Her oturum ayarın anlık görüntüsünü saklıyor.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | |
+| 2 | Sayfa yetkisi | ÇALIŞIYOR | |
+| 3 | API yetkisi | ÇALIŞIYOR | Kendi `defineRoute` ucu; genel `settings` PUT'u artık kullanılmıyor. |
+| 4 | Hero | ÇALIŞIYOR | Ortak `PageHeader`, doğru Türkçe. |
+| 5 | Ayar yükleme | ÇALIŞIYOR | Sunucu ön yüklemesi ve `QueryState`; hata görünür, bozuk kayıt "varsayılana düşüldü" uyarısıyla. |
+| 6 | Varsayılanlar | ÇALIŞIYOR | Tek kaynak `DEFAULT_COUNCIL_CONFIG`, sunucudan. |
+| 7 | Yükleme/kaydetme yarışı (BOZUK) | ÇALIŞIYOR | Form yalnız veri gelince açılıyor; `expectedUpdatedAt` ile 409, "güncel hâli yükle". |
+| 8 | Ajan satırları | ÇALIŞIYOR | Persona adı, rolü, odağı ve avatarı. |
+| 9 | Ağırlık girişi | KALDIRILDI | Etkisizdi. Yerine tur ve uzman seçimi (`ChoiceChips`). |
+| 10 | Yardım metni | ÇALIŞIYOR | Her ayarın etkisi açıklanıyor; çağrı tahmini gösteriliyor. |
+| 11 | Kaydet | ÇALIŞIYOR | Değer motor tarafından tüketiliyor (oturum oluşturulurken anlık görüntüye girer, `stepSession` onu okur). |
+| 12 | Ağırlıkların etkisi (SAHTE) | KALDIRILDI | Gerekçe yukarıda. |
+| 13 | Kaydediliyor durumu | ÇALIŞIYOR | |
+| 14 | Toast | ÇALIŞIYOR | Sunucu mesajı gösteriliyor. |
+| 15 | Denetim kaydı | ÇALIŞIYOR | Sayfada "Değişiklik geçmişi" olarak okunuyor. |
+| 16 | revalidateTag | KALDIRILDI | Önbellek yok; değer her oturum başında okunuyor. |
+| 17 | Karanlık tema | ÇALIŞIYOR | Rol token'ları; brütalist kart kaldırıldı. |
+| 18 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 19 | Mobil | ÇALIŞIYOR | ≥44px çipler. |
+| 20 | İskelet | ÇALIŞIYOR | `skeleton="form"`. |
+| 21 | Yükleme hatası | ÇALIŞIYOR | |
+| 22 | Kirli durum / ayrılma uyarısı | ÇALIŞIYOR | Yapışkan kaydetme çubuğu, "Kaydedilmemiş değişiklik var", `beforeunload`. |
+| 23 | Varsayılana sıfırla / geri al | ÇALIŞIYOR | "Varsayılanlar", "Vazgeç" ve geçmişten "Bu sürümü forma yükle". |
+| 24 | Sunucu şema doğrulaması | ÇALIŞIYOR | `councilConfigSchema`. |
+| 25 | Eşzamanlı düzenleme koruması | ÇALIŞIYOR | 409. |
+| 26 | PUT hız sınırı | ÇALIŞIYOR | `mutation`. |
+| 27 | Navigasyon | ÇALIŞIYOR | Sekme; oturumda ve formda "Ayarlar" bağlantıları. |
+| 28 | Persona bilgileri | ÇALIŞIYOR | |
+| 29 | Erişilebilir adlar | ÇALIŞIYOR | `aria-label` ve `<label htmlFor>`. |
+| 30 | Değişiklik geçmişi | ÇALIŞIYOR | Son 10 kayıt, kim ve ne zaman. |
+| 31 | Etki önizlemesi | KALDIRILDI | Ağırlık kalmadığı için anlamsız. Yerine "en fazla N LLM çağrısı" tahmini ve "Son 90 günde öne çıkanlar" (gerçek `winnerAgent` dağılımı) geldi. |
+| 32 | i18n | KISMİ (kalan) | Tam Türkçe; EN eklenmedi (paylaşılan `messages`). |
+
+**Kapanan bulgular:** B1 (kaldırıldı ve gerçek ayarlarla değiştirildi), B2, B3, B4, B5, B6, B8; B7 Türkçe tarafı kapandı (EN kalan) → 8/8. AI sağlayıcı ve model platform genelinde ayarlanıyor; ayarlar sekmesi bunu salt okunur gösteriyor ve `/admin/ai/studio`'ya bağlantı veriyor.

@@ -37,7 +37,7 @@ test.describe('Smoke', () => {
     await dismissAdminOnboardingIfPresent(page);
     await page.goto('/admin/agent-council');
     await dismissAdminOnboardingIfPresent(page);
-    await expect(page.getByRole('heading', { name: /grok tarzı konsey/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /^ajan konseyi$/i })).toBeVisible({
       timeout: 15000,
     });
   });
@@ -49,7 +49,7 @@ test.describe('Smoke', () => {
     await dismissAdminOnboardingIfPresent(page);
     await page.goto('/admin/agent-council/history');
     await dismissAdminOnboardingIfPresent(page);
-    await expect(page.getByRole('heading', { name: /konsey geçmişi/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /oturum geçmişi/i })).toBeVisible({
       timeout: 15000,
     });
   });

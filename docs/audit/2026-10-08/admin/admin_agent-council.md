@@ -247,3 +247,62 @@ Yöntem: her iddia çağıran ve çağrılan taraflarıyla birlikte baştan okun
 - **Yeniden üretim:** Groq'un yavaş/429 döndüğü bir anda canlı akışı başlat → 60. saniyede fonksiyon kesilir → istemci yarım transkript + "Canlı akış kesildi" görür; kalıcılık olmadığı için (iddia 1) yarım sonuç da kaybolur.
 
 **Özet:** 4 iddianın 4'ü de doğrulandı; 3. iddiadaki `impactScore` alt maddesi bayi tarafı için doğrulanmadı, 4. iddianın etkisi sağlayıcı kotası/gecikmesine bağlı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Üç sayfa tek çalışma alanında birleşti: `/admin/agent-council` → **Oturum · Geçmiş · Ayarlar** (sekme `?tab=`, açık oturum `?oturum=`; eski `?runId=` kalıcı yönlenir). Sunucu bileşeni ayarları, açık oturumu, son oturumları ve geçmişin ilk sayfasını önden okur; istemci adası `components/admin/a-ajan-konseyi/**`. Yeni BFF: `app/api/admin/council/**` (hepsi `defineRoute`, yalnız ADMIN, zod, rate limit). Çekirdek: `lib/council/{contract,engine.server,sessions.server,config.server,context.server}.ts`. Eski motorlar ve uçlar silindi: `lib/agent-dialogue.ts`, `lib/agent-council.ts` (`computeCouncil`), `lib/agent-personas.ts`, `lib/agent-run-store.ts`, `lib/council-run-mapper.ts`, `components/agents-ui/**`, `app/api/admin/agents/**` (conversation, stream, council-to-actions, run, runs, run/[id], outcomes). Test: `__tests__/lib/council.test.ts` (15 test).
+
+**Yeni akış:** `POST /sessions` oturumu oluşturur (LLM yok; ayar anlık görüntüsü + veri paketi `AgentRun.context`'e yazılır) → istemci `POST /sessions/:id/step` ile adım adım ilerletir. Sıradaki adımı sunucu DB'den belirler. Bir turda uzmanlar paralel konuşur, ardından Kaptan turu toparlar; adım başına en fazla iki ardışık çağrı süresi geçer, bu yüzden 60 sn sınırı aşılmaz. Her adım hep-ya-hiç kaydedilir; iyimser kilit (`updatedAt` + `stepLockUntil`) çift adımı engeller. LLM yanıt vermezse **şablon üretilmez**: açık hata döner, `lastError` görünür kalır, "Yeniden dene" sunulur. Sentez tek yapılandırılmış JSON çağrısıdır (`answer, winner, winnerRationale, confidence, dissent, actions`), zod ile doğrulanır ve kapalı bir uzman kazanan seçilemez.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sunucu tarafı yetki | ÇALIŞIYOR | Tüm yeni uçlar `defineRoute({roles:['ADMIN']})`; sayfa `requireAuth` + proxy kapısı. |
+| 2 | Segment metadata (noindex) | ÇALIŞIYOR | Sayfada `robots: noindex`, başlık "Ajan Konseyi". |
+| 3 | Hero | ÇALIŞIYOR | QDL `PageHeader`; "xAI / Grok 4.20" marka iddiası kaldırıldı. Model rozeti gerçek `modelUsed` değerinden geliyor. |
+| 4 | Hero durum rozeti | ÇALIŞIYOR | Oturumun gerçek durumu: `SessionStatusBadge` (Sürüyor/Tamamlandı/Başarısız/Sonlandırıldı/Arşivde). |
+| 5 | Demo modu bandı | KALDIRILDI | Demo/şablon modu yok. AI yapılandırılmamışsa başlatma kapalı ve dürüst uyarı gösteriliyor (503 `AI_UNAVAILABLE`). |
+| 6 | "Canlı LLM" rozeti (SAHTE) | KALDIRILDI → yerine ÇALIŞIYOR | Her mesajda yanıt veren model ve süre (`metadata.model/latencyMs`) gösteriliyor. Şablona düşüş olmadığı için kaydedilen her mesaj gerçek LLM çıktısı. |
+| 7 | Geçmiş kayıt bandı + "Yeni oturum" | ÇALIŞIYOR | Oturum şeridinde "Yeni oturum", URL Next router ile (`useUrlState`). |
+| 8 | Canlı altyazı | ÇALIŞIYOR | Gerçek adım etiketi ("Tur 2/3: Harper, Benjamin, Lucas paralel düşünüyor; ardından Kaptan…" / "Kaptan kararı yazıyor") ve adım izi (`StepTrack`, `aria-current="step"`). |
+| 9 | Soru girişi | ÇALIŞIYOR | Textarea, 10–500 karakter sayacı, satır içi doğrulama, Ctrl/⌘+Enter, `<label>` bağlı. |
+| 10 | Örnek hedef | ÇALIŞIYOR | Boş girişte 3 örnek soru çipi. |
+| 11 | "Konseyi başlat (tur tur)" | ÇALIŞIYOR | "Konseyi topla": oturum oluşur ve bu sekmede kendiliğinden adım adım ilerler. |
+| 12 | "Canlı akış (SSE)" | KALDIRILDI | İkinci motor gereksizdi ve 60 sn sınırını aşıyordu. Kalıcı adım modeli yenileme ve kapatmaya dayanıklı. |
+| 13 | "Sonraki tur" | ÇALIŞIYOR | "Devam et"; adım izi tur ve "Karar" adımını açıkça gösteriyor. |
+| 14 | Durdur / iptal | ÇALIŞIYOR | "Duraklat" (AbortController; sunucuda biten adım yine kaydedilir, bu da açıkça yazıyor), "Sonlandır" (`ConfirmAction`; sonlandırılan oturuma geç gelen sonuç yazılmaz). |
+| 15 | Unmount'ta kapatma | ÇALIŞIYOR | Bekleyen istek unmount'ta iptal edilir. |
+| 16 | Persona kartları | ÇALIŞIYOR | Kompakt "Konsey masası" (mobilde yatay şerit), yalnız ayarlarda açık olan üyeler. |
+| 17 | Ses görselleştiricisi | KALDIRILDI | 484 sonsuz animasyonlu span vardı. Yerine durum halkası (statik `ring`) ve azaltılmış harekete uyan spinner geldi. |
+| 18 | Persona durumu | ÇALIŞIYOR | Durum gerçek adımdan türetiliyor; glif yerine metin ("Düşünüyor…", "Uzmanları bekliyor"). |
+| 19 | Transkript | ÇALIŞIYOR | Tur başlıkları yapışkan, mesaj türleri (tur / tur özeti / nihai karar). |
+| 20 | Transkript rozetleri | ÇALIŞIYOR | |
+| 21 | Otomatik kaydırma (BOZUK) | ÇALIŞIYOR | Yalnız iç kutu kaydırılıyor. Kullanıcı yukarıdaysa zorla çekilmiyor, "Yeni mesajlar" hapı çıkıyor; azaltılmış harekette anlık kaydırma. |
+| 22 | Odaklanabilir transkript | ÇALIŞIYOR | `role="log"`, `tabIndex=0`, odak halkası. |
+| 23 | Ana cevap kartı (çift gösterim) | ÇALIŞIYOR | Tek "Karar" paneli. Transkriptte sentez yalnız kısa alıntı olarak kalıyor ve "Karar paneline yazıldı" diyor. |
+| 24 | "Öne çıkan uzman" (SAHTE regex) | ÇALIŞIYOR | Kazanan, gerekçe ve güven sentez JSON'undan geliyor (`parseSynthesis`). `pickWinner` silindi. |
+| 25 | Aksiyon paketi | ÇALIŞIYOR | Türkçe öncelik etiketleri, ayrıntı metni, kararlı `key` (`a0…`). |
+| 26 | Bayi seçici | ÇALIŞIYOR | Hafif `GET /api/admin/council/dealers?q=` (yalnız id ve ad, 20 sonuç, sunucu araması). Yalnız gerektiğinde yükleniyor; hata ve boş durum görünür. |
+| 27 | Bayi kuyruğuna aktarım | ÇALIŞIYOR | "Yayınla" diyaloğu: düzenlenebilir başlık, açıklama ve öncelik, vade seçimi. (oturum, bayi, aksiyon) başına tek kez; denetim kaydı (`agent_council.actions.publish`); bayiye bildirim. Yönetici sorusu ve persona adı bayiye gitmiyor, `impactScore=null`. |
+| 28 | `?runId=` açma | ÇALIŞIYOR | `?oturum=`; 404'te `QueryState` hata ekranı ve "Yeni oturuma dön" çıkıyor; eski `?runId=` kalıcı yönleniyor. |
+| 29 | Kalıcılık | ÇALIŞIYOR | `AgentRun/AgentMessage/AgentDecision` yazılıyor; yenilemede "Devam et" ile kaldığı yerden sürüyor. |
+| 30 | Alt sayfalara gezinme | ÇALIŞIYOR | Sekmeler; eski rotalar sekmelere `permanentRedirect` ediyor. |
+| 31 | Ajan ağırlıkları (SAHTE) | KALDIRILDI | Yerine motorun gerçekten okuduğu ayarlar geldi (tur sayısı, açık uzmanlar, veri paketi, kurum talimatı). |
+| 32 | Platform verisi ("Veri" uzmanı) | ÇALIŞIYOR | Kapsama göre (platform / tek bayi) 30 günlük veri paketi: geri bildirim, ortalama puan, negatif oran, yüksek kayıp riski, açık aksiyon, şüpheli kayıt. Panelde "Konseyin gördüğü veri" bölümünde görünüyor. İstem paket dışı sayıyı yasaklıyor ve anahtar atfı istiyor. |
+| 33 | Toast önekleri | ÇALIŞIYOR | Bu yüzey `sonner`'ı doğrudan Türkçe metinle kullanıyor (`lib/admin-toast` kullanılmıyor). |
+| 34 | Sunucu hata yanıtları | ÇALIŞIYOR | Zarf v2: `VALIDATION` (alan mesajları), `AI_FAILED` 502, `AI_UNAVAILABLE` 503, `RATE_LIMITED` 429, `STEP_IN_PROGRESS` 409, `CONFLICT` 409. |
+| 35 | Yükleniyor durumu | ÇALIŞIYOR | `QueryState` iskeletleri ve adım satırı. |
+| 36 | Boş durum | ÇALIŞIYOR | Örnek sorular, son oturumlar listesi ve aktif ayar özeti (tur, uzmanlar, çağrı tahmini, model). |
+| 37 | i18n (tr/en) | KISMİ (kalan) | Metinler tam Türkçe karakterli. `messages/*.json` paylaşılan dosya olduğu için EN çevirisi eklenmedi; admin panelinin geri kalanı da TR-öncelikli. |
+| 38 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy` (mesaj girişi ve karar paneli), kaydırma `auto`, spinner `motion-reduce:animate-none`. |
+| 39 | Mobil yerleşim | ÇALIŞIYOR | Mobilde karar ve masa önce, transkript sonra; dokunma hedefleri ≥44px. |
+| 40 | Kopyala / dışa aktar | ÇALIŞIYOR | Markdown kopyala ve `.md` indir (`sessionToMarkdown`, yalnız kayıtlı veri). |
+| 41 | Hız sınırı / maliyet koruması | ÇALIŞIYOR | Oturum oluşturma 6/10 dk, adım `ai` politikası (10/dk). LLM `runChatCompletion` geçidinden `actorKey` ile geçiyor; bekçi hatası 429'a eşleniyor. Ayarlarda ve formda "en fazla N LLM çağrısı" görünüyor. |
+| 42 | Model / gecikme görünürlüğü | ÇALIŞIYOR | Mesaj başına model ve süre, oturum başına model listesi ve çağrı sayısı. Token ve ücret gösterilmiyor: geçit token sayısını döndürmüyor, uydurulmadı. |
+
+**Kapanan bulgular (16/16):** B1 kalıcılık · B2 sahte "canlı" rozeti (şablon tamamen kalktı) · B3 tek-kez yayın, denetim, sızıntı, uydurma etki, bildirim · B4 regex kazanan · B5 60 sn / hata mesajı / iptal (adım modeli, paralel uzmanlar, görünür hata, duraklat/sonlandır) · B6 veri paketi · B7 kaydırma · B8 altyazı ve persona durumu · B9 sahte ağırlık ve yetim alt sayfalar · B10 bayi seçici · B11 girdi doğrulaması ve hata kodları · B12 çift gösterim ve hiyerarşi · B13 marka iddiası (ürün adı "Ajan Konseyi", kaptanın görünen adı "Kaptan"; DB anahtarı eski kayıtlarla uyum için `Grok` olarak kaldı) · B14 görselleştirici · B15 hız sınırı ve maliyet görünürlüğü · B16 küçük temizlikler (dosyalar silindi ya da yeniden yazıldı).
+
+**Uygulanan eksik özellikler:** kalıcı ve paylaşılabilir oturum URL'si · veri bağlamı ve kapsam seçimi · durdur, devam ettir, aynı soruyla yeniden çalıştır · yapılandırılmış karar (güven, karşı görüş) · aksiyon yayını, tekillik, denetim, bildirim ve geri izleme ("Yayınlanan aksiyonlar": bayideki ActionItem durumu canlı okunuyor) · Markdown dışa aktarım ve model görünürlüğü.
+
+**Kalanlar:** (1) Token akışı (yazılırken görünme) yok: adım tamamlanınca gösteriliyor, çünkü `runChatCompletion` akış desteklemiyor ve AI yalnız mevcut geçitten çağrılıyor. (2) Tek mesajı yeniden üretme ve takip sorusu yok. (3) Segment veya çoklu bayiye yayın yok: tek bayi destekleniyor; iç ekip (`/admin/ekip`) görevine aktarım yok. (4) `ActionItem` şemasında tekillik indeksi yok. Tekillik `AgentRun.context.published` ile iyimser kilit altında sağlanıyor. Kesin DB garantisi için **ŞEMA İSTEĞİ:** `ActionItem.sourceRef String?` + `@@unique([sourceRef])`. (5) Ücret görünürlüğü için token sayısı gerekiyor; **ŞEMA/GEÇİT İSTEĞİ:** `runChatCompletion` dönüşüne `usage` eklenmesi (ai-engine sahibi). (6) EN çevirisi (madde 37). (7) `lib/data/admin-api-catalog.json` eski `/api/admin/agents/*` satırlarını içeriyor; `npm run catalog:admin-api` ile yeniden üretilmeli (script çalıştırmak bu dalgada yasak).

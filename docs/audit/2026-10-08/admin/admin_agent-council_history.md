@@ -184,3 +184,42 @@ Yeniden üretim: Admin `/admin/agent-council`'da bir konu başlatır, 4 tur LLM 
 Yeniden üretim: Admin oturumu süresi dolmuşken sayfayı aç → API 401 JSON döner → ekranda hata/yeniden giriş yönlendirmesi yerine "Kayıt yok." görünür. DevTools'ta ağı "Offline" yapıp yenile → aynı boş durum + konsolda unhandled rejection.
 
 Not: Bulgu 1 nedeniyle şu an başarılı yanıt da boş geldiğinden, iki durum pratikte ayırt edilemez; yine de kalıcılık düzeltildiğinde bu maskeleme gerçek kayıtları "yok" gibi gösterecektir. Öneri: üç ayrı durum (`loading | error(status) | ready`) modellenmeli; 401/403'te yeniden giriş/gizli kapı CTA'sı, 5xx/ağ hatasında "Yeniden dene" düğmesi; `catch` ile hatayı state'e yazıp `AbortController` ile unmount'ta iptal; tercihen sayfa genelindeki diğer admin listeleriyle ortak bir `useAdminQuery` (veya SWR/React Query) kancasına taşınmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota emekli: `/admin/agent-council/history` → `permanentRedirect('/admin/agent-council?tab=gecmis')` (sorgu parametreleri korunur). Geçmiş artık konsey çalışma alanının **Geçmiş** sekmesi (`components/admin/a-ajan-konseyi/history-tab.tsx`). Veri ucu `GET /api/admin/council/sessions` (`defineRoute`, zod: `q`, `status`, `cursor`, `limit` 1–50). Ayrıntı için `admin_agent-council.md` içindeki "Uygulama (Dalga 2)" bölümüne bakın.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | Hedef sayfanın noindex metadata'sı. |
+| 2 | Hero / açıklama vaadi | ÇALIŞIYOR | Vaat artık gerçek: her oturum kaydediliyor ve tam transkriptle açılıyor. |
+| 3 | "Yeni konsey oturumu" | ÇALIŞIYOR | "Oturum" sekmesi ve boş durum metni. |
+| 4 | Liste çekme (BOZUK) | ÇALIŞIYOR | Oturumlar `AgentRun`'a yazılıyor; liste gerçek. |
+| 5 | Yükleniyor | ÇALIŞIYOR | `QueryState` liste iskeleti. |
+| 6 | Boş durum | ÇALIŞIYOR | İlk kullanımda yönlendirmeli `EmptyState`; filtrede "Filtreleri temizle". |
+| 7 | Hata durumu (BOZUK) | ÇALIŞIYOR | Hata asla "kayıt yok" olarak görünmüyor: `QueryState` hata kartı, "Tekrar dene", 401/403 ayrımı. |
+| 8 | Satır → detay | ÇALIŞIYOR | `?oturum=` (useSearchParams ile reaktif); 404 görünür hata. |
+| 9 | Hedef metni | ÇALIŞIYOR | `line-clamp-2`. |
+| 10 | Durum rozeti (ham İngilizce) | ÇALIŞIYOR | Türkçe etiket, ton ve ikon (`SessionStatusBadge`). |
+| 11 | Kazanan ajan | ÇALIŞIYOR | Persona avatarı ve "Ad · Rol". |
+| 12 | Güven yüzdesi | ÇALIŞIYOR | |
+| 13 | Tarih | ÇALIŞIYOR | Göreli zaman; title'da Europe/Istanbul tam tarih. |
+| 14 | Erişilebilirlik | ÇALIŞIYOR | `aria-label` ezmesi kaldırıldı, görünür metin erişilebilir ad; `<ol>`, odak halkası. |
+| 15 | Navigasyondan erişim | ÇALIŞIYOR | Sekme; eski rota yönleniyor. |
+| 16 | Eski format eşleme | ÇALIŞIYOR | Eski kayıtlar "Eski biçim" rozetiyle salt okunur. Yanlış `critique→captain` eşlemesi kaldırıldı (`council-run-mapper` silindi). |
+| 17 | Sayfalama | ÇALIŞIYOR | İmleçli "Daha fazla yükle". |
+| 18 | Arama / filtre | ÇALIŞIYOR | Metin araması ve sayaçlı durum çipleri; ikisi de URL'de (`q`, `durum`). |
+| 19 | Kalıcı kayıt | ÇALIŞIYOR | Ana bulgu kapandı. |
+| 20 | Silme / arşiv | ÇALIŞIYOR | Arşivle ve arşivden çıkar (silme yok, denetimli). "Sabitle" eklenmedi. |
+| 21 | Başlatan admin | ÇALIŞIYOR | Satırda ve ayrıntıda görünüyor. |
+| 22 | Karar önizlemesi | ÇALIŞIYOR | Satırda kazanan, güven ve yayınlanan aksiyon sayısı. |
+| 23 | Aksiyon / sonuç takibi | ÇALIŞIYOR (kısmi kapsam) | Yayınlanan aksiyonlar ve bayideki ActionItem durumu oturumda. `AgentOutcome` metrik ölçümü UI'sız ve çağıransız olduğu için uç (`/agents/outcomes`) silindi. |
+| 24 | i18n | KISMİ (kalan) | Tam Türkçe; EN çevirisi paylaşılan `messages` dosyasında yapılmadı. |
+| 25 | Kalıcılık modu göstergesi | KALDIRILDI | Bellek deposu (`agent-run-store`) silindi; tek kaynak DB. |
+| 26 | Yetki | ÇALIŞIYOR | |
+| 27 | Mobil | ÇALIŞIYOR | |
+| 28 | Yenile / tekrar dene | ÇALIŞIYOR | `QueryState` yeniden deneme; sorgular odakta yenileniyor. |
+
+**Kapanan bulgular:** B1, B2, B3, B4, B5 (i18n hariç), B6, B7, B9, B10 → 9/10. **Kalan:** B8 (tüm `/api/admin/*` için gizli kapı doğrulaması) sistem geneli bir konu, bu yüzeyin kapsamı dışında. Karşılaştırma ve diff, fork ve sabitleme uygulanmadı.
