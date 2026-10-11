@@ -1,4 +1,5 @@
 import type { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
+import { clientMessage } from '@/lib/client-messages';
 
 /**
  * Sunucu hatasını forma yansıtma. API zarfı (lib/http/define-route.ts):
@@ -41,7 +42,7 @@ export function isConflictError(error: unknown): boolean {
 }
 
 /** Herhangi bir hata biçimini tek yapıya indirger. */
-export function readServerError(error: unknown, fallbackMessage = 'İşlem tamamlanamadı.'): ServerErrorInfo {
+export function readServerError(error: unknown, fallbackMessage = clientMessage('failed')): ServerErrorInfo {
   const r = asRecord(error);
   // { error: { code, message } } biçimi de görülür
   const nested = r && asRecord(r.error);
