@@ -147,7 +147,7 @@ describe('ekonomi sınırları okuma anında da uygulanır (admin B4, savunma de
     const eff = await getEffectiveMiniGame('pacman');
     expect(eff).not.toBeNull();
     expect(eff!.enabled).toBe(false);
-    expect(eff!.maxScore).toBe(5);
+    expect(eff!.maxScore).toBe(25) // Yıldız Avı v2: 5 seviye × 5 yıldız (PACMAN_GAME.maxScore);
     // Hub listesine pacman girmez (kartı ayrı).
     expect((await getEffectiveMiniGames()).some((g) => g.gameType === 'pacman')).toBe(false);
   });
