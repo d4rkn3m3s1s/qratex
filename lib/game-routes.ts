@@ -20,6 +20,7 @@ import {
 } from '@/lib/minigame-config-effective';
 import { attemptReasonMessage, finalizeAttempt, resolveStartAttempt } from '@/lib/game-session';
 import { getVerifierForGameType } from '@/lib/games/registry/server';
+import { isLiveGameType } from '@/lib/games/registry/live-game-types';
 import { practiceContentFor, rankedContentFor, runVerifier, type VerifierRules } from '@/lib/games/verify';
 import { randomSeed } from '@/lib/games/engine/rng';
 import type { EffectiveMiniGame } from '@/lib/minigame-config-effective';
@@ -61,6 +62,12 @@ function hiddenMessage(game: EffectiveMiniGame): string {
     : 'Bu oyun emekliye ayrıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin.';
 }
 
+/** Sunucu modülü olmayan (emekli/birleşmiş, doğrulayıcısız) oyunun gerekçesi. */
+const NO_MODULE_MESSAGE = 'Bu oyun emekliye ayrıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin.';
+
+/** Doğrulayıcısı olmayan eski oyunda sıralı deneme kazanılamaz (fail-closed). */
+const NO_MODULE_VERIFICATION = { verifiedScore: 0, flags: ['proof_missing' as const], detail: 'sunucu modülü yok' };
+
 /**
  * POST start — günde 1 DENEME (başlangıçta harcanır).
  * `opts.userId`: çağıran route kimliği zaten doğruladıysa (defineRoute) tekrar sorgulanmaz.
@@ -82,6 +89,10 @@ export async function handleGameStart(gameType: string, opts: { userId?: string 
       return json({ error: hiddenMessage(game), canPlay: false }, 403);
     }
     if (!game.enabled) return json({ error: 'Bu oyun şu anda kullanılamıyor', canPlay: false }, 403);
+    // Emekli/birleşmiş eski kimlik: arayüzü yok, doğrulayıcısı yok → sıralı deneme açılmaz.
+    if (!isLiveGameType(game.gameType)) {
+      return json({ error: NO_MODULE_MESSAGE, code: 'GAME_RETIRED', canPlay: false }, 403);
+    }
 
     const r = await resolveStartAttempt(prisma, { userId, game });
 
@@ -157,6 +168,8 @@ export async function handleGameComplete(
     if (!game) return json({ error: 'Oyun bulunamadı' }, 404);
 
     const verifier = getVerifierForGameType(gameType);
+    // Sunucu modülü olmayan eski oyunun (önceden açılmış) denemesi kapanır ama kazanılamaz.
+    const hasModule = isLiveGameType(game.gameType);
     let beforeUnlocked: Set<string> | null = null;
     const result = await finalizeAttempt(prisma, {
       userId,
@@ -166,7 +179,9 @@ export async function handleGameComplete(
       clientDurationSec: body.durationSec,
       token: body.attemptToken ?? null,
       // Oyun doğrulayıcısı (varsa): tohum DB'den, süre sunucu saatinden; skor sunucunun olur.
-      verify: verifier
+      verify: !hasModule
+        ? () => NO_MODULE_VERIFICATION
+        : verifier
         ? ({ seed, serverElapsedSec }) =>
             runVerifier(verifier, {
               seed: seed ?? '',
@@ -331,6 +346,7 @@ export async function buildPracticeRound(gameType: string): Promise<PracticeRoun
   if (!game) return { ok: false, status: 404, error: 'Oyun bulunamadı' };
   if (game.hidden) return { ok: false, status: 403, error: hiddenMessage(game) };
   if (!game.enabled) return { ok: false, status: 403, error: 'Bu oyun şu anda kullanılamıyor' };
+  if (!isLiveGameType(game.gameType)) return { ok: false, status: 403, error: NO_MODULE_MESSAGE };
 
   const seed = randomSeed();
   const verifier = getVerifierForGameType(gameType);
