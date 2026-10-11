@@ -215,3 +215,55 @@ Yöntem: iddialar salt okunur kod okumasıyla tek tek çürütülmeye çalışı
 - Ancak bunun bir **hata/güvenlik açığı** olduğu doğrulanamadı: Kod tabanında (şema, admin sayfası metni `page.tsx:173` "ayarlarını yönetin", bayi sayfası) admin ayarının bayiyi bağlayan bir **politika/kilit** olarak tasarlandığına dair hiçbir işaret yok; `AISettings` satırı açıkça bayiye ait (`dealerId @unique`, bayi kendi sayfasından yönetiyor). Yani bugünkü tasarımda admin, bayinin tercihini onun adına düzenleyen bir "destek" aracı; bayinin kendi ayarını değiştirmesi yetki ihlali değil. Bir kullanıcının/verinin zarar gördüğü somut senaryo, ancak "admin maliyet/kötüye kullanım nedeniyle AI'yı zorla kapatmak istiyor" ürün gereksinimi varsayılırsa kurulabiliyor; bu gereksinim kodda tanımlı değil.
 - Ayrıca 1. bulgu düzelmedikçe "kilit" anlamsız: admin kazansa bile `ai-retry` analizi yine çalıştırır.
 - Önem: KRİTİK/YÜKSEK değil; **ürün kararı + denetlenebilirlik eksikliği (Orta)**. Öneri: admin tarafına plan/politika düzeyinde ayrı bir alan (`adminLocks Json?` veya `aiForcedOff Boolean` + `lockedById`, `lockedReason`) eklenip etkin ayar `bayi tercihi ∧ admin politikası` olarak hesaplanmalı; bayi UI'si kilitli anahtarı devre dışı + açıklamalı göstermeli; her iki yazım yolu `AuditLog`'a aktör/önce/sonra yazmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/ai-settings` → `/admin/ai/studio?tab=bayiler` kalıcı yönlenir. Bayi AI politikası Stüdyo'nun **Bayiler** sekmesine, global üslup kartı **Üsluplar** sekmesine, model ve kullanım bağlamı **Modeller** sekmesine taşındı. Yazım ucu `PATCH /api/admin/ai/studio/dealers/:id`: zod `.strict()`, hedefin DEALER olduğu doğrulanır, bayinin kendi yazım yoluyla aynı advisory kilit ve `baseVersion` (409), yalnız değişen alan yazılır, injection reddedilir, gerekçe zorunlu, denetim satırı ADMIN aktörüyle düşer, ardından `invalidateDealerAiPolicy` çağrılır. `analyze?action=get_settings/update_settings` dalları paylaşılan bir route'ta olduğu için silinmedi; bu yüzey artık onları çağırmıyor.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Yetki | ÇALIŞIYOR |
+| 2 | Yükleniyor | ÇALIŞIYOR. İskelet ve sunucu ön yüklemesi |
+| 3 | Ayarların yüklenmesi | ÇALIŞIYOR. User(role=DEALER) tabanlı; ayar satırı olmayan bayi listede "Varsayılan" rozetiyle görünür |
+| 4 | Hata durumu | ÇALIŞIYOR. `QueryState` hata kartı ve "Tekrar dene"; 429 metni zarftan gelir |
+| 5-6 | Toplam bayi / AI aktif KPI'ları | ÇALIŞIYOR. `count` sorguları (gerçek bayi sayısı, AI kapalı, bağlamlı) |
+| 7 | Bayi listesi | ÇALIŞIYOR. Sayfalı, aranabilir, filtreli |
+| 8 | Durum göstergesi (emoji) | ÇALIŞIYOR. Metinli ve ikonlu `StatusBadge` |
+| 9 | Otomatik/Manuel rozeti (çelişkili) | ÇALIŞIYOR. "AI açık/kapalı" ve ayrı bir "Otomatik analiz kapalı" rozeti |
+| 10 | Boş durum | ÇALIŞIYOR |
+| 11 | Bayi seçimi | ÇALIŞIYOR. `DetailSheet` (`?bayi=`), aktif satır işaretli |
+| 12 | "Bayi seçin" boş durumu | KALDIRILDI. Liste + çekmece deseninde gerek kalmadı |
+| 13 | AI ana anahtarı | ÇALIŞIYOR. Dalga 1'deki P0-32 ile tüm yollar (`ai-retry` dahil) `lib/ai-policy`'den okuyor; açıklama gerçek etkiyi anlatıyor |
+| 14 | Otomatik analiz | ÇALIŞIYOR. Ana anahtar kapalıyken "etkisiz (değeri korunur)" olarak gösteriliyor |
+| 15-23 | 9 analiz modülü anahtarı | KALDIRILDI. Hiçbir kod okumuyordu; sahte kontrol sunulmuyor (gönderilirse zod `.strict()` reddeder) |
+| 24 | Haftalık rapor | ÇALIŞIYOR. `lib/weekly-digest-core` `weeklyReportEnabled`'ı okuyor ("Haftalık özet e-postası") |
+| 25 | Aylık rapor | KALDIRILDI. Tüketicisi yok |
+| 26-28 | Toksik / acil / kayıp riski uyarıları | ÇALIŞIYOR. Analiz hattı bildirimleri `policy.alertOn*` ile koşulluyor |
+| 29 | Özel prompt | ÇALIŞIYOR. "İşletme bağlamı" adıyla; 1000 karakter sayaçlı, injection reddi; denetime yalnız uzunluğu yazılır |
+| 30 | Üslup kartı | ÇALIŞIYOR. Ayrı **Üsluplar** sekmesi (global; bayi seçmek gerekmiyor) |
+| 31 | Kaydet | ÇALIŞIYOR. "N değişikliği kaydet"; değişiklik yoksa pasif; "Geri al" |
+| 32 | Toast'lar | ÇALIŞIYOR. `sonner`, Türkçe karakterli |
+| 33 | `bootstrapSettings` (ölü kod, bozuk kodlama) | KALDIRILDI. Gerek yok: satır ilk kayıtta oluşturuluyor |
+| 34 | Giriş animasyonları | KALDIRILDI. Ops kaydı sakin; Kaydet düğmesinde gecikme yok |
+| 35 | Azaltılmış hareket | ÇALIŞIYOR |
+| 36 | Mobil | ÇALIŞIYOR. Alttan açılan çekmece, tek kolon, ≥44px |
+| 37 | Anahtarların erişilebilir adı | ÇALIŞIYOR. `Label htmlFor` + `Switch id` + `aria-describedby` |
+| 38 | Analiz dili | KALDIRILDI. Analiz yolunda okunmuyor |
+| 39 | Arama ve filtre | ÇALIŞIYOR |
+| 40 | Kaydedilmemiş değişiklik koruması | ÇALIŞIYOR (kısmi). Değişiklik sayacı ve "Geri al" var; çekmece kapanınca form atılıyor, uyarı diyaloğu yok |
+| 41 | Denetim | ÇALIŞIYOR. `ADMIN_UPDATE_AI_SETTINGS` (önce/sonra + gerekçe); bayinin kendi değişiklikleri de Geçmiş sekmesinde görünür |
+| 42 | Sunucu doğrulaması | ÇALIŞIYOR |
+| 43 | Bağımlılık mantığı | ÇALIŞIYOR. Ana anahtar kapalıyken alt anahtarlar etkisiz olarak işaretlenir |
+| 44 | Terminoloji / i18n | ÇALIŞIYOR (TR). Her yerde "Bayi"; admin panelinde bu yüzey için i18n anahtar düzeni yok, metinler tam Türkçe karakterli |
+| 45 | Admin kilidi | AÇIK. Bkz. Kalanlar |
+
+### Kapanan bulgular
+1 (Dalga 1 + bu yüzeyde dürüst açıklama), 2 (sahte anahtarlar kaldırıldı, gerçek olanlar bağlı), 4, 5, 6, 7 (kısmi: değişiklik sayacı ve geri al), 8, 9, 10, 11, 12.
+
+### Kalanlar
+- **Bulgu 3 / #45 Admin kilidi:** Bayi, admin'in kapattığı ana anahtarı kendi panelinden yeniden açabiliyor. Bu bir ürün kararı ve **ŞEMA İSTEĞİ:** `AISettings.adminLocks Json?` (+ `lockedById`, `lockedReason`). Alan eklenince bayinin PATCH'i kilitli alanı 423 ile reddetmeli. Şimdilik admin değişikliği gerekçesiyle denetimde, çakışmalar da 409 ile görünür.
+- Toplu işlem ve platform varsayılanı → bayi istisnası (override) modeli yok.

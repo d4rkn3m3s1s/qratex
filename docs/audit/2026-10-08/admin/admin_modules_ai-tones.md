@@ -223,3 +223,48 @@ Sayfa küçük bir CRUD ekranı ama ürünün geri kalanına bağlantısı kopuk
 - **Yeniden üretim:** Admin `friendly` kaydının slug'ını `samimi` yapar. Bundan sonra `tone="friendly"` olan tüm bayi kuralları, admin'in yazdığı özel promptu değil `fallbackToneMap.friendly` ile kurulan genel prompt'u kullanır. Ne admin ne bayi bunu görür.
 - **İddiadaki abartı:** Bayi seçicisi dört slug'ı sabit kodluyor (`app/dealer/settings/auto-replies/page.tsx:433-437`) ve fallback haritası bu dört slug'ı aynı ton kategorisiyle karşılıyor (`lib/ai-engine.ts:1157-1162`). Bu yüzden "ton tamamen değişir" demek doğru değil. Kaybolan şey, admin'in özelleştirdiği prompt (uzunluk ve üslup kuralları, isim kullanımı vb.); ton ailesi korunuyor. Ayrıca yeni slug bayi tarafından hiç seçilemiyor, bu da ölü bir kayıt yaratıyor.
 - **Düzeltme yaklaşımı:** Kısa vadede PATCH'te slug alanını reddet (değiştirilemez anahtar) ya da `autoReplyRule.count({ where: { tone: eskiSlug } }) > 0` ise 409 dön ve "N kural etkilenir" uyarısı göster. Fallback'e düşüldüğünde `console.warn` veya AI kullanım log'una `toneResolved: 'fallback'` yazılsın. Orta vadede `AutoReplyRule.toneId` FK ilişkisine geçilmeli ve bayi seçicisi `GET /api/dealer/ai-tones` üzerinden dinamik beslenmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/modules/ai-tones` → `/admin/ai/studio?tab=usluplar` kalıcı yönlenir. BFF: `GET/POST /api/admin/ai/studio/tones`, `PATCH …/tones/:id`, `POST …/tones/:id/status`, `GET …/tones/:id/history`, `POST …/tones/preview`. Eski `/api/admin/settings/ai-tones` silindi; tek tüketicisi bu sayfaydı. Bayi seçicisi Dalga 2'de zaten aktif `AITone` kayıtlarından besleniyor ve `assertTone` ile doğruluyor (B2'nin bayi tarafı).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Erişim | ÇALIŞIYOR. `defineRoute`, yalnız ADMIN |
+| 2 | İlk yükleme | ÇALIŞIYOR. Sunucu ön yüklemesi + `QueryState` |
+| 3 | Yükleniyor | ÇALIŞIYOR. İskelet kartlar |
+| 4 | Hata durumu | ÇALIŞIYOR. Hata kartı ve "Tekrar dene" |
+| 5 | Boş durum | ÇALIŞIYOR. Yerleşik 4 aile her zaman listede, liste boş kalmıyor |
+| 6 | Başlık | ÇALIŞIYOR. `SectionCard` + stüdyonun `PageHeader`'ı |
+| 7-8 | Ekleme penceresi (B1 durum sızıntısı, başlık titremesi) | ÇALIŞIYOR. Tek ayrık birleşim `{mode:'create'} / {mode:'edit', tone} / null`; editör `key` ile yeniden kuruluyor; düzenleme `PATCH /tones/:id` (gövdede id yok) |
+| 9 | Görünen ad | ÇALIŞIYOR. 2–60 karakter |
+| 10 | Anahtar (slug) | ÇALIŞIYOR. Biçim `^[a-z0-9-]{2,40}$`; çakışmada alan hatasıyla 409; düzenlemede salt okunur |
+| 11 | Talimat alanı | ÇALIŞIYOR. 20–600 karakter (modele ulaşan tavan), sayaç, kayıtlı → düzenlenen farkı |
+| 12 | Yanıltıcı ipucu | ÇALIŞIYOR. Yeni metin: "Model müşteri adını görmez; vaat ve kişisel hitap temel kurallarca engellenir" |
+| 13-14 | Kaydet (POST/PATCH) | ÇALIŞIYOR. zod `.strict()`, alan beyaz listesi, `expectedVersion` (409), gerekçe zorunlu |
+| 15-16 | Bekleme göstergesi ve toast'lar | ÇALIŞIYOR |
+| 17 | Kartlar | ÇALIŞIYOR. Kaynak rozeti (Yerleşik · etkin değil / Yerleşik · özelleştirilmiş / Özel), "Bayiye sunuluyor / Arşivde", kullanım (aktif kural, toplam kural, bayi), güncellenme zamanı |
+| 18 | Düzenle düğmesi | ÇALIŞIYOR. Metinli + `aria-label` |
+| 19 | Silme | KALDIRILDI (bilinçli). Kurallar slug'a bağlı olduğu için yerine arşivle/geri al geldi (etki önizlemeli `ConfirmAction`, gerekçeli) |
+| 20 | Aktif/pasif | ÇALIŞIYOR |
+| 21 | Bayi kural ekranıyla bağlantı | ÇALIŞIYOR. Bayi seçicisi aktif DB kayıtlarını listeliyor; katalogda karşılığı olmayan slug kullanan kurallar uyarı bandında gösteriliyor |
+| 22 | Yerleşik üsluplar | ÇALIŞIYOR. Kod tarifiyle listede; "Etkinleştir" ön doldurulmuş bir kayıt oluşturur ve bayiye ancak o zaman sunulur. Tarifin motorla aynı olduğunu test doğruluyor |
+| 23 | Test / önizleme | ÇALIŞIYOR. Kaydetmeden, puan ve örnek yorumla gerçek otomatik yanıt sistem mesajı derlenir; yanıt `runChatCompletion` geçidinden (rate limit `ai`, günlük tavan, kullanım kaydı) üretilir. Gönderilen sistem mesajı gösterilir; sağlayıcı yoksa dürüst uyarı çıkar |
+| 24 | Geçmiş / geri al | ÇALIŞIYOR. Denetimde önce/sonra tam metin ve gerekçe; "Bu metni editöre al" |
+| 25 | Kullanım istatistiği | ÇALIŞIYOR (kural ve bayi sayısı). Üretilen yanıt sayısı AÇIK kaldı: AIUsageLog üslubu tutmuyor |
+| 26 | Arama / filtre | KALDIRILDI. Katalog küçük (yerleşik 4 + özel üsluplar); gerek yok |
+| 27 | Keşfedilebilirlik | ÇALIŞIYOR. Stüdyo sekmesi; navigasyon kaydında `redirectFrom` |
+| 28 | Mobil | ÇALIŞIYOR. `grid-cols-1 sm:grid-cols-2`, alttan açılan çekmece, sarılan eylemler |
+| 29 | Ölü import | KALDIRILDI |
+| 30 | i18n | ÇALIŞIYOR (TR). Tam Türkçe karakterli metin |
+
+### Kapanan bulgular
+B1, B2 (bayi tarafı Dalga 2'de yapılmıştı; burada yerleşik üslup etkinleştirme ve yetim slug uyarısı eklendi), B3 (slug salt okunur; silme yerine arşiv ve kullanım etkisi), B4, B5, B6, B7, B8, B9, B10.
+
+### Kalanlar
+- B11 (üslup okumasında önbellek) uygulanmadı. Otomatik yanıt başına tek bir `findUnique` yapılıyor; ölçülmüş bir sorun yok.
+- `AutoReplyRule.toneId` FK ilişkisi için **ŞEMA İSTEĞİ** (orta vadede slug → id geçişi).

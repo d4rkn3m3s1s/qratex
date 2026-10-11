@@ -238,3 +238,61 @@ Yöntem: İddialar salt okuma ile yeniden incelendi (`lib/ai-engine.ts`, `lib/ai
 - Tutarsızlık senaryosu da kesin: sohbet promptu üretimi hata verirse `chatSystemPrompt` `undefined` kalır, Prisma `update` bu alanı atlar (`lib/ai-learning.ts:817`, `:824-828`) → eski (manuel veya önceki) sohbet promptu yeni sistem promptu ve yeni `learnedRules` ile birlikte yaşar; kullanıcıya bildirilmez.
 - Yeniden üretim: Admin sohbet promptunu elle düzenler ve kaydeder → "Sistem Profilini Eğit" → düzenleme kalıcı olarak kaybolur, geri alma yolu yok.
 - Öneri: `AIPromptVersion` benzeri bir sürüm tablosu (taslak/aktif/arşiv, oluşturan, kaynak = manuel|eğitim); eğitim yeni sürümü **taslak** olarak üretmeli, aktifleştirme diff önizlemesiyle admin onayına bağlanmalı; manuel düzenlenmiş aktif sürüm varsa onay penceresi açıkça uyarmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/admin/ai/studio` (Prompt ve Model Stüdyosu): Promptlar · Öğrenilen kurallar · Üsluplar · Bayiler · Modeller · Geçmiş. `/admin/ai-learning` → `/admin/ai/studio?tab=ogrenme` kalıcı yönlenir (sorgu parametreleri korunur). Sunucu bileşeni önce: KPI'lar ve aktif sekmenin verisi sunucuda okunur, sekmeler tembel yüklenir. BFF: `app/api/admin/ai/studio/**` (hepsi `defineRoute`, ADMIN, zod, rate limit; LLM yalnız POST'ta, mevcut geçitlerden). Çekirdek `lib/ai-studio/*`, arayüz `components/admin/a-prompt-studyosu/*`, test `__tests__/lib/ai-studio.test.ts` (22 test). Eski `/api/admin/ai-learning/system` silindi; tek tüketicisi bu sayfaydı.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR. Admin kapısı ve sunucu bileşeninde `requireAuth(['ADMIN'])` |
+| 2 | API yetkisi | ÇALIŞIYOR. Yeni uçlar yalnız ADMIN (`defineRoute`); bu yüzey `/api/ai/learning`'i artık kullanmıyor |
+| 3 | Yükleniyor iskeleti | ÇALIŞIYOR. Her sekmenin kendi `QueryState`'i var; sistem öğrenmesi bayi listesini beklemiyor |
+| 4 | Bayi listesi hata durumu | ÇALIŞIYOR. `DataTable` + `QueryState` hata kartı ve "Tekrar dene"; satır başına N+1 istek yok |
+| 5 | Sistem profili hata durumu | ÇALIŞIYOR. Hata görünür; eğitim düğmesinin devre dışı gerekçesi sunucudan gelir (veri eşiği, sağlayıcı yok, bekleyen öneri) |
+| 6 | Başlık | ÇALIŞIYOR. QDL `PageHeader`, anlamlı ikon |
+| 7-9, 25 | Birbiriyle çelişen hero ve özet sayaçları | KALDIRILDI. Yerine tek KPI şeridi geldi; hepsi sunucudan, platform geneli (bayi, AI kapalı, bağlam, profil, bekleyen öneri, 7 günlük çağrı ve hata) |
+| 10 | Sistem istatistik kartları | ÇALIŞIYOR. Öğrenme sekmesinde (metinli geri bildirim, düzeltme, bayi, embedding) |
+| 11 | Sürüm ve durum rozetleri | ÇALIŞIYOR. "Yürürlükte · sürüm N", "Onaylı kural yok", "Eğitim sürüyor" (gerçek kilitten) |
+| 12 | Son eğitim zamanı | ÇALIŞIYOR. İstanbul saati ve göreli zaman |
+| 13 | Sistem profilini eğit | ÇALIŞIYOR. `POST …/learning/train`: atomik kilit (`status='training'`, 5 dk sonra bayat), sunucu veri eşiği (≥20 metinli geri bildirim, yoksa 422), `maxDuration=60`, 10 dakikada 3 istek. Çıktı ONAY BEKLER; sonuç denetim satırına yazılır. Token ve maliyet `AIUsageLog`'a çekirdekte yazılıyor |
+| 14 | "En az N geri bildirim" koruması | ÇALIŞIYOR. Sunucuda zorlanıyor |
+| 15 | Eğitim onay penceresi | ÇALIŞIYOR. `ConfirmAction` (native confirm kalktı); notlara ve temel prompta dokunmadığı açıkça yazılı |
+| 16-19 | Sistem ve sohbet promptu düzenleme | ÇALIŞIYOR. Yerine **sürümlü yönetici notları** geldi: gerekçesi zorunlu taslak (uzunluk modele ulaşan tavanla sınırlı: 600 / 1200) → satır farkı → "Modele gideni önizle" (LLM yok, yalnız prompt kurucusu çalışır) → yayınla (onaylı, tek transaction + denetim, iyimser kilit 409) → geçmiş ve "taslağa al". Notlar temel promptun yerine geçmez |
+| 20 | Prompt iptal | ÇALIŞIYOR. "Değişiklikleri bırak"; taslak ayrıca silinebilir |
+| 21-22 | Göster / gizle | ÇALIŞIYOR. Native `<details>` (klavye ve ekran okuyucu durumu) |
+| 23 | Öğrenilen profil özeti (ham JSON) | ÇALIŞIYOR. Yapılandırılmış görünüm (kurallar, temalar, yap/kaçın, ek not). Bayi profilinde sektör, terimler, temalar, risk kalıpları ve varlıklar |
+| 24 | "Nasıl çalışır?" (yanlış içerik) | KALDIRILDI. Her bölümün açıklaması gerçek veri akışını ve "kullanıldığı yer"i anlatıyor |
+| 26 | Bayi listesi (50 sınırı, N+1) | ÇALIŞIYOR. `GET …/dealers` User tabanlı, tek sorgu + sayım, sunucu sayfalı |
+| 27 | Filtre | ÇALIŞIYOR. AI kapalı / otomatik analiz kapalı / bağlam var / profil var / profil yok (URL'de kalıcı) |
+| 28 | Arama | ÇALIŞIYOR. İşletme adı, ad, e-posta |
+| 29 | Sıralama | KALDIRILDI. Sıralama ada göre sabit. "Yeniden eğitim" sinyali satır başına sorgu gerektirdiği için listede değil, detayda |
+| 30 | Sayfalama | ÇALIŞIYOR |
+| 31 | Toplu güncelle | KALDIRILDI. Seri ve iptal edilemeyen bir istemci döngüsüydü; profil eşik aşılınca zaten kendiliğinden yenileniyor (`maybeTriggerAdaptiveUpdate`). Tekil yenileme kaldı |
+| 32 | Satır başına "profili yenile" | ÇALIŞIYOR. Detayda; sunucu eşiği (≥5 metinli geri bildirim, yoksa 422 "Yetersiz veri x/5"), `ai` rate limit, denetim, AI geçidi |
+| 33 | Satır genişletme | ÇALIŞIYOR. `DetailSheet` (`?bayi=` derin bağlantı, klavye) |
+| 34-35 | Detay alanları | ÇALIŞIYOR. `riskSignals` artık gösteriliyor |
+| 36 | "Hazır" rozeti | ÇALIŞIYOR. Sürüm ve son eğitim |
+| 37 | "Eğitiliyor" (ölü kod) | KALDIRILDI (bayi satırında). Sistem öğrenmesinde durum gerçek kilitten türetiliyor |
+| 38 | Yeniden eğitim önerisi | ÇALIŞIYOR. Detayda rozet, gerekçe ve yeni veri sayıları |
+| 39 | Düzeltme kayıtları | ÇALIŞIYOR. Detayda son 10 (alan, eski → yeni, not, tarih) |
+| 40 | Boş liste | ÇALIŞIYOR. İlk kullanım ve filtreli boş durumları |
+| 41 | Mobil | ÇALIŞIYOR. `DataTable` mobil kartları, `FilterBar`, alttan açılan `DetailSheet`, ≥44px hedefler |
+| 42 | Azaltılmış hareket | ÇALIŞIYOR. Dönen ikonlarda `motion-reduce:animate-none`; kademeli giriş yok |
+| 43 | Klavye | ÇALIŞIYOR. Satırlar `DataTable` satır düğmesi |
+| 44 | Prompt sürüm geçmişi | ÇALIŞIYOR. Notlar (Settings `ai.prompt-notes`, anahtar başına 30 sürüm, yayındaki sürüm asla budanmaz) ve öğrenilen kuralların onay geçmişi ("Öneri olarak geri yükle") |
+| 45 | Denetim kaydı | ÇALIŞIYOR. Her yazım `auditEntry` ile; Geçmiş sekmesinde tür filtresi ve imleçli liste |
+| 46 | Önizleme | ÇALIŞIYOR. Notlar için derlenmiş blok (LLM'siz) |
+| 47 | Maliyet ve token | ÇALIŞIYOR. Modeller sekmesi: model başına 7 günlük çağrı, hata, girdi/çıktı token, ortalama gecikme (AIUsageLog) |
+
+### Kapanan bulgular
+1 (taban prompt değişimi: P0-33 çekirdeği üzerine yönetişim yüzü; notlar yalnız ek bağlam, sürümlü, onaylı, denetimli), 3 (yardım metni gerçeğe göre yazıldı; notun nerede kullanıldığı gösteriliyor), 4 (eğitim yalnız ÖNERİ üretir, notlara dokunmaz; onay penceresinde yazılı), 5, 6 (kilit + veri eşiği + maxDuration; çekirdek taraması zaten `take` ile sınırlı), 7, 8 (not alanı her zaman görünür, profil yoksa satır oluşturulur, "boş yayınla = notu kaldır" açıkça söyleniyor), 9 (sunucu eşiği + rate limit; LLM hatasında görünür 503), 10, 11, 12, 13, 14 (tek terim "Bayi"), 15. Bulgu 2 (kiracılar arası karışma) Dalga 1'de P0-33 ile çekirdekte kapanmıştı; bu yüzey onu görünür kılıyor (anonimlik açıklaması, k-anonim etiket eşiği).
+
+### Kalanlar
+- Eğitim hâlâ istek içinde, senkron çalışıyor (Inngest işi ve ilerleme göstergesi yok). Kilit, veri eşiği ve 60 sn sınırı sayesinde güvenli. Ayrı iş tablosu (`AILearningJob`) için **ŞEMA İSTEĞİ**.
+- Sohbet notu için eski/yeni canlı yanıt karşılaştırması yok: `askAI` bayi verisi bağlamı istiyor. Önizleme bu yüzden derlenmiş blokla sınırlı tutuldu.
+- Bayi profilinin sürüm geçmişi (v3 → v4 farkı) yok, çünkü model tek satır. **ŞEMA İSTEĞİ:** `AIDealerLearningProfileVersion`.

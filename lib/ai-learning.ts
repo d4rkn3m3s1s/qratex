@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
 import { guardAiCall, recordAiCostUsage } from '@/lib/ai-cost-guard';
 import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
+import { getRoutedModel, refreshAiModelRouting } from '@/lib/ai-studio/model-routing';
 import {
   PROMPT_VERSIONS,
   UNTRUSTED_DATA_RULE,
@@ -17,7 +18,8 @@ import { localEmbed, embedFromFeatures, LOCAL_EMBEDDING_MODEL, cosineSimilarity 
 const GROQ_EMBED_MODEL = 'groq-llm-features-v1';
 
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
-const LEARNING_MODEL =
+/** Ortam/varsayılan bayi öğrenme modeli (Stüdyo seçimi yokken). */
+export const LEARNING_MODEL =
   process.env.AI_LEARNING_MODEL ||
   process.env.OPENAI_LEARNING_MODEL ||
   (process.env.GROQ_API_KEY ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
@@ -314,6 +316,8 @@ export async function getAdaptiveProfileForDealer(dealerId: string) {
 }
 
 export async function updateAdaptiveProfile(dealerId: string) {
+  await refreshAiModelRouting();
+  const learningModel = getRoutedModel('dealerLearning') ?? LEARNING_MODEL;
   const feedbacks = await prisma.feedback.findMany({
     where: { qrCode: { dealerId }, text: { not: null } },
     select: { text: true, sentiment: true, intent: true, topics: true, themes: true, entities: true, actionSuggestions: true },
@@ -345,7 +349,7 @@ export async function updateAdaptiveProfile(dealerId: string) {
     const startedAt = Date.now();
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: LEARNING_MODEL,
+        model: learningModel,
         messages: [
           {
             role: 'system',
@@ -384,7 +388,7 @@ ${UNTRUSTED_DATA_RULE}`,
       response.usage?.prompt_tokens ?? 0,
       response.usage?.completion_tokens ?? 0,
       'dealer_learning',
-      LEARNING_MODEL,
+      learningModel,
       Date.now() - startedAt
     );
     const content = response.choices[0]?.message?.content;
@@ -527,7 +531,8 @@ export async function maybeTriggerAdaptiveUpdate(dealerId: string) {
 //  4. `systemPrompt` / `chatSystemPrompt` sütunları artık yalnız admin'in elle yazdığı notlardır
 //     (`updateSystemLearningPrompts` → `profile.adminPromptsEditedAt`); LLM bunlara yazmaz.
 
-const SYSTEM_LEARNING_MODEL =
+/** Ortam/varsayılan sistem öğrenme modeli (Stüdyo seçimi yokken). */
+export const SYSTEM_LEARNING_MODEL =
   process.env.AI_SYSTEM_LEARNING_MODEL ||
   process.env.AI_LEARNING_MODEL ||
   process.env.OPENAI_LEARNING_MODEL ||
@@ -814,6 +819,8 @@ export interface SystemLearningRunResult {
  * Platform günlük token tavanı ve dakikalık limit uygulanır.
  */
 export async function updateSystemLearningProfile(): Promise<SystemLearningRunResult | null> {
+  await refreshAiModelRouting();
+  const systemLearningModel = getRoutedModel('systemLearning') ?? SYSTEM_LEARNING_MODEL;
   const client = getLearningClient();
   if (!client) {
     console.error('AI client not available for system learning');
@@ -830,7 +837,7 @@ export async function updateSystemLearningProfile(): Promise<SystemLearningRunRe
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: SYSTEM_LEARNING_MODEL,
+        model: systemLearningModel,
         messages: [
           { role: 'system', content: SYSTEM_LEARNING_INSTRUCTIONS },
           { role: 'user', content: contextBlob },
@@ -842,9 +849,9 @@ export async function updateSystemLearningProfile(): Promise<SystemLearningRunRe
     );
     content = response.choices[0]?.message?.content;
     const u = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
-    await recordAiCostUsage(null, u?.prompt_tokens ?? 0, u?.completion_tokens ?? 0, 'system_learning', SYSTEM_LEARNING_MODEL, Date.now() - started);
+    await recordAiCostUsage(null, u?.prompt_tokens ?? 0, u?.completion_tokens ?? 0, 'system_learning', systemLearningModel, Date.now() - started);
   } catch (err) {
-    await recordAiCostUsage(null, 0, 0, 'system_learning', SYSTEM_LEARNING_MODEL, Date.now() - started, {
+    await recordAiCostUsage(null, 0, 0, 'system_learning', systemLearningModel, Date.now() - started, {
       success: false,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -875,7 +882,7 @@ export async function updateSystemLearningProfile(): Promise<SystemLearningRunRe
     id: `slp_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
     promptVersion: PROMPT_VERSIONS.systemLearning,
-    model: SYSTEM_LEARNING_MODEL,
+    model: systemLearningModel,
     trainingDataStats,
   };
 

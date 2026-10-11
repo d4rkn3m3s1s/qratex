@@ -15,6 +15,7 @@ import OpenAI from 'openai';
 import { checkAiCostGuard, guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
 import { getApprovedLearnedPayload, getSystemLearningProfile } from '@/lib/ai-learning';
 import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
+import { getRoutedModel, refreshAiModelRouting } from '@/lib/ai-studio/model-routing';
 import {
   CONTEXT_LIMITS,
   PROMPT_VERSIONS,
@@ -74,12 +75,18 @@ function getAIClient(): OpenAI | null {
   return null;
 }
 
-function getModel(): string {
+/** Ortam/varsayılan hacim modeli (yönetici seçimi yokken). */
+export function getVolumeModelEnvDefault(): string {
   if (process.env.AI_MODEL) return process.env.AI_MODEL;
   // HACİM yolu (her feedback analiz edilir) → ücretsiz tier'da 14.4K istek/gün + 500K token/gün.
   // Model tablosu/gerekçe: lib/groq.ts MODELS.
   if (process.env.GROQ_API_KEY) return 'llama-3.1-8b-instant';
   return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
+}
+
+/** Yönetici seçimi (Prompt ve Model Stüdyosu, katalog denetimli) > ortam > varsayılan. */
+function getModel(): string {
+  return getRoutedModel('volume') ?? getVolumeModelEnvDefault();
 }
 
 function getModelProvider(): string {
@@ -108,6 +115,8 @@ export function getAIProviderStatus(): { configured: boolean; provider: string; 
  * `dealerId` yoksa (platform/müşteri kapsamı) politika uygulanmaz → true.
  */
 async function dealerAllowsAi(dealerId: string | undefined | null): Promise<boolean> {
+  // Her LLM yolu buradan geçer: model yönlendirmesini (TTL'li, asla fırlatmaz) tazele.
+  await refreshAiModelRouting();
   if (!dealerId) return true;
   return canUseAi(await getDealerAiPolicy(dealerId));
 }
