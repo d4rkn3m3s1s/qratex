@@ -14,6 +14,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
+import { publicDisplayName } from '@/lib/http/dto';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 import { cancelSquadBattle, settleSquadBattle, OPEN_BATTLE_STATUSES } from '@/lib/squad-battle-service';
 import { BATTLE_RESULT_VISIBLE_MS, squadLevel } from './rules';
@@ -380,6 +381,16 @@ function toResultDto(b: ResultRow, mySquadId: string, myPayout: number): BattleR
   };
 }
 
+/**
+ * Savaş katkıcısının görünen adı. Kendi klanındaki üyeler zaten birbirini tam adıyla görür
+ * (klan odası); RAKİP klanın üyeleri ise yabancıdır → lig ile aynı maskeli ad ("Ayşe K."),
+ * soyad sızmaz.
+ */
+export function contributorName(name: string | null | undefined, sameSquad: boolean): string {
+  if (sameSquad) return (name ?? '').trim() || 'Üye';
+  return publicDisplayName(name, 'Üye');
+}
+
 /** Güncel (bekleyen/aktif) savaş + son 72 saatte biten savaşın sonucu. */
 export async function getBattleState(
   squadId: string,
@@ -450,7 +461,7 @@ export async function getBattleState(
         }),
       ]);
       topContributors = top.map((p) => ({
-        name: (p.user.name ?? '').trim() || 'Üye',
+        name: contributorName(p.user.name, p.squadId === squadId),
         image: p.user.image,
         score: p.score,
         side: p.squadId === squadId ? 'mine' : 'theirs',

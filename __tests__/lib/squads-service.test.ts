@@ -80,7 +80,7 @@ import {
 } from '@/lib/squads/rules';
 import { createSquad, joinSquad, kickMember, transferOwnership } from '@/lib/squads/membership';
 import { claimWeeklyGoal, computeWeeklyGoal } from '@/lib/squads/goal';
-import { createChallenge, respondChallenge, withdrawChallenge } from '@/lib/squads/battles';
+import { contributorName, createChallenge, respondChallenge, withdrawChallenge } from '@/lib/squads/battles';
 
 function resetAll(obj: Record<string, unknown>) {
   for (const v of Object.values(obj)) {
@@ -425,5 +425,14 @@ describe('savaş', () => {
     expect(r.status).toBe('active');
     expect(db.squadBattleParticipant.createMany.mock.calls[0][0].data).toHaveLength(3);
     expect(db.notification.createMany.mock.calls[0][0].data.map((d: { userId: string }) => d.userId).sort()).toEqual(['o1', 'o2', 'x']);
+  });
+});
+
+describe('savaş katkıcısı adı (gizlilik)', () => {
+  it('kendi klanının üyesi tam adıyla, rakip klanın üyesi maskeli görünür', () => {
+    expect(contributorName('Ayşe Nur Yılmaz', true)).toBe('Ayşe Nur Yılmaz');
+    expect(contributorName('Ayşe Nur Yılmaz', false)).toBe('Ayşe Y.');
+    expect(contributorName('  ', false)).toBe('Üye');
+    expect(contributorName(null, true)).toBe('Üye');
   });
 });

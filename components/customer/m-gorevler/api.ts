@@ -63,12 +63,17 @@ export async function postQuestClaim(input: { questId: string } | { all: true })
   return readEnvelope<QuestClaimResult>(res);
 }
 
-/** Sezon challenge ödülü — etkinlik ucunun mevcut sözleşmesi (`/api/customer/seasonal-event`). */
-export async function postSeasonClaim(): Promise<{ points: number }> {
+/**
+ * Sezon challenge ödülü — etkinlik ucunun mevcut sözleşmesi (`/api/customer/seasonal-event`).
+ * Kartın gösterdiği etkinlik `campaignId` ile açıkça hedeflenir; gövdesiz istekte sunucu
+ * "uygun ilk etkinliği" seçer ve bu, kartta görünenden farklı olabilir.
+ */
+export async function postSeasonClaim(campaignId?: string): Promise<{ points: number }> {
   const res = await fetch('/api/customer/seasonal-event', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(campaignId ? { campaignId } : {}),
   });
   const body = (await res.json().catch(() => null)) as
     | { success?: boolean; points?: number; data?: { points?: number }; error?: string; code?: string }

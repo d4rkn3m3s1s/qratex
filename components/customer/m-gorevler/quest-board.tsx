@@ -211,7 +211,7 @@ export function QuestBoardView({ initialBoard, moduleDisabled = false, initialTa
             onOpen={(q) => setOpenId(q.id)}
             onClaim={claimQuest}
             onClaimAll={() => claimMutation.mutate({ kind: 'all' })}
-            onSeasonClaim={() => seasonMutation.mutate()}
+            onSeasonClaim={() => seasonMutation.mutate(data.season?.campaignId)}
             onExpire={refetchBoard}
           />
         )}
