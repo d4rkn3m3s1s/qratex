@@ -27,7 +27,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'test-results', 'gates');
 const RECORDS = path.join(OUT_DIR, 'routes');
 const DEV_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
-const LH_PORT = 3100;
+const LH_PORT = Number(process.env.GATES_LH_PORT ?? 3100);
 const LH_URL = `http://localhost:${LH_PORT}`;
 const DIST = '.next-gates';
 const SKIP = new Set((process.env.GATES_SKIP ?? '').split(',').filter(Boolean));
@@ -178,16 +178,60 @@ async function waitFor(url, ms) {
   return false;
 }
 
+// Oturum ÜRETİM sunucusunun (3100) kendisine karşı açılır: 3000'deki dev oturumunun çerezi/
+// callbackUrl'i 3100'de geçerli değildir (farklı köken, AUTH_URL 3000'i gösterir). Giriş akışı
+// e2e/support/accounts.ts createState ile aynıdır (Pixel 7 profili — belirteç UA'ya bağlı).
+const ACCOUNTS = {
+  admin: { email: process.env.E2E_ADMIN_EMAIL ?? 'admin@qratex.com', password: process.env.E2E_ADMIN_PASSWORD ?? 'Admin123!', home: '/admin' },
+  dealer: { email: process.env.E2E_DEALER_EMAIL ?? 'dealer@qratex.com', password: process.env.E2E_DEALER_PASSWORD ?? 'Dealer123!', home: '/dealer' },
+  customer: { email: process.env.E2E_CUSTOMER_EMAIL ?? 'customer@qratex.com', password: process.env.E2E_CUSTOMER_PASSWORD ?? 'Customer123!', home: '/customer' },
+};
+const lhCookies = new Map();
+
+async function loginOnLh(chromium, device, role) {
+  const acc = ACCOUNTS[role];
+  // Service worker istekleri bağlam UA'sını değil tarayıcının gerçek UA'sını taşır → token-replay
+  // "farklı tarayıcı" görüp oturumu iptal eder. UA tarayıcı düzeyinde sabitlenir.
+  const browser = await chromium.launch({ headless: true, args: [`--user-agent=${device.userAgent}`] });
+  try {
+    const context = await browser.newContext({ ...device, baseURL: LH_URL });
+    const page = await context.newPage();
+    await page.goto(`/auth/login?callbackUrl=${encodeURIComponent(acc.home)}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('input[type=email],input[name=email]').first().fill(acc.email);
+    await page.locator('input[type=password]').first().fill(acc.password);
+    await page.locator('input[type=password]').first().press('Enter');
+    await page.waitForURL((u) => !u.pathname.startsWith('/auth/'), { timeout: 90_000 });
+    if (role === 'admin') {
+      if (!page.url().includes('/admin-gate')) await page.goto('/admin-gate', { waitUntil: 'domcontentloaded' });
+      if (page.url().includes('/admin-gate')) {
+        const input = page.locator('input').first();
+        await input.waitFor({ state: 'visible', timeout: 30_000 });
+        await input.click();
+        await page.keyboard.type(process.env.E2E_ADMIN_GATE ?? '7', { delay: 80 });
+        await page.keyboard.press('Enter');
+        await page.waitForURL((u) => !u.pathname.startsWith('/admin-gate'), { timeout: 30_000 });
+      }
+    }
+    const cookies = await context.cookies(LH_URL);
+    lhCookies.set(role, cookies);
+    log(`lighthouse oturum ${role}`, `${new URL(page.url()).pathname} (${cookies.map((c) => c.name).join(', ')})`);
+  } catch (e) {
+    log(`lighthouse oturum ${role}`, `BAŞARISIZ: ${e.message}`);
+  } finally {
+    await browser.close();
+  }
+}
+
 function cookieHeader(role) {
-  const f = path.join(ROOT, 'test-results', '.auth', `${role}.json`);
-  if (!fs.existsSync(f)) return null;
-  const st = JSON.parse(fs.readFileSync(f, 'utf8'));
-  return st.cookies.filter((c) => c.domain === 'localhost').map((c) => `${c.name}=${c.value}`).join('; ');
+  const c = lhCookies.get(role);
+  return c ? c.map((x) => `${x.name}=${x.value}`).join('; ') : null;
 }
 
 if (!SKIP.has('lighthouse')) {
   const keep = ['tsconfig.json', 'next-env.d.ts'].map((f) => [f, fs.existsSync(path.join(ROOT, f)) ? fs.readFileSync(path.join(ROOT, f)) : null]);
-  const build = run('npx', ['next', 'build', '--webpack'], { env: { NEXT_DIST_DIR: DIST, DISABLE_SENTRY_BUILD: '1', NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192`.trim() } });
+  // GATES_LH_REUSE_BUILD=1: mevcut .next-gates derlemesini yeniden kullan (yalnız ölçüm hattını denerken).
+  const reuse = process.env.GATES_LH_REUSE_BUILD === '1' && fs.existsSync(path.join(ROOT, DIST, 'BUILD_ID'));
+  const build = reuse ? { code: 0, out: 'GATES_LH_REUSE_BUILD: derleme atlandı' } : run('npx', ['next', 'build', '--webpack'], { env: { NEXT_DIST_DIR: DIST, DISABLE_SENTRY_BUILD: '1', NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192`.trim() } });
   for (const [f, buf] of keep) if (buf) fs.writeFileSync(path.join(ROOT, f), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'build.log'), build.out);
   if (build.code !== 0) {
@@ -197,7 +241,7 @@ if (!SKIP.has('lighthouse')) {
     const server = spawn('npx', ['next', 'start', '-p', String(LH_PORT)], {
       cwd: ROOT,
       shell: IS_WIN,
-      env: { ...process.env, NEXT_DIST_DIR: DIST, NODE_ENV: 'production' },
+      env: { ...process.env, NEXT_DIST_DIR: DIST, NODE_ENV: 'production', AUTH_URL: LH_URL, NEXTAUTH_URL: LH_URL, AUTH_TRUST_HOST: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const srvLog = fs.createWriteStream(path.join(OUT_DIR, 'next-start.log'));
@@ -211,20 +255,28 @@ if (!SKIP.has('lighthouse')) {
       if (!(await waitFor(`${LH_URL}/api/health`, 180_000))) throw new Error('next start 3100 ayağa kalkmadı');
       const { default: lighthouse } = await import('lighthouse');
       const chromeLauncher = await import('chrome-launcher');
-      const { devices } = await import('playwright');
+      const { devices, chromium } = await import('playwright');
       const ua = devices['Pixel 7'].userAgent; // oturum belirteci UA'ya bağlı (lib/token-replay.ts)
-      const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless=new', '--no-sandbox'] });
+      for (const role of new Set(LH_ROUTES.map(([, r]) => r).filter(Boolean))) await loginOnLh(chromium, devices['Pixel 7'], role);
+      const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless=new', '--no-sandbox', `--user-agent=${ua}`] });
+      // Lighthouse `extraHeaders: Cookie` istemci tarafı istekleri/yönlendirmeyi taşımıyor: oturum çerezi
+      // Chrome'un kendi çerez kavanozuna CDP ile yazılır, depolama sıfırlaması kapatılır.
+      const cdp = await chromium.connectOverCDP(`http://127.0.0.1:${chrome.port}`);
+      const jar = cdp.contexts()[0];
       const rows = [];
       try {
         for (const [route, role] of LH_ROUTES) {
+          await jar.clearCookies();
+          if (role && lhCookies.get(role)) await jar.addCookies(lhCookies.get(role));
           // Isınma: ilk istek derleme/önbellek maliyetini ölçüme taşımasın.
           await fetch(LH_URL + route, { headers: role ? { cookie: cookieHeader(role) ?? '', 'user-agent': ua } : {} }).catch(() => {});
-          const cookie = role ? cookieHeader(role) : null;
           const res = await lighthouse(
             LH_URL + route,
-            { port: chrome.port, output: 'json', logLevel: 'error', onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'], ...(cookie ? { extraHeaders: { Cookie: cookie } } : {}) },
-            { extends: 'lighthouse:default', settings: { formFactor: 'mobile', emulatedUserAgent: ua } }
+            { port: chrome.port, output: 'json', logLevel: 'error', onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'], disableStorageReset: true },
+            { extends: 'lighthouse:default', settings: { formFactor: 'mobile', emulatedUserAgent: ua, disableStorageReset: true } }
           );
+          // Sayfa oturumu yenilemiş olabilir (döndürülen belirteç); sıradaki rota güncel çerezle girsin.
+          if (role) lhCookies.set(role, await jar.cookies(LH_URL));
           const lhr = res.lhr;
           const sc = (k) => Math.round((lhr.categories[k]?.score ?? 0) * 100);
           const scripts = (lhr.audits['network-requests']?.details?.items ?? []).filter((i) => i.resourceType === 'Script');
@@ -245,6 +297,7 @@ if (!SKIP.has('lighthouse')) {
           log(`lighthouse ${route}`, JSON.stringify(rows[rows.length - 1]));
         }
       } finally {
+        await cdp.close().catch(() => {});
         await chrome.kill();
       }
       fs.writeFileSync(path.join(OUT_DIR, 'lighthouse.json'), JSON.stringify(rows, null, 1));
