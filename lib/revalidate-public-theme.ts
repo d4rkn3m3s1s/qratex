@@ -3,7 +3,7 @@ import 'server-only';
 import { revalidateTag } from 'next/cache';
 import { PUBLIC_THEME_SETTINGS_CACHE_TAG } from '@/lib/theme-settings-keys';
 
-/** Admin tema / `settings` güncellemesinden sonra public tema önbelleğini boşalt. */
+/** Admin tema / `settings` güncellemesinden sonra public tema önbelleğini ANINDA boşalt ('max' SWR idi: kayıttan sonraki ilk okuma eski satırı döndürüyordu). */
 export function revalidatePublicThemeSettings(): void {
-  revalidateTag(PUBLIC_THEME_SETTINGS_CACHE_TAG, 'max');
+  revalidateTag(PUBLIC_THEME_SETTINGS_CACHE_TAG, { expire: 0 });
 }

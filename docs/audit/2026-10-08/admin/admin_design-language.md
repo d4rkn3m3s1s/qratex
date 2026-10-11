@@ -161,3 +161,52 @@ Sayfa **hiçbir API ucu çağırmıyor, hiçbir Prisma modeli kullanmıyor, stat
 - **`/admin/settings?tab=appearance`** — Görünüm ayarları; tema sayfasıyla örtüşmesi ayrı bir denetim konusu, bu sayfayla doğrudan çakışmıyor.
 - **`/admin/observability#core-web-vitals`** — Çakışma yok; yalnız bağlantı. Birleşik merkezde "Performans" kartı olarak CWV özetini (p75 LCP/INP/CLS) göstermek değer katar.
 - Sidebar'da `design_language` ve `accessibility` iki ayrı giriş (`components/dashboard/sidebar.tsx:199`, `:204`) — birleşmeden sonra tek girişe inmeli; zaten kalabalık admin menüsünü bir öğe hafifletir.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/design-language` emekliye ayrıldı → `/admin/design-system` (varsayılan sekme "Yaşayan rehber"; kalıcı yönlendirme, sorgu korunur). Temel ajanın QDL v2 yaşayan rehberi (token/kontrast/motion/bileşen bölümleri) `components/admin/a-tasarim-sistemi/guide/*` altına taşındı ve birleşik merkezin ilk sekmesi oldu. Uyum raporu: `lib/design-system/drift-scan.ts` → `lib/data/design-drift.json` (üretici: `UPDATE_DESIGN_DRIFT=1 npx jest __tests__/admin/a-tasarim-sistemi/drift.test.ts`). Sayfa sunucu bileşeni; sekmeler `next/dynamic` ile tembel.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR — proxy + sayfada `requireAuth(['ADMIN'])`. |
+| 2 | Metadata | ÇALIŞIYOR — "Tasarım Sistemi". |
+| 3 | Admin kabuğu | ÇALIŞIYOR. |
+| 4 | Sidebar girişi (aynı ikon) | ÇALIŞIYOR — registry'de tek giriş `admin.design-system` (Palette), eski üç rota `redirectFrom` (navigasyon ajanı). |
+| 5 | Hızlı erişim etiketi | Sahiplik dışı (navigasyon). |
+| 6 | Yol haritası "shipped" | ÇALIŞIYOR — iddia artık gerçek: canlı rehber + uyum raporu. |
+| 7 | Premium hero | KALDIRILDI → ortak `PageHeader` (compact, ops). |
+| 8 | Hero azaltılmış hareket | ÇALIŞIYOR — `PageHeader` sürekli animasyon içermez. |
+| 9 | Hero koyu tema ilk kare | KALDIRILDI — `AdminPremiumHero` bu yüzeyde kullanılmıyor. |
+| 10 | Eyebrow "Tasarım" | ÇALIŞIYOR — "Yönetim paneli · Tasarım". |
+| 11–13 | Metin blok kartları | ÇALIŞIYOR (dönüştürüldü) — canlı token, tipografi, ölçek, motion, bileşen, durum örnekleri + Yap/Yapma tablosu. |
+| 14 | "Uygulama durumu" (SAHTE) | ÇALIŞIYOR — gerçek uyum raporu: kurala uyan dosya %, sabit hex, ham palet, 12px altı metin; alan bazında çubuk, en çok ihlal içeren 25 dosya, ölçüm tarihi. |
+| 15 | Anlamsız accent şeritleri | KALDIRILDI — ton yalnız anlamlı yerde (kontrast kartı başarı/tehlike). |
+| 16 | Geliştirici notu + dosya yolu | ÇALIŞIYOR — "Kaynaklar" kartında yollar (token, Tailwind, katalog, motion, durumlar, tema modeli). |
+| 17 | "Tarihçe md'de" iddiası | KALDIRILDI — yanlış iddia silindi. |
+| 18 | Bağlantı: Erişilebilirlik | ÇALIŞIYOR — aynı sayfada sekme. |
+| 19 | Bağlantı: CWV | ÇALIŞIYOR — `ArrowRight` (yanıltıcı harici ikon kaldırıldı). |
+| 20 | Bağlantı: E-posta ayarları | KALDIRILDI — konu dışıydı. |
+| 21 | Müşteri/bayi rehber bağlantıları (ölü anahtar) | KALDIRILDI — sayfa bu anahtarları kullanmıyor (`messages/*` sahibince temizlenebilir). |
+| 22 | TR/EN | ÇALIŞIYOR (TR) — Dalga 2 ops düzeni. |
+| 23 | Duyarlı yerleşim | ÇALIŞIYOR — `PanelPage`, tablolar kendi kabında kayar, ≥ 44px hedefler. |
+| 24 | Başlık hiyerarşisi | ÇALIŞIYOR — tek h1, bölümler h2 (`SectionCard`), alt başlıklar h3. |
+| 25 | Bağlantı grubu landmark | ÇALIŞIYOR — `<nav aria-label="İlgili kalite sayfaları">` + bölüm atlama `<nav>`. |
+| 26 | Klavye odağı | ÇALIŞIYOR. |
+| 27 | Yükleniyor/hata | ÇALIŞIYOR — `PanelErrorBoundary` + sekme iskeleti. |
+| 28 | Canlı bileşen önizlemesi (EKSİK) | ÇALIŞIYOR — Button/Badge/Alert/Input/Switch/Progress, QueryState oynatıcı, EmptyState/ErrorState/StatTile/ConfirmAction (örnek veriler açıkça etiketli; `Math.random` kaldırıldı). |
+| 29 | Token görüntüleyici (EKSİK) | ÇALIŞIYOR — belgeden canlı okunan renkler + kontrast oranları, radius/elevation/boşluk/z-index; "Açık/Koyu modda gör". |
+| 30 | Uyum ölçümü (EKSİK) | ÇALIŞIYOR — bkz. 14. |
+| 31 | Tek kaynak | ÇALIŞIYOR — örnekler koddaki katalogdan (`lib/design/tokens.ts`, `lib/motion`) çizilir. |
+| 32 | Önerilen bileşen adı | ÇALIŞIYOR — `PageHeader`. |
+
+### Kapanan bulgular
+1 (canlı stil rehberi), 2 (uyum raporu), 3 (kendi kurallarına uyum), 4 (elle kopya kaynak → koddan çizim), 5 (ölü bağlantı anahtarları kullanılmıyor), 6 (sunucu bileşeni + tembel istemci adaları), 8 (bilgi mimarisi). **7/8.**
+
+### Kalanlar
+- Bulgu 7 (`AdminPremiumHero` ilk kare koyu metin): paylaşılan bileşen; bu yüzey artık kullanmıyor, sahibine bırakıldı.
+- Tarihli kural değişiklik günlüğü yok (kaynak veri yok; uydurulmadı).
+- Uyum raporu anlık görüntüdür; CI/prebuild üretimi ve ESLint kuralı eklenmedi (`scripts/*` yasağı).

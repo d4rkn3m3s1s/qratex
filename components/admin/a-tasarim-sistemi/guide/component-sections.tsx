@@ -159,7 +159,7 @@ export function StatesSection() {
     <div className="space-y-section">
       <SectionCard
         title="QueryState — tek veri-durum bileşeni"
-        description="loading (statik iskelet) · error (+ tekrar dene; türüne göre metin) · empty · ready (+ bayat veri bandı, arka plan yenileme). Hata asla boş liste gibi görünmez."
+        description="loading (statik iskelet) · error (+ tekrar dene; türüne göre metin) · empty · ready (+ bayat veri bandı, arka plan yenileme). Hata asla boş liste gibi görünmez. Örnek satırlar bileşen gösterimidir."
       >
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Durum seç">
@@ -227,9 +227,9 @@ export function StatesSection() {
 
       <SectionCard
         title="StatTile"
-        description="Değer + değişim (ikon + metin; yalnız renge dayanmaz) + örneklem. Değer değişince sayar; ilk boyamada saymaz."
+        description="Değer + değişim (ikon + metin; yalnız renge dayanmaz) + örneklem. Değer değişince sayar; ilk boyamada saymaz. Bu bölümdeki sayılar bileşen örneğidir, platform verisi değildir."
         actions={
-          <Button size="sm" variant="outline" onClick={() => setVisits((v) => v + Math.round(200 + Math.random() * 900))}>
+          <Button size="sm" variant="outline" onClick={() => setVisits((v) => v + 487)}>
             Değeri artır
           </Button>
         }
@@ -244,7 +244,7 @@ export function StatesSection() {
 
       <SectionCard
         title="ConfirmAction"
-        description="Etki önizlemesi (sunucudan), tipli onay, işlem bitene kadar açık kalma, hata olursa kapanmadan gösterme. Native confirm() ve tek tıkla kalıcı işlem yerine."
+        description="Etki önizlemesi (sunucudan), tipli onay, işlem bitene kadar açık kalma, hata olursa kapanmadan gösterme. Native confirm() ve tek tıkla kalıcı işlem yerine. Buradaki düğmeler yalnız diyaloğu gösterir; hiçbir kayıt değişmez."
       >
         <div className="flex flex-wrap items-center gap-3">
           <ConfirmAction

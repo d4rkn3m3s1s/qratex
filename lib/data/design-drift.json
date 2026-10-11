@@ -1,0 +1,237 @@
+{
+  "generatedAt": "2026-10-11T04:01:11.753Z",
+  "totals": {
+    "files": 1263,
+    "clean": 1139,
+    "hex": 741,
+    "palette": 690,
+    "tinyText": 281
+  },
+  "areas": [
+    {
+      "area": "admin",
+      "hex": 3,
+      "palette": 140,
+      "tinyText": 33,
+      "files": 97,
+      "clean": 92
+    },
+    {
+      "area": "dealer",
+      "hex": 0,
+      "palette": 0,
+      "tinyText": 0,
+      "files": 80,
+      "clean": 80
+    },
+    {
+      "area": "customer",
+      "hex": 0,
+      "palette": 0,
+      "tinyText": 0,
+      "files": 100,
+      "clean": 100
+    },
+    {
+      "area": "staff",
+      "hex": 0,
+      "palette": 0,
+      "tinyText": 0,
+      "files": 5,
+      "clean": 5
+    },
+    {
+      "area": "public",
+      "hex": 50,
+      "palette": 91,
+      "tinyText": 49,
+      "files": 74,
+      "clean": 69
+    },
+    {
+      "area": "components",
+      "hex": 688,
+      "palette": 459,
+      "tinyText": 199,
+      "files": 907,
+      "clean": 793
+    }
+  ],
+  "top": [
+    {
+      "file": "app/lab/zoom/zoom-client.tsx",
+      "hex": 35,
+      "palette": 83,
+      "tinyText": 47,
+      "total": 165
+    },
+    {
+      "file": "components/team/team-board.tsx",
+      "hex": 4,
+      "palette": 117,
+      "tinyText": 32,
+      "total": 153
+    },
+    {
+      "file": "app/admin/settings/settings-client.tsx",
+      "hex": 0,
+      "palette": 69,
+      "tinyText": 21,
+      "total": 90
+    },
+    {
+      "file": "components/ui/backgrounds/winter.tsx",
+      "hex": 51,
+      "palette": 0,
+      "tinyText": 0,
+      "total": 51
+    },
+    {
+      "file": "components/customer/games/truth-vs-fake-game.tsx",
+      "hex": 28,
+      "palette": 19,
+      "tinyText": 3,
+      "total": 50
+    },
+    {
+      "file": "components/team/task-detail-sheet.tsx",
+      "hex": 0,
+      "palette": 28,
+      "tinyText": 17,
+      "total": 45
+    },
+    {
+      "file": "components/team/team-performance.tsx",
+      "hex": 0,
+      "palette": 26,
+      "tinyText": 18,
+      "total": 44
+    },
+    {
+      "file": "app/admin/intern-emails/page.tsx",
+      "hex": 0,
+      "palette": 38,
+      "tinyText": 5,
+      "total": 43
+    },
+    {
+      "file": "components/ui/backgrounds/ice-kingdom.tsx",
+      "hex": 42,
+      "palette": 0,
+      "tinyText": 0,
+      "total": 42
+    },
+    {
+      "file": "components/ui/avatar-frame.tsx",
+      "hex": 10,
+      "palette": 31,
+      "tinyText": 0,
+      "total": 41
+    },
+    {
+      "file": "components/customer/games/mind-thief-game.tsx",
+      "hex": 26,
+      "palette": 7,
+      "tinyText": 3,
+      "total": 36
+    },
+    {
+      "file": "app/admin/inbox/page.tsx",
+      "hex": 0,
+      "palette": 29,
+      "tinyText": 5,
+      "total": 34
+    },
+    {
+      "file": "components/customer/games/trust-merge-game.tsx",
+      "hex": 31,
+      "palette": 1,
+      "tinyText": 1,
+      "total": 33
+    },
+    {
+      "file": "components/customer/character-reveal.tsx",
+      "hex": 26,
+      "palette": 0,
+      "tinyText": 6,
+      "total": 32
+    },
+    {
+      "file": "components/customer/games/spam-defense-game.tsx",
+      "hex": 28,
+      "palette": 1,
+      "tinyText": 2,
+      "total": 31
+    },
+    {
+      "file": "components/customer/pacman-game.tsx",
+      "hex": 25,
+      "palette": 5,
+      "tinyText": 0,
+      "total": 30
+    },
+    {
+      "file": "components/ui/backgrounds/autumn.tsx",
+      "hex": 29,
+      "palette": 0,
+      "tinyText": 0,
+      "total": 29
+    },
+    {
+      "file": "components/customer/games/lucky-wheel-game.tsx",
+      "hex": 26,
+      "palette": 0,
+      "tinyText": 1,
+      "total": 27
+    },
+    {
+      "file": "components/admin/admin-progress-stat-card.tsx",
+      "hex": 0,
+      "palette": 23,
+      "tinyText": 3,
+      "total": 26
+    },
+    {
+      "file": "components/customer/games/troll-slayer-game.tsx",
+      "hex": 21,
+      "palette": 2,
+      "tinyText": 2,
+      "total": 25
+    },
+    {
+      "file": "components/customer/character-share-card.tsx",
+      "hex": 22,
+      "palette": 0,
+      "tinyText": 0,
+      "total": 22
+    },
+    {
+      "file": "components/customer/games/combo-tap-game.tsx",
+      "hex": 20,
+      "palette": 1,
+      "tinyText": 1,
+      "total": 22
+    },
+    {
+      "file": "components/customer/games/data-miner-game.tsx",
+      "hex": 21,
+      "palette": 0,
+      "tinyText": 1,
+      "total": 22
+    },
+    {
+      "file": "components/customer/games/guardian-of-trust-game.tsx",
+      "hex": 19,
+      "palette": 2,
+      "tinyText": 1,
+      "total": 22
+    },
+    {
+      "file": "components/customer/games/review-detective-game.tsx",
+      "hex": 15,
+      "palette": 5,
+      "tinyText": 2,
+      "total": 22
+    }
+  ]
+}

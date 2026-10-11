@@ -317,3 +317,61 @@ Kapsam notu: Sorun tema anahtarlarına özgü değil. Tekil `PUT` kullanan her a
 | 3 | Mount'ta sabit purple ve preview olayı | doğrulandı | Düşük-orta: yalnızca o adminin oturumu etkilenir. |
 | 4 | Özel tema kaydı atomik değil | doğrulandı | Orta: olasılık düşük ama etki tüm kullanıcılara yayılır. |
 | 5 | Genel rollback tema audit'ini bozuyor | doğrulandı | Orta: admin verisi bozulur ve başarı mesajı yanıltır. |
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/themes` emekliye ayrıldı → `/admin/design-system?tab=temalar` (kalıcı yönlendirme, sorgu parametreleri korunur). Temalar sekmesi: `components/admin/a-tasarim-sistemi/theme/*`; model `lib/design-system/theme-model.ts` (saf), sunucu `lib/design-system/theme.server.ts`; BFF `GET|PUT /api/admin/design-system/theme`, `GET …/theme/history`, `POST …/theme/rollback` (hepsi `defineRoute`, ADMIN, zod, rate limit). Testler: `__tests__/admin/a-tasarim-sistemi/server.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero başlık | ÇALIŞIYOR — ortak `PageHeader` ("Tasarım Sistemi"), Türkçe; sekme adı "Temalar". |
+| 2 | Yükleniyor durumu | ÇALIŞIYOR — `QueryState` iskeleti; sekme `next/dynamic` ile tembel yüklenir. |
+| 3 | Tema ayarlarını çekme | ÇALIŞIYOR — sunucuda ön yükleme (`getThemeOverview`), istemcide React Query; zarf/`res.ok` kontrolü. |
+| 4 | Yükleme hata durumu | ÇALIŞIYOR — hata + "Tekrar dene"; düzenleme yüzeyi hiç çizilmez (varsayılan "Mor Gece" yalanı yok). |
+| 5 | "Aktif Tema" başlığı | ÇALIŞIYOR — "Canlıdaki tema" kartı: ad, varsayılan mod, son yayın zamanı (Europe/Istanbul) ve yayınlayan. |
+| 6 | Aktif tema swatch'ları | ÇALIŞIYOR — açık/koyu × 5 renk, Türkçe etiket + hex, `grid-cols-5` (taşma yok). |
+| 7 | Hazır aile ızgarası | ÇALIŞIYOR — yalnız iki varyantlı 13 aile, Türkçe adlar, 4 grup (Marka / Soğuk / Doğa-sıcak / Canlı). |
+| 8 | Tıklayınca anında yayın | KALDIRILDI (bilinçli) — seçim yalnız taslağı değiştirir; yayın onaylı ayrı adım. |
+| 9 | "Palette aktif" rozeti | KALDIRILDI — yerine seçili kartta onay ikonu + kayan seçim çerçevesi. |
+| 10 | Açık/koyu varyant göstergesi | ÇALIŞIYOR — her kartta iki varyant şeridi; seçim aile düzeyinde, moda bağlı değil. |
+| 11 | Sıralı giriş animasyonu | KALDIRILDI — ops kaydı sakin; yalnız seçim çerçevesi (`layoutId`) ve yayın çubuğu (`fadeUp`), azaltılmış harekette kapanır. |
+| 12 | "Varsayılan Mod" metni (SAHTE) | ÇALIŞIYOR — gerçek Sistem/Açık/Koyu denetimi; uçtan uca uygulanır (bkz. 29). |
+| 13 | Mount'ta palet uygulama/yayın (BOZUK) | KALDIRILDI — sayfa belge köküne HİÇ yazmaz; önizleme kapsamlı tuvalde. |
+| 14 | Mod değişince yeniden uygulama | ÇALIŞIYOR — önizleme iki modu yan yana gösterir; canlı uygulama sağlayıcıda. |
+| 15 | "Aydınlık" ailesi (BOZUK) | KALDIRILDI — tek varyantlı preset seçici dışı; sunucu `'light'`/`''` reddeder; saklı eski değer varsa uyarı bandı. |
+| 16 | Renk seçiciler | ÇALIŞIYOR — `ColorField` (bağlı etiket, `aria-label`). |
+| 17 | Hex metin girişi | ÇALIŞIYOR — biçim doğrulama, `#RGB` genişletme, `aria-invalid` + satır içi hata; yarım değer taslağa yazılmaz. |
+| 18 | Özel önizleme kutusu | ÇALIŞIYOR — "mini uygulama" tuvali (kenar çubuğu, kart, grafik, odak halkası, butonlar, rozet), açık + koyu. |
+| 19 | Özel temayı kaydet (atomik değil) | ÇALIŞIYOR — tek `PUT`, tek transaction, satır başına koşullu güncelleme, tek denetim kaydı. |
+| 20 | Özel tema canlı global uygulama | KALDIRILDI — tuşa basış yalnız önizlemeyi değiştirir; sızıntı yok. |
+| 21 | Kaydediliyor durumu | ÇALIŞIYOR — `ConfirmAction` işlem bitene kadar meşgul; çift gönderim yok. |
+| 22 | Toast bildirimleri | ÇALIŞIYOR — sunucu hata mesajı gösterilir; 409'da "Güncel hâli yükle". |
+| 23 | Yetki kontrolü | ÇALIŞIYOR — proxy + `defineRoute({ roles: ['ADMIN'] })` + sayfada `requireAuth`. |
+| 24 | Audit log | ÇALIŞIYOR — `entity: ThemeSettings`, tam önce/sonra anlık görüntüsü + not; ekranda "Sürüm geçmişi". |
+| 25 | Public önbellek invalidasyonu | ÇALIŞIYOR — `revalidateTag(tag, { expire: 0 })`; yanıt yeni satırları döndürür, sağlayıcı ikinci okuma yapmaz. |
+| 26 | Klavye erişimi | ÇALIŞIYOR — `radiogroup`/`radio` + `aria-checked`, ok/Home/End, roving tabindex. |
+| 27 | Mobil yerleşim | ÇALIŞIYOR — tek sütun, ≥ 44px hedefler, swatch ızgarası sarar, yayın çubuğu yapışkan. |
+| 28 | i18n | ÇALIŞIYOR (TR) — tüm metin tam Türkçe; Dalga 2 ops admin düzeni (EN anahtarı yok). |
+| 29 | Varsayılan açık/koyu mod (EKSİK) | ÇALIŞIYOR — `defaultMode` yazılır; `app/layout.tsx` ilk boyama betiği + `ThemeProvider defaultTheme` okur; kullanıcının kendi seçimi önce gelir. |
+| 30 | Değişiklik geçmişi ve geri al (EKSİK) | ÇALIŞIYOR — sayfalı geçmiş (palet küçük resmi, kim/ne zaman/not), onaylı "Önceki temaya dön" (iyimser kilitli). |
+| 31 | Kontrast denetimi (EKSİK) | ÇALIŞIYOR — iki modda 7 kritik çift; yayın onayında uyarı sayısı ve açıklaması. |
+| 32 | Özel temada zemin/metin + açık/koyu (EKSİK) | ÇALIŞIYOR — `customColors.modes.light|dark` (isteğe bağlı); sağlayıcı moda göre uygular; eski tek takım geriye uyumlu. |
+| 33 | Taslak → önizle → yayınla (EKSİK) | ÇALIŞIYOR — yapışkan "Yayınlanmamış değişiklik · Vazgeç · Yayınla…", sayfadan ayrılırken uyarı. |
+| 34 | Mevsimsel konsept uyarısı (EKSİK) | ÇALIŞIYOR — etkin konsept adı, bitiş tarihi, ezdiği palet + "Konsepte git"; okunamazsa açıkça belirtilir. |
+| 35 | Varsayılana sıfırla (EKSİK) | ÇALIŞIYOR — "Taslağı varsayılana sıfırla" (Mor Gece + Sistem), yine onaylı yayınla. |
+
+Ek: dışa aktarma (CSS değişkenleri / JSON panoya) — eksik özellik 6'nın ilk yarısı.
+
+### Kapanan bulgular
+1 (Aydınlık; doğrulanmış yan bulgu dahil: `''` yazımı artık imkânsız), 2 (SWR → `expire: 0` + kendi yazdığını okuma), 3 (mount'ta mor yayını yok), 4 (atomik yazım), 5 (tema geçmişi + doğru geri alma; yeni kayıtlar genel ayar geri alma listesine karışmaz), 6 (taslak/önizleme, sızıntı yok), 7 (varsayılan mod uçtan uca), 8 (bilgilendirme bandı; palet çözümü sağlayıcıda tek yerde), 9 (klavye/etiket), 10 (hata durumu), 11 (aynı temayı yeniden yayınlamak 400; onay diyaloğu çift gönderimi engeller; 409 kilidi), 12 (mobil taşma), 13 (dil karışıklığı), 14 (aile adı tablodan; gruplama). **14/14.**
+
+### Kalanlar
+- Yakın tonlu aileler (Orman / Gece Ormanı vb.) birleştirilmedi: canlı DB'de seçili olabilirler; silmek yerine gruplandı.
+- "Logodan palet üret" ve panel bazında (müşteri/bayi/landing) ayrı palet yapılmadı; zamanlanmış palet zaten mevsimsel konseptte.
+- `/admin/settings` genel geri alma ucu, ESKİ tema denetim kayıtlarını (`entity: settings`) hâlâ yanlış işler (o yüzeyin sahibine); yeni yayınlar bu listeye girmez.
+- Genel `PUT /api/admin/settings` tema anahtarlarını doğrulamasız yazabilir (başka yüzeyin API'si). Korumalı anahtar listesine eklemek denetim görüntüleyicide değerleri gizleyeceği için yapılmadı.
+- `/api/settings/theme` CDN başlığı (`s-maxage=120`) diğer ziyaretçilerde en çok ~2 dk gecikme bırakır; yayınlayan admin anında görür.

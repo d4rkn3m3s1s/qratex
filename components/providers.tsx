@@ -28,13 +28,18 @@ interface ProvidersProps {
   initialThemeSettings?: ThemeSettingRow[];
 }
 
+/** Saklı özel tema: eski tek takım + isteğe bağlı moda özel zemin/metin. */
+type StoredCustomColors = RuntimeThemeHex & {
+  modes?: Partial<Record<'light' | 'dark', { background?: string; foreground?: string }>>;
+};
+
 function parseThemeRowsToState(settings: ThemeSettingRow[]) {
   const themeSettings = settings.find((s) => s.key === THEME_SETTINGS_KEYS.activeTheme);
   const nextThemeId = themeSettings?.value;
   const customColorsSetting = settings.find((s) => s.key === THEME_SETTINGS_KEYS.customColors);
   return {
     activeThemeId: typeof nextThemeId === 'string' ? nextThemeId : null,
-    customColors: customColorsSetting?.value ? (customColorsSetting.value as RuntimeThemeHex) : null,
+    customColors: customColorsSetting?.value ? (customColorsSetting.value as StoredCustomColors) : null,
   };
 }
 
@@ -74,14 +79,14 @@ function ThemeColorsProvider({
   const { resolvedTheme } = useTheme();
   const boot = useMemo(() => {
     if (!initialThemeSettings?.length) {
-      return { activeThemeId: null as string | null, customColors: null as RuntimeThemeHex | null };
+      return { activeThemeId: null as string | null, customColors: null as StoredCustomColors | null };
     }
     return parseThemeRowsToState(initialThemeSettings);
   }, [initialThemeSettings]);
 
   const [isThemeInitialized, setIsThemeInitialized] = useState(!!initialThemeSettings?.length);
   const [activeThemeId, setActiveThemeId] = useState<string | null>(boot.activeThemeId);
-  const [customColors, setCustomColors] = useState<RuntimeThemeHex | null>(boot.customColors);
+  const [customColors, setCustomColors] = useState<StoredCustomColors | null>(boot.customColors);
   // Aktif dönemsel konseptin paleti: tema hesaplamasında üst katman (aynı yoldan, moda göre).
   const [seasonalThemeId, setSeasonalThemeId] = useState<string | null>(null);
   useEffect(() => {
@@ -122,7 +127,17 @@ function ThemeColorsProvider({
   }, []);
 
   useEffect(() => {
-    const onPaletteChanged = () => {
+    const onPaletteChanged = (event: Event) => {
+      // Yayın yanıtı yeni satırları taşıyorsa doğrudan uygula (kendi yazdığını okuma garantisi;
+      // ikinci okuma önbellekten eski satırı getirip yeni paleti ezmesin). Yoksa eski davranış.
+      const rows = (event as CustomEvent<{ entries?: ThemeSettingRow[] }>).detail?.entries;
+      if (Array.isArray(rows)) {
+        const parsed = parseThemeRowsToState(rows);
+        setActiveThemeId(parsed.activeThemeId);
+        setCustomColors(parsed.customColors);
+        setIsThemeInitialized(true);
+        return;
+      }
       void loadThemeSettings({ bypassCache: true });
     };
     const onPalettePreview = (event: Event) => {
@@ -172,13 +187,15 @@ function ThemeColorsProvider({
     }
 
     if (activeThemeId === 'custom' && customColors) {
+      // Moda özel zemin/metin (Tasarım Sistemi → Temalar: `modes.light|dark`); yoksa eski tek takım.
+      const surface = customColors.modes?.[mode];
       applyRuntimeThemeToRoot(
         {
           primary: customColors.primary,
           secondary: customColors.secondary,
           accent: customColors.accent,
-          background: customColors.background,
-          foreground: customColors.foreground,
+          background: surface?.background ?? customColors.background,
+          foreground: surface?.foreground ?? customColors.foreground,
           mode,
         },
         root
@@ -229,7 +246,14 @@ function ThemeModeSync() {
   return null;
 }
 
+/** Platform varsayılan modu (Tasarım Sistemi → Temalar). Kullanıcının kendi seçimi (`qratex-theme`) her zaman önce gelir. */
+function readDefaultMode(rows?: ThemeSettingRow[]): 'system' | 'light' | 'dark' {
+  const v = rows?.find((r) => r.key === THEME_SETTINGS_KEYS.defaultMode)?.value;
+  return v === 'light' || v === 'dark' ? v : 'system';
+}
+
 export function Providers({ children, initialThemeSettings }: ProvidersProps) {
+  const defaultMode = readDefaultMode(initialThemeSettings);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -250,7 +274,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme={defaultMode}
             enableSystem
             storageKey="qratex-theme"
             themes={['light', 'dark', 'system']}

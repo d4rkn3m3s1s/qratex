@@ -151,3 +151,47 @@ Kıyas: Stripe Dashboard'un "health" kartları, Linear'ın tarama-sonucu → iss
 - **`/admin/observability`** (`#core-web-vitals`, `#rum-web-vitals`): Performans verisi orada yaşamalı; erişilebilirlik sayfası yalnızca bağlantı vermeli (şu anki durum doğru). RUM yüküne `prefers-reduced-motion` eklenirse, ham veri observability'de, özet erişilebilirlik sekmesinde gösterilir.
 - **`/admin/compliance`** (KVKK & Denetim): Erişilebilirlik beyanı ve kontrol listesi denetim günlüğü, uyumluluk alanıyla doğal bağ kurar; audit olayları aynı günlüğe yazılmalı, ayrı bir günlük icat edilmemeli.
 - **Kaldırma değil, dönüştürme:** Sayfa bugünkü haliyle düşük değerli olsa da ürünün gerçek bir erişilebilirlik özelliği (`lib/accessibility-prefs.ts`) ve test altyapısı (Playwright) var; bu sayfa o ikisini birbirine bağlayan tek yer olmaya aday.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/accessibility` emekliye ayrıldı → `/admin/design-system?tab=erisilebilirlik` (kalıcı yönlendirme). Sekme: `components/admin/a-tasarim-sistemi/a11y/a11y-tab.tsx`; sunucu `lib/design-system/a11y.server.ts`, liste `lib/design-system/a11y-checklist.ts`; BFF `GET /api/admin/design-system/a11y`, `PATCH /api/admin/design-system/a11y/checklist` (`defineRoute`, ADMIN, zod, rate limit). Şema değişmedi: liste durumu `Settings.a11y_checklist_v1`, tercihler mevcut `Settings.user_settings_<id>.preferences`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR. |
+| 2 | Metadata ("kontrol listesi" vaadi) | ÇALIŞIYOR — vaat artık gerçek (bkz. 6). |
+| 3 | Premium hero | KALDIRILDI → ortak `PageHeader`. |
+| 4 | Hero nefes animasyonu | KALDIRILDI — erişilebilirlik ekranında sürekli hareket yok. |
+| 5 | Hukuki uyarı | ÇALIŞIYOR — "Rehber ve referanslar" kartında. |
+| 6 | "Kontrol listesi" (SAHTE) | ÇALIŞIYOR — 21 WCAG 2.2 A/AA kriteri, Qratex'e özgü test yönergesi, durum (Geçti/Kaldı/Kapsam dışı/Denetlenmedi), "Kaldı" için zorunlu not, kim/ne zaman, ilerleme çubuğu, duruma göre süzme; iyimser kilit (409) + denetim kaydı. |
+| 7 | `ListChecks` ikonu | ÇALIŞIYOR — gerçekten işaretlenebilir listenin ikonu. |
+| 8 | Anlamsız accent | KALDIRILDI — renk yalnız durum taşır. |
+| 9–11 | Dış referanslar | ÇALIŞIYOR — WCAG 2.2 hızlı başvuru, W3C Türkçe yetkili çeviri, MDN. Axe bağlantısı kaldırıldı (projede axe yok). |
+| 12 | "Yeni sekmede açılır" bildirimi (EKSİK) | ÇALIŞIYOR — `sr-only` metin. |
+| 13 | İç bağlantı: Tasarım dili | ÇALIŞIYOR — aynı sayfada sekme. |
+| 14 | İç bağlantı: CWV | ÇALIŞIYOR — rehber "Kaynaklar" kartında. |
+| 15 | İç bağlantı: RUM | ÇALIŞIYOR. |
+| 16 | E-posta bağlantısı | KALDIRILDI — konu dışıydı. |
+| 17 | TR/EN anahtarları | ÇALIŞIYOR (TR) — W3C ilke adları: Algılanabilir, İşletilebilir, Anlaşılabilir, Sağlam. |
+| 18 | Navigasyon kaydı | ÇALIŞIYOR — tek giriş (registry, navigasyon ajanı). |
+| 19 | Başlık hiyerarşisi | ÇALIŞIYOR — h1 → h2 (kart) → h3 (ilke grupları). |
+| 20 | Odak görünürlüğü | ÇALIŞIYOR — özel düğmelerde `focus-visible` halkası. |
+| 21 | Ana içeriğe atla | ÇALIŞIYOR (layout). |
+| 22 | Mobil yerleşim | ÇALIŞIYOR — 2×2 KPI, tablolar kendi kabında kayar, ≥ 44px hedefler. |
+| 23 | Yükleniyor/boş/hata | ÇALIŞIYOR — `QueryState`. |
+| 24 | Otomatik tarama sonuçları (EKSİK) | KALDIRILDI (dürüst not) — `@axe-core/playwright` kurulumu (npm install yasak) ve tarama modeli (şema) gerekir; ekranda "otomatik tarama henüz CI'a bağlı değil" yazılır, sahte sayı yok. Yerine canlı kontrast sözleşmesi + tüm tema paletleri için kontrast tablosu. |
+| 25 | Rota bazlı uyumluluk (EKSİK) | KISMİ — tarama verisi yok; el ile liste kriter bazında; tasarım uyum raporu (rehber sekmesi) dosya bazında. |
+| 26 | Tercih benimsenmesi (EKSİK) | ÇALIŞIYOR — yüksek kontrast / animasyon azaltma / renk körü / büyük yazı, rol kırılımı; tek SQL, 10 dk Redis; "yalnız hesaba kaydedilenler" açıkça yazılır. |
+| 27 | Gereksiz `'use client'` | ÇALIŞIYOR — sayfa sunucu bileşeni; sekme tembel istemci adası. |
+
+### Kapanan bulgular
+1 (gerçek kontrol listesi), 3 (tercih istatistikleri), 4 (alakasız bağlantı + kopya iskelet → tek merkez), 5 (başlık hiyerarşisi, yeni sekme bildirimi), 6 (sunucu bileşeni, tekrar eden sınıflar), 7 (anlamsız accent, W3C terimleri). **6/7.**
+
+### Kalanlar
+- Bulgu 2 (otomatik axe taraması + CI kapısı): bağımlılık kurulumu ve şema gerekir. **ŞEMA İSTEĞİ:** `A11yScanRun { id, createdAt, commitSha, source, routeCount, totals Json }`, `A11yViolation { id, runId, route, ruleId, impact, wcagTags String[], nodeCount, firstSeenAt, lastSeenAt }`.
+- İhlalden ekip kanbanına görev açma ve erişilebilirlik beyanı yönetimi yapılmadı (tarama verisi ve yasal içerik sahibi gerekli).
+- RUM'a OS `prefers-reduced-motion` sinyali eklenmedi (observability yüzeyinin sahipliği).

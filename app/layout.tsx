@@ -17,13 +17,20 @@ import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
 import { PageTransition } from '@/components/layout/page-transition';
 
 /** İlk boyamadan önce light/dark sınıfı (next-themes / localStorage ile uyumlu; FOUC azaltır). */
-const THEME_CLASS_INIT_SCRIPT = `
+/** Platform varsayılan modu (Tasarım Sistemi → Temalar `defaultMode`); kullanıcının kayıtlı seçimi önce gelir. */
+function readDefaultMode(rows: ReadonlyArray<{ key: string; value: unknown }>): 'system' | 'light' | 'dark' {
+  const v = rows.find((r) => r.key === 'defaultMode')?.value;
+  return v === 'light' || v === 'dark' ? v : 'system';
+}
+
+const themeClassInitScript = (defaultMode: 'system' | 'light' | 'dark') => `
 (function(){
   try {
     var k = 'qratex-theme';
     var t = localStorage.getItem(k);
+    var d = '${defaultMode}';
     var sys = function(){ return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; };
-    var resolved = (t === 'light' || t === 'dark') ? t : sys();
+    var resolved = (t === 'light' || t === 'dark') ? t : (t === 'system' ? sys() : (d === 'light' || d === 'dark') ? d : sys());
     var el = document.documentElement;
     el.classList.add(resolved);
     el.setAttribute('data-theme', resolved);
@@ -166,7 +173,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${spaceGrotesk.variable}`}
     >
       <head>
-        <Script id="qratex-theme-class" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: THEME_CLASS_INIT_SCRIPT }} />
+        <Script id="qratex-theme-class" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeClassInitScript(readDefaultMode(initialThemeSettings)) }} />
         {/* Logo preload KALDIRILDI: header <Image priority> next/image'in KENDİ preload'unu
             (/_next/image?url=... optimize URL) üretiyor; raw /logo/logo.png preload'u onunla
             eşleşmiyordu → "preloaded but not used" uyarısı + boşa indirme. */}
