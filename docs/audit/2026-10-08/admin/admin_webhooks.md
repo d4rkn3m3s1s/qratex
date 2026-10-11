@@ -228,3 +228,66 @@ Kısa özet: Sayfa küçük ve temiz bir CRUD; ancak ürün vaadinin büyük kı
 | 1 | Secret düz metin admin istemcisine dönüyor | Çürütüldü (kritik/yüksek olarak) | Düşük — hijyen; asıl sistem-çapı risk `/api/admin/*` uçlarının gate cookie'siz erişilebilmesi |
 | 2 | 5 olaydan 4'ü hiç tetiklenmiyor | Doğrulandı | Orta-yüksek — işlevsel, sessiz veri kaybı + yanıltıcı UI |
 | 3 | URL'de SSRF/şema koruması yok | Çürütüldü (kritik/yüksek olarak) | Orta — yalnız admin, Vercel'de somut iç hedef yok; derinlemesine savunma olarak yapılmalı |
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/admin/integrations` (Entegrasyon Merkezi) — sekmeler: API anahtarları · Webhook'lar · Partnerler · API kataloğu · Dokümantasyon. Eski rota `permanentRedirect` ile ilgili sekmeye yönlenir (sorgu parametreleri korunur).
+
+**Mimari:** BFF `/api/admin/integrations/*` (hepsi `defineRoute`: ADMIN + zod + Redis'li rate limit + idempotency; `requireAuth` artık admin gizli kapısını da API'de doğruluyor). Servis `lib/integrations/server.ts`; sözleşme `lib/integrations/contract.ts` (kapsam + olay kataloğu tek kaynak); meta zarfı `lib/integrations/meta.ts`; SSRF `lib/integrations/url-safety.ts`; sır kasası `lib/integrations/secret-box.ts`; UI `components/admin/a-entegrasyonlar/**` (QDL v2 PanelPage/SectionTabs/DataTable/DetailSheet/QueryState, ops kaydı, azaltılmış hareket). Sunucu bileşeni KPI + aktif sekmenin ilk verisini ön yükler; katalog ve dokümantasyon sekmeleri lazy. Testler: `__tests__/lib/integrations.test.ts` (23 test).
+
+**Şema kısıtı:** Şema dalgası kapalı olduğu için yaşam döngüsü alanları mevcut Json kolonlarında sürümlü zarfla tutuluyor (`ApiKey.scope` → `{v:2, scopes, dealerId, partnerId, expiresAt, revokedAt, suffix, ipAllowlist…}`, `Webhook.events` → `{v:2, events, description, partnerId, archivedAt, disabledReason, secretHint}`, `Partner.metadata` → irtibat/bayiler/arşiv). Okuyucular eski dizi biçimini de anlar.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Başlık + açıklama | ÇALIŞIYOR — yanıltıcı "rozet, görev" ifadesi kaldırıldı |
+| 2 | URL alanı | ÇALIŞIYOR — https zorunlu, anlık uyarı, Label bağlı |
+| 3 | Secret alanı | KALDIRILDI — sır artık sunucuda üretiliyor (`whsec_` + 32 bayt), bir kez gösteriliyor |
+| 4 | Olay seçimi | ÇALIŞIYOR — yalnız gerçekten tetiklenen olaylar: `feedback.created`, `incident.created` (kriz radarı) |
+| 5 | Olay seçilmezse | ÇALIŞIYOR — en az bir olay zorunlu (sessiz varsayılan yok) |
+| 6 | Ekle + yükleniyor | ÇALIŞIYOR |
+| 7 | Form sıfırlama + yenileme | ÇALIŞIYOR |
+| 8 | Ekleme hata bildirimi | ÇALIŞIYOR — alan altı + satır içi hata |
+| 9 | Liste yükleniyor | ÇALIŞIYOR — iskelet |
+| 10 | Boş durum | ÇALIŞIYOR — CTA |
+| 11 | Liste hata durumu | ÇALIŞIYOR — QueryState |
+| 12 | URL gösterimi | ÇALIŞIYOR — host vurgulu, path soluk |
+| 13 | Olaylar + tarih | ÇALIŞIYOR — çipler (+N), desteklenmeyen eski olay rozeti |
+| 14 | Oluşturan | ÇALIŞIYOR (detay) |
+| 15 | Aktif/pasif | ÇALIŞIYOR — Duraklat/Etkinleştir (PATCH, denetimli) |
+| 16 | Sağlık rozeti | ÇALIŞIYOR — webhook başına SQL toplamı, açık pencere ("son 24 saat · N teslim"), test teslimleri hariç, ikon+metin |
+| 17 | Teslim özeti | ÇALIŞIYOR — normalize hata türü (zaman aşımı/ağ/4xx/5xx/yönlendirme/engellendi) |
+| 18 | Sil | KALDIRILDI — arşiv (teslim geçmişi korunur, geri alınabilir) |
+| 19 | Silme onayı | ÇALIŞIYOR — arşiv için ConfirmAction |
+| 20 | Son başarısız teslimler | ÇALIŞIYOR — "Teslim günlüğü" kartı: hedef host, filtre, "başarısız teslim yok" olumlu durum |
+| 21 | Teslim geçmişi hatası | ÇALIŞIYOR — QueryState |
+| 22 | Düzenleme | ÇALIŞIYOR — URL/olay/açıklama/partner (aynı id, geçmiş kopmaz) |
+| 23 | Test olayı | ÇALIŞIYOR — örnek payload yalnız bu uca, kod/süre/yanıt satır içi |
+| 24 | Yeniden dene / replay | ÇALIŞIYOR — gövde saklanıyor (≤16 KB), "Yeniden gönder" |
+| 25 | Teslim detayı | ÇALIŞIYOR — istek gövdesi, yanıt parçası (500 kr.), süre, deneme sayısı |
+| 26 | Secret yönetimi | ÇALIŞIYOR — "tanımlı · …ipucu", döndür (bir kez göster), AES-256-GCM şifreli saklama |
+| 27 | Arama / filtre | ÇALIŞIYOR — adres/açıklama + durum (etkin/duraklatılan/arşiv) |
+| 28 | Yenile | ÇALIŞIYOR — Yenile butonu, odakta tazeleme |
+| 29 | API yetkisi | ÇALIŞIYOR |
+| 30 | Secret istemciye gönderilmemesi | ÇALIŞIYOR — GET'te yalnız `hasSecret` + ipucu |
+| 31 | Audit log | ÇALIŞIYOR — transaction; aynı URL için 409 (çift kayıt yok) |
+| 32 | Rate limit | ÇALIŞIYOR — tüm mutasyonlarda Redis öncelikli |
+| 33 | Sunucu URL doğrulaması | ÇALIŞIYOR — https, kimlik bilgisi yok, DNS sonrası özel/loopback/link-local/CGNAT/ULA reddi |
+| 34 | Olay whitelist'i | ÇALIŞIYOR — `z.enum(WEBHOOK_EVENT_KEYS)` |
+| 35 | HMAC imza | ÇALIŞIYOR — eski `X-Qratex-Signature` korunur + `X-Qratex-Signature-V2: t=,v1=`, `X-Qratex-Timestamp`, `X-Qratex-Delivery` |
+| 36 | Teslim loglama | ÇALIŞIYOR — genişletilmiş kayıt |
+| 37 | Otomatik yeniden deneme | ÇALIŞIYOR — geçici hatada 3 deneme (1 sn, 3 sn) |
+| 38 | Serverless güvenilirlik | ÇALIŞIYOR — çağıranlar `after()`/`runAfter` içinde (feedback-funnel, radar) |
+| 39 | Mobil | ÇALIŞIYOR |
+| 40 | Klavye / ekran okuyucu | ÇALIŞIYOR — shadcn Checkbox + Label, aria-expanded teslim satırları |
+| 41 | i18n | KALAN — tam Türkçe; EN kapsam dışı |
+| 42 | Payload / imza dokümantasyonu | ÇALIŞIYOR — Dokümantasyon sekmesi: olay örnek JSON'ları + Node doğrulama örneği |
+
+### Kapanan bulgular (11/11)
+1 secret sızıntısı (+ şifreli saklama) · 2 sahte olaylar (katalog yalnız tetiklenenler; `incident.created` radar'da zaten bağlıydı, artık seçilebilir) · 3 olay whitelist + SSRF (kayıt ve teslim anında, `redirect: 'manual'`) · 4 hata=boş liste · 5 aktif/pasif + art arda 15 hatada otomatik duraklatma (denetimli) · 6 sağlık penceresi · 7 yeniden deneme/replay/`after()` · 8 audit transaction + 409 çift kayıt · 9 bağlamsız başarısız teslimler · 10 erişilebilirlik · 11 dağınık yüzeyler (tech/add ve partner `webhookUrl` buraya toplandı).
+
+### Kalanlar
+- `/admin/innovation` partner digest webhook'u (ayrı ayar) bu merkeze taşınmadı — sahiplik dışı.
+- Uzun vadeli kuyruk (Inngest step) yerine istek sonrası `after()` içinde sınırlı yeniden deneme.
+- **ŞEMA İSTEĞİ:** ayrı `WebhookDelivery` modeli (`webhookId` FK + `@@index([webhookId, createdAt])`), `Webhook.description/partnerId/disabledReason` kolonları (şimdi Json zarfında).

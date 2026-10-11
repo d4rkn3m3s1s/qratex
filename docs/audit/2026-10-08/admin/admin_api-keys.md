@@ -241,3 +241,65 @@ Salt okunur inceleme. Kod değiştirilmedi, veritabanına erişilmedi, hiçbir k
 - Durumu ağırlaştıran nokta: `AuditLog.user` da `onDelete: Cascade` (`schema.prisma:1118`). Silinen adminin yazdığı `CREATE_API_KEY` audit satırları da yok oluyor. Kullanıcı silme audit'i (`users/route.ts:681-692`) yalnızca ad, e-posta ve rol tutuyor, zincirleme silinen anahtarları listelemiyor. Sonuçta anahtarın hem kendisi hem de oluşturulma izi kayboluyor.
 - **Yeniden üretim:** Admin B, "POS" anahtarını oluşturur. Admin A, ayrılan B'nin hesabını `/admin/users` üzerinden siler. "POS" satırı ve B'nin `CREATE_API_KEY` audit kaydı silinir, entegrasyon bir sonraki istekte 401 "Geçersiz API anahtarı" alır (`partner-api-auth.ts:27-29`). Admin panelinde neden durduğuna dair hiçbir iz kalmaz.
 - Öneri: `createdById String?` + `onDelete: SetNull`. Anahtarın yaşam döngüsü `revokedAt`/`revokedById` alanlarıyla ve fiziksel silme yerine iptal modeliyle yönetilmeli. Kullanıcı silme akışı, silinecek kullanıcının aktif anahtarlarını önceden listeleyip onay istemeli. AuditLog'un da kullanıcıyla birlikte silinmemesi gerekiyor (`userId String?` + `SetNull`); bu ayrı ve sistem genelinde bir bulgu olarak ele alınmalı.
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/admin/integrations` (Entegrasyon Merkezi) — sekmeler: API anahtarları · Webhook'lar · Partnerler · API kataloğu · Dokümantasyon. Eski rota `permanentRedirect` ile ilgili sekmeye yönlenir (sorgu parametreleri korunur).
+
+**Mimari:** BFF `/api/admin/integrations/*` (hepsi `defineRoute`: ADMIN + zod + Redis'li rate limit + idempotency; `requireAuth` artık admin gizli kapısını da API'de doğruluyor). Servis `lib/integrations/server.ts`; sözleşme `lib/integrations/contract.ts` (kapsam + olay kataloğu tek kaynak); meta zarfı `lib/integrations/meta.ts`; SSRF `lib/integrations/url-safety.ts`; sır kasası `lib/integrations/secret-box.ts`; UI `components/admin/a-entegrasyonlar/**` (QDL v2 PanelPage/SectionTabs/DataTable/DetailSheet/QueryState, ops kaydı, azaltılmış hareket). Sunucu bileşeni KPI + aktif sekmenin ilk verisini ön yükler; katalog ve dokümantasyon sekmeleri lazy. Testler: `__tests__/lib/integrations.test.ts` (23 test).
+
+**Şema kısıtı:** Şema dalgası kapalı olduğu için yaşam döngüsü alanları mevcut Json kolonlarında sürümlü zarfla tutuluyor (`ApiKey.scope` → `{v:2, scopes, dealerId, partnerId, expiresAt, revokedAt, suffix, ipAllowlist…}`, `Webhook.events` → `{v:2, events, description, partnerId, archivedAt, disabledReason, secretHint}`, `Partner.metadata` → irtibat/bayiler/arşiv). Okuyucular eski dizi biçimini de anlar.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Başlık + açıklama | ÇALIŞIYOR — kompakt PageHeader; hangi uçların çağrılacağı Dokümantasyon sekmesinde |
+| 2 | Sayfa erişimi | ÇALIŞIYOR |
+| 3 | API yetkisi | ÇALIŞIYOR — `defineRoute` → `requireAuth` (gizli kapı API'de de doğrulanıyor) |
+| 4 | İsim alanı | ÇALIŞIYOR — `maxLength`, Label/`htmlFor`, alan altı hata |
+| 5 | Boş isim kontrolü | ÇALIŞIYOR — istemci + sunucu (min 2) |
+| 6 | Sunucu doğrulaması | ÇALIŞIYOR — `z.enum(API_SCOPE_KEYS)` + `'*'` yalnız `confirmFullAccess` ile |
+| 7 | Oluştur + spinner | ÇALIŞIYOR |
+| 8 | Enter ile gönderme | ÇALIŞIYOR — `<form onSubmit>` |
+| 9 | Rate limit | ÇALIŞIYOR — Redis öncelikli `checkRateLimitDb` (oluşturma/döndürme: sensitive) |
+| 10 | Anahtar üretimi | ÇALIŞIYOR — `qrx_` + 32 bayt, SHA-256 |
+| 11 | Tek seferlik panel | ÇALIŞIYOR — diyalog içinde, kapanınca state'ten silinir |
+| 12 | Kopyala | ÇALIŞIYOR — `await` + başarısızsa metin seçilir ve söylenir |
+| 13 | "Kaydettim" onayı | ÇALIŞIYOR — onaysız kapanmaz (dış tıklama/Esc kilitli) |
+| 14 | Kapsam seçimi | ÇALIŞIYOR |
+| 15 | Anahtarın digest'te çalışması | ÇALIŞIYOR — varsayılan kapsam `read:partner_digest` |
+| 16 | Liste yükleme | ÇALIŞIYOR — zarf v2, `res.ok` |
+| 17 | Yükleniyor | ÇALIŞIYOR — iskelet + arka plan göstergesi |
+| 18 | Hata durumu | ÇALIŞIYOR — QueryState hata + Tekrar dene (boş liste gibi görünmez) |
+| 19 | Boş durum | ÇALIŞIYOR — CTA'lı |
+| 20 | Satırda isim | ÇALIŞIYOR |
+| 21 | Önek gösterimi | ÇALIŞIYOR — `qrx_`+8 karakter önek + son 4 karakter (yeni anahtarlar) |
+| 22 | Son kullanım | ÇALIŞIYOR — göreli + "hiç kullanılmadı" + 90 gün "atıl" |
+| 23 | Oluşturan | ÇALIŞIYOR (silinmişse "Silinmiş kullanıcı") |
+| 24 | Oluşturma tarihi | ÇALIŞIYOR |
+| 25 | Kapsam rozetleri | ÇALIŞIYOR — kapsamsız eski anahtar için uyarı rozeti |
+| 26 | Silme | KALDIRILDI — fiziksel silme yerine gerekçeli **iptal** (iz kalır) |
+| 27 | Silme onayı | ÇALIŞIYOR — iptal için gerekçeli diyalog |
+| 28 | Audit log | ÇALIŞIYOR — mutasyonla aynı transaction |
+| 29 | Anahtar bazlı audit geçmişi | ÇALIŞIYOR — detay çekmecesi "Etkinlik" |
+| 30 | Arama / filtre | ÇALIŞIYOR — ad/önek araması + durum (etkin/süresi dolan/iptal/tümü); sıralama oluşturma tarihine göre sabit |
+| 31 | Sayfalama | ÇALIŞIYOR — URL'li sayfalama + toplam |
+| 32 | İptal, süre sonu, rotasyon, yeniden adlandırma | ÇALIŞIYOR — PATCH, revoke, roll (0/1/24/72 sa ek süre) |
+| 33 | Kullanım analitiği | ÇALIŞIYOR — anahtar başına 14 günlük başarılı/reddedilen sayaç (Redis; yoksa dürüst not). Uç bazında dağılım/IP günlüğü yok |
+| 34 | Entegrasyon dokümantasyonu | ÇALIŞIYOR — Dokümantasyon sekmesi + oluşturmada cURL örneği |
+| 35 | Toast dili | ÇALIŞIYOR (bu yüzey) — sonner doğrudan Türkçe mesajla; `lib/admin-toast` önekleri sistem geneli, sahiplik dışı |
+| 36 | i18n | KALAN — tüm metin tam Türkçe; EN çevirisi bu dalgada kapsam dışı (diğer Dalga 2 ops yüzeyleriyle aynı) |
+| 37 | Modül kontrolü `api_keys` | ÇALIŞIYOR — `authenticatePartnerApiKey` kapalıysa 503; sayfa üstünde durum şeridi |
+| 38 | Dashboard sayaç kartı | KALAN (sahiplik dışı) — tech-summary toplamı iptal edilenleri de sayar |
+| 39 | Mobil yerleşim | ÇALIŞIYOR — çift padding yok, mobilde kart listesi, ≥44px hedefler |
+| 40 | Klavye / ekran okuyucu | ÇALIŞIYOR — etiketli alanlar, aria-live, AlertDialog/Dialog odak tuzağı |
+| 41 | Azaltılmış hareket | ÇALIŞIYOR — `useReducedMotionPref` |
+| 42 | Anahtarı bayiye bağlama | ÇALIŞIYOR — `dealerId`; digest anahtarın bayisine zorlanır, başka bayi istenirse 403 |
+
+### Kapanan bulgular (15/15)
+1 digest 403 (kapsam UI) · 2 kiracı bağlama (`dealerId` + partner bayileri) · 3 gizli kapı API'de (`requireAuth` checkAdminElevation; defineRoute) · 4 Cascade etkisi: fiziksel silme kaldırıldı, iptal modeli (FK şeması değişmedi — aşağıda şema isteği) · 5 hata=boş liste · 6 iptal/süre/rotasyon/yeniden adlandırma · 7 iki anahtar sistemi: partner artık `ApiKey` + `partnerId` kullanıyor, `qrk_` üretimi kaldırıldı, eski özet "temizle" aksiyonu · 8 modül kill-switch · 9 her istekte yazma: `lastUsedAt` Redis ile dakikada bir (indeks şema isteği) · 10 tek seferlik akış · 11 transaction · 12 görünürlük/önek · 13 erişilebilirlik · 14 dil (bu yüzey) · 15 çift padding.
+
+### Kalanlar
+- i18n (EN) — kapsam dışı.
+- **ŞEMA İSTEĞİ:** `ApiKey.keyHash @unique` (+ `findUnique`), `createdById` opsiyonel + `onDelete: SetNull`; yaşam döngüsü alanlarının (revokedAt/expiresAt/dealerId/partnerId) Json zarfından kolonlara taşınması.

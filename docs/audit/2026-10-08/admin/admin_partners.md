@@ -197,3 +197,56 @@ Yeniden üretim:
 3. Yanıt her zaman `401 {"error":"Geçersiz anahtar biçimi"}` olur. Önek `qrx_` yapılsa bile özet `ApiKey` tablosunda bulunmadığı için `401 'Geçersiz API anahtarı'` döner.
 
 Not: Bu bir güvenlik açığı değil, işlevsel bir kırılma. Yanlışlıkla erişim açılmıyor, aksine meşru erişim hiç verilemiyor. Etki şu: Partner kanalı bu sayfa üzerinden işlevsiz. Admin geçersiz bir kimlik bilgisini "tek seferlik sır" diye dağıtıyor ve sorun ancak partnerin entegrasyonu başarısız olduğunda ortaya çıkıyor. Bu yüzden önem derecesi YÜKSEK (ürün/işlev) olarak yerinde. Raporun önerdiği düzeltme yönü kodla uyumlu: `ApiKey.partnerId` ilişkisi eklenmeli, anahtar üretimi `qrx_`/SHA-256 yoluna taşınmalı, `authenticatePartnerApiKey` `partnerId` döndürmeli ve pasif partneri reddetmeli, `Partner.apiKeyHash` kaldırılmalı.
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/admin/integrations` (Entegrasyon Merkezi) — sekmeler: API anahtarları · Webhook'lar · Partnerler · API kataloğu · Dokümantasyon. Eski rota `permanentRedirect` ile ilgili sekmeye yönlenir (sorgu parametreleri korunur).
+
+**Mimari:** BFF `/api/admin/integrations/*` (hepsi `defineRoute`: ADMIN + zod + Redis'li rate limit + idempotency; `requireAuth` artık admin gizli kapısını da API'de doğruluyor). Servis `lib/integrations/server.ts`; sözleşme `lib/integrations/contract.ts` (kapsam + olay kataloğu tek kaynak); meta zarfı `lib/integrations/meta.ts`; SSRF `lib/integrations/url-safety.ts`; sır kasası `lib/integrations/secret-box.ts`; UI `components/admin/a-entegrasyonlar/**` (QDL v2 PanelPage/SectionTabs/DataTable/DetailSheet/QueryState, ops kaydı, azaltılmış hareket). Sunucu bileşeni KPI + aktif sekmenin ilk verisini ön yükler; katalog ve dokümantasyon sekmeleri lazy. Testler: `__tests__/lib/integrations.test.ts` (23 test).
+
+**Şema kısıtı:** Şema dalgası kapalı olduğu için yaşam döngüsü alanları mevcut Json kolonlarında sürümlü zarfla tutuluyor (`ApiKey.scope` → `{v:2, scopes, dealerId, partnerId, expiresAt, revokedAt, suffix, ipAllowlist…}`, `Webhook.events` → `{v:2, events, description, partnerId, archivedAt, disabledReason, secretHint}`, `Partner.metadata` → irtibat/bayiler/arşiv). Okuyucular eski dizi biçimini de anlar.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero | ÇALIŞIYOR — merkez başlığı + sekme açıklaması |
+| 2 | Menü girişi | ÇALIŞIYOR (yönlendirme; menü navigasyon ajanının) |
+| 3 | Yetki | ÇALIŞIYOR |
+| 4 | Liste yükleme | ÇALIŞIYOR — zarf, `res.ok` |
+| 5 | Yükleniyor | ÇALIŞIYOR |
+| 6 | Boş durum | ÇALIŞIYOR — hata ile ayrışık, CTA |
+| 7 | Hata durumu | ÇALIŞIYOR — QueryState + Tekrar dene |
+| 8 | Ad | ÇALIŞIYOR |
+| 9 | Tür rozeti | ÇALIŞIYOR — `PARTNER_TYPES` etiketleri |
+| 10 | Aktif rozeti | ÇALIŞIYOR — Etkin/Pasif/Arşivde |
+| 11 | Webhook URL | KALDIRILDI — serbest metin adres yerine gerçek webhook aboneliği; eski adres için "Webhook aboneliğine dönüştür" |
+| 12 | Key ikonu | KALDIRILDI — yerine anahtar sütunu (etkin sayısı + son çağrı) |
+| 13 | Kart animasyonu | KALDIRILDI — yoğun tablo (ops kaydı) |
+| 14 | Yeni Partner | ÇALIŞIYOR |
+| 15 | Ad alanı | ÇALIŞIYOR — min 2 istemci+sunucu, alan altı hata |
+| 16 | Tür seçimi | ÇALIŞIYOR |
+| 17 | Webhook URL alanı | KALDIRILDI — webhook "Webhook ekle" ile (https + SSRF + imza) |
+| 18 | Oluştur | ÇALIŞIYOR — pending kilidi + Idempotency-Key + rate limit; hata metni (nesne değil) |
+| 19 | İptal | ÇALIŞIYOR — açılışta form sıfırlanır |
+| 20 | Tek seferlik anahtar | ÇALIŞIYOR — partner oluşturma artık anahtar üretmiyor; "Anahtar bağla" gerçek `ApiKey` (`partnerId`) üretir |
+| 21 | Kopyala | ÇALIŞIYOR — SecretReveal |
+| 22 | Tamam | ÇALIŞIYOR |
+| 23 | Partner webhook teslimatı | ÇALIŞIYOR — partnere bağlı `Webhook` kayıtları dispatcher'dan gerçekten teslim alır |
+| 24 | Dış tıklama ile kapatma | ÇALIŞIYOR — sır adımında kilitli |
+| 25 | metadata | ÇALIŞIYOR — irtibat kişisi/e-posta, notlar, bağlı bayiler |
+| 26 | createdAt | ÇALIŞIYOR |
+| 27 | Düzenleme / pasifleştirme / silme | ÇALIŞIYOR — düzenle, pasifleştir (anahtarlar 403, webhook'lar duraklar; etkinleştirince devam), arşivle (silme yok) |
+| 28 | Anahtar döndürme / iptal | ÇALIŞIYOR — partner detayından anahtara geçiş (döndür/iptal) |
+| 29 | Arama / filtre | ÇALIŞIYOR — ad, durum, tür |
+| 30 | Audit | ÇALIŞIYOR — CREATE/UPDATE_PARTNER, detayda Etkinlik |
+| 31 | Rate limit | ÇALIŞIYOR |
+| 32 | i18n | KALAN — tam Türkçe; EN kapsam dışı |
+| 33 | Mobil | ÇALIŞIYOR |
+
+### Kapanan bulgular (10/10)
+1 anahtar doğrulanmıyor (tek sistem: `ApiKey` + `partnerId`; pasif partner reddi; eski `qrk_` özeti temizleme) · 2 sır penceresi onaysız kapanma · 3 `[object Object]` · 4 çift gönderim · 5 audit + rate limit · 6 hata=boş · 7 `webhookUrl`/`type` davranışsız (webhook gerçek abonelik; tür etiketli) · 8 partner–bayi sınırı (partner bağlı bayileri → digest süzülür, kapsam dışı `dealerId` 403) · 9 bilgi yetersizliği (anahtar, son çağrı, webhook sağlığı, bayi sayısı) · 10 erişilebilirlik.
+
+### Kalanlar
+- i18n (EN).
+- **ŞEMA İSTEĞİ:** `ApiKey.partnerId`/`Webhook.partnerId` gerçek FK, `PartnerDealer` tablosu (şimdi `Partner.metadata.dealerIds`), `Partner.apiKeyHash` kolonunun kaldırılması.

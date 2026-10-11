@@ -192,3 +192,54 @@ Hepsi `useReducedMotion` ile kapatılabilir olmalı. Sayfa gövdesinde dekoratif
 **Öneri (ürün seviyesi):** Regex'i genişletmek kısa vadede yeter: `export\s+(async\s+function|const|let)\s+METHOD\b` ve `export\s*\{[^}]*\bas\s+METHOD\b`. Kalıcı çözüm, raporun "Veri/API değişiklikleri" maddesindeki AST tabanlı (`ts-morph`) üreticiye geçmek. Üretici `methods.length === 0` olan her route için hata koduyla çıkmalı ve bu kontrol prebuild/CI adımına bağlanmalı. Böylece hata sessiz kalmaz. UI tarafında "—" yerine "tespit edilemedi" uyarı rozeti göstermek, operatörün bunu "metodsuz route" diye okumasını engeller.
 
 **Ek gözlem (iddia dışı, bilgi):** Katalog `generatedAt: 2026-08-25` (`lib/data/admin-api-catalog.json:2`) ve üretim elle yapılıyor (`package.json:27` `catalog:admin-api`). Build/CI'a bağlı olmadığı için katalog zamanla bayatlayabilir. Şu an route sayıları tutuyor ama bu bir garanti değil.
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/admin/integrations` (Entegrasyon Merkezi) — sekmeler: API anahtarları · Webhook'lar · Partnerler · API kataloğu · Dokümantasyon. Eski rota `permanentRedirect` ile ilgili sekmeye yönlenir (sorgu parametreleri korunur).
+
+**Mimari:** BFF `/api/admin/integrations/*` (hepsi `defineRoute`: ADMIN + zod + Redis'li rate limit + idempotency; `requireAuth` artık admin gizli kapısını da API'de doğruluyor). Servis `lib/integrations/server.ts`; sözleşme `lib/integrations/contract.ts` (kapsam + olay kataloğu tek kaynak); meta zarfı `lib/integrations/meta.ts`; SSRF `lib/integrations/url-safety.ts`; sır kasası `lib/integrations/secret-box.ts`; UI `components/admin/a-entegrasyonlar/**` (QDL v2 PanelPage/SectionTabs/DataTable/DetailSheet/QueryState, ops kaydı, azaltılmış hareket). Sunucu bileşeni KPI + aktif sekmenin ilk verisini ön yükler; katalog ve dokümantasyon sekmeleri lazy. Testler: `__tests__/lib/integrations.test.ts` (23 test).
+
+**Şema kısıtı:** Şema dalgası kapalı olduğu için yaşam döngüsü alanları mevcut Json kolonlarında sürümlü zarfla tutuluyor (`ApiKey.scope` → `{v:2, scopes, dealerId, partnerId, expiresAt, revokedAt, suffix, ipAllowlist…}`, `Webhook.events` → `{v:2, events, description, partnerId, archivedAt, disabledReason, secretHint}`, `Partner.metadata` → irtibat/bayiler/arşiv). Okuyucular eski dizi biçimini de anlar.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR — `/admin/integrations` metadata |
+| 2 | Sayfa erişimi | ÇALIŞIYOR |
+| 3 | API yetkisi | ÇALIŞIYOR — `/api/admin/integrations/catalog` (defineRoute ADMIN) |
+| 4 | Önbellek kapalı | ÇALIŞIYOR |
+| 5 | Katalog verisi | ÇALIŞIYOR — statik JSON import (fs yok) |
+| 6 | Tazelik | ÇALIŞIYOR — prebuild her derlemede; üretim zamanı göreli gösterilir |
+| 7 | Yöntem tespiti | ÇALIŞIYOR — üretici `export const`, `export { x as GET }`, `route.tsx` destekler; tespit edilemeyen uç uyarı basar ve UI'da "Tespit edilemedi" rozeti |
+| 8 | Yükleniyor | ÇALIŞIYOR — tablo iskeleti |
+| 9 | Hata durumu | ÇALIŞIYOR — QueryState kalıcı hata + Tekrar dene, sunucu mesajı görünür |
+| 10 | Sayı rozeti | ÇALIŞIYOR — "12 / 142 uç" |
+| 11 | JSON indir | ÇALIŞIYOR — filtrelenmiş görünüm, tarihli dosya adı |
+| 12 | Arama | ÇALIŞIYOR — yol/dosya araması; yöntem ayrı çoklu filtre |
+| 13 | URL durumu | ÇALIŞIYOR — `cq`, `cdomain`, `cmethod`, `cauth` |
+| 14 | Arama kartı başlığı | ÇALIŞIYOR — gerçek başlık ve etiket |
+| 15 | OpenAPI ipucu | KALDIRILDI — yerine dürüst not: "admin uçları OpenAPI'de belgelenmemiştir" |
+| 16 | Üretim zamanı | ÇALIŞIYOR — göreli + mutlak (İstanbul) |
+| 17 | "Yeniden üret" ipucu | KALDIRILDI — "her dağıtımda otomatik yenilenir" |
+| 18 | Tablo başlığı | ÇALIŞIYOR — DataTable (gerçek tablo semantiği, mobilde kart) |
+| 19 | Yöntem rozetleri | ÇALIŞIYOR — GET bilgi, POST başarı, PUT/PATCH uyarı, DELETE tehlike (metinle) |
+| 20 | Yol + dosya | ÇALIŞIYOR — `[id]` segmentleri vurgulu |
+| 21 | Kopyala | ÇALIŞIYOR — aria-label, ✓ geri bildirimi, doğru hata metni |
+| 22 | Kaydırma alanı | ÇALIŞIYOR — sayfalı tablo (50/sayfa) |
+| 23 | Boş arama | ÇALIŞIYOR — EmptyState |
+| 24 | Toast önekleri | KALDIRILDI (bu yüzeyde toast yok) |
+| 25 | Menü girişleri | ÇALIŞIYOR (yönlendirme; menü navigasyon ajanının) |
+| 26 | Yetki modeli sütunu | ÇALIŞIYOR — üretici rol/ekip/cron/public/korumasız çıkarır; "korumasız uç" sayacı + filtre. Eski üretimde "bir sonraki dağıtımda" notu |
+| 27 | Filtre / gruplama | ÇALIŞIYOR — alan (sayaçlı), yöntem, erişim |
+| 28 | Uç → sayfa eşlemesi | ÇALIŞIYOR — üretici `app/admin` + `components/admin` metin taraması ("Kullanan N dosya", referanssız uç uyarısı) |
+| 29 | Detay (şema/örnek) | KALAN — zod şemalarından OpenAPI üretimi yapılmadı (bağımlılık kurulumu yasak) |
+| 30 | Motion | ÇALIŞIYOR — yalnız kopyala onayı; dekoratif hareket yok |
+
+### Kapanan bulgular (9/9)
+1 yöntem tespiti · 2 OpenAPI vaadi (dürüst metin) · 3 hata durumu · 4 yetki modeli · 5 gruplama/filtre/URL · 6 fs.readFileSync → statik import · 7 dil/mesajlar · 8 erişilebilirlik · 9 yıkıcı yöntem rengi.
+
+### Kalanlar
+- Uç başına şema/örnek ve gerçek OpenAPI dışa aktarımı (zod-to-openapi bağımlılığı gerekiyor).
+- Uç başına çağrı/gecikme metrikleri (gözlemlenebilirlik kaynağı yok).
+- Not: güncellenen üretici bir sonraki `next build` (prebuild) ile çalışır; mevcut JSON 2026-08-25 tarihli ve `auth`/`usedBy` içermiyor — UI bunu açıkça belirtir.

@@ -204,3 +204,52 @@
 | 2 | Özellik bayrakları etkisiz | Doğrulandı | Yüksek (yanlış kill-switch güveni) |
 | 3 | Scope'suz API anahtarı → digest 403 | Doğrulandı | Orta (işlevsel) |
 | 4 | SSRF + düz metin secret GET'te | Doğrulandı, replay alt iddiası düzeltildi | Düşük–orta (yalnız admin ele geçirilirse) |
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/admin/integrations` (Entegrasyon Merkezi) — sekmeler: API anahtarları · Webhook'lar · Partnerler · API kataloğu · Dokümantasyon. Eski rota `permanentRedirect` ile ilgili sekmeye yönlenir (sorgu parametreleri korunur).
+
+**Mimari:** BFF `/api/admin/integrations/*` (hepsi `defineRoute`: ADMIN + zod + Redis'li rate limit + idempotency; `requireAuth` artık admin gizli kapısını da API'de doğruluyor). Servis `lib/integrations/server.ts`; sözleşme `lib/integrations/contract.ts` (kapsam + olay kataloğu tek kaynak); meta zarfı `lib/integrations/meta.ts`; SSRF `lib/integrations/url-safety.ts`; sır kasası `lib/integrations/secret-box.ts`; UI `components/admin/a-entegrasyonlar/**` (QDL v2 PanelPage/SectionTabs/DataTable/DetailSheet/QueryState, ops kaydı, azaltılmış hareket). Sunucu bileşeni KPI + aktif sekmenin ilk verisini ön yükler; katalog ve dokümantasyon sekmeleri lazy. Testler: `__tests__/lib/integrations.test.ts` (23 test).
+
+**Şema kısıtı:** Şema dalgası kapalı olduğu için yaşam döngüsü alanları mevcut Json kolonlarında sürümlü zarfla tutuluyor (`ApiKey.scope` → `{v:2, scopes, dealerId, partnerId, expiresAt, revokedAt, suffix, ipAllowlist…}`, `Webhook.events` → `{v:2, events, description, partnerId, archivedAt, disabledReason, secretHint}`, `Partner.metadata` → irtibat/bayiler/arşiv). Okuyucular eski dizi biçimini de anlar.
+
+**Karar uygulandı: birleştir.** `/admin/tech/add` kaldırıldı ve kalıcı yönlendirmeye dönüştü: `?type=webhook` → Webhook'lar sekmesi + yeni webhook diyaloğu, `?type=apikey` → API anahtarları + yeni anahtar diyaloğu, diğer (özellik bayrağı) → `/admin/features` (bayrak oluşturma oradaki diyalogda; o yüzeyin sahibi ayrı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | PageHeader | KALDIRILDI — sayfa yönlendirme |
+| 2 | Sekme çubuğu | ÇALIŞIYOR (taşındı) — merkezde Radix `SectionTabs`, URL'de `?tab=` |
+| 3–7 | Bayrak formu alanları ve oluşturma | KALDIRILDI (bu yüzeyden) — `/admin/features` diyaloğu tek yer |
+| 8 | Bayrağın platform etkisi | KALAN (sahiplik dışı) — `/admin/features` yüzeyinin konusu |
+| 9 | Bayrak bitiş tarihi/sahip | KALDIRILDI (bu yüzeyden) — `/admin/features` |
+| 10 | Webhook URL + doğrulama | ÇALIŞIYOR (taşındı) — https + SSRF |
+| 11 | Webhook secret | ÇALIŞIYOR (taşındı) — sunucuda üretim, bir kez göster, şifreli saklama, GET'te yok |
+| 12 | Olay seçimi | ÇALIŞIYOR (taşındı) — yalnız tetiklenen olaylar, sunucuda `z.enum` (`quest.completed`/`reward.claimed` artık kaydedilemez) |
+| 13 | Sessiz varsayılan olay | ÇALIŞIYOR — en az bir olay zorunlu |
+| 14 | Webhook ekleme | ÇALIŞIYOR (taşındı) |
+| 15 | Test ping | ÇALIŞIYOR — oluşturma sonrası test adımı |
+| 16 | API anahtarı isim | ÇALIŞIYOR (taşındı) |
+| 17 | Kapsam seçimi | ÇALIŞIYOR (taşındı) |
+| 18 | Ham anahtar bir kez | ÇALIŞIYOR (taşındı) |
+| 19 | Kopyala | ÇALIŞIYOR — başarısızlık gizlenmez |
+| 20 | Ham anahtar yaşam döngüsü | ÇALIŞIYOR — "kaydettim" onayı, kilitli diyalog, kapanınca silinir |
+| 21 | cURL örneği | ÇALIŞIYOR |
+| 22 | "Listeler" linkleri | KALDIRILDI — oluşturma liste üzerinde bağlam içinde |
+| 23 | Oluşturma sonrası yönlendirme | ÇALIŞIYOR — yeni kayıt listede + detay çekmecesi; webhook'ta test adımı |
+| 24 | Spinner + çift gönderim engeli | ÇALIŞIYOR + Idempotency-Key |
+| 25 | Hata yönetimi | ÇALIŞIYOR — JSON olmayan yanıtta Türkçe mesaj, 401 açıklaması |
+| 26 | Yetki | ÇALIŞIYOR |
+| 27 | Audit | ÇALIŞIYOR — transaction, UI'da Etkinlik |
+| 28 | Etiket–alan ilişkisi | ÇALIŞIYOR |
+| 29 | Enter ile gönderme | ÇALIŞIYOR |
+| 30 | Mobil | ÇALIŞIYOR |
+| 31 | i18n | KALAN — tam Türkçe; EN kapsam dışı |
+| 32 | Rate limit | ÇALIŞIYOR — Redis öncelikli (bayrak POST'u `/admin/features` yüzeyinde) |
+
+### Kapanan bulgular
+1 sahte olay listesi · 3 kapsamsız anahtar · 4 SSRF + secret · 5 kopya formlar (sayfa kaldırıldı) · 6 çıkmaz sokak (test/cURL/detay) · 7 erişilebilirlik · 8 hata/kopyala · 10 görsel tutarsızlık/mobil. **Toplam 8/10.**
+
+### Kalanlar (sahiplik dışı)
+- Bulgu 2 (bayrakların etkisizliği) ve 9 (bayrak anahtarı normalizasyonu/varsayılan) `/admin/features` yüzeyine ait.
