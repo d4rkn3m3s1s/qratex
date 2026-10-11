@@ -240,3 +240,72 @@ Her iddia kod baştan okunarak çürütülmeye çalışıldı (route'lar, `lib/s
 - `incident` → `/admin/audit` (`:187`). `/api/admin/audit` yalnız `prisma.auditLog` sorguluyor; incident oluşturan/güncelleyen yollar (`app/api/dealer/incidents/**`, `lib/auto-reply-engine.ts`, `negative-feedback-sla`) AuditLog yazmıyor. Hedefte kayıt bulunmaz; admin için bir incident sayfası da yok.
 - `security` → `/admin/observability` (`:200`). Sayfa yalnız `vercel-status`, `health`, `web-vitals-summary` çekiyor (`observability/page.tsx:48-50`); oradaki "incidents" Vercel statü olayları, SecurityAlert değil.
 - **Yeniden üretim:** Timeline'da "Telafi onay bekliyor" satırında "Git" → admin panel ana sayfasına düşer; güvenlik satırında "Git" → Vercel/sağlık panosu açılır, uyarı yok.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/admin/trust` — Güven Merkezi (`app/admin/trust/page.tsx` sunucu önce + `components/admin/a-guven-merkezi/**` istemci adası). `/admin/trust-command` ve `/admin/fraud-prevention` sorgu parametrelerini koruyarak `permanentRedirect` ile buraya yönlenir. Sunucu mantığı `lib/admin-trust/` (`contract.ts` saf sözleşme, `rules.ts` saf kural mantığı, `trust.server.ts`), BFF uçları `app/api/admin/trust/**` (hepsi `defineRoute`: ADMIN + zod + rate limit; her yazma `AuditLog`). Eski `trust-overview` / `trust-timeline` uçları 410 döner (tüketicisi kalmadı). Test: `__tests__/lib/admin-trust.test.ts` (20 test).
+
+Yerleşim: durum bandı (kalkan: etkin kural sayısı, son tarama, kritik vaka/uyarı; `aria-live`) → 5 KPI (Açık vaka + 14 günlük sparkline, Güvenlik uyarısı 24 sa, Bayraklı hesap rol kırılımlı, Korunan puan 7 gün, Hassas işlem 24 sa; tıklanınca kuyruğu o filtreyle açar) → sekmeler: **Vaka kuyruğu** (URL filtreli, sayfalı, toplu çözme, CSV, `?case=` derin linkli detay çekmecesi) · **Güvenlik uyarıları** (okundu/çöz/yeniden aç) · **Kurallar** (eşik düzenleme, 409, gerekçe, tetiklenme ve yanlış alarm oranı) · **Hassas işlemler** (aktör + rol + IP). ops kaydı; 3B yok, sonsuz animasyon yok; dönen ikonlar yalnız `motion-safe`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişim kontrolü | ÇALIŞIYOR (proxy + sayfada `requireAuth(['ADMIN'])` DB'den) |
+| 2 | API yetki kontrolü | ÇALIŞIYOR — tüm uçlar `defineRoute` → `requireAuth` (rol DB'den, token-replay, admin kapısı `ADMIN_GATE_REQUIRED`) |
+| 3 | Hero | ÇALIŞIYOR — `PageHeader` "Güven Merkezi", TR/EN karışıklığı yok |
+| 4 | Yenile | ÇALIŞIYOR (+ KPI'lar 60 sn'de bir tazelenir) |
+| 5 | Yükleniyor | ÇALIŞIYOR (`QueryState` iskeletleri, tablo iskeleti) |
+| 6 | Hata kartı | ÇALIŞIYOR — hata "0" değil, görünür hata + Tekrar dene; sunucu ön yüklemesi düşerse istemci kendi hatasını gösterir |
+| 7 | KPI: Denetim (24s) | KALDIRILDI — gürültüydü; yerine "Hassas işlem (24 sa)" (beyaz listeli eylemler) |
+| 8 | "Günlüğe git" | ÇALIŞIYOR — Hassas işlemler sekmesi + "Tam denetim günlüğü" bağlantısı |
+| 9 | KPI: Açık şüpheli | ÇALIŞIYOR — vakalar artık çözülebiliyor; önem kırılımı + 14 gün eğilimi |
+| 10 | "Sahtekarlık önleme" linki | KALDIRILDI — aynı sayfanın sekmesi oldu |
+| 11 | KPI: İşaretli bayiler | ÇALIŞIYOR — "Bayraklı hesap": müşteri/bayi kırılımı, gölge yasak ve askıdakiler ayrı |
+| 12 | "Kullanıcılar" linki | KALDIRILDI — detay çekmecesinden ilgili kullanıcının sayfasına derin link var |
+| 13 | KPI: Telafi kuyruğu | KALDIRILDI — güvenlik sinyali değil; telafi bayi/risk yüzeyinin işi |
+| 14 | Telafi kartı açıklaması | KALDIRILDI (13 ile) |
+| 15 | Uyumluluk özeti kartı | KALDIRILDI — sahteydi; uyumluluk kendi yüzeyinde |
+| 16 | KVKK paneline git | KALDIRILDI (navigasyon zaten veriyor) |
+| 17 | Güvenlik uyarısı sayacı | ÇALIŞIYOR — INFO/LOW dışı tüm uyarılar (HIGH dahil), ayrı KPI kartı + okunmamış + açık kritik |
+| 18 | Operasyonel zaman çizelgesi | KALDIRILDI — yerine tekilleştirilmiş vaka kuyruğu + uyarılar sekmesi; güven dışı kaynaklar (geri bildirim, konsey, olay, telafi) kendi yüzeylerinde |
+| 19 | Tür etiketi | ÇALIŞIYOR — Türkçe tür sözlüğü (`CASE_TYPE_LABEL`), bilinmeyen tür "Diğer sinyal" |
+| 20 | Önem rozeti | ÇALIŞIYOR — `SeverityBadge` ikon + metin + ayrık ton |
+| 21 | Göreli zaman | ÇALIŞIYOR — göreli + `<time>` + mutlak İstanbul saati tooltip |
+| 22 | Link: şüpheli | ÇALIŞIYOR — kayda özel `?case=` detay çekmecesi |
+| 23 | Link: denetim | ÇALIŞIYOR — vaka geçmişi çekmecede, tam günlük bağlantısı |
+| 24 | Link: telafi | KALDIRILDI (kırıktı; telafi bu yüzeyde değil) |
+| 25 | Link: olay | KALDIRILDI (kırıktı) |
+| 26 | Link: güvenlik → observability | KALDIRILDI — uyarılar artık burada yaşıyor |
+| 27 | Link: Agent Council | KALDIRILDI (güven dışı) |
+| 28 | Link: geri bildirim | KALDIRILDI (güven dışı) |
+| 29 | "Düşük puanlı" başlığı | KALDIRILDI (kaynak kaldırıldı) |
+| 30 | Aynı olayın iki kez görünmesi | ÇALIŞIYOR — tek listede tekrar yok: vakalar ve uyarılar ayrı yaşam döngüsüyle ayrı sekmelerde; tarama aynı özne+tür için açık vaka varken yenisini açmaz |
+| 31 | Çözülmüş/açık ayrımı | ÇALIŞIYOR — durum filtresi (varsayılan Açık) + rozet + çözüm kodu |
+| 32 | meta alanları | ÇALIŞIYOR — detayda bayi, IP, kart, ölçülen/eşik, ham metadata |
+| 33 | Timeline sınırı | ÇALIŞIYOR — sunucu sayfalama (toplam sayıyla) |
+| 34 | Boş durum | ÇALIŞIYOR — hata ile boşluk ayrı; filtreli boş durum ayrı metin |
+| 35 | Son şüpheli kayıtlar | ÇALIŞIYOR — kuyruk satırı: önem, özne, tür, bayi, durum; tıklanabilir |
+| 36 | Son denetim olayları | ÇALIŞIYOR — aktör adı + rol + IP |
+| 37 | Kaydırılabilir listeler | ÇALIŞIYOR — iç scroll yok; DataTable mobilde kart görünümü |
+| 38 | Filtre / arama / sıralama | ÇALIŞIYOR — URL'de: arama, durum, önem (çoklu), tür, zaman; tarih sıralaması |
+| 39 | Aksiyonlar | ÇALIŞIYOR — çöz (kod + gerekçe), yeniden aç, toplu çöz, sahtekârlık durumu (iyimser kilit), askıya al/kaldır, puan geri al, uyarı okundu/çöz. Atama: ŞEMA İSTEĞİ |
+| 40 | Otomatik yenileme | ÇALIŞIYOR — 60 sn polling (sekme arka plandayken durur) |
+| 41 | Son güncelleme damgası | ÇALIŞIYOR — "Veri: … " damgası |
+| 42 | i18n | KISMİ (kalan) — metinler tam Türkçe; next-intl anahtarlarına taşınmadı (diğer Dalga 2 admin yüzeyleriyle aynı desen) |
+| 43 | Sayfa `<title>` | ÇALIŞIYOR (`metadata`) |
+| 44 | Mobil grid | ÇALIŞIYOR |
+| 45 | Azaltılmış hareket | ÇALIŞIYOR — hareket yalnız ds bileşenlerinde, politika ile kapanır |
+| 46 | Veri yükleme akışı | ÇALIŞIYOR — sunucu önce, tek `Promise.all`, istemci waterfall yok |
+
+### Kapanan bulgular (12 bulgudan 11'i tam, 1'i kısmi)
+1 (bayi KPI) · 2 (HIGH uyarılar) · 3 (aksiyon yok → vaka/uyarı yaşam döngüsü) · 4 (kırık linkler kaldırıldı, detay çekmecesi) · 5 (tekrar / yanlış başlık / çözülmüş ayrımı) · 6 (hassas eylem beyaz listesi + aktör) · 7 (hata görünür) · 8 (sahte kartlar kaldırıldı) · 10 (gate: `requireAuth` admin kapısını uyguluyor, tüm yeni uçlar ondan geçiyor) · 11 (waterfall yok, sunucu önce) · 12 (ikon+metin, `aria-label`'lı bağlantılar, `aria-live`, 44px hedefler, mobilde iç scroll yok). **Kısmi:** 9 — ham enum'lar kalktı, metinler Türkçe; next-intl'e taşıma kaldı.
+
+### Kalanlar
+- Vaka atama ("bana atanan") ve "inceleniyor" durumu: şema alanı yok → ŞEMA İSTEĞİ.
+- Önem enum'u ve `SecurityAlert ↔ SuspiciousActivity` bağı: şema/veri göçü gerektirir → ŞEMA İSTEĞİ; şimdilik uygulama katmanında `normalizeSeverity` tek sözlük.
+- Tarama elle ("Sinyalleri tara"); günlük cron'a bağlamak cron sahibinin işi (`runScan` cron'dan `type:'cron'` aktörüyle çağrılabilir).
+- Eşik aşımında push/e-posta yönlendirmesi yok (mevcut uygulama içi admin bildirimi `lib/security.ts`'te sürüyor).
+- `lib/data/admin-api-catalog.json` hâlâ eski iki ucu listeliyor (paylaşılan katalog; sahibi güncellemeli).

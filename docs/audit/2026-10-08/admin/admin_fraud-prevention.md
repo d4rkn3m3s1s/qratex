@@ -333,3 +333,59 @@ Salt okunur inceleme; kod çalıştırılmadı, veritabanına dokunulmadı. Her 
 - **Yeniden üretim:** Bir hesap 5 başarısız girişle kilitlenir → `BRUTE_FORCE / HIGH` kaydı oluşur ve admin'e "🚨 HIGH Güvenlik Uyarısı" bildirimi gider (`lib/security.ts:98-124`), ama bu sayfada amber (orta) ikonla, `userId` olmadığı için "Gizli Üye (Bilinmiyor)" ve "ŞÜPHELİ" rozetiyle görünür. `CRITICAL` için ayrı görsel yok.
 - **Abartılı kısım:** "/api/security/suspicious filtresini iki sözlük bozuyor" — küçük harf üreten motor hiç çalışmadığı için veritabanında pratikte yalnız büyük harf değerler var; `?severity=HIGH` filtresi bugün doğru çalışır. Risk, motor bağlanırsa ortaya çıkacak gizli bir tuzak.
 - **Öneri:** `severity` Prisma `enum`'a çevrilmeli (göç öncesi `UPPER()` normalize + yedek), görüntüleme tek bir `severityMeta` haritasından (LOW/MEDIUM/HIGH/CRITICAL → renk, ikon, etiket) beslenmeli; `engine.ts:74` büyük harfe çekilmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+Bu sayfa `/admin/trust` Güven Merkezi'ne birleşti; rota `permanentRedirect` ile `/admin/trust?tab=vakalar` (sorgu korunur) oldu. Mimari ayrıntı: `admin_trust-command.md` → "Uygulama (Dalga 2)". Tespit artık gerçek: üç kural (puan hızı — `points_credited`, hızlı tüketim — `Consumption`, çoklu hesap — `AuditLog.ipAddress` ortak genel IP) Settings `trust.rules.v1`'deki eşiklerle (sunucu varsayılanı; 409'lu, gerekçeli düzenleme) "Sinyalleri tara" ile çalışır, tekilleştirilmiş `SuspiciousActivity` vakası açar ve **kullanıcıya otomatik ceza vermez**. Gölge yasak `mintPoints` fraud kapısında zaten uygulanıyor (defter satırı `void`); ekran bunun ölçüsünü ("Korunan puan") gösteriyor. Puan geri alma yalnız `lib/economy` `adjustPointsByAdmin` üzerinden (negatif → `debitPoints`, eksi bakiye yok, tek-kez anahtarı `trust-reverse:<ledgerId>`).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sunucu ADMIN kontrolü | ÇALIŞIYOR (proxy + `requireAuth` DB'den; API'de admin kapısı) |
+| 2 | "AI tabanlı analiz motoru" hero | KALDIRILDI — sahteydi; yerine gerçek kalkan bandı (etkin kural sayısı, son tarama zamanı ve sonucu) |
+| 3 | "Demo şüpheli aktivite üret" | KALDIRILDI — üretim ekranından çıkarıldı (demo araçları yalnız Ayarlar'daki hızlı başlangıçta) |
+| 4 | "Demo veriyi sil" | KALDIRILDI (3 ile) |
+| 5 | KPI: Gölge yasaklı | ÇALIŞIYOR — "Bayraklı hesap" kartında; operatör durumu artık ekrandan değiştirebiliyor; yasak `mintPoints`'te uygulanıyor |
+| 6 | "İşlemleri kaydedilmiyor" | ÇALIŞIYOR — doğru metin ("yeni kazanımlar bakiyeye yansımaz") + "Korunan puan (7 gün)" gerçek defter toplamı |
+| 7 | KPI: Şüpheli (flagged) | ÇALIŞIYOR — rol kırılımlı; değeri artık operatör kararları besliyor |
+| 8 | "Sistem Durumu: Aktif" | KALDIRILDI — sabit yalandı; kalkan bandı gerçek durumu gösterir, tarama yoksa uyarı tonunda |
+| 9 | Son 50 liste | ÇALIŞIYOR — sayfalı kuyruk, varsayılan Açık |
+| 10 | Önem rengi | ÇALIŞIYOR — `normalizeSeverity` + `SeverityBadge` (4 seviye, ikon + metin) |
+| 11 | Kullanıcı adı/e-posta | ÇALIŞIYOR — özne: hesap / giriş denemesi hedefi (e-postadan hesap eşlemesi) / IP; e-posta büyük harfe çevrilmiyor |
+| 12 | Açıklama + bayi | ÇALIŞIYOR — bayi yoksa "—" |
+| 13 | Durum rozeti | ÇALIŞIYOR — olay durumu (Açık / çözüm kodu) satırda; öznenin güncel durumu detayda ayrı rozet |
+| 14 | Zaman damgası | ÇALIŞIYOR — Europe/Istanbul, göreli + mutlak |
+| 15 | Boş durum + demo | ÇALIŞIYOR — dürüst boş durum, demo butonu yok |
+| 16 | Yükleniyor | ÇALIŞIYOR (sayfaya özel iskelet) |
+| 17 | Hata durumu | ÇALIŞIYOR — bölüm başına `QueryState` + `PanelErrorBoundary`; ön yükleme hatası sayfayı düşürmez |
+| 18 | Paralel veri çekme | ÇALIŞIYOR |
+| 19 | Olay türü | ÇALIŞIYOR — Türkçe tür etiketi + tür filtresi |
+| 20 | Çözme | ÇALIŞIYOR — çöz (Yanlış alarm / Doğrulandı / Aksiyon alındı + gerekçe), yeniden aç, toplu çöz; 409 |
+| 21 | Filtre | ÇALIŞIYOR — URL'de durum, önem, tür, zaman |
+| 22 | Arama | ÇALIŞIYOR — e-posta, ad, IP, açıklama, bayi, vaka no |
+| 23 | Sayfalama | ÇALIŞIYOR |
+| 24 | Kullanıcı aksiyonları | ÇALIŞIYOR — Temiz / İşaretli / Gölge yasak (iyimser kilit, gerekçe, denetim), askıya al/kaldır (oturumlar düşer), puan geri al; yönetici ve kendi hesabı korumalı |
+| 25 | Profil bağlantısı | ÇALIŞIYOR — `/admin/users/:id` |
+| 26 | Olay detayı | ÇALIŞIYOR — metadata, IP, UA, kart, ölçülen/eşik, 24 sa puan/tüketim, güven puanı, defter, aynı IP'deki hesaplar, ilişkili vakalar, geçmiş |
+| 27 | Kural/eşik yapılandırması | ÇALIŞIYOR — Kurallar sekmesi (aç/kapa, eşik, pencere, önem; 30 gün tetiklenme, açık, yanlış alarm oranı) |
+| 28 | Trend | ÇALIŞIYOR — 14 günlük vaka sparkline'ı (İstanbul günü) |
+| 29 | CSV | ÇALIŞIYOR — filtreli, BOM'lu, formül enjeksiyonuna karşı korumalı, en çok 5000 satır |
+| 30 | Yenileme | ÇALIŞIYOR — Yenile + 60 sn |
+| 31 | Derin bağlantı | ÇALIŞIYOR — `?case=<id>` çekmeceyi açar |
+| 32 | Modül kontrolü | KISMİ (kalan) — `fraud_prevention` modülü sayfayı kapatmıyor; kritik güvenlik yüzeyini modülle kapatmak ürün kararı, `lib/module-controls.ts` sahibinin |
+| 33 | Demo aksiyon denetimi | KALDIRILDI (bu yüzeyde demo aksiyonu yok); bootstrap ucunun kendisi Ayarlar yüzeyinin |
+| 34 | i18n | KISMİ (kalan) — TR/EN karışık etiketler kalktı, tam Türkçe; next-intl'e taşınmadı |
+| 35 | Mobil | ÇALIŞIYOR |
+| 36 | Azaltılmış hareket | ÇALIŞIYOR |
+
+### Kapanan bulgular (10 bulgudan 7'si tam, 3'ü kısmi)
+B3 (önem sözlüğü) · B4 (olay/özne durumu ayrımı) · B5 (triage + aksiyonlar, zod, `requireAuth`) · B6 (filtre/arama/sayfalama/derin link) · B8 (İstanbul saati) · B9 (ikon+metin, token kontrastı, `normal-case` e-posta, onaylı yıkıcı aksiyonlar, semantik tablo, klavye) · B10 (bölümsel hata, ölü veri kaldırıldı). **Kısmi:** B1 — ölü `lib/fraud/engine.ts` yerine kural taraması gerçek veriyle çalışıyor, gölge yasak `mintPoints`'te uygulanıyor; ölü dosya paylaşılan `lib/` altında, silinmedi. B2 — demo butonları bu sayfadan kaldırıldı; `app/api/admin/bootstrap` (Ayarlar yüzeyi) davranışı o yüzeyin sahibinde. B7 — puan hızı, tüketim hızı ve çoklu hesap tek depoya akıyor; geri bildirim `trustFlagged`, oyun tavanı ve bayi skoru henüz akmıyor.
+
+### Kalanlar ve ŞEMA İSTEKLERİ
+- `SuspiciousActivity`: `status` (OPEN/IN_REVIEW/RESOLVED), `assigneeId`, `resolutionCode`, `source` alanları; `@@index([isResolved, severity, createdAt])`, `@@index([userId, createdAt])`; `severity` enum'u (göç öncesi `UPPER()` normalize).
+- `SecurityAlert.suspiciousActivityId` (tekilleştirme bağı).
+- `User.fraudScore` ölçeğinin 0–100'e netleştirilmesi (bugün ekranda gösterilmiyor).
+- Tarama cron'a bağlanmadı (cron sahibi); `runScan` hazır.
