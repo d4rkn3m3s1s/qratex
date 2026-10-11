@@ -498,3 +498,73 @@ Uygulama olayları (`feedback_created`, `review_created`, `game_won`, `visit_rec
 - Fiziksel kartın bayiye nasıl dağıtıldığı / bir bayinin kendi kartını edinip edinemeyeceği (K1 senaryosunun pratik maliyeti).
 - Reward kayıtlarının üretimde gerçek (fiziksel/kupon) değer taşıyıp taşımadığı (Y6'nın finansal riski).
 - Mini oyun ödüllerinin admin override'ı ile üretimde değiştirilip değiştirilmediği (Y2 hesapları registry varsayılanlarıyla yapıldı).
+
+---
+
+## Uygulama sonrası durum
+
+Tarih: 2026-10-11 · Dal: `feat/platform-overhaul` · Yöntem: her bulgu ŞİMDİKİ koda karşı yeniden okundu (grep + dosya okuma + jest); DB'ye bağlanılmadı. Dalga 1–2'nin ekonomi çekirdeği (`lib/economy`: `mintPoints` / `debitPoints` / `adjustPointsByAdmin`, kalıcı `PointsLedger`, `ECONOMY_CAPS`, gölge ban kapısı, gece mutabakatı) yerindeydi; bu turda açık kalanlar kapatıldı ve dalgaların bıraktığı tutarsızlıklar temizlendi.
+
+### Bu turun commit'leri
+
+| Commit | Kapsam |
+|---|---|
+| `a9d24f0c` | Moderasyon geri alımı (`lib/economy/clawback`), giriş serisi taşları puan matrisinden (tek kaynak), seviye eğrisi tek (stats/progress/kenar çubuğu), rozet listesi `points` = `badgeRewardPoints`, `lib/utils` DEFAULT lig yardımcıları kaldırıldı |
+| `7b4bf484` | Retention dürtmeleri (`lib/gamification-nudges`: seri tehlikede + açılmamış kutu), `__tests__/architecture/economy-guard`, ölü `dailyXpCap` okuması |
+| `d278b7ee` | Puan Rehberi (Cüzdan → Hareketler → Puan; `lib/economy/earn-guide`) |
+| `ba898c91` | Hatırlatma işi küme bazlı + tam kapsam + doğru tekilleştirme |
+| `e4a303f1` | Şema istekleri (lig/VIP'in bakiyeden ayrılması) |
+| `b7d7d067` | Sentetik haftalık liderlik ucu `/api/leaderboard` emekli (410) + puan hızı kategori ayrımı tek tanım (Güven Merkezi taraması) |
+| `0457b293` | Davranışsal rozetlerin tek sahibi + gerçek kural metni (`lib/activity-badge-rules`) |
+| `46b2ca03` | `/api/customer/trends` seviye tahmini tek eğriden |
+| `99aadeb5` | "Aktif gün" rozet sayacı gerçek veriden |
+| `03c411af` | Arşivli ödül testi güncel talep servisine |
+
+### Bulgu bulgu
+
+| Bulgu | Durum | Kanıt |
+|---|---|---|
+| **K1** Bayi happy-hour ile sınırsız/görünmez puan | **KAPANDI** | `lib/happy-hour-live.ts` `happyHourCreateSchema` çarpan [1,3] + okuma anında `clampHappyHourMultiplier` (eski kayıtlar); `lib/consumption/service.ts` pasif puan `mintPoints(source:'dealer_passive', actorId)` tüketimle aynı tx'te, tek tüketim ≤ 300, müşteri×bayi×gün 300 / müşteri×gün 600 (`lib/economy/caps.ts`), çarpan şelalesi ≤ 4, bayi kendi kartına ve kendi personeline yazamaz; defter + `points_credited` görünür. Ham artış geri gelirse `economy-guard` testi düşer |
+| **K2** Rozet self-award | **KAPANDI** | `POST /api/gamification/progress` kaldırıldı (405); rozet + ödül yalnız `lib/badges/award.ts` `awardBadge` (ödül `badgeRewardPoints`, `requirement.value` asla puan değil); puanla açma ucu 410 |
+| **Y1** Otomatik görev çift ödeme | **KAPANDI** | `UserQuest.rewardedAt` + `updateMany({rewardedAt:null})` guard'ı tüm yollarda (`lib/quests/claim.ts`, `lib/achievements.ts`, `lib/visit-missions.ts`); otomatik görev claim'de `QUEST_AUTO_REWARDED` |
+| **Y2** Kaynak/harcama dengesi | **KISMEN** | Kapanan: oyun tavanı 600/gün–3.000/hafta, tek ödüllü haftalık turnuva (dondurulmuş rotasyon), geri bildirim/bayi/telafi tavanları, `MAX_SINGLE_MINT`; Ekonomi Stüdyosu defterden mint/burn/arz akışı + simülasyon; bayi okutmalı ödül kodu döngüsü (Y6). Kalan (ürün kararı): karakter rozeti ödülleri 2.500–10.000 (nadirlik bandına çekilmedi — açılış metinleri bu puanları vaat ediyor), tekrarlayan sink'ler (seri dondurma, turnuva giriş ücreti) eklenmedi |
+| **Y3** Lig/VIP bakiyeye bağlı; 100.001'de Başlangıç | **KISMEN** | Kapanan: son kademe aralık dışında "geçtiği en yüksek lig" (`lib/league-rules-core.ts` `getLeagueMetaFromRules`), istemcide yönetici kurallarını yok sayan `getLeague*` yardımcıları silindi (çağıranı yoktu), VIP yan etkili GET salt okunur. Kalan: lig kademesi hâlâ GÜNCEL BAKİYEDEN (harcama ligi düşürür) — `User.lifetimeEarnedPoints`/`seasonPoints` şema isteğinde (`SCHEMA-REQUESTS.md` › oyunlastirma-ekonomi); VIP atama yolu yok (uyku hâlinde; arayüz yalnız gerçek kaydı gösterir, çarpan yalnız atanmış kayıtta) — kademe yönetimi ürün kararı |
+| **Y4** Fraud uygulanmıyor; defter 90 günde siliniyor | **KAPANDI** | Kalıcı `PointsLedger` (retention dışı) + `points_spent` `debitPoints`'te; `mintPoints` gölge ban → `void`; analitik temizliği ekonomi olaylarını korur; gece mutabakatı (`lib/economy/reconcile.ts`). Bu tur: moderasyonla çöpe atılan yorumun puanı defterli geri alınır, geri yüklenince iade (`lib/economy/clawback.ts`, sayaçlı tek-kez anahtarlar, `__tests__/lib/economy-clawback.test.ts`); puan hızı Güven Merkezi taramasında tek seferlik ödülleri/iadeleri saymıyor (karakter rozeti açan her dürüst müşteri YÜKSEK vaka üretiyordu), her mint kaynağı sınıflandırılmak zorunda (`velocity-categories.test.ts`); write-only `dailyXpCap` okuması kaldırıldı (XP tavanlı kategorilerde puanla aynı oranda kısılır). Kalıntı: `flagged → pending` onay kuyruğu yok (fraud durumu temiz olmayan liderlikten çıkar, gölge ban kredi basmaz); geri alımda XP düşülmez |
+| **Y5** Referral sybil | **KAPANDI** | `lib/referral.ts` iki aşama: kayıtta `PENDING` (puan yok), e-posta doğrulaması + ilk QR olayı ile `qualifyReferral` tek seferlik mint; limitler tek servis; kademe sayımı yalnız `COMPLETED`. IP kümelemesi eklenmedi (gerçek QR olayı şartı maliyeti zaten yüksek) |
+| **Y6** Ödül kodu/kupon kullanılmıyor | **KISMEN** | Kapanan: bayi `/api/dealer/reward-codes` okutma (`claimedAt` atomik), partner kod havuzu, `claimReward` kullanıcı kilidi altında kişi başı limit + stok + defterli borç. Kalan: platform kuponu (`/api/customer/redeem-coupon`, sürpriz kutudaki kupon kodu) için işletmede kullanım yolu yok — ürün kararı (ödül akışına birleştir ya da kaldır) |
+| **O1** Kural tutarsızlığı | **KAPANDI** | Bu tur: `/api/customer/stats`, `/api/gamification/progress`, `/api/customer/trends` "seviye × 1000" yerine yazan akışla aynı geometrik eğri (`m-ben-ilerleme/level.ts`); kenar çubuğu puanı "XP" yazıp seviye çubuğunu puandan hesaplıyordu (kaldırıldı); sentetik haftalık puanlı `/api/leaderboard` emekli (410; liderlik `lib/league-board` defterden); progress GET serisi İstanbul günü, `longestStreak` uydurması kalktı. Çarpan kapsamı yönetici ekranında açıkça yazıyor; tüketim yorumu tavanı `mintPoints` kilidi altında |
+| **O2** Seri parçalanması, yetim loyalty serisi | **KAPANDI** | `/api/streak` silindi. Bu tur: Ekonomi Stüdyosu "Seri" ayarı artık giriş serisinin gerçek ödemesi (`getLoginStreakMilestones`; ödeyen kod + Ana Sayfa + İlerleme + tanıtım + rehber aynı liste — tanıtım sayfası ödenmeyen 7/14/30 = 100/250/500 vaadini gösteriyordu), "aktif gün" rozetleri yazılmayan `UserStreak` yerine gerçek aktif günlerden. Üç seri (giriş / oyun / yorum) ayrı adlarla gösteriliyor. Ürün geliştirmesi olarak kalan: döngüsel taşlar + seri dondurma bileti |
+| **O3** Rozet motorları çelişiyor, gizlilik | **KAPANDI** | `?userId=` yalnız `me`/ADMIN (`lib/auth/subject-user.ts`); "puanla aç" ucu 410 ve arayüzde vaat yok. Bu tur: davranışsal rozetlerin tek sahibi `lib/activity-badges` (sürpriz motoru atlar), katalog ve koleksiyon açıklaması motorun eşiğinden (`lib/activity-badge-rules.ts`), rozet listesi puanı `badgeRewardPoints`. Bilinçli kalan: sürpriz motorunun "yaklaşık" sayaç eşlemesi (ürün sahibinin "tüm rozetler kazanılabilir olsun" kararı; yönetici ekranında izlenebilirlik etiketiyle görünür) |
+| **O4** Görev sistemi yarım | **KAPANDI** | `lib/quests/mechanics.ts` canlı mekanikler (dönem penceresinden kaynak kayıt sayımı), `period.ts` günlük/haftalık/aylık dönem + ödeme anahtarı; "Manuel" görev yönetici "Kullanıcıyı tamamla" ile |
+| **O5** Klan ekonomisi | **KAPANDI** | Haftalık hedef ödülü `mintPoints` (`lib/squads/goal.ts`), escrow net-sıfır, kadro kabulde donar, klan gücü harcanmaz; oran ve kurallar `lib/squads/rules.ts` + sayfa metninde açık. Tasarım tercihi: havuzu yalnız meydan okuyan koyar (metinde açık) |
+| **O6** Turnuva beraberliği | **KAPANDI** | `lib/game-tournament.ts` `(skor ↓, ilk ulaşma ↑, userId ↑)`, sunucu doğrulamalı oyunlar, tek öne çıkan oyun, en az 5 katılımcı, günlük otomatik kapanış |
+| **O7** Kurallar anlatılmıyor | **KAPANDI** | Bu tur: Puan Rehberi — miktarlar matristen, sınırlar `ECONOMY_CAPS`'ten, "bugün X / Y" tavanı uygulayan sayımdan, seri taşları ödeyen listeden (`lib/economy/earn-guide.ts`, `__tests__/lib/earn-guide.test.ts`); defter makbuzu (Hareketler), oyun ve QR ekranında kalan hak; oturumdaki puan istemciden yazılamaz (DB'den tazelenir) |
+| **D1** Admin manuel puan | **KAPANDI** | `adjustPointsByAdmin`: DB rolü, gerekçe, ±100.000, günlük 200.000, >10.000 ikinci admin belirteci, eksi bakiye yok, defter + audit; otomasyon `mintPoints`/`debitPoints` |
+| **D2** Küçük yarışlar | **KAPANDI** | Hediyede arşiv/aktiflik + fiyat değişimi 409, alıcı önizlemesi maskeli + oran sınırlı; çark/kutu yalnız CUSTOMER; `streakFreezes` yolu kaldırıldı |
+| **D3** Hatırlatma yok | **KAPANDI** | Bu tur: seri tehlikede (İstanbul 06:00, sıradaki taş ödülüyle) + açılmamış sürpriz kutu dürtmeleri; mevcut hatırlatma işi ilk 1000 müşteriyle sınırlıydı, müşteri başına 3–5 sıralı sorgu yapıyordu ve tekilleştirme yalnız en son bildirime bakıyordu — küme bazlı, imleçli, doğru tekilleştirme (`__tests__/lib/customer-reminders.test.ts`, `gamification-nudges.test.ts`). Turnuva bitişi/görev süresi dürtmesi eklenmedi |
+
+### Dalgaların getirdiği / bu turda bulunan regresyonlar (hepsi kapandı)
+
+- Tanıtım sayfası ve yönetici "Seri" ayarı ödenmeyen kilometre taşlarını gösteriyordu (matris yetim loyalty serisini tanımlıyordu).
+- Güven Merkezi puan hızı kuralı tek seferlik rozet ödüllerini sayıyordu → dürüst müşterilere YÜKSEK önemli vaka.
+- `/api/leaderboard` ekranı emekli olduğu hâlde sentetik puanla canlıydı; önbellek ısıtma işi onu oturumsuz çağırıyordu (401, boşa iş).
+- Kenar çubuğu bakiyeyi "XP" diye gösterip seviye çubuğunu puan bakiyesinden hesaplıyordu.
+- "Aktif gün" rozetleri yazılmayan bir tabloya bağlıydı (kazanılamaz rozet).
+- Arşivli ödül testi eski kimlik yoluna bakıyordu (müşteri API turunda PATCH `requireAuth`'a geçmişti).
+
+### Korkuluklar (geri dönüşü CI'da yakalar)
+
+`__tests__/architecture/economy-guard.test.ts` (points/xp atomik yazım yalnız `lib/points-wallet`, ham SQL bakiye yazımı yok, `creditPointsAndXp` yalnız `mintPoints`'ten, `PointsLedger` satırı yalnız çekirdekten) · `__tests__/lib/velocity-categories.test.ts` (her mint kaynağı sınıflandırılmış) · `__tests__/lib/activity-badge-rules.test.ts` (rozet tek sahip + açıklama eşikten) · `economy-clawback`, `earn-guide`, `gamification-nudges`, `customer-reminders` jest.
+
+### Kalan maddeler
+
+1. **Lig kademesi bakiyeden** (Y3) — `User.lifetimeEarnedPoints` / `seasonPoints` şema isteği; geldiğinde `mintPoints` artırır, lig `max(bakiye, ömür boyu kazanç)` ile başlar, sonra sezonluk lige geçilir.
+2. **VIP uyku hâlinde** (Y3) — atama işi defterden yazılabilir; kademe tanımı/yönetimi ürün kararı (şema isteğinde not).
+3. **Platform kuponunun kullanım yolu yok** (Y6) — ödül/kod akışına birleştirme ya da kaldırma ürün kararı.
+4. **Ekonomi bütçesi** (Y2) — karakter rozeti ödülleri (2.500–10.000) ve tekrarlayan sink'ler (seri dondurma, turnuva giriş ücreti) ürün/ekonomi kararı.
+5. **Fraud `flagged → pending` kuyruğu** (Y4) — yönetici onay ekranıyla birlikte; moderasyon geri alımında XP düşülmez (bilinçli).
+6. **Ölü dosyalar** — `lib/fraud/engine.ts`, `lib/surprise-box-config.ts` (çağıranı yok) ve `lib/points-caps.ts` (yalnız test) silinmeli; bu turda dosya silme izni verilmedi.
+
+### Yeni puan: **8.5 / 10**
+
+Gerekçe: Rapordaki iki kritik puan basma açığı, çift ödeme ve kalıcı defter yokluğu kapalı ve bir daha açılmalarını engelleyen yapısal testler var; her bakiye değişimi tek kapıdan (kilit + tek-kez + tavan + gölge ban + defter) geçiyor, moderasyon artık ekonomik olarak etkili, kurallar müşteriye ödeyen koddan üretilerek anlatılıyor ve yönetici ayarları gerçekten uygulanıyor. 10'a engel olanlar kod dışı kararlar: ligin hâlâ harcanabilir bakiyeye bağlı olması (şema), VIP ve kuponun ürün kararı bekleyen yarım döngüleri ve ekonomi bütçesinin (rozet ödül bandı, tekrarlayan harcama yolları) belirlenmemiş olması.
