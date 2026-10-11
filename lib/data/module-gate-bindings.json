@@ -64,6 +64,14 @@
     "ai_features": {
       "api": [
         {
+          "endpoint": "/api/dealer/ai-settings",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/ai-settings/route.ts"
+        },
+        {
           "endpoint": "/api/dealer/assistant",
           "methods": [
             "GET"
@@ -234,21 +242,6 @@
             "POST"
           ],
           "file": "app/api/internal/inngest/churn-intervention/route.ts"
-        }
-      ],
-      "pages": [],
-      "server": [],
-      "landing": [],
-      "menu": []
-    },
-    "customer_ai_insights": {
-      "api": [
-        {
-          "endpoint": "/api/customer/ai-recommendations",
-          "methods": [
-            "GET"
-          ],
-          "file": "app/api/customer/ai-recommendations/route.ts"
         }
       ],
       "pages": [],
@@ -943,13 +936,6 @@
             "PATCH"
           ],
           "file": "app/api/gamification/rewards/[id]/route.ts"
-        },
-        {
-          "endpoint": "/api/leaderboard",
-          "methods": [
-            "GET"
-          ],
-          "file": "app/api/leaderboard/route.ts"
         }
       ],
       "pages": [
