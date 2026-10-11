@@ -22,8 +22,6 @@ import {
 } from '@/app/api/dealer/voc-wall/wall-policy';
 import {
   CURATION_PAGE_SIZE,
-  DEFAULT_WALL_CONFIG,
-  DEFAULT_WALL_RULES,
   DISPLAY_TTL_DAYS,
   MAX_ACTIVE_DISPLAYS,
   WALL_CONFIG_CATEGORY,
@@ -64,14 +62,12 @@ export class WallError extends Error {
 
 // ───────────────────────── Yapılandırma ─────────────────────────
 
-/** Okuma (fail-safe): DB okunamazsa güvenli varsayılan (en sıkı değil ama yayın güvenliği ayrı). */
+/**
+ * Okuma (FAIL-CLOSED): DB okunamazsa varsayılana DÜŞÜLMEZ — varsayılanın `hidden` listesi boş
+ * olduğundan moderasyonla gizlenmiş yorumlar yeniden görünürdü. Hata çağırana yükselir.
+ */
 export async function getWallConfig(dealerId: string): Promise<WallConfig> {
-  try {
-    return await readWallConfigStrict(dealerId);
-  } catch (err) {
-    console.error('[voc-wall] yapılandırma okunamadı, varsayılan kullanılıyor:', err);
-    return { ...DEFAULT_WALL_CONFIG, rules: { ...DEFAULT_WALL_RULES } };
-  }
+  return readWallConfigStrict(dealerId);
 }
 
 /** Yazma öncesi okuma: hata yutulmaz (aksi hâlde varsayılan, gerçek listelerin üstüne yazılırdı). */
@@ -137,7 +133,7 @@ function baseWhere(dealerId: string, qrCodeId: string | null): Prisma.FeedbackWh
   return { qrCode: { dealerId }, deletedAt: null, ...(qrCodeId ? { qrCodeId } : {}) };
 }
 
-function displayName(user: { name: string | null; anonymizedAt: Date | null } | null, rules: WallRules): string | null {
+export function wallDisplayName(user: { name: string | null; anonymizedAt: Date | null } | null, rules: WallRules): string | null {
   if (rules.nameDisplay === 'none' || !user || user.anonymizedAt) return null;
   const masked = maskCustomerName(user.name);
   return masked === maskCustomerName(null) ? null : masked;
@@ -160,7 +156,7 @@ function toItem(r: ItemRow, rules: WallRules, pinned: string[]) {
     id: r.id,
     rating: r.rating,
     text: toWallText(r.text),
-    name: displayName(r.user, rules),
+    name: wallDisplayName(r.user, rules),
     location: r.qrCode?.location?.name ?? r.qrCode?.name ?? null,
     createdAt: new Date(r.createdAt).toISOString(),
     pinned: pinned.includes(r.id),
@@ -464,7 +460,8 @@ export async function isWallModuleEnabled(): Promise<boolean> {
     const { assertModuleEnabled } = await import('@/lib/module-gate');
     return (await assertModuleEnabled('voc_wall', { routeKey: 'wall.display' })) === null;
   } catch (err) {
-    console.error('[voc-wall] modül kapısı okunamadı:', err);
-    return true;
+    // FAIL-CLOSED: kapı okunamıyorsa oturumsuz herkese açık ekran kapalı sayılır.
+    console.error('[voc-wall] modül kapısı okunamadı, ekran kapalı sayılıyor:', err);
+    return false;
   }
 }

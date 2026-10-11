@@ -260,6 +260,15 @@ export async function POST(request: NextRequest) {
 
     const { name, email, password, role, businessName } = validatedData.data;
 
+    // Güvenlik: doğrudan ADMIN hesabı oluşturmak dört göz yükseltme akışını atlatırdı
+    // (deny-by-default). Yönetici yalnız Kullanıcı 360 → Erişim → ikinci yönetici onayıyla olur.
+    if (role === 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Yönetici hesabı doğrudan oluşturulamaz; kullanıcıyı oluşturup ikinci bir yöneticinin onayıyla yükseltin.', code: 'ELEVATION_REQUIRES_APPROVAL' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
     // Check if email already exists
     const existing = await prisma.user.findUnique({
       where: { email },
@@ -353,6 +362,20 @@ export async function PUT(request: NextRequest) {
     if (!existing) {
       return NextResponse.json(
         { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    // Güvenlik: başka bir yöneticinin e-postasını değiştirmek (→ sıfırlama bağlantısıyla)
+    // hesabını ele geçirme yoludur; yönetici hedeflerin kimlik alanları buradan değişmez.
+    if (
+      String(existing.role) === 'ADMIN' &&
+      existing.id !== session.user.id &&
+      validatedData.data.email !== undefined &&
+      validatedData.data.email !== existing.email
+    ) {
+      return NextResponse.json(
+        { error: 'Başka bir yöneticinin e-posta adresi değiştirilemez.', code: 'ADMIN_TARGET_PROTECTED' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Check email uniqueness if changing

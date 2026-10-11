@@ -45,6 +45,9 @@ const bulkUnsuspendSchema = z.object({
   userIds: z.array(z.string().cuid()).min(1).max(100),
 });
 
+/** Toplu rol değişikliğinin dokunabileceği kaynak roller (ADMIN/STAFF hariç). */
+const BULK_ROLE_SOURCES: Array<'DEALER' | 'CUSTOMER'> = ['DEALER', 'CUSTOMER'];
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
@@ -92,13 +95,16 @@ export async function POST(request: NextRequest) {
       }
       // P0-07: rolü GERÇEKTEN değişenlerin açık oturumları düşer (eski rolle verilmiş token geçersiz).
       const changing = await prisma.user.findMany({
-        where: { id: { in: ids }, role: { not: role } },
+        // Güvenlik: toplu yol YALNIZ DEALER↔CUSTOMER içindir. ADMIN hedefler (düşürme = son
+        // yönetici/dört göz kuralları) ve STAFF (personel kaydı) kişi başı akışa gider;
+        // anonimleştirilmiş hesaplara dokunulmaz. Deny-by-default: izinli kaynak roller listesi.
+        where: { id: { in: ids }, role: { in: BULK_ROLE_SOURCES, not: role }, anonymizedAt: null },
         select: { id: true },
       });
       const changedIds = changing.map((u) => u.id);
       if (changedIds.length > 0) {
         await prisma.user.updateMany({
-          where: { id: { in: changedIds }, role: { not: role } },
+          where: { id: { in: changedIds }, role: { in: BULK_ROLE_SOURCES, not: role }, anonymizedAt: null },
           data: { role, sessionVersion: { increment: 1 } },
         });
         await Promise.all(changedIds.map((id) => invalidateSessionState(id).catch(() => undefined)));
@@ -107,10 +113,10 @@ export async function POST(request: NextRequest) {
       await prisma.auditLog.create({
         data: {
           userId: currentUser, action: 'BULK_UPDATE_USER_ROLE', entity: 'User', entityId: `${ids.length} kullanıcı`,
-          newData: { userIds: ids, role } as object, ...getAuditRequestMeta(request),
+          newData: { userIds: changedIds, requested: ids.length, role } as object, ...getAuditRequestMeta(request),
         },
       }).catch((e) => console.error('[users/bulk] audit failed:', e));
-      return NextResponse.json({ ok: true, success: true, updated: changedIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ ok: true, success: true, updated: changedIds.length, skipped: ids.length - changedIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (body.action === 'delete') {
       const parsed = bulkDeleteSchema.safeParse(body);
