@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { devices, type Browser } from '@playwright/test';
+import { devices, expect, type Browser } from '@playwright/test';
 
 /**
  * Kalite kapısı e2e paketinin rol hesapları ve oturum durumu (storageState) üretimi.
@@ -49,6 +49,17 @@ export async function createState(browser: Browser, baseURL: string, role: Role)
   const context = await browser.newContext({ ...GATE_DEVICE, baseURL });
   const page = await context.newPage();
   await page.goto(`/auth/login?callbackUrl=${encodeURIComponent(acc.home)}`, { waitUntil: 'domcontentloaded' });
+  // Çerez kararı oturumla birlikte storageState'e (qx_consent çerezi) yazılır. Yazılmazsa her rota
+  // ziyaretinde bant yeniden çıkıp "Tümünü reddet" POST /api/consent atıyordu → 79 rotada
+  // public-write hız sınırı 429 → "konsol hatası" (ölçülen: 6 müşteri rotası). Karar bir kez verilir.
+  const reject = page.getByRole('button', { name: /tümünü reddet/i }).first();
+  if (await reject.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false)) {
+    await reject.click().catch(() => {});
+    await expect
+      .poll(async () => (await context.cookies()).some((c) => c.name === 'qx_consent'), { timeout: 10_000 })
+      .toBe(true)
+      .catch(() => {});
+  }
   await page.locator('input[type=email],input[name=email]').first().fill(acc.email);
   await page.locator('input[type=password]').first().fill(acc.password);
   await page.locator('input[type=password]').first().press('Enter');
@@ -90,6 +101,16 @@ export async function createState(browser: Browser, baseURL: string, role: Role)
       await page.waitForURL((u) => !u.pathname.startsWith('/admin-gate'), { timeout: 180_000, waitUntil: 'commit' });
       if (new URL(page.url()).pathname.startsWith('/admin-gate')) throw new Error('admin-gate: kapı çerezi kabul edilmedi');
     }
+  }
+
+  // Rıza kararı oturum durumuna bir kez yazılır (gerçek kullanıcı da bir kez karar verir): yoksa
+  // rota taraması her sayfada bandı yeniden görüp karar POST'luyordu → /api/consent 429 (rate-limit-429).
+  const rejectConsent = page.getByRole('button', { name: 'Tümünü reddet' });
+  if (await rejectConsent.isVisible().catch(() => false)) {
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/consent') && r.request().method() === 'POST', { timeout: 15_000 }).catch(() => null),
+      rejectConsent.click().catch(() => {}),
+    ]);
   }
 
   fs.mkdirSync(AUTH_DIR, { recursive: true });

@@ -6,7 +6,8 @@
  *   GATES_SKIP=jest,lighthouse node scripts/quality-gates.mjs   # bazılarını atla
  *
  * YALNIZ localhost'a koşar ve DB'ye yazan akışları ÇALIŞTIRMAZ (e2e/gates/flows.spec.ts
- * E2E_WRITE=1 ister). Ön koşul: http://localhost:3000'de çalışan uygulama (next dev).
+ * E2E_WRITE=1 ister). e2e de Lighthouse ile aynı üretim derlemesine (3100) karşı koşar;
+ * GATES_E2E_DEV=1 ile http://localhost:3000'deki next dev'e karşı.
  *
  * Lighthouse dev sunucusunda yanıltıcıdır: üretim derlemesi AYRI klasöre (NEXT_DIST_DIR=.next-gates,
  * next.config.js destekler) alınır ve 3100 portunda `next start` ile ölçülür; dev sunucusunun
@@ -87,14 +88,36 @@ if (!SKIP.has('jest')) {
 } else skipped('Jest birim/entegrasyon', '%100 geçer', 'GATES_SKIP');
 
 // ── 3. e2e (salt-okur) + rota taraması ────────────────────────────────────────
+// Varsayılan: ÜRETİM derlemesine (3100, .next-gates — Lighthouse ile aynı sunucu) karşı koşar.
+// Dev sunucusunda bayi/admin rotalarının ilk derlemesi 120 sn'yi aşıp zaman aşımı/ERR_CONNECTION_RESET
+// üretiyordu (ölçülen: 23/29 başarısızlık) — kapı ürünü değil dev derleyicisini ölçüyordu.
+// GATES_E2E_DEV=1: eski davranış (3000'deki next dev).
+const E2E_DEV = process.env.GATES_E2E_DEV === '1';
+
+/** Uzun süren alt süreç — spawnSync olay döngüsünü kilitler, açık `next start` borusu dolup sunucu donar. */
+function runAsync(cmd, args, opts = {}) {
+  const t0 = Date.now();
+  return new Promise((resolve) => {
+    const p = spawn(cmd, args, { cwd: ROOT, shell: IS_WIN, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(opts.env ?? {}) } });
+    let out = '';
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (out += d));
+    p.on('close', (code) => {
+      log(`${cmd} ${args.join(' ')} → çıkış ${code} (${Math.round((Date.now() - t0) / 1000)} sn)`);
+      resolve({ code, out });
+    });
+  });
+}
+
 let records = [];
-if (!SKIP.has('e2e')) {
+async function runE2e(baseUrl) {
   const pf = path.join(OUT_DIR, 'playwright.json');
   // --output: Playwright çıktı klasörünü (varsayılan test-results/) koşu başında SİLER; ayrı alt
   // klasör verilmezse test-results/gates (jest.json, rota kayıtları) da silinir.
-  run('npx', ['playwright', 'test', '--project=gates', '--reporter=json', '--workers=3', '--output=test-results/pw-gates'], {
-    env: { GATES_OUT: RECORDS, PLAYWRIGHT_JSON_OUTPUT_NAME: pf, E2E_WRITE: '' },
+  const pw = await runAsync('npx', ['playwright', 'test', '--project=gates', '--reporter=json', '--workers=3', '--output=test-results/pw-gates'], {
+    env: { GATES_OUT: RECORDS, PLAYWRIGHT_JSON_OUTPUT_NAME: pf, E2E_WRITE: '', PLAYWRIGHT_BASE_URL: baseUrl },
   });
+  fs.writeFileSync(path.join(OUT_DIR, 'playwright.log'), pw.out);
   if (fs.existsSync(pf)) {
     const p = JSON.parse(fs.readFileSync(pf, 'utf8'));
     const failed = [];
@@ -145,10 +168,10 @@ if (!SKIP.has('e2e')) {
   }
   sumGate('Dokunma hedefi <44px', '0', (r) => r.smallTargets, (a) => head(a));
   sumGate('Kontrast ihlali (AA)', '0', (r) => r.lowContrast, (a) => head(a));
-} else {
-  for (const g of ['E2E (Playwright, salt-okur)', 'Konsol hatası', 'Başarısız istek', 'axe kritik + ciddi', 'Yatay taşma (412px)', 'Dokunma hedefi <44px', 'Kontrast ihlali (AA)'])
-    skipped(g, '0', 'GATES_SKIP');
 }
+const E2E_GATES = ['E2E (Playwright, salt-okur)', 'Konsol hatası', 'Başarısız istek', 'axe kritik + ciddi', 'Yatay taşma (412px)', 'Dokunma hedefi <44px', 'Kontrast ihlali (AA)'];
+if (SKIP.has('e2e')) for (const g of E2E_GATES) skipped(g, '0', 'GATES_SKIP');
+else if (E2E_DEV) await runE2e(DEV_URL);
 
 // ── 4. Lighthouse (üretim derlemesi, mobil) ───────────────────────────────────
 const LH_ROUTES = [
@@ -227,7 +250,10 @@ function cookieHeader(role) {
   return c ? c.map((x) => `${x.name}=${x.value}`).join('; ') : null;
 }
 
-if (!SKIP.has('lighthouse')) {
+const LH_GATES = ['Lighthouse performans (mobil)', 'Lighthouse erişilebilirlik', 'Lighthouse en iyi uygulamalar', 'Lighthouse SEO (public)', 'LCP (mobil)', 'CLS', '/feedback/[code] JS (sıkıştırılmış)'];
+const E2E_ON_PROD = !SKIP.has('e2e') && !E2E_DEV;
+const LH_SKIPPED = Symbol('lighthouse-skipped');
+if (!SKIP.has('lighthouse') || E2E_ON_PROD) {
   const keep = ['tsconfig.json', 'next-env.d.ts'].map((f) => [f, fs.existsSync(path.join(ROOT, f)) ? fs.readFileSync(path.join(ROOT, f)) : null]);
   // GATES_LH_REUSE_BUILD=1: mevcut .next-gates derlemesini yeniden kullan (yalnız ölçüm hattını denerken).
   const reuse = process.env.GATES_LH_REUSE_BUILD === '1' && fs.existsSync(path.join(ROOT, DIST, 'BUILD_ID'));
@@ -235,7 +261,8 @@ if (!SKIP.has('lighthouse')) {
   for (const [f, buf] of keep) if (buf) fs.writeFileSync(path.join(ROOT, f), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'build.log'), build.out);
   if (build.code !== 0) {
-    gate('Üretim derlemesi (Lighthouse ön koşulu)', 'başarılı', 'BAŞARISIZ', false, build.out.split(/\r?\n/).filter((l) => /error|Error/.test(l)).slice(0, 15));
+    gate('Üretim derlemesi (e2e + Lighthouse ön koşulu)', 'başarılı', 'BAŞARISIZ', false, build.out.split(/\r?\n/).filter((l) => /error|Error/.test(l)).slice(0, 15));
+    if (E2E_ON_PROD) for (const g of E2E_GATES) gate(g, '—', 'ölçülmedi', false, ['üretim derlemesi başarısız']);
   } else {
     run('node', ['scripts/ensure-edge-instrumentation.js'], { env: { NEXT_DIST_DIR: DIST } });
     const server = spawn('npx', ['next', 'start', '-p', String(LH_PORT)], {
@@ -253,6 +280,8 @@ if (!SKIP.has('lighthouse')) {
     };
     try {
       if (!(await waitFor(`${LH_URL}/api/health`, 180_000))) throw new Error('next start 3100 ayağa kalkmadı');
+      if (E2E_ON_PROD) await runE2e(LH_URL);
+      if (SKIP.has('lighthouse')) throw LH_SKIPPED;
       const { default: lighthouse } = await import('lighthouse');
       const chromeLauncher = await import('chrome-launcher');
       const { devices, chromium } = await import('playwright');
@@ -335,13 +364,14 @@ if (!SKIP.has('lighthouse')) {
       }
       fs.writeFileSync(path.join(OUT_DIR, 'lighthouse-table.md'), rows.map((r) => `| ${fmt(r)} | ${r.perf} | ${r.a11y} | ${r.bp} | ${r.seo} | ${((r.lcp ?? 0) / 1000).toFixed(2)} | ${(r.cls ?? 0).toFixed(3)} | ${Math.round(r.tbt ?? 0)} | ${r.jsKB} |`).join('\n'));
     } catch (e) {
-      gate('Lighthouse', 'ölçüm', 'BAŞARISIZ', false, [String(e?.message ?? e).slice(0, 300)]);
+      if (e === LH_SKIPPED) for (const g of LH_GATES) skipped(g, '—', 'GATES_SKIP');
+      else gate('Lighthouse', 'ölçüm', 'BAŞARISIZ', false, [String(e?.message ?? e).slice(0, 300)]);
     } finally {
       stop();
     }
   }
 } else {
-  for (const g of ['Lighthouse performans (mobil)', 'Lighthouse erişilebilirlik', 'Lighthouse en iyi uygulamalar', 'Lighthouse SEO (public)', 'LCP (mobil)', 'CLS', '/feedback/[code] JS (sıkıştırılmış)'])
+  for (const g of LH_GATES)
     skipped(g, '—', 'GATES_SKIP');
 }
 
@@ -377,7 +407,9 @@ const md = [
   '',
   `**Özet:** ${green} YEŞİL · ${red} KIRMIZI · ${gates.length - green - red} bilgi/atlandı`,
   '',
-  'Ortam: e2e/tarama `next dev` (localhost:3000, Pixel 7 profili, 4 rol); Lighthouse üretim derlemesi',
+  E2E_DEV
+    ? 'Ortam: e2e/tarama `next dev` (localhost:3000, GATES_E2E_DEV=1, Pixel 7 profili, 4 rol); Lighthouse üretim derlemesi'
+    : 'Ortam: e2e/tarama VE Lighthouse aynı üretim derlemesine karşı (Pixel 7 profili, 4 rol):',
   '(`NEXT_DIST_DIR=.next-gates`, `next start -p 3100`, mobil profil). DB yazan akışlar bu turda koşmaz',
   '(`E2E_WRITE=1 npx playwright test --project=gates e2e/gates/flows.spec.ts`).',
   '',

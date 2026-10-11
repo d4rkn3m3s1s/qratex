@@ -32,7 +32,9 @@ export default defineConfig({
       dependencies: ['gates-setup'],
     },
   ],
-  webServer: process.env.CI
+  // PLAYWRIGHT_BASE_URL verildiyse (kalite kapısı: üretim derlemesi 3100) sunucuyu çağıran yönetir;
+  // aksi hâlde 3000 ayakta olduğu sürece dev sunucusu gereksiz yere beklenir/başlatılır.
+  webServer: process.env.CI || process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
         command: 'npm run dev',
