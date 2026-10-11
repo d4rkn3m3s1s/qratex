@@ -36,10 +36,8 @@ export async function GET(req: Request) {
   const base = internalAppBaseUrl();
   // Isıtılacak GLOBAL uçlar (Redis/unstable_cache doldurur). Self-fetch: yanıtı umursamayız,
   // yalnız cache dolsun. Her biri ayrı try — biri patlarsa diğerleri devam eder.
-  const targets = [
-    '/api/public/stats',
-    '/api/leaderboard?period=alltime',
-  ];
+  // Eski /api/leaderboard emekli (410; oturumsuz çağrıda zaten 401 dönüyordu — boşa iş).
+  const targets = ['/api/public/stats'];
   const results: { path: string; ok: boolean; ms: number }[] = [];
   for (const path of targets) {
     const t0 = Date.now();

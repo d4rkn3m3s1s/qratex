@@ -1,25 +1,58 @@
 /**
- * Leaderboard anti-cheat: anormal hızda puan artışı tespiti.
- * Son 24 saat points_credited toplamı eşik aşımında suspicious flag.
+ * Puan hızı anomalisi — anormal hızda puan artışı tespiti (TEK tanım).
+ * Son 24 saat `points_credited` toplamı eşik aşımında şüpheli.
  *
- * Kategori ayrımı (oyun-ekosistemi K2): mini oyun puanı sunucu doğrulamalı ve kendi
- * tavanına (lib/economy/caps GAME_DAILY_CAP) tabi; turnuva ödülü sunucunun dondurduğu
- * sıradan tek seferlik. Bunlar genel 500/24s eşiğine SAYILMAZ — eskiden 4 oyunu dürüstçe
- * kazanan oyuncu (4 × 150) genel liderlikte "şüpheli" işaretleniyordu. Oyun kovası yalnız
- * tavanın kendisini aşarsa (24 saatlik pencere iki UTC gününe yayılabilir → 2 × günlük
- * tavan) şüphelidir: bu dürüst oyunla imkânsızdır, tavan atlatma/hata işaretidir.
+ * Tüketiciler: Güven Merkezi taraması (`lib/admin-trust/trust.server.ts` → POINTS_VELOCITY vakası;
+ * eşik yöneticinin kuralından, kategori ayrımı buradan) ve bu modülün kullanıcı bazlı yardımcıları.
+ * (Eski `/api/leaderboard` emekli — liderlik lib/league-board, fraud durumu temiz olmayanı dışlar.)
+ *
+ * Kategori ayrımı:
+ *  - Oyun (oyun-ekosistemi K2): sunucu doğrulamalı ve kendi tavanına (GAME_DAILY_CAP) tabi; genel
+ *    eşiğe SAYILMAZ — 4 oyunu dürüstçe kazanan (4 × 150) "şüpheli" olmamalı. Oyun kovası yalnız
+ *    tavanın kendisini aşarsa (24 saatlik pencere iki UTC gününe yayılabilir → 2 × günlük tavan)
+ *    şüphelidir: dürüst oyunla imkânsız, tavan atlatma/hata işaretidir.
+ *  - Muaf (oyunlaştırma-ekonomi Y4): sunucunun belirlediği TEK SEFERLİK ödüller (rozet 2.500–10.000,
+ *    davet, görev, seri taşı, turnuva, sezon, doğum günü) ve kullanıcının kendi puanının iadesi /
+ *    transferi (escrow iadesi, savaş havuzu, ödül iadesi, moderasyon iadesi, admin düzeltmesi,
+ *    açılış bakiyesi). Bunlar eşiğe sayılınca karakter rozeti açan her dürüst müşteri Güven
+ *    Merkezi'nde YÜKSEK önemli "puan hızı" vakası üretiyordu. Bilinmeyen (yeni) kaynak SAYILIR
+ *    (tespit tarafında güvenli varsayılan).
  */
 import { prisma } from '@/lib/prisma';
 import { GAME_DAILY_CAP } from '@/lib/economy/caps';
 
 const HOURS = 24;
-const THRESHOLD = 500; // 24 saatte 500+ puan şüpheli (oyun/turnuva hariç)
+const THRESHOLD = 500; // 24 saatte 500+ puan şüpheli (oyun/muaf kategoriler hariç)
 
 /** Kendi tavanı olan oyun kovası: 24 saatte bunu AŞAN şüphelidir. */
-const GAME_BUCKET_LIMIT = 2 * GAME_DAILY_CAP;
-const GAME_CATEGORIES: ReadonlySet<string> = new Set(['game']);
-/** Sunucunun belirlediği tek seferlik ödüller — hız eşiğine sayılmaz. */
-const EXEMPT_CATEGORIES: ReadonlySet<string> = new Set(['tournament']);
+export const VELOCITY_GAME_BUCKET_LIMIT = 2 * GAME_DAILY_CAP;
+const GAME_BUCKET_LIMIT = VELOCITY_GAME_BUCKET_LIMIT;
+export const VELOCITY_GAME_CATEGORIES: readonly string[] = ['game'];
+const GAME_CATEGORIES: ReadonlySet<string> = new Set(VELOCITY_GAME_CATEGORIES);
+/** Hız eşiğine sayılmayan `points_credited.category` değerleri (tek seferlik + iade/transfer). */
+export const VELOCITY_EXEMPT_CATEGORIES: readonly string[] = [
+  // tek seferlik, sunucu belirler
+  'tournament',
+  'badge',
+  'referral',
+  'referral_milestone',
+  'quest',
+  'game_quest',
+  'game_streak',
+  'streak',
+  'seasonal_challenge',
+  'birthday',
+  'squad',
+  // kullanıcının kendi puanının iadesi / transfer / yönetici
+  'squad_battle',
+  'squad_escrow_refund',
+  'reward_refund',
+  'reversal',
+  'admin_adjust',
+  'opening_balance',
+  'demo_seed',
+];
+const EXEMPT_CATEGORIES: ReadonlySet<string> = new Set(VELOCITY_EXEMPT_CATEGORIES);
 
 type VelocityEvent = { category?: string | null; data: unknown };
 

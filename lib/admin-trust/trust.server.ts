@@ -7,6 +7,7 @@
  * silme yok (vakalar çözülür/yeniden açılır). Zaman kovaları Europe/Istanbul.
  */
 import { Prisma } from '@prisma/client';
+import { VELOCITY_EXEMPT_CATEGORIES, VELOCITY_GAME_BUCKET_LIMIT, VELOCITY_GAME_CATEGORIES } from '@/lib/points-velocity';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
 import { auditEntry } from '@/lib/data-safety/audit';
@@ -279,17 +280,28 @@ export async function runScan(ctx: ActionCtx, now = new Date()): Promise<ScanSum
 
   const [velocityRows, consumptionRows, ipRows] = await Promise.all([
     rules.velocity.enabled
-      ? prisma.$queryRaw<{ userId: string; total: number }[]>(Prisma.sql`
-          SELECT ae."userId" AS "userId",
-                 SUM(CASE WHEN jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "total"
-          FROM "AnalyticsEvent" ae
-          JOIN "User" u ON u."id" = ae."userId"
-          WHERE ae."event" = 'points_credited'
-            AND ae."createdAt" >= ${new Date(t - rules.velocity.windowHours * HOUR)}
-            AND u."role"::text <> 'ADMIN' AND u."isDemo" = false
-          GROUP BY ae."userId"
-          HAVING SUM(CASE WHEN jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END) >= ${rules.velocity.points}
-          ORDER BY 2 DESC
+      ? // Kategori ayrımı lib/points-velocity ile TEK tanım: tek seferlik ödüller (rozet, davet,
+        // görev, turnuva …) ve iade/transferler sayılmaz; oyun kendi tavanıyla ayrı kovada
+        // (yalnız 2 × günlük oyun tavanını aşarsa). Eskiden karakter rozeti açan her dürüst
+        // müşteri (2.500–10.000 tek seferlik) YÜKSEK önemli "puan hızı" vakası üretiyordu.
+        prisma.$queryRaw<{ userId: string; total: number }[]>(Prisma.sql`
+          SELECT "userId",
+                 CASE WHEN v."general" >= ${rules.velocity.points} THEN v."general" ELSE v."game" END AS "total"
+          FROM (
+            SELECT ae."userId" AS "userId",
+                   SUM(CASE WHEN ae."category" IN (${Prisma.join([...VELOCITY_EXEMPT_CATEGORIES, ...VELOCITY_GAME_CATEGORIES])}) THEN 0
+                            WHEN jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "general",
+                   SUM(CASE WHEN ae."category" IN (${Prisma.join([...VELOCITY_GAME_CATEGORIES])})
+                             AND jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "game"
+            FROM "AnalyticsEvent" ae
+            JOIN "User" u ON u."id" = ae."userId"
+            WHERE ae."event" = 'points_credited'
+              AND ae."createdAt" >= ${new Date(t - rules.velocity.windowHours * HOUR)}
+              AND u."role"::text <> 'ADMIN' AND u."isDemo" = false
+            GROUP BY ae."userId"
+          ) v
+          WHERE v."general" >= ${rules.velocity.points} OR v."game" > ${VELOCITY_GAME_BUCKET_LIMIT}
+          ORDER BY GREATEST(v."general", v."game") DESC
           LIMIT 200`)
       : Promise.resolve([]),
     rules.rapidConsumption.enabled

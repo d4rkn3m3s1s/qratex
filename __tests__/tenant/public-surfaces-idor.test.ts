@@ -178,46 +178,16 @@ describe('GET /api/cards/[token] — kart sahibinin kimliği', () => {
   });
 });
 
-describe('GET /api/leaderboard — gizlilik', () => {
-  const users = [
-    { id: 'u1', name: 'Gizli Kişi', image: null, points: 900, level: 5, xp: 1, _count: { feedbacks: 1, badges: 1, referralsMade: 0 } },
-    { id: 'u2', name: 'Mehmet Can Demir', image: null, points: 800, level: 4, xp: 1, _count: { feedbacks: 1, badges: 1, referralsMade: 0 } },
-    { id: 'cust-1', name: 'Ayşe Yılmaz', image: null, points: 700, level: 3, xp: 1, _count: { feedbacks: 1, badges: 1, referralsMade: 0 } },
-  ];
-  async function call(session: unknown) {
-    setSession(session);
-    db.user.findMany.mockResolvedValue(users);
-    db.user.count.mockResolvedValue(3);
-    db.settings.findMany.mockResolvedValue([{ key: 'user_settings_u1' }]);
+describe('GET /api/leaderboard — emekli', () => {
+  // Liderlik lib/league-board'a taşındı (gizlilik testleri: __tests__/lib/league-board*). Eski uç
+  // sentetik haftalık puan hesaplıyordu; artık 410 (oyunlaştırma-ekonomi O1).
+  it('oturumsuz → 401, müşteri → 410 (veri dönmez)', async () => {
     const { GET } = await import('@/app/api/leaderboard/route');
-    return GET(req('/api/leaderboard?period=alltime&limit=10'));
-  }
-
-  it('oturumsuz → 401', async () => {
-    expect((await call(null)).status).toBe(401);
-  });
-
-  it('ham userId yok, görünürlüğü kapalı kullanıcı listede yok, adlar maskeli, needsReview yok', async () => {
-    const data = await (await call(CUSTOMER)).json();
-    const board = data.data.leaderboard as Array<Record<string, unknown>>;
-    const text = JSON.stringify(board);
-    expect(text).not.toContain('"u1"');
-    expect(text).not.toContain('Gizli Kişi');
-    expect(text).not.toContain('"u2"');
-    expect(text).not.toContain('cust-1');
-    for (const e of board) {
-      expect(String(e.id)).toMatch(/^lb_[0-9a-f]{20}$/);
-      expect(e).not.toHaveProperty('needsReview');
-    }
-    const mehmet = board.find((e) => e.rank === 1);
-    expect(mehmet?.name).toBe('Mehmet D.');
-    const me = board.find((e) => e.isCurrentUser);
-    expect(me?.name).toBe('Ayşe Yılmaz');
-  });
-
-  it('ADMIN needsReview görür', async () => {
-    const data = await (await call(ADMIN)).json();
-    const board = data.data.leaderboard as Array<Record<string, unknown>>;
-    expect(board.some((e) => e.needsReview === true)).toBe(true);
+    setSession(null);
+    expect((await GET(req('/api/leaderboard?period=alltime&limit=10'), {})).status).toBe(401);
+    setSession(CUSTOMER);
+    const res = await GET(req('/api/leaderboard?period=weekly'), {});
+    expect(res.status).toBe(410);
+    expect(JSON.stringify(await res.json())).not.toContain('leaderboard"');
   });
 });

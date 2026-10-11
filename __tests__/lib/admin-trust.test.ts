@@ -16,7 +16,10 @@ jest.mock('@/lib/prisma', () => {
   return { ...p, prisma, __queryRaw: queryRaw };
 });
 jest.mock('@prisma/client', () => ({
-  Prisma: { sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: [...strings], values }) },
+  Prisma: {
+    sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: [...strings], values }),
+    join: (values: unknown[]) => ({ join: values }),
+  },
 }));
 jest.mock('@/lib/api-auth', () => ({ requireAuth: jest.fn() }));
 jest.mock('@/lib/auth/scope', () => ({ resolveDealerScope: jest.fn() }));

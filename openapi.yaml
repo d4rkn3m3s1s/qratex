@@ -204,31 +204,6 @@ paths:
                   data: { type: object }
         '401': { description: Unauthorized }
 
-  /api/leaderboard:
-    get:
-      summary: Liderlik tablosu
-      description: Puan veya lig bazlı sıralama. Oturum açmış kullanıcı için kendi sırası da döner.
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: leagueId
-          in: query
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  entries: { type: array, items: { type: object } }
-                  myRank: { type: object, nullable: true }
-        '401': { description: Unauthorized }
-
   /api/user/profile:
     get:
       summary: Kullanıcı profili
