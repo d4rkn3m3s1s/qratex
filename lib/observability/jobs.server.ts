@@ -71,6 +71,65 @@ export async function runJobNow(
     throw new ApiError('CONFLICT', 'Bu iş bu dönem için zaten başarıyla çalıştı. Yeniden çalıştırmak yan etkileri (mail, puan, bildirim) tekrarlayabilir.');
   }
 
+  // Atomik claim: aynı işin eşzamanlı ikinci "şimdi çalıştır"ı 409 alır (çift yan etki yok).
+  const token = await claimJob(def, now);
+  try {
+    // Claim sonrası durumu yeniden oku: claim'den hemen önce biten bir koşu işi "yapıldı" yapmış olabilir.
+    let fresh: CronState;
+    try {
+      fresh = await loadCronState();
+    } catch {
+      throw new ApiError('SERVICE_UNAVAILABLE', 'İş durumu okunamadı; birazdan tekrar deneyin.', { retryable: true });
+    }
+    const fc = fresh.currentRun;
+    if (fc && !fc.finishedAt && now.getTime() - new Date(fc.startedAt).getTime() < RUNNING_GUARD_MS) {
+      throw new ApiError('CONFLICT', 'Günlük koşu şu an sürüyor. Bitince tekrar deneyin.');
+    }
+    if (!isJobDue(def, fresh.jobs?.[def.name], now)) {
+      throw new ApiError('CONFLICT', 'Bu iş bu dönem için zaten başarıyla çalıştı.');
+    }
+    return await executeJob(def, input, actor, request);
+  } finally {
+    await releaseJob(def.name, token);
+  }
+}
+
+const CLAIM_PREFIX = 'cron_manual_claim:';
+
+/**
+ * Settings.key UNIQUE üzerinde atomik claim: `create` yalnız bir çağrıda başarılı olur (P2002 → 409).
+ * Süresi geçmiş (öldürülmüş fonksiyondan kalan) claim koşullu `deleteMany` ile temizlenir.
+ */
+async function claimJob(def: JobDef, now: Date): Promise<string> {
+  const key = `${CLAIM_PREFIX}${def.name}`;
+  const token = `${now.getTime()}-${Math.random().toString(36).slice(2, 10)}`;
+  const staleBefore = new Date(now.getTime() - (def.timeoutMs + RUNNING_GUARD_MS));
+  await prisma.settings.deleteMany({ where: { key, updatedAt: { lt: staleBefore } } });
+  try {
+    await prisma.settings.create({ data: { key, value: { token, startedAt: now.toISOString() }, category: 'system' } });
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'P2002') {
+      throw new ApiError('CONFLICT', 'Bu iş şu an zaten çalıştırılıyor. Bitince tekrar deneyin.');
+    }
+    throw e;
+  }
+  return token;
+}
+
+async function releaseJob(name: string, token: string): Promise<void> {
+  try {
+    await prisma.settings.deleteMany({ where: { key: `${CLAIM_PREFIX}${name}`, value: { path: ['token'], equals: token } } });
+  } catch (e) {
+    console.error('[admin/jobs] claim bırakılamadı (süre dolunca temizlenir):', e);
+  }
+}
+
+async function executeJob(
+  def: JobDef,
+  input: { name: string; reason: string },
+  actor: AuditActor,
+  request: { headers: { get(name: string): string | null } }
+): Promise<RunJobResult> {
   // Denetim önce (fail-closed): kayıt yazılamazsa iş çalışmaz.
   await prisma.auditLog.create({
     data: auditEntry(actor, { action: 'jobs.run_requested', entity: 'cron_job', entityId: def.name, newData: { reason: input.reason } }, request),

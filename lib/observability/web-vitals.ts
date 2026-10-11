@@ -31,6 +31,10 @@ const KEY_PREFIX = 'obs:wv:v1:';
 const TTL_SECONDS = 8 * 24 * 3600;
 const PANEL_PREFIXES = ['/admin', '/dealer', '/customer', '/staff'];
 const MIN_PATH_SAMPLES = 5;
+const MAX_PATH_SEGMENTS = 4;
+const SEGMENT_RE = /^[a-z][a-z0-9-]{0,31}$/;
+/** Saatlik kovadaki alan sayısı üst sınırı; aşılınca yeni yollar yalnız "(diğer)"e yazılır. */
+export const MAX_HOUR_FIELDS = 3000;
 
 export type VitalSample = { name: VitalName; value: number; path?: string | null };
 
@@ -48,7 +52,16 @@ export function ratingOf(name: VitalName, value: number): 'good' | 'needs-improv
 /** Kırılım yolu: yalnız panel yolları; diğerleri "(diğer)". */
 export function vitalPath(raw: string | null | undefined): string {
   const p = normalizePath(raw ?? '');
-  return PANEL_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`)) ? p : '(diğer)';
+  if (!PANEL_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return '(diğer)';
+  // Kardinalite sınırı: en çok MAX_PATH_SEGMENTS parça, yalnız rota biçimli parçalar.
+  // Uydurma/rastgele parça (büyük harf, nokta, %, uzun slug) yolu ilk geçerli öneğe indirir.
+  const segs = p.split('/').filter(Boolean);
+  const kept: string[] = [];
+  for (const seg of segs.slice(0, MAX_PATH_SEGMENTS)) {
+    if (seg !== ':id' && !SEGMENT_RE.test(seg)) break;
+    kept.push(seg);
+  }
+  return `/${kept.join('/')}`;
 }
 
 export function rumEnabled(): boolean {
@@ -62,11 +75,18 @@ export async function recordVitals(samples: VitalSample[], now: Date = new Date(
   const valid = samples.filter(isValidVital);
   if (valid.length === 0) return 0;
   const key = `${KEY_PREFIX}${hourKey(now)}`;
+  let full = false;
+  try {
+    full = Number(await r.hlen(key)) >= MAX_HOUR_FIELDS;
+  } catch {
+    full = true; // sayılamıyorsa kırılımı kapat (fail-closed), global histogram yine yazılır
+  }
   const p = r.pipeline();
   for (const s of valid) {
     const b = bucketIndex(VITAL_EDGES[s.name], s.value);
     p.hincrby(key, `${s.name}|g|b${b}`, 1);
-    p.hincrby(key, `${s.name}|p|${vitalPath(s.path).replace(/\|/g, '/')}|b${b}`, 1);
+    const path = full ? '(diğer)' : vitalPath(s.path).replace(/\|/g, '/');
+    p.hincrby(key, `${s.name}|p|${path}|b${b}`, 1);
   }
   p.expire(key, TTL_SECONDS);
   try {

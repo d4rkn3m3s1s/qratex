@@ -18,7 +18,24 @@ jest.mock('@/lib/redis', () => ({
 jest.mock('@/lib/admin-command/server', () => ({ loadCommandHealth: jest.fn() }));
 
 const auditCreate = jest.fn();
-jest.mock('@/lib/prisma', () => ({ prisma: { auditLog: { create: (...a: unknown[]) => auditCreate(...a) }, $queryRaw: jest.fn() }, isPrismaConnectivityError: () => false }));
+const claims = new Set<string>();
+const settingsCreate = jest.fn(async ({ data }: { data: { key: string } }) => {
+  if (claims.has(data.key)) throw Object.assign(new Error('unique'), { code: 'P2002' });
+  claims.add(data.key);
+  return data;
+});
+const settingsDeleteMany = jest.fn(async ({ where }: { where: { key: string; updatedAt?: unknown } }) => {
+  if (!where.updatedAt) claims.delete(where.key);
+  return { count: 1 };
+});
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    auditLog: { create: (...a: unknown[]) => auditCreate(...a) },
+    settings: { create: (a: never) => settingsCreate(a), deleteMany: (a: never) => settingsDeleteMany(a) },
+    $queryRaw: jest.fn(),
+  },
+  isPrismaConnectivityError: () => false,
+}));
 
 const cronState: { value: unknown } = { value: { jobs: {} } };
 jest.mock('@/lib/cron-state', () => ({ loadCronState: jest.fn(async () => cronState.value) }));
@@ -103,6 +120,11 @@ describe('Web Vitals', () => {
   it('yalnız panel yolları kırılımda', () => {
     expect(vitalPath('/admin/users/123')).toBe('/admin/users/:id');
     expect(vitalPath('/fiyatlar')).toBe('(diğer)');
+  });
+  it('kardinalite: uydurma parçalar ve derinlik kırpılır', () => {
+    expect(vitalPath('/admin/RANDOM.x1/abc')).toBe('/admin');
+    expect(vitalPath('/admin/a/b/c/d/e/f')).toBe('/admin/a/b/c');
+    expect(vitalPath('/admin/%41%42')).toBe('/admin');
   });
   it('p75 ve en yavaş sayfalar (en az 5 örnek)', () => {
     const e = VITAL_EDGES.LCP;
@@ -243,6 +265,20 @@ describe('arka plan işleri', () => {
       auditCreate.mockRejectedValueOnce(new Error('db'));
       await expect(runJobNow({ name: 'db-cleanup', reason: 'deneme gerekçe' }, actor, req, now)).rejects.toThrow();
       expect(dailyGet).not.toHaveBeenCalled();
+    });
+
+    it('aynı işin eşzamanlı ikinci çalıştırması 409; iş bir kez koşar, claim bırakılır', async () => {
+      claims.clear();
+      cronState.value = { jobs: {} };
+      let release: (r: Response) => void = () => {};
+      dailyGet.mockImplementation(() => new Promise<Response>((res) => (release = res)));
+      const first = runJobNow({ name: 'db-cleanup', reason: 'deneme gerekçe' }, actor, req, now);
+      await new Promise((r) => setTimeout(r, 0));
+      await expect(runJobNow({ name: 'db-cleanup', reason: 'deneme gerekçe' }, actor, req, now)).rejects.toMatchObject({ status: 409 });
+      release(new Response(JSON.stringify({ results: { 'db-cleanup': { status: 'ok', ms: 1 } } }), { status: 200 }));
+      await expect(first).resolves.toMatchObject({ status: 'ok' });
+      expect(dailyGet).toHaveBeenCalledTimes(1);
+      expect(claims.size).toBe(0);
     });
   });
 });
