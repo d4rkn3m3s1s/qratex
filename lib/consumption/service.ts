@@ -446,7 +446,10 @@ export async function createConsumption(
         }
       }
       return { consumption: created, mint: minted };
-    });
+      // Varsayılan 5 sn etkileşimli tx süresi bu iş için dar: kayıt + denetim + bildirim +
+      // mintPoints (kilit, defter, bakiye, tavan sayaçları) + klan ≈ 12-15 gidiş-dönüş; uzak
+      // Neon'da 5,2 sn'de "Transaction already closed" → kasada 500 ve puan yazılmıyordu.
+    }, { maxWait: 10_000, timeout: 20_000 });
 
     return {
       consumption,

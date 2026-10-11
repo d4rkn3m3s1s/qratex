@@ -270,7 +270,8 @@ export function KasaScreen({ initial }: { initial: KasaBootstrap }) {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(0,20rem)] xl:grid-cols-[24rem_minmax(0,1fr)_22rem]">
+      {/* Üç sütun yalnız 2xl'de: 1440 masaüstünde (kenar çubuğuyla ~1100 px) orta sütun ~330 px'e sıkışıp müşteri kartı ve son işlem adlarını kesiyordu; lg–xl'de tarayıcı | müşteri, "Bugün" altta tam genişlik. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] 2xl:grid-cols-[24rem_minmax(0,1fr)_22rem]">
         <ScannerPanel
           onToken={(tok) => findCard(tok, true)}
           busy={lookupBusy}
@@ -339,7 +340,7 @@ export function KasaScreen({ initial }: { initial: KasaBootstrap }) {
           </AnimatePresence>
         </section>
 
-        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+        <aside className="min-w-0 lg:col-span-2 2xl:sticky 2xl:top-4 2xl:col-span-1 2xl:self-start">
           <TodayFeed query={today} onVoided={refreshToday} />
         </aside>
       </div>

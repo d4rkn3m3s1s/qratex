@@ -65,7 +65,10 @@ function replaceQuery(patch: Record<string, string | null>, resetPage = true) {
   }
   if (resetPage && !('page' in patch)) url.searchParams.delete('page');
   url.searchParams.delete('search'); // global arama derin bağlantısı `q`'ya taşındı
-  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  // Veri olarak `null`: Next 16 yamalı replaceState, `__NA` taşıyan (yani window.history.state)
+  // veriyi kendi iç çağrısı sayıp useSearchParams'ı GÜNCELLEMİYORDU → arama/filtre/sıralama/
+  // sayfalama URL'yi değiştirip listeyi hiç yenilemiyordu. Next iç durumu kendisi kopyalar.
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function sortValue(q: CatalogQuery) {
