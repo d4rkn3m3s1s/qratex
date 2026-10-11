@@ -13,7 +13,8 @@ import { createNoteDraft, errorText, fetchPrompts, isConflict, noteVersionAction
 import { TextDiff } from './diff-view';
 import { actorName, fmtDateTime } from './format';
 import { CountedTextarea, PromptBlock, ReasonInput, reasonOk } from './parts';
-import { usePromptStudioCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { PROMPT_STUDIO_DICT, usePromptStudioCopy } from './copy';
 
 const STATUS_LABEL: Record<NoteVersion['status'], { label: string; tone: 'success' | 'info' | 'neutral' | 'warning' }> = {
   published: { label: 'Yayında', tone: 'success' },
@@ -27,9 +28,10 @@ const STATUS_LABEL: Record<NoteVersion['status'], { label: string; tone: 'succes
  * EK notlardır. Akış: taslak (gerekçeli) → fark + derlenmiş önizleme → yayınla (onay) → geçmiş/geri yükle.
  */
 export default function PromptsTab({ initial }: { initial?: PromptsState | null }) {
+  const ux = usePromptStudioCopy().ui;
   const query = useQuery({ queryKey: studioKeys.prompts(), queryFn: fetchPrompts, initialData: initial ?? undefined, staleTime: 15_000 });
   return (
-    <QueryState query={query} skeleton="detail" error={{ title: 'Promptlar yüklenemedi' }}>
+    <QueryState query={query} skeleton="detail" error={{ title: ux.promptlarYuklenemedi }}>
       {(state) => (
         <div className="space-y-6">
           <BasePrompts state={state} />
@@ -43,11 +45,13 @@ export default function PromptsTab({ initial }: { initial?: PromptsState | null 
 }
 
 function BasePrompts({ state }: { state: PromptsState }) {
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   return (
     <SectionCard
-      title="Temel promptlar"
-      description="Güvenlik ve gizlilik kurallarını taşıyan çekirdek. Kodda sabittir ve sürüm etiketiyle izlenir; veritabanındaki hiçbir metin (öğrenilen kurallar, notlar, bayi bağlamı) bunların yerine geçemez, yalnız sınırlı ek bağlam olarak sonuna eklenir."
+      title={ux.temelPromptlar}
+      description={ux.guvenlikVeGizlilikKurallarini}
       icon={<Lock />}
     >
       <ul className="divide-y divide-border">
@@ -59,7 +63,7 @@ function BasePrompts({ state }: { state: PromptsState }) {
                 <StatusBadge label={b.version} tone="brand" size="sm" icon={null} />
                 <span className="qx-small text-fg-muted">{b.usedBy.join(' · ')}</span>
                 <span className="qx-small ml-auto text-brand group-open:hidden">{px.showText}</span>
-                <span className="qx-small ml-auto hidden text-brand group-open:inline">Gizle</span>
+                <span className="qx-small ml-auto hidden text-brand group-open:inline">{uy.gizle}</span>
               </summary>
               <div className="mt-2">
                 <PromptBlock text={b.text} label={`${b.title} temel promptu`} />
@@ -73,8 +77,12 @@ function BasePrompts({ state }: { state: PromptsState }) {
 }
 
 function NoteCard({ note, version }: { note: NoteState; version: string }) {
+  const fz = usePromptStudioCopy().fx;
+  const L = useSourceT(PROMPT_STUDIO_DICT);
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
-  const meta = NOTE_META[note.key];
+  const meta0 = NOTE_META[note.key];
+  const meta = { ...meta0, title: L(meta0.title), description: L(meta0.description), usedBy: meta0.usedBy.map((u) => L(u)) };
   const qc = useQueryClient();
   const draft = note.versions.find((v) => v.status === 'draft') ?? null;
   const [body, setBody] = useState(draft?.body ?? note.live ?? '');
@@ -94,7 +102,7 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
   };
   const onConflict = (e: unknown) => {
     if (isConflict(e)) {
-      toast.error('Notlar başka bir oturumda değişti; güncel hâli yüklendi.');
+      toast.error(ux.notlarBaskaBirOturumda);
       qc.invalidateQueries({ queryKey: studioKeys.prompts() });
       return true;
     }
@@ -109,7 +117,7 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
       setReason('');
       setBasedOn(null);
       setFormError(null);
-      toast.success('Taslak kaydedildi. Yayınlanana kadar modele etkisi yok.');
+      toast.success(ux.taslakKaydedildiYayinlananaKadar);
     },
     onError: (e) => {
       if (!onConflict(e)) setFormError(errorText(e));
@@ -136,8 +144,8 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
       id: v.id,
       title: (
         <span className="flex flex-wrap items-center gap-2">
-          <StatusBadge label={STATUS_LABEL[v.status].label} tone={STATUS_LABEL[v.status].tone} size="sm" />
-          <span className="qx-small text-fg-muted">{v.body ? `${v.body.length} karakter` : 'Not kaldırıldı'}</span>
+          <StatusBadge label={L(STATUS_LABEL[v.status].label)} tone={STATUS_LABEL[v.status].tone} size="sm" />
+          <span className="qx-small text-fg-muted">{v.body ? `${v.body.length} karakter` : ux.notKaldirildi}</span>
         </span>
       ),
       description: (
@@ -153,11 +161,11 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
                 setBody(v.body ?? '');
                 setBasedOn(v.id.startsWith('legacy-') ? null : v.id);
                 setEditing(true);
-                setReason(`Geri yükleme: ${fmtDateTime(v.publishedAt ?? v.createdAt)} sürümü`);
+                setReason(fz.restoreReason(fmtDateTime(v.publishedAt ?? v.createdAt)));
               }}
             >
               <RotateCcw className="h-4 w-4" aria-hidden />
-              Bu metni taslağa al
+              {ux.buMetniTaslagaAl}
             </Button>
           ) : null}
         </span>
@@ -174,20 +182,20 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
       icon={<FileEdit />}
       actions={
         note.live ? (
-          <StatusBadge label="Yayında" tone="success" />
+          <StatusBadge label={ux.yayinda} tone="success" />
         ) : note.liveIneffective ? (
-          <StatusBadge label="Etkisiz eski metin" tone="warning" />
+          <StatusBadge label={ux.etkisizEskiMetin} tone="warning" />
         ) : (
-          <StatusBadge label="Not yok" tone="neutral" />
+          <StatusBadge label={ux.notYok} tone="neutral" />
         )
       }
     >
       <div className="space-y-5">
-        <p className="qx-small text-fg-muted">Kullanıldığı yer: {meta.usedBy.join(' · ')}. Modele en çok {note.limit} karakter ulaşır.</p>
+        <p className="qx-small text-fg-muted">{fz.usedWhere(meta.usedBy.join(' · '), note.limit)}</p>
 
         {note.liveIneffective ? (
           <InlineError variant="banner" tone="warning">
-            Bu alanda yönetici onayı damgası olmayan eski bir metin var (eski sistem eğitiminin yazdığı). Güvenlik gereği modele gönderilmiyor. Kullanmak isterseniz taslak olarak kaydedip yayınlayın.
+            {ux.buAlandaYoneticiOnayi}
           </InlineError>
         ) : null}
 
@@ -199,33 +207,33 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
         {draft ? (
           <div className="space-y-3 rounded-lg border border-info-border bg-info-subtle/40 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge label="Bekleyen taslak" tone="info" />
+              <StatusBadge label={ux.bekleyenTaslak} tone="info" />
               <span className="qx-small text-fg-muted">
                 {actorName(draft.createdBy)} · {fmtDateTime(draft.createdAt)} · “{draft.note}”
               </span>
             </div>
-            <TextDiff before={note.live} after={draft.body} label="Yayındaki → taslak" />
+            <TextDiff before={note.live} after={draft.body} label={ux.yayindakiTaslak} />
             <div className="flex flex-wrap gap-2">
               <ConfirmAction
                 tone="brand"
                 trigger={
                   <Button className="min-h-11 sm:min-h-10">
                     <Send className="h-4 w-4" aria-hidden />
-                    Taslağı yayınla
+                    {ux.taslagiYayinla}
                   </Button>
                 }
-                title="Taslak yayınlansın mı?"
-                description={`Bu not ${meta.usedBy.join(', ')} çağrılarına sonraki istekten itibaren eklenir. Yayındaki metin geçmişe taşınır ve geri yüklenebilir.`}
+                title={ux.taslakYayinlansinMi}
+                description={fz.publishDesc(meta.usedBy.join(', '))}
                 impact={[
-                  { label: 'Yayındaki', value: note.live ? `${note.live.length} karakter` : 'Not yok' },
-                  { label: 'Yeni', value: draft.body ? `${draft.body.length} karakter` : 'Not kaldırılacak', emphasis: true },
+                  { label: ux.yayindaki, value: note.live ? `${note.live.length} karakter` : 'Not yok' },
+                  { label: ux.yeni, value: draft.body ? `${draft.body.length} karakter` : ux.notKaldirilacak, emphasis: true },
                 ]}
                 irreversibleNote={false}
-                confirmLabel="Yayınla"
+                confirmLabel={ux.yayinla}
                 onConfirm={async () => {
                   try {
                     onSettled(await noteVersionAction(draft.id, 'publish', version));
-                    toast.success('Not yayınlandı.');
+                    toast.success(ux.notYayinlandi);
                   } catch (e) {
                     if (!onConflict(e)) throw e;
                   }
@@ -236,13 +244,13 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
                 trigger={
                   <Button variant="outline" className="min-h-11 sm:min-h-10">
                     <Trash2 className="h-4 w-4" aria-hidden />
-                    Taslağı sil
+                    {ux.taslagiSil}
                   </Button>
                 }
-                title="Taslak silinsin mi?"
-                description="Yayındaki metin değişmez; taslak geçmişte “silinen taslak” olarak kalır."
+                title={ux.taslakSilinsinMi}
+                description={ux.yayindakiMetinDegismezTaslak}
                 irreversibleNote={false}
-                confirmLabel="Sil"
+                confirmLabel={ux.sil}
                 onConfirm={async () => {
                   try {
                     onSettled(await noteVersionAction(draft.id, 'discard', version));
@@ -261,15 +269,15 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!canSave) {
-              setFormError(!reasonOk(reason) ? 'Gerekçe en az 3 karakter olmalı.' : len > note.limit ? `En çok ${note.limit} karakter.` : 'Değişiklik yok.');
+              setFormError(!reasonOk(reason) ? ux.gerekceEnAz3 : len > note.limit ? fz.maxChars(note.limit) : ux.degisiklikYok);
               return;
             }
             save.mutate();
           }}
         >
-          <h3 className="qx-small font-medium text-fg">{draft ? 'Taslağı değiştir' : 'Yeni taslak'}</h3>
+          <h3 className="qx-small font-medium text-fg">{draft ? ux.taslagiDegistir : 'Yeni taslak'}</h3>
           <CountedTextarea
-            label={`${meta.title} metni`}
+            label={fz.textOf(meta.title)}
             value={body}
             onChange={(v) => {
               setBody(v);
@@ -278,7 +286,7 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
             }}
             max={note.limit}
             rows={note.key === 'chat' ? 8 : 6}
-            hint="Talimat değil, kısa üslup/öncelik ipuçları yazın. Boş bırakıp yayınlamak notu kaldırır."
+            hint={ux.talimatDegilKisaUslup}
           />
           <ReasonInput value={reason} onChange={setReason} />
           {formError ? (
@@ -293,7 +301,7 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
             </Button>
             <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" onClick={() => runPreview.mutate()} disabled={runPreview.isPending || len > note.limit}>
               <Eye className="h-4 w-4" aria-hidden />
-              {runPreview.isPending ? 'Derleniyor…' : 'Modele gideni önizle'}
+              {runPreview.isPending ? 'Derleniyor…' : ux.modeleGideniOnizle}
             </Button>
             {editing ? (
               <Button
@@ -308,7 +316,7 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
                   setFormError(null);
                 }}
               >
-                Değişiklikleri bırak
+                {ux.degisiklikleriBirak}
               </Button>
             ) : null}
           </div>
@@ -318,13 +326,13 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
           <div className="space-y-2" aria-live="polite">
             <h3 className="qx-small font-medium text-fg">{px.compiledContext}</h3>
             <p className="qx-small text-fg-muted">{px.dryRunNote}</p>
-            <PromptBlock text={note.key === 'chat' ? preview.chatBlock : preview.insightBlock} label="Derlenmiş ek bağlam" />
+            <PromptBlock text={note.key === 'chat' ? preview.chatBlock : preview.insightBlock} label={ux.derlenmisEkBaglam} />
           </div>
         ) : null}
 
         <div className="space-y-2">
           <h3 className="qx-small font-medium text-fg">{px.versionHistory}</h3>
-          <Timeline events={events} timeStyle="datetime" dense emptyLabel="Henüz yayınlanmış sürüm yok." ariaLabel={`${meta.title} sürüm geçmişi`} />
+          <Timeline events={events} timeStyle="datetime" dense emptyLabel={ux.henuzYayinlanmisSurumYok} ariaLabel={fz.historyOf(meta.title)} />
         </div>
       </div>
     </SectionCard>

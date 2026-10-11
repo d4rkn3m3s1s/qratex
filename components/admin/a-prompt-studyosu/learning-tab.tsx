@@ -20,6 +20,7 @@ import { usePromptStudioCopy } from './copy';
  * Onaylanmadan hiçbir prompta girmez. Geçmişteki onaylı sürüm yeniden ÖNERİ olarak yüklenebilir.
  */
 export default function LearningTab({ initial }: { initial?: LearningState | null }) {
+  const ux = usePromptStudioCopy().ui;
   const query = useQuery({
     queryKey: studioKeys.learning(),
     queryFn: fetchLearning,
@@ -29,13 +30,15 @@ export default function LearningTab({ initial }: { initial?: LearningState | nul
     refetchInterval: (q) => (q.state.data?.status === 'training' ? 5_000 : false),
   });
   return (
-    <QueryState query={query} skeleton="detail" error={{ title: 'Öğrenme durumu yüklenemedi' }}>
+    <QueryState query={query} skeleton="detail" error={{ title: ux.ogrenmeDurumuYuklenemedi }}>
       {(s) => <LearningBody s={s} />}
     </QueryState>
   );
 }
 
 function LearningBody({ s }: { s: LearningState }) {
+  const fz = usePromptStudioCopy().fx;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const set = (next: LearningState) => {
@@ -46,7 +49,7 @@ function LearningBody({ s }: { s: LearningState }) {
     mutationFn: runTraining,
     onSuccess: (next) => {
       set(next);
-      toast.success('Öneri hazır. İnceleyip onaylayana kadar hiçbir prompta etkisi yok.');
+      toast.success(ux.oneriHazirInceleyipOnaylayana);
     },
     onError: (e) => {
       toast.error(errorText(e));
@@ -56,26 +59,26 @@ function LearningBody({ s }: { s: LearningState }) {
   const enoughData = s.data.feedbackWithText >= s.minFeedback;
   const training = s.status === 'training' || train.isPending;
   const trainDisabledReason = !s.aiConfigured
-    ? 'AI sağlayıcısı yapılandırılmamış.'
+    ? ux.aiSaglayicisiYapilandirilmamis
     : !enoughData
-      ? `Eğitim için en az ${s.minFeedback} metinli geri bildirim gerekir (şu an ${fmtNumber(s.data.feedbackWithText)}).`
+      ? fz.minFeedback(s.minFeedback, fmtNumber(s.data.feedbackWithText))
       : s.proposal
-        ? 'Bekleyen öneri var; önce onu onaylayın ya da reddedin.'
+        ? ux.bekleyenOneriVarOnce
         : null;
 
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Sistem öğrenmesi"
-        description="Platform genelinden ANONİM toplulaştırma (sayılar, dağılımlar ve en az 3 farklı işletmede geçen tema etiketleri). Ham yorum metni, işletme/ürün adı ve bayilerin özel bağlamları modele gönderilmez."
+        title={ux.sistemOgrenmesi}
+        description={ux.platformGenelindenAnonimToplulastirma}
         icon={<BrainCircuit />}
         actions={
           training ? (
-            <StatusBadge label="Eğitim sürüyor" tone="info" icon={Loader2} />
+            <StatusBadge label={ux.egitimSuruyor} tone="info" icon={Loader2} />
           ) : s.approval ? (
-            <StatusBadge label={`Yürürlükte · sürüm ${s.version}`} tone="success" />
+            <StatusBadge label={fz.inEffect(s.version)} tone="success" />
           ) : (
-            <StatusBadge label="Onaylı kural yok" tone="neutral" />
+            <StatusBadge label={ux.onayliKuralYok} tone="neutral" />
           )
         }
       >
@@ -85,13 +88,13 @@ function LearningBody({ s }: { s: LearningState }) {
             columns={3}
             dense
             items={[
-              { label: 'Metinli geri bildirim', value: fmtNumber(s.data.feedbackWithText) },
-              { label: 'Düzeltme', value: fmtNumber(s.data.corrections) },
-              { label: 'Bayi', value: fmtNumber(s.data.dealers) },
-              { label: 'Anlamsal vektör (embedding)', value: fmtNumber(s.data.embeddings) },
-              { label: 'Son eğitim', value: s.lastTrainedAt ? `${fmtDateTime(s.lastTrainedAt)} (${fmtAgo(s.lastTrainedAt)})` : 'Hiç' },
+              { label: ux.metinliGeriBildirim, value: fmtNumber(s.data.feedbackWithText) },
+              { label: ux.duzeltme, value: fmtNumber(s.data.corrections) },
+              { label: ux.bayi, value: fmtNumber(s.data.dealers) },
+              { label: ux.anlamsalVektorEmbedding, value: fmtNumber(s.data.embeddings) },
+              { label: ux.sonEgitim, value: s.lastTrainedAt ? `${fmtDateTime(s.lastTrainedAt)} (${fmtAgo(s.lastTrainedAt)})` : ux.hic },
               {
-                label: 'Son onay',
+                label: ux.sonOnay,
                 value: s.approval ? `${fmtDateTime(s.approval.approvedAt)} · ${actorName(s.approval.approvedBy)}` : 'Yok',
               },
             ]}
@@ -102,21 +105,21 @@ function LearningBody({ s }: { s: LearningState }) {
               trigger={
                 <Button className="min-h-11 sm:min-h-10" disabled={training || !!trainDisabledReason}>
                   {training ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
-                  {training ? 'Eğitiliyor…' : 'Yeni öneri üret'}
+                  {training ? ux.egitiliyor : ux.yeniOneriUret}
                 </Button>
               }
-              title="Öğrenme önerisi üretilsin mi?"
-              description="AI sağlayıcısına anonim özet gönderilir (günlük token tavanı ve dakikalık limit uygulanır). Çıkan öneri ONAY BEKLER; yürürlükteki kurallar siz onaylayana kadar değişmez. Yönetici notları ve temel promptlar bu işlemden etkilenmez."
+              title={ux.ogrenmeOnerisiUretilsinMi}
+              description={ux.aiSaglayicisinaAnonimOzet}
               irreversibleNote={false}
-              confirmLabel="Öneri üret"
+              confirmLabel={ux.oneriUret}
               onConfirm={() => train.mutateAsync()}
             />
             {trainDisabledReason ? <p className="qx-small text-fg-muted">{trainDisabledReason}</p> : null}
-            {s.trainingSince ? <p className="qx-small text-fg-muted">Başlangıç: {fmtDateTime(s.trainingSince)}</p> : null}
+            {s.trainingSince ? <p className="qx-small text-fg-muted">{fz.startedAt} {fmtDateTime(s.trainingSince)}</p> : null}
           </div>
           {s.lastRejected ? (
             <p className="qx-small text-fg-muted">
-              Son reddedilen öneri: {fmtDateTime(s.lastRejected.rejectedAt)} · {actorName(s.lastRejected.rejectedBy)}
+              {fz.lastRejected} {fmtDateTime(s.lastRejected.rejectedAt)} · {actorName(s.lastRejected.rejectedBy)}
               {s.lastRejected.reason ? ` · “${s.lastRejected.reason}”` : ''}
             </p>
           ) : null}
@@ -125,13 +128,13 @@ function LearningBody({ s }: { s: LearningState }) {
 
       {s.proposal && s.diff ? <ProposalCard s={s} onDone={set} /> : null}
 
-      <SectionCard title="Yürürlükteki öğrenilen kurallar" description="İçgörü raporu ve AI sohbetinde sınırlı ek bağlam olarak kullanılır (en çok 8 kural, 5 yap, 5 kaçın, 6 tema)." icon={<ShieldCheck />}>
-        {s.active ? <PayloadView p={s.active} /> : <EmptyState compact title="Onaylı kural yok" description="Bir öneri üretip onayladığınızda burada görünür. O zamana kadar modeller yalnız temel promptlarla çalışır." />}
+      <SectionCard title={ux.yururluktekiOgrenilenKurallar} description={ux.icgoruRaporuVeAi} icon={<ShieldCheck />}>
+        {s.active ? <PayloadView p={s.active} /> : <EmptyState compact title={ux.onayliKuralYok} description={ux.birOneriUretipOnayladiginizda} />}
       </SectionCard>
 
-      <SectionCard title="Onay geçmişi" description="Önceki onaylı içerikler (son 5). Geri yüklemek yeni bir ÖNERİ oluşturur; yine diff ve onaydan geçer." icon={<History />}>
+      <SectionCard title={ux.onayGecmisi} description={ux.oncekiOnayliIceriklerSon} icon={<History />}>
         {s.history.length === 0 ? (
-          <EmptyState compact title="Geçmiş yok" description="İkinci onaydan sonra önceki içerik burada saklanır." />
+          <EmptyState compact title={ux.gecmisYok} description={ux.ikinciOnaydanSonraOnceki} />
         ) : (
           <ul className="space-y-3">
             {s.history.map((h) => (
@@ -148,16 +151,16 @@ function LearningBody({ s }: { s: LearningState }) {
                     trigger={
                       <Button variant="outline" size="sm" className="ml-auto min-h-11 sm:min-h-9" disabled={!!s.proposal}>
                         <RotateCcw className="h-4 w-4" aria-hidden />
-                        Öneri olarak geri yükle
+                        {ux.oneriOlarakGeriYukle}
                       </Button>
                     }
-                    title="Bu sürüm öneri olarak yüklensin mi?"
-                    description="Yürürlükteki kurallar değişmez; yüklenen içerik bekleyen öneri olur ve onayınızı bekler."
+                    title={ux.buSurumOneriOlarak}
+                    description={ux.yururluktekiKurallarDegismezYuklenen}
                     irreversibleNote={false}
-                    confirmLabel="Öneri olarak yükle"
+                    confirmLabel={ux.oneriOlarakYukle}
                     onConfirm={async () => {
                       set(await restoreLearning(h.index, s.version));
-                      toast.success('Geçmiş sürüm öneri olarak yüklendi.');
+                      toast.success(ux.gecmisSurumOneriOlarak);
                     }}
                   />
                 </div>
@@ -177,6 +180,9 @@ function LearningBody({ s }: { s: LearningState }) {
 }
 
 function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningState) => void }) {
+  const fz = usePromptStudioCopy().fx;
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const p = s.proposal!;
   const d = s.diff!;
@@ -185,8 +191,8 @@ function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningSta
   const stats = p.trainingDataStats;
   return (
     <SectionCard
-      title="Onay bekleyen öneri"
-      description={p.source === 'restore' ? 'Geçmişten geri yüklenen içerik.' : `${fmtDateTime(p.createdAt)} · model ${p.model} · ${p.promptVersion}`}
+      title={ux.onayBekleyenOneri}
+      description={p.source === 'restore' ? ux.gecmistenGeriYuklenenIcerik : `${fmtDateTime(p.createdAt)} · model ${p.model} · ${p.promptVersion}`}
       icon={<GitCompare />}
       tone="info"
       stripe
@@ -194,17 +200,17 @@ function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningSta
       <div className="space-y-5">
         {p.source === 'training' ? (
           <p className="qx-small text-fg-muted">
-            Girdi: {fmtNumber(Number(stats.sampledFeedbackCount ?? 0))} örneklenmiş geri bildirim, {fmtNumber(Number(stats.correctionCount ?? 0))} düzeltme,{' '}
-            {fmtNumber(Number(stats.dealerCount ?? 0))} bayi; etiket eşiği en az {String(stats.minDealersPerLabel ?? 3)} işletme.
+            {fz.input(fmtNumber(Number(stats.sampledFeedbackCount ?? 0)), fmtNumber(Number(stats.correctionCount ?? 0)))}{' '}
+            {fz.dealersThreshold(fmtNumber(Number(stats.dealerCount ?? 0)), String(stats.minDealersPerLabel ?? 3))}
           </p>
         ) : null}
         <div className="grid gap-5 lg:grid-cols-2">
-          <ListDiffView title="Kurallar" diff={d.learnedRules} />
-          <ListDiffView title="Temalar" diff={d.learnedThemes} />
-          <ListDiffView title="Yap" diff={d.guidelinesDo} />
-          <ListDiffView title="Kaçın" diff={d.guidelinesAvoid} />
+          <ListDiffView title={ux.kurallar} diff={d.learnedRules} />
+          <ListDiffView title={ux.temalar} diff={d.learnedThemes} />
+          <ListDiffView title={ux.yap} diff={d.guidelinesDo} />
+          <ListDiffView title={ux.kacin} diff={d.guidelinesAvoid} />
         </div>
-        {d.promptAppendix.changed ? <TextDiff before={d.promptAppendix.before} after={d.promptAppendix.after} label="Ek not" /> : null}
+        {d.promptAppendix.changed ? <TextDiff before={d.promptAppendix.before} after={d.promptAppendix.after} label={ux.ekNot} /> : null}
 
         <div className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
           <ConfirmAction
@@ -212,43 +218,43 @@ function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningSta
             trigger={
               <Button className="min-h-11 sm:min-h-10">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                Onayla ve yürürlüğe koy
+                {ux.onaylaVeYururlugeKoy}
               </Button>
             }
-            title="Öneri yürürlüğe girsin mi?"
-            description="Onaylanan kurallar sonraki içgörü raporu ve AI sohbeti çağrılarından itibaren sınırlı ek bağlam olarak kullanılır. Yürürlükteki içerik onay geçmişine taşınır."
+            title={ux.oneriYururlugeGirsinMi}
+            description={ux.onaylananKurallarSonrakiIcgoru}
             impact={[
-              { label: 'Eklenen kural', value: String(d.learnedRules.added.length), emphasis: true },
-              { label: 'Kaldırılan kural', value: String(d.learnedRules.removed.length) },
-              { label: 'Tema değişimi', value: `+${d.learnedThemes.added.length} / −${d.learnedThemes.removed.length}` },
+              { label: ux.eklenenKural, value: String(d.learnedRules.added.length), emphasis: true },
+              { label: ux.kaldirilanKural, value: String(d.learnedRules.removed.length) },
+              { label: ux.temaDegisimi, value: `+${d.learnedThemes.added.length} / −${d.learnedThemes.removed.length}` },
             ]}
             irreversibleNote={false}
-            confirmLabel="Onayla"
+            confirmLabel={ux.onayla}
             onConfirm={async () => {
               onDone(await decideProposal({ action: 'approve', proposalId: p.id }));
-              toast.success('Öğrenilen kurallar yürürlüğe girdi.');
+              toast.success(ux.ogrenilenKurallarYururlugeGirdi);
             }}
           />
           <div className="min-w-0 flex-1 basis-64">
-            <ReasonInput label="Reddetme gerekçesi" value={reason} onChange={setReason} error={rejectError} />
+            <ReasonInput label={ux.reddetmeGerekcesi} value={reason} onChange={setReason} error={rejectError} />
           </div>
           <ConfirmAction
             tone="danger"
             trigger={
               <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={!reasonOk(reason)} onClick={() => setRejectError(null)}>
                 <XCircle className="h-4 w-4" aria-hidden />
-                Reddet
+                {uy.reddet}
               </Button>
             }
-            title="Öneri reddedilsin mi?"
-            description="Yürürlükteki kurallar değişmez. Gerekçe denetim geçmişine yazılır."
+            title={ux.oneriReddedilsinMi}
+            description={ux.yururluktekiKurallarDegismezGerekce}
             irreversibleNote={false}
-            confirmLabel="Reddet"
+            confirmLabel={ux.reddet}
             disabled={!reasonOk(reason)}
             onConfirm={async () => {
               try {
                 onDone(await decideProposal({ action: 'reject', proposalId: p.id, reason }));
-                toast.success('Öneri reddedildi.');
+                toast.success(ux.oneriReddedildi);
               } catch (e) {
                 setRejectError(errorText(e));
                 throw e;
@@ -263,6 +269,9 @@ function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningSta
 }
 
 function PayloadView({ p }: { p: LearnedPayloadView }) {
+  const fz = usePromptStudioCopy().fx;
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const block = (title: string, items: string[]) => (
     <section className="space-y-1">
       <h4 className="qx-small font-medium text-fg">{title}</h4>
@@ -273,7 +282,7 @@ function PayloadView({ p }: { p: LearnedPayloadView }) {
           ))}
         </ul>
       ) : (
-        <p className="qx-small text-fg-muted">Yok</p>
+        <p className="qx-small text-fg-muted">{uy.yok}</p>
       )}
     </section>
   );
@@ -282,10 +291,10 @@ function PayloadView({ p }: { p: LearnedPayloadView }) {
       {block('Kurallar', p.learnedRules)}
       {block(
         'Temalar',
-        p.learnedThemes.map((t) => `${t.theme} (${t.priority === 'high' ? 'yüksek' : t.priority === 'low' ? 'düşük' : 'orta'} öncelik${t.count ? ` · ${t.count}` : ''})`)
+        p.learnedThemes.map((t) => fz.themeLine(t.theme, t.priority === 'high' ? fz.prioHigh : t.priority === 'low' ? fz.prioLow : fz.prioMid, t.count ?? 0))
       )}
       {block('Yap', p.responseGuidelines.do)}
-      {block('Kaçın', p.responseGuidelines.avoid)}
+      {block(ux.kacin, p.responseGuidelines.avoid)}
       {p.promptAppendix ? <div className="md:col-span-2">{block('Ek not', [p.promptAppendix])}</div> : null}
     </div>
   );

@@ -11,6 +11,7 @@ import type { LearningState, ModelsState, PromptsState, StudioOverview, StudioTa
 import { errorText, fetchOverview, studioKeys } from './api';
 import type { DealersInitial } from './dealers-tab';
 import { fmtNumber, percent } from './format';
+import { usePromptStudioCopy } from './copy';
 
 const loading = () => <SkeletonDetail />;
 const PromptsTab = dynamic(() => import('./prompts-tab'), { loading });
@@ -36,6 +37,9 @@ export type StudioInitial = {
  * üsluplar, bayi politikası ve model seçimi gerekçeli, sürüm kontrollü ve denetimli.
  */
 export function StudioCenter({ initial }: { initial: StudioInitial }) {
+  const fz = usePromptStudioCopy().fx;
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const qc = useQueryClient();
   const overview = useQuery({ queryKey: studioKeys.overview(), queryFn: fetchOverview, initialData: initial.overview ?? undefined, staleTime: 30_000 });
   const o = overview.data;
@@ -45,44 +49,44 @@ export function StudioCenter({ initial }: { initial: StudioInitial }) {
       register="ops"
       header={
         <PageHeader
-          title="Prompt ve Model Stüdyosu"
-          description="AI'ın hangi talimatlarla, hangi modelle ve hangi bayide nasıl çalıştığını yönetin. Her değişiklik gerekçeli, geri alınabilir ve kayıtlıdır."
+          title={ux.promptVeModelStudyosu}
+          description={ux.aiInHangiTalimatlarla}
           icon={<Wand2 />}
           actions={
             <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => qc.invalidateQueries({ queryKey: studioKeys.all })}>
               <RefreshCw className="h-4 w-4" aria-hidden />
-              Yenile
+              {uy.yenile}
             </Button>
           }
         />
       }
     >
       {overview.isError && !o ? (
-        <ErrorState title="Stüdyo göstergeleri yüklenemedi" description={errorText(overview.error)} onRetry={() => overview.refetch()} />
+        <ErrorState title={ux.studyoGostergeleriYuklenemedi} description={errorText(overview.error)} onRetry={() => overview.refetch()} />
       ) : (
         <MetricGrid cols={4}>
           <MetricTile
-            label="Bayi"
+            label={ux.bayi}
             metric={{ value: o?.dealers ?? null }}
-            hint={o ? `${fmtNumber(o.aiOff)} bayide AI kapalı · ${fmtNumber(o.customPrompts)} işletme bağlamı` : undefined}
+            hint={o ? fz.dealersAiOff(fmtNumber(o.aiOff), fmtNumber(o.customPrompts)) : undefined}
             icon={<Store />}
             loading={!o}
             href="?tab=bayiler"
           />
           <MetricTile
-            label="Öğrenme profili"
+            label={ux.ogrenmeProfili}
             metric={{ value: o?.profiles ?? null }}
-            hint={o ? (o.pendingProposal ? 'Onay bekleyen sistem önerisi var' : 'Bekleyen sistem önerisi yok') : undefined}
+            hint={o ? (o.pendingProposal ? ux.onayBekleyenSistemOnerisi : ux.bekleyenSistemOnerisiYok) : undefined}
             tone={o?.pendingProposal ? 'warning' : undefined}
             icon={<BrainCircuit />}
             loading={!o}
             href="?tab=ogrenme"
           />
-          <MetricTile label="Aktif üslup" metric={{ value: o?.activeTones ?? null }} hint="Bayi kural seçicisinde görünen" icon={<MessageSquareQuote />} loading={!o} href="?tab=usluplar" />
+          <MetricTile label={ux.aktifUslup} metric={{ value: o?.activeTones ?? null }} hint={ux.bayiKuralSecicisindeGorunen} icon={<MessageSquareQuote />} loading={!o} href="?tab=usluplar" />
           <MetricTile
-            label="AI çağrısı (7 gün)"
+            label={ux.aiCagrisi7Gun}
             metric={{ value: o?.calls7d ?? null }}
-            hint={o ? `${fmtNumber(o.failures7d)} hata (${percent(o.failures7d, o.calls7d)}) · ${o.provider === 'none' ? 'sağlayıcı yok' : o.provider === 'groq' ? 'Groq' : 'OpenAI'}` : undefined}
+            hint={o ? fz.failures(fmtNumber(o.failures7d), percent(o.failures7d, o.calls7d), o.provider === 'none' ? fz.noProvider : o.provider === 'groq' ? 'Groq' : 'OpenAI') : undefined}
             tone={o && o.provider === 'none' ? 'danger' : undefined}
             icon={<Cpu />}
             loading={!o}
@@ -92,16 +96,16 @@ export function StudioCenter({ initial }: { initial: StudioInitial }) {
       )}
 
       <SectionTabs
-        ariaLabel="Stüdyo bölümleri"
+        ariaLabel={ux.studyoBolumleri}
         defaultValue="promptlar"
         resetKeys={['bayi', 'page', 'size', 'q', 'durum']}
         tabs={[
-          { value: 'promptlar', label: 'Promptlar', icon: <FileText /> },
-          { value: 'ogrenme', label: 'Öğrenilen kurallar', icon: <BrainCircuit />, count: o?.pendingProposal ? 1 : undefined },
-          { value: 'usluplar', label: 'Üsluplar', icon: <MessageSquareQuote /> },
-          { value: 'bayiler', label: 'Bayiler', icon: <Store /> },
-          { value: 'modeller', label: 'Modeller', icon: <Cpu /> },
-          { value: 'gecmis', label: 'Geçmiş', icon: <History /> },
+          { value: 'promptlar', label: ux.promptlar, icon: <FileText /> },
+          { value: 'ogrenme', label: ux.ogrenilenKurallar, icon: <BrainCircuit />, count: o?.pendingProposal ? 1 : undefined },
+          { value: 'usluplar', label: ux.usluplar, icon: <MessageSquareQuote /> },
+          { value: 'bayiler', label: ux.bayiler, icon: <Store /> },
+          { value: 'modeller', label: ux.modeller, icon: <Cpu /> },
+          { value: 'gecmis', label: ux.gecmis, icon: <History /> },
         ]}
       >
         {(tab) =>

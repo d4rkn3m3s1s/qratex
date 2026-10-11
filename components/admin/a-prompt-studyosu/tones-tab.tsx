@@ -19,7 +19,8 @@ import { createTone, errorText, fetchToneHistory, fetchTones, fieldErrors, isCon
 import { TextDiff } from './diff-view';
 import { actorName, fmtDateTime, fmtNumber } from './format';
 import { CountedTextarea, PromptBlock, ReasonInput, reasonOk } from './parts';
-import { usePromptStudioCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { PROMPT_STUDIO_DICT, usePromptStudioCopy } from './copy';
 
 const SOURCE: Record<ToneRow['source'], { label: string; tone: 'neutral' | 'brand' | 'info' }> = {
   builtin: { label: 'Yerleşik · etkin değil', tone: 'neutral' },
@@ -34,37 +35,39 @@ type EditorState = { mode: 'create'; preset?: { slug: string; name: string; syst
  * yerleşik aileler etkinleştirilmeden bayiye sunulmaz. Anahtar sabit, silme yok (arşiv), her yazım gerekçeli.
  */
 export default function TonesTab({ initial }: { initial?: TonesState | null }) {
+  const fz = usePromptStudioCopy().fx;
+  const ux = usePromptStudioCopy().ui;
   const query = useQuery({ queryKey: studioKeys.tones(), queryFn: fetchTones, initialData: initial ?? undefined, staleTime: 15_000 });
   const [editor, setEditor] = useState<EditorState>(null);
   // Durum sızıntısı yok (eski B1): ekleme ve düzenleme tek ayrık birleşimde; kapanınca null.
   return (
     <>
-      <QueryState query={query} skeleton="cards" error={{ title: 'Üsluplar yüklenemedi' }}>
+      <QueryState query={query} skeleton="cards" error={{ title: ux.usluplarYuklenemedi }}>
         {(s) => (
           <div className="space-y-4">
             {s.orphanSlugs.length ? (
               <div role="status" className={cn('flex gap-2 rounded-lg border p-3 text-sm', TONE_CALLOUT.warning)}>
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <p>
-                  Katalogda aktif karşılığı olmayan üslup kullanan kurallar var:{' '}
-                  {s.orphanSlugs.map((o) => `${o.slug} (${fmtNumber(o.rules)} kural)`).join(', ')}. Bu kurallar AI yanıtında yalnız yerleşik aile tarifine (ya da “Profesyonel”e) düşer.
+                  {fz.orphanRules}{' '}
+                  {s.orphanSlugs.map((o) => fz.ruleCount(o.slug, fmtNumber(o.rules))).join(', ')}{fz.orphanFallback}
                 </p>
               </div>
             ) : null}
             <SectionCard
-              title="Yanıt üslupları"
-              description="Otomatik yanıt kurallarında seçilen üslubun talimatı. Temel otomatik yanıt kuralları (vaat yok, kişisel veri yok, 3-4 cümle) kodda sabittir; buradaki metin onların yerine geçmez, yalnız üslup ek bağlamıdır."
+              title={ux.yanitUsluplari}
+              description={ux.otomatikYanitKurallarindaSecilen}
               icon={<MessageSquareQuote />}
               actions={
                 <Button className="min-h-11 sm:min-h-10" onClick={() => setEditor({ mode: 'create' })}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  Yeni üslup
+                  {ux.yeniUslup}
                 </Button>
               }
               density="flush"
             >
               {s.tones.length === 0 ? (
-                <EmptyState compact title="Üslup yok" />
+                <EmptyState compact title={ux.uslupYok} />
               ) : (
                 <ul className="divide-y divide-border">
                   {s.tones.map((t) => (
@@ -82,8 +85,8 @@ export default function TonesTab({ initial }: { initial?: TonesState | null }) {
           if (!o) setEditor(null);
         }}
         id={editor?.mode === 'edit' ? editor.tone.slug : 'yeni'}
-        title={editor?.mode === 'edit' ? `${editor.tone.name} üslubu` : editor?.preset ? `${editor.preset.name} üslubunu etkinleştir` : 'Yeni üslup'}
-        description={editor?.mode === 'edit' ? `Anahtar: ${editor.tone.slug} (değiştirilemez)` : 'Anahtar oluşturulduktan sonra değiştirilemez; bayi kuralları bu anahtara bağlıdır.'}
+        title={editor?.mode === 'edit' ? fz.toneTitle(editor.tone.name) : editor?.preset ? fz.activateTone(editor.preset.name) : ux.yeniUslup}
+        description={editor?.mode === 'edit' ? fz.keyLocked(editor.tone.slug) : ux.anahtarOlusturulduktanSonraDegistirilemez}
         size="lg"
       >
         {editor ? <ToneEditor key={editor.mode === 'edit' ? editor.tone.slug : editor.preset?.slug ?? 'new'} state={editor} onClose={() => setEditor(null)} /> : null}
@@ -101,9 +104,12 @@ function presetFor(t: ToneRow) {
 }
 
 function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; onActivate: () => void }) {
+  const fz = usePromptStudioCopy().fx;
+  const L = useSourceT(PROMPT_STUDIO_DICT);
+  const ux = usePromptStudioCopy().ui;
   const qc = useQueryClient();
   const [reason, setReason] = useState('');
-  const src = SOURCE[t.source];
+  const src = { ...SOURCE[t.source], label: L(SOURCE[t.source].label) };
   return (
     <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -111,39 +117,39 @@ function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; o
           <span className="font-medium text-fg">{t.name}</span>
           <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">{t.slug}</code>
           <StatusBadge label={src.label} tone={src.tone} size="sm" />
-          {t.id ? <StatusBadge label={t.isActive ? 'Bayiye sunuluyor' : 'Arşivde'} tone={t.isActive ? 'success' : 'warning'} size="sm" /> : null}
+          {t.id ? <StatusBadge label={t.isActive ? 'Bayiye sunuluyor' : ux.arsivde} tone={t.isActive ? 'success' : 'warning'} size="sm" /> : null}
         </div>
         <p className="qx-small text-fg-muted">
           {fmtNumber(t.usage.activeRules)} aktif kural · {fmtNumber(t.usage.rules)} toplam kural · {fmtNumber(t.usage.dealers)} bayi
-          {t.updatedAt ? ` · güncellendi ${fmtDateTime(t.updatedAt)}` : ''}
+          {t.updatedAt ? fz.updatedAt(fmtDateTime(t.updatedAt)) : ''}
         </p>
-        <p className="line-clamp-2 text-sm text-fg">{t.systemPrompt ?? `Kod tarifi: “${t.descriptor}”. Bayi seçicisinde görünmesi için etkinleştirin.`}</p>
+        <p className="line-clamp-2 text-sm text-fg">{t.systemPrompt ?? fz.codeDescriptor(String(t.descriptor))}</p>
       </div>
       <div className="flex flex-wrap gap-2 sm:justify-end">
         {t.id ? (
           <>
-            <Button variant="outline" className="min-h-11 sm:min-h-9" onClick={onEdit} aria-label={`${t.name} üslubunu düzenle`}>
+            <Button variant="outline" className="min-h-11 sm:min-h-9" onClick={onEdit} aria-label={fz.editTone(t.name)}>
               <Pencil className="h-4 w-4" aria-hidden />
-              Düzenle
+              {ux.duzenle}
             </Button>
             <ConfirmAction
               tone={t.isActive ? 'warning' : 'brand'}
               trigger={
-                <Button variant="ghost" className="min-h-11 sm:min-h-9" aria-label={`${t.name} üslubunu ${t.isActive ? 'arşivle' : 'yeniden etkinleştir'}`}>
+                <Button variant="ghost" className="min-h-11 sm:min-h-9" aria-label={fz.toggleTone(t.name, t.isActive)}>
                   {t.isActive ? <Archive className="h-4 w-4" aria-hidden /> : <ArchiveRestore className="h-4 w-4" aria-hidden />}
-                  {t.isActive ? 'Arşivle' : 'Geri al'}
+                  {t.isActive ? ux.arsivle : 'Geri al'}
                 </Button>
               }
-              title={t.isActive ? `${t.name} arşivlensin mi?` : `${t.name} yeniden etkinleşsin mi?`}
+              title={fz.toggleTitle(t.name, t.isActive)}
               description={
                 t.isActive
-                  ? 'Bayi seçicisinden kalkar; bu üslubu kullanan mevcut kurallar AI yanıtında yalnız yerleşik aile tarifine düşer. Kayıt silinmez.'
-                  : 'Bayi seçicisinde yeniden görünür ve kurallar bu talimatı kullanır.'
+                  ? ux.bayiSecicisindenKalkarBu
+                  : ux.bayiSecicisindeYenidenGorunur
               }
               impact={{
                 items: [
-                  { label: 'Aktif kural', value: fmtNumber(t.usage.activeRules), emphasis: t.isActive && t.usage.activeRules > 0 },
-                  { label: 'Etkilenen bayi', value: fmtNumber(t.usage.dealers) },
+                  { label: ux.aktifKural, value: fmtNumber(t.usage.activeRules), emphasis: t.isActive && t.usage.activeRules > 0 },
+                  { label: ux.etkilenenBayi, value: fmtNumber(t.usage.dealers) },
                 ],
                 warning: (
                   <span className="block pt-2">
@@ -152,14 +158,14 @@ function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; o
                 ),
               }}
               irreversibleNote={false}
-              confirmLabel={t.isActive ? 'Arşivle' : 'Etkinleştir'}
+              confirmLabel={t.isActive ? ux.arsivle : ux.etkinlestir}
               onConfirm={async () => {
-                if (!reasonOk(reason)) throw new Error('Gerekçe en az 3 karakter olmalı.');
+                if (!reasonOk(reason)) throw new Error(fz.reasonMin);
                 try {
                   qc.setQueryData(studioKeys.tones(), await setToneStatus(t.id!, { active: !t.isActive, reason, expectedVersion: t.version ?? '' }));
                   qc.invalidateQueries({ queryKey: studioKeys.overview() });
                   setReason('');
-                  toast.success(t.isActive ? 'Üslup arşivlendi.' : 'Üslup yeniden etkin.');
+                  toast.success(t.isActive ? ux.uslupArsivlendi : ux.uslupYenidenEtkin);
                 } catch (e) {
                   if (isConflict(e)) qc.invalidateQueries({ queryKey: studioKeys.tones() });
                   throw e;
@@ -168,9 +174,9 @@ function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; o
             />
           </>
         ) : (
-          <Button variant="outline" className="min-h-11 sm:min-h-9" onClick={onActivate} aria-label={`${t.name} üslubunu etkinleştir`}>
+          <Button variant="outline" className="min-h-11 sm:min-h-9" onClick={onActivate} aria-label={fz.activateTone(t.name)}>
             <Power className="h-4 w-4" aria-hidden />
-            Etkinleştir
+            {ux.etkinlestir}
           </Button>
         )}
       </div>
@@ -179,13 +185,14 @@ function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; o
 }
 
 function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClose: () => void }) {
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const tone = state.mode === 'edit' ? state.tone : null;
   const [slug, setSlug] = useState(state.mode === 'create' ? state.preset?.slug ?? '' : tone!.slug);
   const [name, setName] = useState(state.mode === 'create' ? state.preset?.name ?? '' : tone!.name);
   const [prompt, setPrompt] = useState(state.mode === 'create' ? state.preset?.systemPrompt ?? '' : tone!.systemPrompt ?? '');
-  const [reason, setReason] = useState(state.mode === 'create' && state.preset ? 'Yerleşik üslup bayilere açıldı' : '');
+  const [reason, setReason] = useState(state.mode === 'create' && state.preset ? ux.yerlesikUslupBayilereAcildi : '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const slugLocked = state.mode === 'edit' || !!(state.mode === 'create' && state.preset);
@@ -205,12 +212,12 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
       qc.setQueryData(studioKeys.tones(), next);
       qc.invalidateQueries({ queryKey: studioKeys.overview() });
       if (tone) qc.invalidateQueries({ queryKey: studioKeys.toneHistory(tone.id!) });
-      toast.success(tone ? 'Üslup güncellendi.' : 'Üslup oluşturuldu; bayi seçicisinde görünür.');
+      toast.success(tone ? ux.uslupGuncellendi : ux.uslupOlusturulduBayiSecicisinde);
       onClose();
     },
     onError: (e) => {
       if (isConflict(e) && tone) {
-        setFormError('Bu üslup siz düzenlerken değişti. Pencereyi kapatıp güncel hâlini açın.');
+        setFormError(ux.buUslupSizDuzenlerken);
         qc.invalidateQueries({ queryKey: studioKeys.tones() });
         return;
       }
@@ -237,7 +244,7 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
           e.preventDefault();
           setFormError(null);
           if (!valid) {
-            setFormError(!dirty ? 'Değişiklik yok.' : 'Alanları kontrol edin (ad ≥ 2, talimat 20–600 karakter, gerekçe ≥ 3).');
+            setFormError(!dirty ? ux.degisiklikYok : ux.alanlariKontrolEdinAd);
             return;
           }
           save.mutate();
@@ -262,32 +269,32 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
               aria-invalid={!!errors.slug || undefined}
             />
             <p id="tone-slug-hint" className={cn('qx-small', errors.slug ? 'text-danger' : 'text-fg-muted')}>
-              {errors.slug ?? (slugLocked ? 'Değiştirilemez: kurallar bu anahtara bağlı.' : 'Küçük harf, rakam ve tire (örn. sicak-ve-kisa).')}
-              {!slugLocked && isBuiltinSlug ? ' Bu yerleşik bir ailenin anahtarı; listedeki “Etkinleştir”i kullanın.' : ''}
+              {errors.slug ?? (slugLocked ? ux.degistirilemezKurallarBuAnahtara : ux.kucukHarfRakamVe)}
+              {!slugLocked && isBuiltinSlug ? ux.buYerlesikBirAilenin : ''}
             </p>
           </div>
         </div>
         <CountedTextarea
-          label="Üslup talimatı"
+          label={ux.uslupTalimati}
           value={prompt}
           onChange={setPrompt}
           max={TONE_PROMPT_MAX}
           min={TONE_PROMPT_MIN}
           rows={6}
           error={errors.systemPrompt}
-          hint="Kısa üslup tarifi yazın. Model müşteri adını görmez; kişisel hitap, vaat, indirim ya da bağlantı isteyen talimatlar temel kurallar tarafından engellenir."
+          hint={ux.kisaUslupTarifiYazin}
         />
-        {tone && prompt.trim() !== (tone.systemPrompt ?? '') ? <TextDiff before={tone.systemPrompt} after={prompt.trim()} label="Kayıtlı → düzenlenen" /> : null}
+        {tone && prompt.trim() !== (tone.systemPrompt ?? '') ? <TextDiff before={tone.systemPrompt} after={prompt.trim()} label={ux.kayitliDuzenlenen} /> : null}
         <ReasonInput value={reason} onChange={setReason} error={errors.reason} />
         {formError ? (
           <InlineError variant="banner">{formError}</InlineError>
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={save.isPending}>
-            {save.isPending ? 'Kaydediliyor…' : tone ? 'Değişiklikleri kaydet' : 'Oluştur'}
+            {save.isPending ? 'Kaydediliyor…' : tone ? ux.degisiklikleriKaydet : ux.olustur}
           </Button>
           <Button type="button" variant="ghost" className="min-h-11 sm:min-h-10" onClick={onClose}>
-            Vazgeç
+            {ux.vazgec}
           </Button>
         </div>
       </form>
@@ -302,9 +309,11 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
 const RATING_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} ★`, textLabel: `${n} yıldız` }));
 
 function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
+  const fz = usePromptStudioCopy().fx;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const [rating, setRating] = useState('2');
-  const [text, setText] = useState('Yemek soğuk geldi, garson da ilgisizdi.');
+  const [text, setText] = useState(ux.yemekSogukGeldiGarson);
   const run = useMutation({
     mutationFn: () => previewTone({ slug, systemPrompt: prompt.trim() ? prompt.trim().slice(0, TONE_PROMPT_MAX) : null, rating: Number(rating), text }),
     onError: (e) => toast.error(errorText(e)),
@@ -319,14 +328,14 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
     <section aria-labelledby="tone-preview-h" className="space-y-3 rounded-lg border border-border p-3">
       <h3 id="tone-preview-h" className="flex items-center gap-2 font-medium text-fg">
         <Sparkles className="h-4 w-4" aria-hidden />
-        Önizleme (kaydetmeden)
+        {ux.onizlemeKaydetmeden}
       </h3>
       <p className="qx-small text-fg-muted">{px.previewNote}</p>
       <div className="space-y-1.5">
         <span id="tone-rating-l" className="qx-small font-medium text-fg">
-          Müşteri puanı
+          {ux.musteriPuani}
         </span>
-        <ChoiceChips aria-labelledby="tone-rating-l" options={RATING_OPTIONS} value={rating} onChange={(v) => v && setRating(v)} size="sm" />
+        <ChoiceChips aria-labelledby="tone-rating-l" options={RATING_OPTIONS.map((o) => ({ ...o, textLabel: fz.stars(Number(o.value)) }))} value={rating} onChange={(v) => v && setRating(v)} size="sm" />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="tone-sample">{px.sampleReview}</Label>
@@ -334,7 +343,7 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
       </div>
       <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" disabled={run.isPending || text.trim().length < 5} onClick={() => run.mutate()}>
         <Sparkles className="h-4 w-4" aria-hidden />
-        {run.isPending ? 'Üretiliyor…' : 'Yanıt üret'}
+        {run.isPending ? ux.uretiliyor : ux.yanitUret}
       </Button>
       {r ? (
         <div className="space-y-2" aria-live="polite">
@@ -342,13 +351,13 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
             <blockquote className="rounded-md border-l-4 border-brand bg-brand-subtle/40 p-3 text-sm text-fg">{r.reply}</blockquote>
           ) : (
             <InlineError variant="banner" tone="warning">
-              {r.reason === 'unconfigured' ? 'AI sağlayıcısı yapılandırılmamış; yanıt üretilmedi.' : 'Yorum güvenlik denetiminden geçmedi ya da AI kapalı; yanıt üretilmedi.'}
+              {r.reason === 'unconfigured' ? ux.aiSaglayicisiYapilandirilmamisYanit : ux.yorumGuvenlikDenetimindenGecmedi}
             </InlineError>
           )}
           {r.model ? <p className="qx-small text-fg-muted">Model: {r.model}</p> : null}
           <details>
             <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">{px.showSystemMsg}</summary>
-            <PromptBlock text={r.systemPrompt} label="Gönderilen sistem mesajı" />
+            <PromptBlock text={r.systemPrompt} label={ux.gonderilenSistemMesaji} />
           </details>
         </div>
       ) : null}
@@ -357,15 +366,16 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
 }
 
 function ToneHistory({ id, onLoad, current }: { id: string; onLoad: (text: string) => void; current: string | null }) {
+  const ux = usePromptStudioCopy().ui;
   const q = useQuery({ queryKey: studioKeys.toneHistory(id), queryFn: () => fetchToneHistory(id), staleTime: 30_000 });
-  const LABEL: Record<string, string> = { AI_TONE_CREATE: 'Oluşturuldu', AI_TONE_UPDATE: 'Güncellendi', AI_TONE_ARCHIVE: 'Arşivlendi', AI_TONE_RESTORE: 'Yeniden etkin' };
+  const LABEL: Record<string, string> = { AI_TONE_CREATE: ux.olusturuldu, AI_TONE_UPDATE: ux.guncellendi, AI_TONE_ARCHIVE: ux.arsivlendi, AI_TONE_RESTORE: 'Yeniden etkin' };
   const rows = useMemo(() => q.data ?? [], [q.data]);
   return (
     <section aria-labelledby="tone-hist-h" className="space-y-2">
       <h3 id="tone-hist-h" className="font-medium text-fg">
-        Değişiklik geçmişi
+        {ux.degisiklikGecmisi}
       </h3>
-      <QueryState query={q} skeleton="list" isEmpty={(d) => d.length === 0} empty={{ compact: true, title: 'Kayıt yok', description: 'Bu üslup için denetim kaydı bulunmuyor (sürümleme öncesi oluşturulmuş olabilir).' }}>
+      <QueryState query={q} skeleton="list" isEmpty={(d) => d.length === 0} empty={{ compact: true, title: ux.kayitYok, description: ux.buUslupIcinDenetim }}>
         {() => (
           <ol className="space-y-2">
             {rows.map((h) => (
@@ -380,7 +390,7 @@ function ToneHistory({ id, onLoad, current }: { id: string; onLoad: (text: strin
                 {h.after?.systemPrompt && h.after.systemPrompt !== current ? (
                   <Button type="button" variant="ghost" size="sm" className="min-h-11 px-2 sm:min-h-9" onClick={() => onLoad(h.after!.systemPrompt!)}>
                     <RotateCcw className="h-4 w-4" aria-hidden />
-                    Bu metni editöre al
+                    {ux.buMetniEditoreAl}
                   </Button>
                 ) : null}
               </li>

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { usePromptStudioCopy } from './copy';
 
 /** Etiketli, sayaçlı metin alanı — sınır aşılınca uyarı metinle de verilir. */
 export function CountedTextarea({
@@ -30,6 +31,7 @@ export function CountedTextarea({
   placeholder?: string;
   disabled?: boolean;
 }) {
+  const ux = usePromptStudioCopy().ui;
   const id = useId();
   const len = value.trim().length;
   const over = len > max;
@@ -58,7 +60,7 @@ export function CountedTextarea({
         )}
         <p id={`${id}-count`} className={cn('qx-small tabular-nums', over || under ? 'text-danger' : 'text-fg-muted')} aria-live="polite">
           {len} / {max}
-          {over ? ' · sınırı aşıyor' : under ? ` · en az ${min}` : ''}
+          {over ? ux.siniriAsiyor : under ? ` · en az ${min}` : ''}
         </p>
       </div>
       {error ? (
@@ -71,7 +73,10 @@ export function CountedTextarea({
 }
 
 /** Gerekçe alanı — her yazım denetim kaydına bu metinle düşer. */
-export function ReasonInput({ value, onChange, error, label = 'Değişiklik gerekçesi' }: { value: string; onChange: (v: string) => void; error?: string | null; label?: string }) {
+export function ReasonInput({ value, onChange, error, label: labelProp }: { value: string; onChange: (v: string) => void; error?: string | null; label?: string }) {
+  const ux = usePromptStudioCopy().ui;
+  const reasonFx = usePromptStudioCopy().fx;
+  const label = labelProp ?? reasonFx.changeReason;
   const id = useId();
   return (
     <div className="space-y-1.5">
@@ -81,7 +86,7 @@ export function ReasonInput({ value, onChange, error, label = 'Değişiklik gere
         value={value}
         onChange={(e) => onChange(e.target.value)}
         maxLength={200}
-        placeholder="Örn. Yanıtlar çok uzundu, kısaltma kuralı eklendi"
+        placeholder={ux.ornYanitlarCokUzundu}
         aria-invalid={!!error || undefined}
         aria-describedby={error ? `${id}-err` : `${id}-hint`}
         className="min-h-11 sm:min-h-10"
@@ -92,7 +97,7 @@ export function ReasonInput({ value, onChange, error, label = 'Değişiklik gere
         </p>
       ) : (
         <p id={`${id}-hint`} className="qx-small text-fg-muted">
-          Denetim geçmişine yazılır (en az 3 karakter).
+          {ux.denetimGecmisineYazilirEn}
         </p>
       )}
     </div>

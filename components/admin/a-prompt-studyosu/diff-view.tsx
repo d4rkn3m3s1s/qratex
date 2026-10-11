@@ -8,6 +8,7 @@ import { usePromptStudioCopy } from './copy';
 
 /** Satır bazlı metin farkı — ekleme/silme işaretle ve metinle (yalnız renge dayanmaz). */
 export function TextDiff({ before, after, label }: { before: string | null; after: string | null; label: string }) {
+  const fz = usePromptStudioCopy().fx;
   const px = usePromptStudioCopy();
   const lines = useMemo(() => lineDiff(before, after), [before, after]);
   const stats = diffStats(lines);
@@ -15,11 +16,11 @@ export function TextDiff({ before, after, label }: { before: string | null; afte
   return (
     <figure className="space-y-1">
       <figcaption className="qx-small text-fg-muted">
-        {label}: <span className="text-success">+{stats.added} satır</span> · <span className="text-danger">−{stats.removed} satır</span>
+        {label}: <span className="text-success">{fz.linesAdded(stats.added)}</span> · <span className="text-danger">{fz.linesRemoved(stats.removed)}</span>
       </figcaption>
       <pre
         className="max-h-80 overflow-auto rounded-md border border-border bg-surface-muted p-2 font-mono text-xs leading-relaxed"
-        aria-label={`${label} farkı`}
+        aria-label={fz.diffOf(label)}
         tabIndex={0}
       >
         {lines.map((l, i) => (
@@ -47,6 +48,7 @@ export function TextDiff({ before, after, label }: { before: string | null; afte
 
 /** Liste farkı: eklenen / çıkarılan / değişmeyen öğeler. */
 export function ListDiffView({ title, diff }: { title: string; diff: ListDiff }) {
+  const fz = usePromptStudioCopy().fx;
   const px = usePromptStudioCopy();
   const empty = !diff.added.length && !diff.removed.length && !diff.unchanged.length;
   return (
@@ -54,7 +56,7 @@ export function ListDiffView({ title, diff }: { title: string; diff: ListDiff })
       <h4 className="qx-small font-medium text-fg">
         {title}{' '}
         <span className="text-fg-muted">
-          (+{diff.added.length} · −{diff.removed.length} · {diff.unchanged.length} aynı)
+          (+{diff.added.length} · −{diff.removed.length} · {fz.sameN(diff.unchanged.length)})
         </span>
       </h4>
       {empty ? (

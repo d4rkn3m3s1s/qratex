@@ -24,7 +24,8 @@ import { cn } from '@/lib/utils';
 import { errorText, fetchDealer, fetchDealers, fieldErrors, isConflict, refreshDealerProfile, studioKeys, updateDealerPolicy } from './api';
 import { fmtAgo, fmtDateTime, fmtNumber } from './format';
 import { CountedTextarea, ReasonInput, reasonOk } from './parts';
-import { usePromptStudioCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { PROMPT_STUDIO_DICT, usePromptStudioCopy } from './copy';
 
 export type DealersInitial = { qs: string; page: DealerListPage } | null;
 
@@ -43,12 +44,16 @@ const FILTER_OPTIONS = [
  * Liste sunucu sayfalı ve aranır; ayar satırı olmayan bayi "varsayılan" olarak görünür.
  */
 export default function DealersTab({ initial }: { initial?: DealersInitial }) {
+  const fz = usePromptStudioCopy().fx;
+  const L = useSourceT(PROMPT_STUDIO_DICT);
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const fields = useMemo<FilterField[]>(
     () => [
-      { type: 'search', key: 'q', label: 'Ara', placeholder: 'İşletme adı ya da e-posta', minLength: 2 },
-      { type: 'select', key: 'durum', label: 'Durum', allLabel: 'Tümü', options: FILTER_OPTIONS },
+      { type: 'search', key: 'q', label: ux.ara, placeholder: ux.isletmeAdiYaDa, minLength: 2 },
+      { type: 'select', key: 'durum', label: ux.durum, allLabel: ux.tumu, options: FILTER_OPTIONS.map((o) => ({ ...o, label: L(o.label) })) },
     ],
-    []
+    [L, ux]
   );
   const filters = useFilterState(fields);
   const table = useUrlTableState({ defaultPageSize: 20 });
@@ -68,7 +73,7 @@ export default function DealersTab({ initial }: { initial?: DealersInitial }) {
         id: 'name',
         header: 'Bayi',
         enableSorting: false,
-        meta: { mobile: 'title', label: 'Bayi' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: ux.bayi } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="min-w-[12rem]">
             <span className="block truncate font-medium text-fg">{row.original.name}</span>
@@ -78,49 +83,49 @@ export default function DealersTab({ initial }: { initial?: DealersInitial }) {
       },
       {
         id: 'policy',
-        header: 'AI politikası',
+        header: ux.aiPolitikasi,
         enableSorting: false,
-        meta: { mobile: 'subtitle', label: 'AI politikası' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'subtitle', label: ux.aiPolitikasi } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const p = row.original.policy;
           return (
             <div className="flex flex-wrap gap-1">
-              <StatusBadge size="sm" label={p.isEnabled ? 'AI açık' : 'AI kapalı'} tone={p.isEnabled ? 'success' : 'danger'} />
-              {p.isEnabled && !p.autoAnalyze ? <StatusBadge size="sm" label="Otomatik analiz kapalı" tone="warning" /> : null}
-              {p.hasCustomPrompt ? <StatusBadge size="sm" label="Bağlam var" tone="info" /> : null}
-              {p.isDefault ? <StatusBadge size="sm" label="Varsayılan" tone="neutral" icon={null} /> : null}
+              <StatusBadge size="sm" label={p.isEnabled ? ux.aiAcik : ux.aiKapali} tone={p.isEnabled ? 'success' : 'danger'} />
+              {p.isEnabled && !p.autoAnalyze ? <StatusBadge size="sm" label={ux.otomatikAnalizKapali} tone="warning" /> : null}
+              {p.hasCustomPrompt ? <StatusBadge size="sm" label={ux.baglamVar} tone="info" /> : null}
+              {p.isDefault ? <StatusBadge size="sm" label={ux.varsayilan} tone="neutral" icon={null} /> : null}
             </div>
           );
         },
       },
       {
         id: 'profile',
-        header: 'Öğrenme profili',
+        header: ux.ogrenmeProfili,
         enableSorting: false,
-        meta: { label: 'Öğrenme profili' } satisfies DataTableColumnMeta,
+        meta: { label: ux.ogrenmeProfili } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const pr = row.original.profile;
           return pr ? (
             <span className="text-sm">
-              Sürüm {pr.version} · <time dateTime={pr.lastTrainedAt ?? undefined}>{fmtAgo(pr.lastTrainedAt)}</time>
+              {fz.versionAt(pr.version)} <time dateTime={pr.lastTrainedAt ?? undefined}>{fmtAgo(pr.lastTrainedAt)}</time>
             </span>
           ) : (
-            <span className="text-sm text-fg-muted">Yok</span>
+            <span className="text-sm text-fg-muted">{uy.yok}</span>
           );
         },
       },
     ],
-    []
+    [fz, ux, uy]
   );
 
   return (
     <div className="space-y-4">
-      <FilterBar fields={fields} ariaLabel="Bayi filtreleri" />
+      <FilterBar fields={fields} ariaLabel={ux.bayiFiltreleri} />
       <p className="sr-only" aria-live="polite">
         {list.data ? `${fmtNumber(list.data.total)} bayi bulundu` : ''}
       </p>
       <DataTable
-        ariaLabel="Bayi AI politikaları"
+        ariaLabel={ux.bayiAiPolitikalari}
         columns={columns}
         data={list.data?.items}
         query={list}
@@ -135,11 +140,11 @@ export default function DealersTab({ initial }: { initial?: DealersInitial }) {
         onRowClick={(r) => sheet.open(r.id)}
         empty={
           filters.activeCount > 0
-            ? { variant: 'filtered', title: 'Filtrelere uyan bayi yok', secondaryAction: <Button variant="outline" className="min-h-11" onClick={filters.clear}>Filtreleri temizle</Button> }
-            : { variant: 'first-use', title: 'Henüz bayi yok', description: 'İlk bayi kaydolduğunda AI politikası burada yönetilir.' }
+            ? { variant: 'filtered', title: ux.filtrelereUyanBayiYok, secondaryAction: <Button variant="outline" className="min-h-11" onClick={filters.clear}>{uy.filtreleriTemizle}</Button> }
+            : { variant: 'first-use', title: ux.henuzBayiYok, description: ux.ilkBayiKaydoldugundaAi }
         }
       />
-      <DetailSheet paramKey="bayi" title="Bayi AI ayarları" size="lg">
+      <DetailSheet paramKey="bayi" title={ux.bayiAiAyarlari} size="lg">
         {(id) => <DealerDetailBody id={id} />}
       </DetailSheet>
     </div>
@@ -147,9 +152,10 @@ export default function DealersTab({ initial }: { initial?: DealersInitial }) {
 }
 
 function DealerDetailBody({ id }: { id: string }) {
+  const ux = usePromptStudioCopy().ui;
   const q = useQuery({ queryKey: studioKeys.dealer(id), queryFn: () => fetchDealer(id), staleTime: 10_000 });
   return (
-    <QueryState query={q} skeleton="detail" error={{ title: 'Bayi yüklenemedi' }}>
+    <QueryState query={q} skeleton="detail" error={{ title: ux.bayiYuklenemedi }}>
       {(d) => <DealerDetailView d={d} />}
     </QueryState>
   );
@@ -179,6 +185,10 @@ function pickPolicy(p: DealerPolicyView) {
 }
 
 function DealerDetailView({ d }: { d: DealerDetail }) {
+  const fz = usePromptStudioCopy().fx;
+  const L = useSourceT(PROMPT_STUDIO_DICT);
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const baseId = useId();
@@ -213,11 +223,11 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
       setReason('');
       setErrors({});
       setFormError(null);
-      toast.success('Bayi AI ayarları kaydedildi; en geç 30 sn içinde tüm yollara yansır.');
+      toast.success(ux.bayiAiAyarlariKaydedildi);
     },
     onError: (e) => {
       if (isConflict(e)) {
-        setFormError('Bu ayarlar siz düzenlerken (muhtemelen bayi tarafından) değişti. Güncel hâl yüklendi; değişikliklerinizi yeniden uygulayın.');
+        setFormError(ux.buAyarlarSizDuzenlerken);
         qc.invalidateQueries({ queryKey: studioKeys.dealer(d.id) });
         return;
       }
@@ -230,7 +240,7 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
     mutationFn: () => refreshDealerProfile(d.id),
     onSuccess: (next) => {
       setDetail(next);
-      toast.success('Öğrenme profili yenilendi.');
+      toast.success(ux.ogrenmeProfiliYenilendi);
     },
   });
 
@@ -242,8 +252,8 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
         <p className="font-medium text-fg">{d.name}</p>
         {d.email ? <p className="qx-small text-fg-muted">{d.email}</p> : null}
         <p className="qx-small text-fg-muted">
-          Son 7 gün: {fmtNumber(d.usage7d.calls)} AI çağrısı · {fmtNumber(d.usage7d.failures)} hata · {fmtNumber(d.usage7d.tokens)} token
-          {d.policy.isDefault ? ' · ayar satırı yok (varsayılanlar geçerli)' : ''}
+          {fz.usage7d(fmtNumber(d.usage7d.calls), fmtNumber(d.usage7d.failures), fmtNumber(d.usage7d.tokens))}
+          {d.policy.isDefault ? ux.ayarSatiriYokVarsayilanlar : ''}
         </p>
       </div>
 
@@ -253,16 +263,16 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
         onSubmit={(e) => {
           e.preventDefault();
           setFormError(null);
-          if (!dirty) return setFormError('Değişiklik yok.');
-          if (!reasonOk(reason)) return setFormError('Gerekçe en az 3 karakter olmalı.');
+          if (!dirty) return setFormError(ux.degisiklikYok);
+          if (!reasonOk(reason)) return setFormError(ux.gerekceEnAz3);
           save.mutate();
         }}
       >
         <h3 id={`${baseId}-policy`} className="font-medium text-fg">
-          AI politikası
+          {ux.aiPolitikasi}
         </h3>
         <p className="qx-small text-fg-muted">
-          Bayi de aynı ayarları kendi panelinden değiştirebilir; burada yaptığınız değişiklik yönetici adıyla ve gerekçeyle denetim kaydına düşer.
+          {ux.bayiDeAyniAyarlari}
         </p>
         <ul className="divide-y divide-border rounded-lg border border-border">
           {SWITCHES.map((s) => {
@@ -272,11 +282,11 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
               <li key={s.key} className="flex items-start justify-between gap-3 p-3">
                 <div className="min-w-0">
                   <Label htmlFor={id} className="font-medium">
-                    {POLICY_FIELD_LABELS[s.key]}
+                    {L(POLICY_FIELD_LABELS[s.key])}
                   </Label>
                   <p id={`${id}-d`} className="qx-small text-fg-muted">
-                    {s.hint}
-                    {inert ? ' AI ana anahtarı kapalıyken etkisiz (değeri korunur).' : ''}
+                    {L(s.hint)}
+                    {inert ? ux.aiAnaAnahtariKapaliyken : ''}
                   </p>
                 </div>
                 <Switch
@@ -291,23 +301,23 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
           })}
         </ul>
         <CountedTextarea
-          label={POLICY_FIELD_LABELS.customPrompt}
+          label={L(POLICY_FIELD_LABELS.customPrompt)}
           value={form.customPrompt}
           onChange={(v) => setForm((f) => ({ ...f, customPrompt: v }))}
           max={DEALER_AI_CONTEXT_MAX}
           rows={5}
           error={errors.customPrompt}
-          hint="Yalnız bu bayinin analizine, sınırlı ek bağlam olarak eklenir; talimat/kod/bağlantı içeren metin reddedilir."
+          hint={ux.yalnizBuBayininAnalizine}
         />
         <ReasonInput value={reason} onChange={setReason} error={errors.reason} />
         {formError ? <InlineError variant="banner">{formError}</InlineError> : null}
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={save.isPending || !dirty}>
-            {save.isPending ? 'Kaydediliyor…' : dirty ? `${changedKeys.length} değişikliği kaydet` : 'Kaydedilecek değişiklik yok'}
+            {save.isPending ? fz.saving : dirty ? fz.saveChanges(changedKeys.length) : ux.kaydedilecekDegisiklikYok}
           </Button>
           {dirty ? (
             <Button type="button" variant="ghost" className="min-h-11 sm:min-h-10" onClick={() => setForm(original)}>
-              Geri al
+              {uy.geriAl}
             </Button>
           ) : null}
         </div>
@@ -316,13 +326,13 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
       <section aria-labelledby={`${baseId}-profile`} className="space-y-3 border-t border-border pt-4">
         <div className="flex flex-wrap items-center gap-2">
           <h3 id={`${baseId}-profile`} className="font-medium text-fg">
-            Öğrenme profili
+            {ux.ogrenmeProfili}
           </h3>
-          {d.retrain.shouldRetrain ? <StatusBadge size="sm" tone="warning" label="Yeniden eğitim önerilir" /> : null}
+          {d.retrain.shouldRetrain ? <StatusBadge size="sm" tone="warning" label={ux.yenidenEgitimOnerilir} /> : null}
         </div>
         {d.retrain.reason ? <p className="qx-small text-fg-muted">{d.retrain.reason}</p> : null}
         <p className="qx-small text-fg-muted">
-          Son eğitimden beri {fmtNumber(d.retrain.newFeedbackCount)} yeni geri bildirim, {fmtNumber(d.retrain.newCorrectionsCount)} yeni düzeltme. Profil, yeni veri eşiği aşıldığında otomatik de yenilenir.
+          {fz.sinceTrain(fmtNumber(d.retrain.newFeedbackCount), fmtNumber(d.retrain.newCorrectionsCount))}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <ConfirmAction
@@ -330,13 +340,13 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
             trigger={
               <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={!enoughData || refresh.isPending}>
                 <RefreshCw className={cn('h-4 w-4', refresh.isPending && 'animate-spin motion-reduce:animate-none')} aria-hidden />
-                {refresh.isPending ? 'Yenileniyor…' : 'Profili şimdi yenile'}
+                {refresh.isPending ? 'Yenileniyor…' : ux.profiliSimdiYenile}
               </Button>
             }
-            title="Öğrenme profili yenilensin mi?"
-            description="Bu bayinin son 200 geri bildirimi ve düzeltmesi AI sağlayıcısına gönderilir (bayinin AI'ı kapalıysa yerel, deterministik profil üretilir). Bayi günlük token tavanı uygulanır."
+            title={ux.ogrenmeProfiliYenilensinMi}
+            description={ux.buBayininSon200}
             irreversibleNote={false}
-            confirmLabel="Yenile"
+            confirmLabel={ux.yenile}
             onConfirm={() => refresh.mutateAsync()}
           />
           {!enoughData ? (
@@ -345,12 +355,12 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
             </p>
           ) : null}
         </div>
-        {d.profile ? <ProfileView d={d} /> : <EmptyState compact title="Profil yok" description="Yeterli veri oluştuğunda profil otomatik oluşur ya da buradan yenileyebilirsiniz." />}
+        {d.profile ? <ProfileView d={d} /> : <EmptyState compact title={ux.profilYok} description={ux.yeterliVeriOlustugundaProfil} />}
       </section>
 
       <section aria-labelledby={`${baseId}-corr`} className="space-y-2 border-t border-border pt-4">
         <h3 id={`${baseId}-corr`} className="font-medium text-fg">
-          Son düzeltmeler
+          {ux.sonDuzeltmeler}
         </h3>
         {d.corrections.length === 0 ? (
           <p className="qx-small text-fg-muted">{px.noDealerEdits}</p>
@@ -375,9 +385,11 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
 }
 
 function ProfileView({ d }: { d: DealerDetail }) {
+  const fz = usePromptStudioCopy().fx;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const p = d.profile!;
-  const PRI: Record<string, string> = { high: 'yüksek', medium: 'orta', low: 'düşük' };
+  const PRI: Record<string, string> = { high: ux.yuksek, medium: 'orta', low: ux.dusuk };
   return (
     <div className="space-y-4">
       <KeyValueList
@@ -385,12 +397,12 @@ function ProfileView({ d }: { d: DealerDetail }) {
         columns={2}
         dense
         items={[
-          { label: 'Sürüm', value: String(p.version) },
-          { label: 'Son eğitim', value: fmtDateTime(p.lastTrainedAt) },
-          { label: 'Eğitimde kullanılan geri bildirim', value: fmtNumber(p.trainingFeedbackCount) },
-          { label: 'Kullanılan düzeltme', value: fmtNumber(p.correctionsUsed) },
-          { label: 'Sektör', value: p.businessContext.sector ?? '—' },
-          { label: 'Anahtar terimler', value: p.businessContext.keyTerms.join(', ') || '—' },
+          { label: ux.surum, value: String(p.version) },
+          { label: ux.sonEgitim, value: fmtDateTime(p.lastTrainedAt) },
+          { label: ux.egitimdeKullanilanGeriBildirim, value: fmtNumber(p.trainingFeedbackCount) },
+          { label: ux.kullanilanDuzeltme, value: fmtNumber(p.correctionsUsed) },
+          { label: ux.sektor, value: p.businessContext.sector ?? '—' },
+          { label: ux.anahtarTerimler, value: p.businessContext.keyTerms.join(', ') || '—' },
         ]}
       />
       {p.themes.length ? (
@@ -430,7 +442,7 @@ function ProfileView({ d }: { d: DealerDetail }) {
       </div>
       {p.entities.length ? (
         <details>
-          <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">Varlık eşlemeleri ({p.entities.length})</summary>
+          <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">{fz.entityMap(p.entities.length)}</summary>
           <ul className="mt-1 space-y-0.5 text-sm">
             {p.entities.map((e) => (
               <li key={`${e.alias}-${e.canonical}`}>

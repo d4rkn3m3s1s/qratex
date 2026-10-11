@@ -14,7 +14,8 @@ import { MODEL_SLOTS, MODEL_SLOT_META, type ModelSlot, type ModelsState } from '
 import { errorText, fetchModels, isConflict, saveModels, studioKeys } from './api';
 import { fmtNumber, percent } from './format';
 import { ReasonInput, reasonOk } from './parts';
-import { usePromptStudioCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { PROMPT_STUDIO_DICT, usePromptStudioCopy } from './copy';
 
 const DEFAULT = '__default__';
 const SOURCE_LABEL = { override: 'Yönetici seçimi', env: 'Ortam değişkeni', default: 'Kod varsayılanı', none: 'Sağlayıcı yok' } as const;
@@ -24,15 +25,20 @@ const SOURCE_LABEL = { override: 'Yönetici seçimi', env: 'Ortam değişkeni', 
  * ve son 7 günün gerçek kullanımı (AIUsageLog).
  */
 export default function ModelsTab({ initial }: { initial?: ModelsState | null }) {
+  const ux = usePromptStudioCopy().ui;
   const query = useQuery({ queryKey: studioKeys.models(), queryFn: fetchModels, initialData: initial ?? undefined, staleTime: 15_000 });
   return (
-    <QueryState query={query} skeleton="detail" error={{ title: 'Model bilgisi yüklenemedi' }}>
+    <QueryState query={query} skeleton="detail" error={{ title: ux.modelBilgisiYuklenemedi }}>
       {(s) => <ModelsBody s={s} />}
     </QueryState>
   );
 }
 
 function ModelsBody({ s }: { s: ModelsState }) {
+  const fz = usePromptStudioCopy().fx;
+  const L = useSourceT(PROMPT_STUDIO_DICT);
+  const uy = usePromptStudioCopy().ui2;
+  const ux = usePromptStudioCopy().ui;
   const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const baseId = useId();
@@ -55,11 +61,11 @@ function ModelsBody({ s }: { s: ModelsState }) {
       qc.setQueryData(studioKeys.models(), next);
       setReason('');
       setError(null);
-      toast.success('Model seçimi kaydedildi; en geç 1 dakikada tüm sunuculara yansır.');
+      toast.success(ux.modelSecimiKaydedildiEn);
     },
     onError: (e) => {
       if (isConflict(e)) {
-        setError('Model seçimi başka bir oturumda değişti; güncel hâl yüklendi.');
+        setError(ux.modelSecimiBaskaBir);
         qc.invalidateQueries({ queryKey: studioKeys.models() });
         return;
       }
@@ -68,7 +74,7 @@ function ModelsBody({ s }: { s: ModelsState }) {
   });
 
   if (s.provider === 'none') {
-    return <EmptyState title="AI sağlayıcısı yapılandırılmamış" description="GROQ_API_KEY ya da OPENAI_API_KEY tanımlı değil; hiçbir LLM çağrısı yapılmıyor ve model seçilemez." />;
+    return <EmptyState title={ux.aiSaglayicisiYapilandirilmamis2} description={ux.groqApiKeyYa} />;
   }
 
   const totalCalls = s.usage7d.reduce((a, b) => a + b.calls, 0);
@@ -76,8 +82,8 @@ function ModelsBody({ s }: { s: ModelsState }) {
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Model seçimi"
-        description={`Etkin sağlayıcı: ${s.provider === 'groq' ? 'Groq' : 'OpenAI'}. Yalnız bu sağlayıcının katalogdaki modelleri seçilebilir; “Varsayılan” ortam değişkeni ya da kod varsayılanını kullanır.`}
+        title={ux.modelSecimi}
+        description={fz.activeProvider(s.provider === 'groq' ? 'Groq' : 'OpenAI')}
         icon={<Cpu />}
       >
         <form
@@ -85,15 +91,16 @@ function ModelsBody({ s }: { s: ModelsState }) {
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
-            if (!changed.length) return setError('Değişiklik yok.');
-            if (!reasonOk(reason)) return setError('Gerekçe en az 3 karakter olmalı.');
+            if (!changed.length) return setError(ux.degisiklikYok);
+            if (!reasonOk(reason)) return setError(ux.gerekceEnAz3);
             save.mutate();
           }}
         >
           <ul className="space-y-4">
             {s.slots.map((slot) => {
               const id = `${baseId}-${slot.slot}`;
-              const meta = MODEL_SLOT_META[slot.slot];
+              const meta0 = MODEL_SLOT_META[slot.slot];
+              const meta = { ...meta0, title: L(meta0.title), description: L(meta0.description) };
               return (
                 <li key={slot.slot} className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
                   <div className="space-y-1">
@@ -104,20 +111,20 @@ function ModelsBody({ s }: { s: ModelsState }) {
                     <p className="qx-small flex flex-wrap items-center gap-2">
                       <span className="text-fg-muted">{px.current}</span>
                       <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs">{slot.effective ?? '—'}</code>
-                      <StatusBadge size="sm" tone={slot.source === 'override' ? 'brand' : 'neutral'} label={SOURCE_LABEL[slot.source]} icon={null} />
+                      <StatusBadge size="sm" tone={slot.source === 'override' ? 'brand' : 'neutral'} label={L(SOURCE_LABEL[slot.source])} icon={null} />
                     </p>
                     {slot.overrideIgnored ? (
                       <InlineError variant="field" tone="warning">
-                        Kayıtlı seçim ({slot.override}) etkin sağlayıcının kataloğunda yok; yok sayılıyor.
+                        {fz.overrideMissing(String(slot.override))}
                       </InlineError>
                     ) : null}
                   </div>
                   <Select value={sel[slot.slot]} onValueChange={(v) => setSel((p) => ({ ...p, [slot.slot]: v }))}>
-                    <SelectTrigger id={id} className="min-h-11 sm:min-h-10" aria-label={`${meta.title} modeli`}>
+                    <SelectTrigger id={id} className="min-h-11 sm:min-h-10" aria-label={fz.modelOf(meta.title)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={DEFAULT}>Varsayılan ({slot.envDefault ?? '—'})</SelectItem>
+                      <SelectItem value={DEFAULT}>{fz.defaultModel(slot.envDefault ?? '—')}</SelectItem>
                       {s.catalog.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.label}
@@ -142,24 +149,24 @@ function ModelsBody({ s }: { s: ModelsState }) {
           <ReasonInput value={reason} onChange={setReason} />
           {error ? <InlineError variant="banner">{error}</InlineError> : null}
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={save.isPending || !changed.length}>
-            {save.isPending ? 'Kaydediliyor…' : changed.length ? `${changed.length} seçimi kaydet` : 'Değişiklik yok'}
+            {save.isPending ? fz.saving : changed.length ? fz.saveSelections(changed.length) : ux.degisiklikYok2}
           </Button>
         </form>
       </SectionCard>
 
-      <SectionCard title="Son 7 gün kullanım" description="AIUsageLog'dan; başarısız çağrılar dahil. Token sayısı sağlayıcının bildirdiği değerdir." icon={<Gauge />} density="flush">
+      <SectionCard title={ux.son7GunKullanim} description={ux.aiusagelogDanBasarisizCagrilar} icon={<Gauge />} density="flush">
         {s.usage7d.length === 0 ? (
-          <EmptyState compact title="Son 7 günde AI çağrısı yok" />
+          <EmptyState compact title={ux.son7GundeAi} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <caption className="sr-only">{px.usageCaption}</caption>
               <thead className="border-b border-border text-left text-fg-muted">
                 <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">Model</th>
+                  <th scope="col" className="px-4 py-2 font-medium">{uy.model}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">{px.calls}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Pay</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Hata</th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">{uy.hata}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">{px.tokens}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Ort. gecikme</th>
                 </tr>
