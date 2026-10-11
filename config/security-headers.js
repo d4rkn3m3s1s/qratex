@@ -64,7 +64,18 @@ function buildCsp(scriptSrc) {
  * Uygulanan politika. `'unsafe-inline'` Next.js App Router'ın satır içi önyükleme betikleri için
  * gerekli (nonce'lu CSP her sayfayı dinamik render'a zorlar — statik/ISR sayfalar kaybolur).
  */
-const CONTENT_SECURITY_POLICY = buildCsp(`'self' 'unsafe-inline' 'unsafe-eval' blob: ${CSP_SCRIPT_HOSTS}`);
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+/**
+ * `'unsafe-eval'` YALNIZ geliştirmede (genel denetim 2026-10 guvenlik): next dev / React
+ * geliştirme çağrı yığınları eval kullanır; üretim paketinde (`.next/static/chunks`) `eval(` /
+ * `new Function(` YOK (grep ile doğrulandı) → üretimde yalnız WebAssembly için `'wasm-unsafe-eval'`.
+ */
+const SCRIPT_EVAL_SOURCE = IS_PRODUCTION ? "'wasm-unsafe-eval'" : "'unsafe-eval'";
+
+const CONTENT_SECURITY_POLICY = buildCsp(
+  `'self' 'unsafe-inline' ${SCRIPT_EVAL_SOURCE} blob: ${CSP_SCRIPT_HOSTS}`
+);
 
 /** CSP ihlal raporlarının gönderildiği uç (yalnız Report-Only politikası kullanır). */
 const CSP_REPORT_PATH = '/api/security/csp-report';
