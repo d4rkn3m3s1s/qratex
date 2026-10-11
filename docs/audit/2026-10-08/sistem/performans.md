@@ -447,3 +447,71 @@ Beklenen etki: soğuk açılışta ~18 API çağrısı → 1 HTML + 0–2 API; L
 - Vercel 4,5 MB gövde sınırına takılan feedback gönderimleri canlıda denenmedi (Y6). Kodda base64'ün kabul edildiği doğrulandı.
 - `components/charts/index.ts` barrel'inden yalnız `RatingDistributionBar`/`MiniSparkline` import eden bayi ana sayfasına recharts'ın sızıp sızmadığı derleme manifestinden kesinleştirilemedi (`app/dealer/dealer-dashboard-client.tsx:44`). Bundle analyzer ile bakılmalı.
 - Canlı veri hacmi (feedback satır sayısı) bilinmediği için Y4'teki tavanların bugün ne sıklıkla dolduğu ölçülmedi. Veritabanına dokunulmadı.
+
+---
+
+## Uygulama sonrası durum
+
+> Tarih: 2026-10-11 · Dal: `feat/platform-overhaul` · Yöntem: her bulgu ŞİMDİKİ koda karşı yeniden denetlendi (dosya okuma + grep + yerel ölçüm; DB'ye, dev server'a ve build'e dokunulmadı). Bu turun commit'leri: `ef803ba2` (paket/varlık/sıcak yol) ve ardından gelen bildirim tek kanal + arama önbelleği + korkuluk testi commit'i. Önceki dalgalarda kapatılanlar (P0-37, nav kabuğu `fc16832f`, landing `67763e8d`, gözlemlenebilirlik `3b039bcc`, mimari-api B9 `01827121`) kanıtıyla birlikte sayıldı.
+
+### Bulgu bulgu
+
+| # | Durum | Kanıt (şimdiki kod) |
+|---|---|---|
+| **K1** SW tüm `public/`'i precache ediyor | **KAPANDI** | `config/pwa.js`: `PUBLIC_EXCLUDES` (images/videos/mascot/logo/uploads hariç), `BUILD_EXCLUDES` yalnız kabuk chunk'ları (webpack/main-app/framework/polyfills/CSS/font/manifest), `register: false`; SW yalnız oturumlu panelde ve tarayıcı boşa düşünce kaydedilir (`components/pwa/service-worker-registrar.tsx`, `lib/pwa/service-worker.ts`), QR hunisi hiç kaydetmez. Görseller çalışma anında `maxEntries`'li önbelleklerde. `__tests__/config/pwa-options.test.ts`. `public/` 343 MB → **52 MB**. |
+| **K2** 3,4 MB avatar SVG'leri, rozetler | **KAPANDI** | Avatarlar aynı yolda ~25 KB ince SVG + içerik hash'li 512 px WebP (`public/images/avatar/opt`, ~11 KB), `/images/(avatar/badges)/opt/*` 1 yıl `immutable` (`config/security-headers.js`). Bu tur: **Radix `AvatarImage` hazır avatar yolunu tek yerden WebP'ye çözer** (`components/ui/avatar.tsx` → `resolveAvatarImage`) — header, sidebar, ekip, lig, klan, sohbet dahil ~30 nokta. Rozetler 320 px WebP küçük resim (`lib/badge-images.ts`); bu tur kalan ham SVG noktaları da geçti: admin rozet galerisi/katalog/sheet (`a-rozetler/parts.tsx` `glyphSource`, `badge-editor.tsx`), karakter açılışı (`character-reveal.tsx`), Yılım rozetleri (`m-yilim/parts.tsx`). Sohbet maskotu 1,66 MB PNG → **7 KB WebP** (`public/logo/chatbot-mascot.webp`). Lig ekranı görselsiz kullanıcıda baş harf gösterir (`m-lig/lig-avatar.tsx`), rastgele avatar atanmaz. Korkuluk: izin listesi dışında 300 KB üstü public dosyası ve arayüzde `/logo/chatbot.png` CI'da düşer. |
+| **Y1** TR+EN sözlüğün tamamı her sayfada | **KAPANDI** | `i18n/core.ts` sözlüksüz çekirdek (dil listesi + saf `translate`); `i18n/request.ts` yalnız sunucu; `lib/app-locale.tsx` yalnız **TR**'yi statik alır, EN yalnız seçilince ayrı parça olarak bir kez iner. Koddan hiç anılmayan **82 ölü namespace** `messages/{tr,en}.json`'dan çıkarıldı (kalan 25 namespace HEAD ile birebir aynı, doğrulandı). Ortak paketteki sözlük payı **314 KB ham / ~98 KB gzip → 66 KB ham / ~17 KB gzip** (yalnız TR). Korkuluk: istemci modülünden `@/i18n/request` ya da `messages/en.json` statik içe aktarımı CI'da düşer. |
+| **Y2** 27 arka plan varyantı + 34 sonsuz animasyon + tekrar fetch | **KAPANDI** | Varsayılan zemin statik gradyan, JS animasyonu yok; özel/sezonluk zemin `next/dynamic` + `<Ambient>` (gizli sekme ve azaltılmış harekette durur), değer SSR prop'u (`components/public/p-landing/public-backdrop.tsx`); QR hunisi ayrı `app/(funnel)/` grubu. Bu tur: `dynamic-background.tsx` 27 varyantı statik import etmiyor — **seçili varyant `React.lazy` ile tek başına** iner (≈7.300 satırın yalnız biri); ayar ucu CDN önbelleğini atlamıyor. Korkuluk: varyant modülünün statik içe aktarımı CI'da düşer. |
+| **Y3** Boş kabuk + istemci fetch şelalesi | **KAPANDI** | 247 `page.tsx`'in yalnız **3**'ü `'use client'` (152/200'den); müşteri ana sayfası sunucuda `loadCustomerHome` + `HydrationBoundary` (`app/customer/page.tsx`), 20 sayfa aynı desende; panel kabuğu (menü görünürlüğü/sıra/gruplar/modül) sunucuda çözülüp prop iner (`fc16832f`); sidebar'da `prefetch={false}` yok; React Query 265 dosyada. Kabukta kalan istemci istekleri: bayi rozet sayısı, dönemsel konsept ve tema — son ikisi CDN önbellekli (`s-maxage`), DB'ye gitmez. |
+| **Y4** Global agregasyonlar bellekte | **KAPANDI** | Keşif sinyalleri bu tur **iki `GROUP BY`** (`lib/discovery/compute.server.ts` `loadSignals`): 25k+20k satır taşınmıyor, `take` tavanı (sessiz eksik sayım) ve diziyi her öğede kopyalayan kuadratik `push` yok; sonuç 120 sn global Redis anahtarı (`discovery:signals:v3`), ad/görsel yalnız gösterilen ≤11 işletme için. Eski `/api/dealer/benchmark` emekli (yenisi k-anonim, önbellekli); eski `/api/admin/analytics` silindi, yerine tamamen SQL `GROUP BY`/`date_trunc` (`lib/admin-analytics/load.ts`); okuyucusuz preagg emekli (tablo düşürme veri-modeli şema isteğinde). |
+| **Y5** İki paralel bildirim mekanizması, görünmez sekmede polling | **KAPANDI** | Ağ yoklayan tüm `setInterval`'ler görünürlük korumalı ya da React Query (arka planda durur); kalan `setInterval`'ler yalnız yerel saat etiketi. SSE gizli sekmede kapanır, imleçle yeniden bağlanır (`01827121`); sunucu yoklaması uyarlanır (1,2–5 sn). Bu tur **tek kanal**: SSE canlıyken bildirim merkezi 20 sn yoklamayı bırakır, liste akış olayıyla (400 ms birleştirilmiş tek istek) + 5 dk güvenlik turuyla tazelenir; akış kopunca anında eski yoklamaya döner (`lib/notification-stream-bus.ts`). Admin'in 5 sn'lik tüm-pano tick'i dosyasıyla birlikte kalktı. |
+| **Y6** Fotoğraflar base64 JSON → DB | **KAPANDI (kod)** / veri işlemi isteği | Yeni huni R2'ye yükler; `acceptedMediaUrls` yalnız kendi R2 host'umuz + QR'a bağlı anahtarı kabul eder, `data:` reddedilir (`lib/feedback-funnel/media.ts`; eski `POST /api/feedbacks` de aynı çekirdek). Bu tur müşteri istatistiği son geri bildirimleri `select` ile okur. **Eski base64 satırların R2'ye taşınması** canlı veri işlemi → `SCHEMA-REQUESTS.md` (performans). |
+| **O1** Menü önce açılıp sonra gizleniyor | **KAPANDI** | Menü yapılandırması layout'tan prop (`fc16832f`); `sidebar.tsx`'te görünürlük/sıra/grup isteği yok. |
+| **O2** Global ayar uçları her istekte DB, CDN yok | **KAPANDI** | `seasonal-concept` ve `background` `public, s-maxage=60, stale-while-revalidate=300`; tema `s-maxage`; sidebar-order/groups istemci istekleri kalktı (kabuk sunucuda). |
+| **O3** Landing dinamik, istemci yönlendirmesi | **KAPANDI (bilinçli dinamik)** | Oturumlu kullanıcı SUNUCUDA `roleHome`'a yönlenir (istemci `router.push` ve ~490 KB boşa indirme yok); veri (istatistik, planlar, kazanç önizlemesi) önbellekli ve fail-safe; ölü `proxy.ts` `/` kontrolü kaldırıldı, `/staff` matcher'da. Sayfa dil çerezi + oturum nedeniyle istek başına render'lanır (ölçülen TTFB 0,26–0,32 sn); CDN'e almak dil için ayrı `/en` rotası gerektirir — ürün kararı, performans borcu değil. |
+| **O4** Gönderim yolu ~15 seri tur | **KAPANDI** | Yan etkiler (`scanCount`, bildirim, analitik, AI) `scheduleFeedbackSideEffects` ile yanıt sonrası; liderlik etiketi `revalidateTag(tag, 'max')` (bayat-sun-arkada-yenile). Bu tur: QR hız sınırı + personel + çıkar çatışması + puan matrisi **tek `Promise.all`** turunda (`lib/feedback-funnel/submit.ts`); Redis oran sınırı **INCR+PEXPIRE+PTTL tek Lua turu** (`lib/redis.ts`) — `defineRoute`'taki TÜM oran sınırlı uçlarda 2–3 sıralı REST turu → 1; TTL'siz kalmış sayacın kalıcı kilit olması da onarıldı. |
+| **O5** `Feedback.dealerId` yok | **KALDI (şema)** | Şema değişikliği ajanlara yasak → `SCHEMA-REQUESTS.md` (göç + backfill + kademeli okuyucu planı). Mevcut `(qrCodeId, deletedAt, createdAt)` bileşik indeksi bayi gelen kutusunu karşılıyor. |
+| **O6** Arama ILIKE, trigram yok | **KAPANDI (ara çözüm)** / şema isteği | `/api/search` kişi + rol + sorgu anahtarıyla 30 sn Redis önbellekli (önerilen ara çözüm), oran sınırlı, tür başına `take: 5`. `pg_trgm` GIN indeksleri `SCHEMA-REQUESTS.md`'de. |
+| **O7** İsteğe bağlı kütüphaneler statik | **KAPANDI** | three/leaflet/recharts/qrcode/confetti `dynamic`/`lazyChart`/`import()` arkasında; tam `motion` importu sıfır. Bu tur: 2FA `qrcode` yalnız kurulumda; ekip panosu ve grafik barrel'ı recharts'ı tembel sürümle verir (rapor §6'daki barrel sızıntı şüphesi de kapandı). Korkuluk (`__tests__/architecture/perf-bundle-guards.test.ts`): ağır kütüphane modülünün istemciden statik içe aktarımı ve tam `motion` CI'da düşer (paylaşılan ESLint yapılandırmasına dokunmadan jest). Kök `domAnimation` senkron bırakıldı (~15 KB gzip): tembel yüklemek `initial` durumundaki öğeleri özellikler inene kadar görünmez bırakır (LCP riski). |
+| **O8** Web Vitals: 5 ayrı POST, bellekte kayboluyor | **KAPANDI** | `components/telemetry/web-vitals-reporter.tsx`: sayfa gizlenince TEK `sendBeacon`, sunucu tarafı derece, Upstash saatlik kovalarda kalıcı p75 (`3b039bcc`). |
+| **O9** Push SW ile next-pwa SW yarışı | **KAPANDI** | Tek SW: `importScripts: ['/push-sw.js']` (`config/pwa.js`); `register` yalnız `lib/pwa/service-worker.ts`'te. |
+| **D1** `next/image` / statik varlık önbelleği | **KAPANDI** | R2 host'u env'den `remotePatterns`'e ekleniyor, joker Supabase/Netlify host'ları kalktı; `/images,/icons,/logo,/mascot,/videos` `max-age=86400, stale-while-revalidate=30 gün` (eskiden `max-age=0`), hash'li çıktı `immutable`. Kalan `unoptimized` kullanımları bilinçli: SVG kozmetik/ödül görseli ve keyfi uzak host (etkinlik görseli). |
+| **D2** Kökte tekrar fetch, sohbet botu hemen iniyor | **KAPANDI** | Sohbet botu parçası bu tur **tarayıcı boşa düşünce** (en geç 4 sn) iner, huni ve çıplak yüzeylerde hiç inmez (`components/chat/chatbot-lazy.tsx`); maskot 7 KB WebP, gereksiz `priority` kalktı. Tema SSR satırlarıyla hazır başlar; mount'taki tek doğrulama isteği CDN önbellekli `/api/settings/theme`'e gider (DB yok) — tasarım-sistemi sahibinin bilinçli tazelik kontrolü, korundu. |
+| **D3** Küçük sorgu kalıpları | **KAPANDI** / 1 şema isteği | Karakter haftalık liderliği haftaya pencereli `groupBy` (kullanıcının gerçek sırası için grup sayımı gerekli — bilinçli); müşteri istatistiği `select`; karakter barı uzunluk-şartlı sayım kullanıcı başına tek küçük sorgu. `UserBadge(badgeId, earnedAt)` indeksi `SCHEMA-REQUESTS.md`'de. |
+| **D4** Kullanılmayan bağımlılıklar | **KALDI** | `geist`, `zustand`, `@tanstack/react-table` hâlâ `package.json`'da, kodda 0 import. Çıkarmak lockfile'ı yeniden üretmeyi gerektirir (`npm install` bu turda yasak; lockfile'sız `package.json` değişikliği Vercel `npm ci`'yi kırar). Paket boyutuna etkisi yok. |
+
+### Önce / sonra
+
+| Ölçüt | Denetimde | Şimdi |
+|---|---|---|
+| SW precache | ~370 MB / 1.213 giriş | yalnız kabuk (webpack/framework/main-app/polyfills/CSS/font) |
+| `public/` | 343 MB | 52 MB (41 MB'ı rozet vektör kaynakları; arayüz 320 px küçük resim kullanır) |
+| Avatar (14–48 px) | 3,4 MB SVG | ~11 KB WebP, 1 yıl immutable |
+| Sohbet maskotu | 1,66 MB PNG | 7 KB WebP |
+| Ortak paketteki i18n | 314 KB ham / ~98 KB gzip (TR+EN) | 66 KB ham / ~17 KB gzip (yalnız TR; EN istenince ayrı parça) |
+| Public arka plan | 27 varyant statik + 34 sonsuz framer animasyonu | statik gradyan; özel zemin yalnız seçili varyant, gizlide durur |
+| `'use client'` `page.tsx` | 152 / 200 | 3 / 247 |
+| Müşteri ana sayfası açılış verisi | ~18 API + 5 beacon | SSR + HydrationBoundary (açılışta veri isteği yok) + tek beacon |
+| Keşif sinyali | 45k satır belleğe, 25k tavan | 2 GROUP BY, tavansız, 120 sn global Redis |
+| Oran sınırı (her uç) | 2–3 sıralı Upstash turu | 1 Lua turu |
+| Açık bayi sekmesi | SSE + 20 sn bildirim yoklaması | yalnız SSE (+5 dk güvenlik turu), gizlide kapalı |
+
+### Dalgaların getirdiği regresyon taraması
+
+- **Döngü içinde `await prisma` (N+1):** `app/api` + `lib` (cron/iç iş hariç) tarandı; kalanlar admin toplu işlemleri (sınırlı, kayıt başına yazma zorunlu), kullanıcı başına birkaç öğeli görev döngüleri ya da tarayıcı yanlış pozitifi. Sıcak yolda yeni N+1 yok.
+- **Sınırsız `findMany`:** müşteri/bayi/public uçları + ana sayfa/lig/huni yükleyicileri tarandı; `take`'siz kalanlar kullanıcı başına oyun günü kovalı sorgular.
+- **Statik ağır kütüphane / tam `motion`:** bulunan son noktalar (ekip panosu grafikleri, 2FA qrcode, grafik barrel'ı) bu turda kapandı; korkuluk testi yenilerini engelliyor.
+- **Ham büyük görsel:** dalga 2'de yazılan rozet/karakter/yıl ekranlarında ham SVG kalmıştı (admin katalog, karakter açılışı, Yılım) — küçük resme geçti.
+
+### Kalan maddeler
+
+1. **O5** `Feedback.dealerId` + bileşik indeks (şema isteği, göç penceresi).
+2. **O6** `pg_trgm` GIN indeksleri (şema isteği; ara çözüm canlıda).
+3. **Y6** eski base64 `media` satırlarının R2'ye taşınması (canlı veri işlemi; şema isteği dosyasında ölçüm sorgusu ve plan).
+4. **D3** `UserBadge(badgeId, earnedAt)` indeksi (şema isteği).
+5. **D4** üç kullanılmayan bağımlılığın lockfile ile birlikte çıkarılması (`npm install` gerektirir).
+6. Ölçüm: bu turdaki paket kazanımları build alınmadan koddan hesaplandı; bir sonraki deploy'da `/feedback/[code]` ve `/` chunk aktarımı ile Speed Insights p75 yeniden ölçülmeli (Lighthouse CI hâlâ yok).
+
+### Yeni puan: **9 / 10**
+
+Gerekçe: denetimin puanı aşağı çeken üç sistemik karar (kontrolsüz varlık katmanı + her ziyaretçiye 370 MB SW, şişkin ortak paket, boş kabuk + istemci şelalesi) tamamen kapandı ve korkuluk testleriyle kilitlendi; sıcak yolun kalan seri turları (oran sınırı, huni gönderimi, bildirim çift kanalı, keşif agregasyonu) bu turda tek tura/SQL'e indi. 10'a engel olanlar kod dışı: üç şema/göç isteği (Feedback.dealerId, trigram, UserBadge indeksi), eski base64 satır backfill'i ve gerçek build/Lighthouse ölçümüyle doğrulanmamış paket bütçesi.
