@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { createBadge, errorText, updateBadge, uploadBadgeIcon } from './api';
 import { glyphSource } from './parts';
+import { resolveBadgeThumb } from '@/lib/badge-images';
 
 /** İkon galerisi tek kaynaktan: rozet kataloğu (ikinci elle yazılmış liste yok — Bulgu 11). */
 const ICON_GALLERY = Array.from(new Map(BADGE_CATALOG.map((b) => [b.icon, b.name])).entries()).map(([icon, name]) => ({ icon, name }));
@@ -270,7 +271,7 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- yerel rozet SVG'leri; next/image gerekmez */}
-                  <img src={i.icon} alt={i.name} className="h-full w-full object-contain" loading="lazy" />
+                  <img src={resolveBadgeThumb(i.icon) ?? i.icon} alt={i.name} className="h-full w-full object-contain" loading="lazy" />
                 </button>
               );
             })}

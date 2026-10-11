@@ -91,8 +91,22 @@ export type SubmitContext = {
 export async function submitFeedback(ref: QrRef, body: SubmitFeedbackBody, ctx: SubmitContext): Promise<SubmitFeedbackResult> {
   const now = ctx.now ?? new Date();
   const qr = await requireOpenQr(ref, now);
+  const viewer = ctx.viewer;
 
-  const qrLimit = await checkFeedbackPerQrRateLimit(qr.id, ctx.clientId);
+  // Birbirinden bağımsız okumalar TEK turda (perf O4): QR başı hız sınırı, personel doğrulaması,
+  // çıkar çatışması ve puan matrisi eskiden 4 sıralı DB/Redis turuydu (gönder anı gecikmesi).
+  const [qrLimit, staffRow, insider, matrix] = await Promise.all([
+    checkFeedbackPerQrRateLimit(qr.id, ctx.clientId),
+    // Personel: yalnız bu işletmenin AKTİF personeli; değilse sessizce yok sayılır (kullanıcı cezalandırılmaz).
+    body.staffId
+      ? prisma.dealerStaff.findFirst({
+          where: { id: body.staffId, dealerId: qr.dealerId, isActive: true },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    viewer ? isVenueInsider(viewer.userId, qr.dealerId) : Promise.resolve(false),
+    getPointsMatrix(),
+  ]);
   if (!qrLimit.ok) {
     const retryAfter = Math.max(1, Math.ceil((qrLimit.retryAfterMs ?? 60_000) / 1000));
     throw new ApiError('RATE_LIMITED', 'Bu QR kod için çok fazla gönderim yapıldı. Lütfen kısa süre sonra tekrar deneyin.', {
@@ -101,15 +115,7 @@ export async function submitFeedback(ref: QrRef, body: SubmitFeedbackBody, ctx: 
     });
   }
 
-  // Personel: yalnız bu işletmenin AKTİF personeli; değilse sessizce yok sayılır (kullanıcı cezalandırılmaz).
-  let staffId: string | null = null;
-  if (body.staffId) {
-    const staff = await prisma.dealerStaff.findFirst({
-      where: { id: body.staffId, dealerId: qr.dealerId, isActive: true },
-      select: { id: true },
-    });
-    staffId = staff?.id ?? null;
-  }
+  const staffId: string | null = staffRow?.id ?? null;
 
   const ownText = typeof body.text === 'string' ? body.text.trim() : '';
   const tags = normalizeQuickTags(body.tags);
@@ -118,9 +124,6 @@ export async function submitFeedback(ref: QrRef, body: SubmitFeedbackBody, ctx: 
   const npsScore = typeof body.npsScore === 'number' ? body.npsScore : null;
   const attribution = body.attribution ?? {};
 
-  const viewer = ctx.viewer;
-  const insider = viewer ? await isVenueInsider(viewer.userId, qr.dealerId) : false;
-  const matrix = await getPointsMatrix();
   const detailed = isDetailedText(ownText, matrix);
 
   const data = {

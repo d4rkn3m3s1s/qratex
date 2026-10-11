@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
-import { type Locale } from '@/i18n/request';
+import type { Locale } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
 const LANGS: Array<{ key: Locale }> = [{ key: 'tr' }, { key: 'en' }];

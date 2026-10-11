@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { BadgeGlyph, type BadgeGlyphSize } from '@/components/ds/play';
 import { cn } from '@/lib/utils';
+import { resolveBadgeThumb } from '@/lib/badge-images';
 import type { YearSummary } from '@/lib/customer-year/contract';
 import type { YearCopy } from './copy';
 
@@ -48,7 +49,7 @@ export function YearBadgeGlyph({
       label={badge.name}
       rarity={badge.rarity}
       color={badge.color ?? undefined}
-      imageSrc={isUrl ? icon : undefined}
+      imageSrc={isUrl ? (resolveBadgeThumb(icon) ?? icon) : undefined}
       emoji={isEmoji ? icon : undefined}
       size={size}
       register="play"

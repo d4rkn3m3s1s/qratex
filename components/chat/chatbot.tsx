@@ -397,11 +397,10 @@ export function Chatbot() {
                 >
                   {botImageOk ? (
                     <Image
-                      src="/logo/chatbot.png"
+                      src="/logo/chatbot-mascot.webp"
                       alt=""
                       width={56}
                       height={56}
-                      priority
                       className={cn(
                         'h-[2.6rem] w-[2.6rem] rounded-full ring-1 ring-white/35 sm:h-12 sm:w-12 dark:ring-white/15',
                         qraMascotImgFilter
@@ -509,7 +508,7 @@ export function Chatbot() {
                       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white/50 backdrop-blur-sm dark:bg-zinc-900/55">
                         {botImageOk ? (
                           <Image
-                            src="/logo/chatbot.png"
+                            src="/logo/chatbot-mascot.webp"
                             alt=""
                             width={48}
                             height={48}
@@ -621,7 +620,7 @@ export function Chatbot() {
                           <Avatar className="mt-0.5 h-8 w-8 shrink-0 ring-1 ring-white/35 ring-offset-1 ring-offset-transparent dark:ring-white/10 sm:h-9 sm:w-9">
                             {message.role === 'assistant' ? (
                               <>
-                                {botImageOk ? <AvatarImage src="/logo/chatbot.png" alt="" className={qraMascotImgFilterStatic} /> : null}
+                                {botImageOk ? <AvatarImage src="/logo/chatbot-mascot.webp" alt="" className={qraMascotImgFilterStatic} /> : null}
                                 <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
                                   <Bot className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                                 </AvatarFallback>
@@ -667,7 +666,7 @@ export function Chatbot() {
                         aria-live="polite"
                       >
                         <Avatar className="h-8 w-8 shrink-0 ring-1 ring-white/35 ring-offset-1 ring-offset-transparent dark:ring-white/10 sm:h-9 sm:w-9">
-                          {botImageOk ? <AvatarImage src="/logo/chatbot.png" alt="" className={qraMascotImgFilterStatic} /> : null}
+                          {botImageOk ? <AvatarImage src="/logo/chatbot-mascot.webp" alt="" className={qraMascotImgFilterStatic} /> : null}
                           <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
                             <Bot className="h-4 w-4" />
                           </AvatarFallback>

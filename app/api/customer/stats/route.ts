@@ -42,7 +42,8 @@ export async function GET() {
         where: { deletedAt: null, userId },
         orderBy: { createdAt: 'desc' },
         take: 5,
-        include: { qrCode: { select: { name: true, dealer: { select: { businessName: true } } } } },
+        // Yalnız gösterilen alanlar: eski satırlarda `media` base64 olabiliyordu (perf D3/Y6).
+        select: { id: true, rating: true, createdAt: true, qrCode: { select: { name: true, dealer: { select: { businessName: true } } } } },
       }),
       prisma.userBadge.findMany({
         where: { userId },

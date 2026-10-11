@@ -21,12 +21,10 @@ import type { DiscoveryComputed, NearbyItem, Sponsored } from '@/lib/admin-disco
 
 type Db = typeof prismaClient;
 
-const FEEDBACK_CAP = 25_000;
-const REVIEW_CAP = 20_000;
 const NEARBY_DEALER_CAP = 2_000;
 const HAPPY_HOUR_CAP = 200;
 const SIGNALS_TTL_S = 120;
-const SIGNALS_KEY = 'discovery:signals:v2';
+const SIGNALS_KEY = 'discovery:signals:v3';
 const EARTH_RADIUS_KM = 6371;
 
 const rad = (v: number) => (v * Math.PI) / 180;
@@ -114,89 +112,85 @@ type Signals = {
   weekly: Record<'ambience' | 'food' | 'service', { dealerId: string; businessName: string; score: number } | null>;
 };
 
+type VenueAggRow = { dealerId: string; n: unknown; ratingSum: unknown; scans: unknown };
+type DimAggRow = { dealerId: string; ambience: unknown; food: unknown; service: unknown };
+
+const num = (v: unknown): number => (typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : Number(v ?? 0) || 0);
+
+/**
+ * Global keşif sinyalleri (perf Y4): eskiden son 30 günün 25.000'e kadar geri bildirimi ve 7 günün
+ * 20.000'e kadar değerlendirmesi belleğe çekilip JS'te gruplanıyordu (tavan dolunca sessizce
+ * eksik sayım; dizi kopyalayan `push` ile kuadratik bellek). Artık iki `GROUP BY` sorgusu yalnız
+ * işletme başına özet döndürür; tavan yok, satır taşınmaz. Puan formülü ve kazanan seçimi aynı.
+ */
 async function loadSignals(db: Db, now: Date): Promise<Signals> {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const [feedbacks, reviews] = await Promise.all([
-    db.feedback.findMany({
-      where: { deletedAt: null, createdAt: { gte: thirtyDaysAgo } },
-      select: { rating: true, qrCodeId: true },
-      orderBy: { createdAt: 'desc' },
-      take: FEEDBACK_CAP,
-    }),
-    db.consumptionReview.findMany({
-      where: { createdAt: { gte: sevenDaysAgo }, deletedAt: null },
-      select: {
-        rating: true,
-        dimensions: true,
-        consumption: { select: { dealerId: true, dealer: { select: { id: true, businessName: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: REVIEW_CAP,
-    }),
+  const [venueRows, dimRows] = await Promise.all([
+    db.$queryRaw<VenueAggRow[]>`
+      SELECT q."dealerId" AS "dealerId",
+             COUNT(*)::int AS n,
+             COALESCE(SUM(f."rating"), 0)::int AS "ratingSum",
+             COALESCE(MAX(q."scanCount"), 0)::int AS scans
+      FROM "Feedback" f
+      JOIN "QRCode" q ON q."id" = f."qrCodeId"
+      WHERE f."deletedAt" IS NULL AND f."createdAt" >= ${thirtyDaysAgo}
+      GROUP BY q."dealerId"`,
+    // Boyut puanı yoksa (ya da sayı değilse) genel puan kullanılır — eski JS kuralıyla aynı.
+    db.$queryRaw<DimAggRow[]>`
+      SELECT c."dealerId" AS "dealerId",
+             AVG(CASE WHEN jsonb_typeof(r."dimensions"->'ambience') = 'number' THEN (r."dimensions"->>'ambience')::float8 ELSE COALESCE(r."rating", 0) END) AS ambience,
+             AVG(CASE WHEN jsonb_typeof(r."dimensions"->'taste') = 'number' THEN (r."dimensions"->>'taste')::float8 ELSE COALESCE(r."rating", 0) END) AS food,
+             AVG(CASE WHEN jsonb_typeof(r."dimensions"->'service') = 'number' THEN (r."dimensions"->>'service')::float8 ELSE COALESCE(r."rating", 0) END) AS service
+      FROM "ConsumptionReview" r
+      JOIN "Consumption" c ON c."id" = r."consumptionId"
+      WHERE r."deletedAt" IS NULL AND r."createdAt" >= ${sevenDaysAgo}
+      GROUP BY c."dealerId"
+      ORDER BY c."dealerId"`,
   ]);
 
-  const qrIds = [...new Set(feedbacks.map((f) => f.qrCodeId).filter(Boolean))];
-  const qrRows: Array<{ id: string; dealerId: string; scanCount: number | null }> = [];
-  for (let i = 0; i < qrIds.length; i += 8_000) {
-    qrRows.push(...(await db.qRCode.findMany({ where: { id: { in: qrIds.slice(i, i + 8_000) } }, select: { id: true, dealerId: true, scanCount: true } })));
-  }
-  const qrMap = new Map(qrRows.map((r) => [r.id, { dealerId: r.dealerId, scanCount: r.scanCount ?? 0 }]));
-  const dealerIds = [...new Set(qrRows.map((r) => r.dealerId))];
-  const dealers = dealerIds.length
-    ? await db.user.findMany({ where: { id: { in: dealerIds } }, select: { id: true, businessName: true, image: true }, take: 5_000 })
-    : [];
-  const dealerMap = new Map(dealers.map((d) => [d.id, d]));
-
-  const venue = new Map<string, { dealerId: string; businessName: string; image: string | null; n: number; sum: number; scans: number }>();
-  for (const f of feedbacks) {
-    const qr = qrMap.get(f.qrCodeId);
-    if (!qr) continue;
-    const d = dealerMap.get(qr.dealerId);
-    const e = venue.get(qr.dealerId) ?? { dealerId: qr.dealerId, businessName: d?.businessName || 'İşletme', image: d?.image ?? null, n: 0, sum: 0, scans: qr.scanCount };
-    e.n += 1;
-    e.sum += f.rating || 0;
-    e.scans = Math.max(e.scans, qr.scanCount);
-    venue.set(qr.dealerId, e);
-  }
-  const trendingVenues = [...venue.values()]
-    .map((e) => {
-      const avg = e.n > 0 ? e.sum / e.n : 0;
+  const scored = venueRows
+    .map((r) => {
+      const n = num(r.n);
+      const avg = n > 0 ? num(r.ratingSum) / n : 0;
+      const scans = num(r.scans);
       return {
-        dealerId: e.dealerId,
-        businessName: e.businessName,
-        image: e.image,
-        feedbackCount: e.n,
+        dealerId: r.dealerId,
+        feedbackCount: n,
         avgRating: Number(avg.toFixed(2)),
-        score: Math.round(avg * 20 + Math.min(30, e.n * 1.5) + Math.min(20, e.scans / 10)),
+        score: Math.round(avg * 20 + Math.min(30, n * 1.5) + Math.min(20, scans / 10)),
       };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
 
-  const buckets = { ambience: new Map<string, number[]>(), food: new Map<string, number[]>(), service: new Map<string, number[]>() };
-  const names = new Map<string, string>();
-  for (const r of reviews) {
-    const dealerId = r.consumption?.dealerId;
-    if (!dealerId) continue;
-    names.set(dealerId, r.consumption?.dealer?.businessName || 'İşletme');
-    const dims = r.dimensions && typeof r.dimensions === 'object' ? (r.dimensions as Record<string, unknown>) : {};
-    const pick = (k: string) => (typeof dims[k] === 'number' ? (dims[k] as number) : r.rating || 0);
-    const push = (b: Map<string, number[]>, v: number) => b.set(dealerId, [...(b.get(dealerId) ?? []), v]);
-    push(buckets.ambience, pick('ambience'));
-    push(buckets.food, pick('taste'));
-    push(buckets.service, pick('service'));
-  }
-  const best = (b: Map<string, number[]>) => {
-    let winner: { dealerId: string; businessName: string; score: number } | null = null;
-    for (const [dealerId, scores] of b) {
-      if (scores.length === 0) continue;
-      const score = Number((scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2));
-      if (!winner || score > winner.score) winner = { dealerId, businessName: names.get(dealerId) || 'İşletme', score };
+  type Winner = { dealerId: string; businessName: string; score: number } | null;
+  const best = (pick: (r: DimAggRow) => unknown): Winner => {
+    let winner: Winner = null;
+    for (const r of dimRows) {
+      const score = Number(num(pick(r)).toFixed(2));
+      if (!winner || score > winner.score) winner = { dealerId: r.dealerId, businessName: 'İşletme', score };
     }
     return winner;
   };
-  return { trendingVenues, weekly: { ambience: best(buckets.ambience), food: best(buckets.food), service: best(buckets.service) } };
+  const weekly = { ambience: best((r) => r.ambience), food: best((r) => r.food), service: best((r) => r.service) };
+
+  // Ad/görsel yalnız gösterilecek işletmeler için (en çok 8 + 3).
+  const ids = [
+    ...new Set([...scored.map((v) => v.dealerId), ...Object.values(weekly).flatMap((w) => (w ? [w.dealerId] : []))]),
+  ];
+  const dealers = ids.length
+    ? await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, businessName: true, image: true } })
+    : [];
+  const dealerMap = new Map(dealers.map((d) => [d.id, d]));
+
+  const trendingVenues = scored.map((v) => {
+    const d = dealerMap.get(v.dealerId);
+    return { dealerId: v.dealerId, businessName: d?.businessName || 'İşletme', image: d?.image ?? null, feedbackCount: v.feedbackCount, avgRating: v.avgRating, score: v.score };
+  });
+  for (const w of Object.values(weekly)) if (w) w.businessName = dealerMap.get(w.dealerId)?.businessName || 'İşletme';
+
+  return { trendingVenues, weekly };
 }
 
 async function getSignals(db: Db, now: Date): Promise<Signals> {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +43,8 @@ export function TwoFactorSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Kurulum başlatılamadı');
       setSetupSecret(data.secret);
+      // qrcode yalnız kurulum anında gerekir; ayarlar sayfasının paketine girmez (perf O7).
+      const { default: QRCode } = await import('qrcode');
       setQrDataUrl(await QRCode.toDataURL(data.otpauthUri));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Kurulum başlatılamadı');

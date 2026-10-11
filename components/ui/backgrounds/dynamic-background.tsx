@@ -1,33 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
-import { AuroraBackground } from './aurora';
-import { SparklesBackground } from './sparkles';
-import { BackgroundBeams } from './beams';
-import { GradientAnimation } from './gradient-animation';
-import { MeteorsBackground } from './meteors';
-import { GridDotsBackground } from './grid-dots';
-import { MatrixBackground } from './matrix';
-import { ParticlesBackground } from './particles';
-import { WavesBackground } from './waves';
-import { StarfieldBackground } from './starfield';
-import { CyberpunkBackground } from './cyberpunk';
-import { GeometricBackground } from './geometric';
-import { FirefliesBackground } from './fireflies';
-import { ChristmasBackground } from './christmas';
-import { ValentineBackground } from './valentine';
-import { BirthdayBackground } from './birthday';
-import { NebulaBackground } from './nebula';
-import { NorthernLightsBackground } from './northern-lights';
-import { HolographicBackground } from './holographic';
-import { GalaxyBackground } from './galaxy';
-import { SummerBackground } from './summer';
-import { WinterBackground } from './winter';
-import { AutumnBackground } from './autumn';
-import { SpringBackground } from './spring';
-import { IceKingdomBackground } from './ice-kingdom';
 
 export type BackgroundVariant =
   | 'original'
@@ -58,6 +33,49 @@ export type BackgroundVariant =
   | 'spring'
   | 'ice-kingdom'
   | 'none';
+
+/**
+ * Varyant başına AYRI parça (perf Y2): eskiden 27 varyantın hepsi (≈7.300 satır, framer/canvas
+ * döngüleri) statik import ediliyordu → admin tek bir sezonluk zemin seçtiğinde public sayfalar
+ * hepsini indiriyordu. Artık yalnız seçili varyantın modülü `React.lazy` ile iner; inene kadar
+ * içerik (children) zeminsiz gösterilir, yerleşim kaymaz.
+ */
+type BgProps = { className?: string; children?: ReactNode };
+type BgComponent = ComponentType<BgProps>;
+
+function lazyBg(loader: () => Promise<BgComponent>): LazyExoticComponent<BgComponent> {
+  return lazy(() => loader().then((Component) => ({ default: Component })));
+}
+
+const GridDotsLazy = lazy(() => import('./grid-dots').then((m) => ({ default: m.GridDotsBackground })));
+
+const LAZY_VARIANTS: Partial<Record<BackgroundVariant, LazyExoticComponent<BgComponent>>> = {
+  'aurora': lazyBg(() => import('./aurora').then((m) => m.AuroraBackground as BgComponent)),
+  'sparkles': lazyBg(() => import('./sparkles').then((m) => m.SparklesBackground as BgComponent)),
+  'beams': lazyBg(() => import('./beams').then((m) => m.BackgroundBeams as BgComponent)),
+  'gradient': lazyBg(() => import('./gradient-animation').then((m) => m.GradientAnimation as BgComponent)),
+  'meteors': lazyBg(() => import('./meteors').then((m) => m.MeteorsBackground as BgComponent)),
+  'matrix': lazyBg(() => import('./matrix').then((m) => m.MatrixBackground as BgComponent)),
+  'particles': lazyBg(() => import('./particles').then((m) => m.ParticlesBackground as BgComponent)),
+  'waves': lazyBg(() => import('./waves').then((m) => m.WavesBackground as BgComponent)),
+  'starfield': lazyBg(() => import('./starfield').then((m) => m.StarfieldBackground as BgComponent)),
+  'cyberpunk': lazyBg(() => import('./cyberpunk').then((m) => m.CyberpunkBackground as BgComponent)),
+  'geometric': lazyBg(() => import('./geometric').then((m) => m.GeometricBackground as BgComponent)),
+  'fireflies': lazyBg(() => import('./fireflies').then((m) => m.FirefliesBackground as BgComponent)),
+  'christmas': lazyBg(() => import('./christmas').then((m) => m.ChristmasBackground as BgComponent)),
+  'valentine': lazyBg(() => import('./valentine').then((m) => m.ValentineBackground as BgComponent)),
+  'birthday': lazyBg(() => import('./birthday').then((m) => m.BirthdayBackground as BgComponent)),
+  'nebula': lazyBg(() => import('./nebula').then((m) => m.NebulaBackground as BgComponent)),
+  'northern-lights': lazyBg(() => import('./northern-lights').then((m) => m.NorthernLightsBackground as BgComponent)),
+  'holographic': lazyBg(() => import('./holographic').then((m) => m.HolographicBackground as BgComponent)),
+  'galaxy': lazyBg(() => import('./galaxy').then((m) => m.GalaxyBackground as BgComponent)),
+  'summer': lazyBg(() => import('./summer').then((m) => m.SummerBackground as BgComponent)),
+  'winter': lazyBg(() => import('./winter').then((m) => m.WinterBackground as BgComponent)),
+  'autumn': lazyBg(() => import('./autumn').then((m) => m.AutumnBackground as BgComponent)),
+  'spring': lazyBg(() => import('./spring').then((m) => m.SpringBackground as BgComponent)),
+  'ice-kingdom': lazyBg(() => import('./ice-kingdom').then((m) => m.IceKingdomBackground as BgComponent)),
+};
+
 
 interface DynamicBackgroundProps {
   children: React.ReactNode;
@@ -99,12 +117,8 @@ export function DynamicBackground({
 
     const fetchBackground = async () => {
       try {
-        const res = await fetch('/api/settings/background', {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache',
-          },
-        });
+        // Uç herkese aynı ve CDN önbellekli; tarayıcı önbelleğini atlamaya gerek yok.
+        const res = await fetch('/api/settings/background');
         if (res.ok) {
           const data = await res.json();
           if (data.backgroundEffect != null) {
@@ -126,194 +140,22 @@ export function DynamicBackground({
     return <div className={className}>{children}</div>;
   }
 
-  switch (seasonalVariant ?? variant) {
-    case 'original':
-      return <div className={className}>{children}</div>;
-
-    case 'aurora':
-      return (
-        <AuroraBackground className={className}>
+  const active = seasonalVariant ?? variant;
+  const plain = <div className={className}>{children}</div>;
+  if (active === 'grid' || active === 'dots') {
+    return (
+      <Suspense fallback={plain}>
+        <GridDotsLazy variant={active} className={className}>
           {children}
-        </AuroraBackground>
-      );
-
-    case 'sparkles':
-      return (
-        <SparklesBackground className={className}>
-          {children}
-        </SparklesBackground>
-      );
-
-    case 'beams':
-      return (
-        <BackgroundBeams className={className}>
-          {children}
-        </BackgroundBeams>
-      );
-
-    case 'gradient':
-      return (
-        <GradientAnimation className={className}>
-          {children}
-        </GradientAnimation>
-      );
-
-    case 'meteors':
-      return (
-        <MeteorsBackground className={className}>
-          {children}
-        </MeteorsBackground>
-      );
-
-    case 'grid':
-      return (
-        <GridDotsBackground variant="grid" className={className}>
-          {children}
-        </GridDotsBackground>
-      );
-
-    case 'dots':
-      return (
-        <GridDotsBackground variant="dots" className={className}>
-          {children}
-        </GridDotsBackground>
-      );
-
-    case 'matrix':
-      return (
-        <MatrixBackground className={className}>
-          {children}
-        </MatrixBackground>
-      );
-
-    case 'particles':
-      return (
-        <ParticlesBackground className={className}>
-          {children}
-        </ParticlesBackground>
-      );
-
-    case 'waves':
-      return (
-        <WavesBackground className={className}>
-          {children}
-        </WavesBackground>
-      );
-
-    case 'starfield':
-      return (
-        <StarfieldBackground className={className}>
-          {children}
-        </StarfieldBackground>
-      );
-
-    case 'cyberpunk':
-      return (
-        <CyberpunkBackground className={className}>
-          {children}
-        </CyberpunkBackground>
-      );
-
-    case 'geometric':
-      return (
-        <GeometricBackground className={className}>
-          {children}
-        </GeometricBackground>
-      );
-
-    case 'fireflies':
-      return (
-        <FirefliesBackground className={className}>
-          {children}
-        </FirefliesBackground>
-      );
-
-    case 'christmas':
-      return (
-        <ChristmasBackground className={className}>
-          {children}
-        </ChristmasBackground>
-      );
-
-    case 'valentine':
-      return (
-        <ValentineBackground className={className}>
-          {children}
-        </ValentineBackground>
-      );
-
-    case 'birthday':
-      return (
-        <BirthdayBackground className={className}>
-          {children}
-        </BirthdayBackground>
-      );
-
-    case 'nebula':
-      return (
-        <NebulaBackground className={className}>
-          {children}
-        </NebulaBackground>
-      );
-
-    case 'northern-lights':
-      return (
-        <NorthernLightsBackground className={className}>
-          {children}
-        </NorthernLightsBackground>
-      );
-
-    case 'holographic':
-      return (
-        <HolographicBackground className={className}>
-          {children}
-        </HolographicBackground>
-      );
-
-    case 'galaxy':
-      return (
-        <GalaxyBackground className={className}>
-          {children}
-        </GalaxyBackground>
-      );
-
-    case 'summer':
-      return (
-        <SummerBackground className={className}>
-          {children}
-        </SummerBackground>
-      );
-
-    case 'winter':
-      return (
-        <WinterBackground className={className}>
-          {children}
-        </WinterBackground>
-      );
-
-    case 'autumn':
-      return (
-        <AutumnBackground className={className}>
-          {children}
-        </AutumnBackground>
-      );
-
-    case 'spring':
-      return (
-        <SpringBackground className={className}>
-          {children}
-        </SpringBackground>
-      );
-
-    case 'ice-kingdom':
-      return (
-        <IceKingdomBackground className={className}>
-          {children}
-        </IceKingdomBackground>
-      );
-
-    case 'none':
-    default:
-      return <div className={className}>{children}</div>;
+        </GridDotsLazy>
+      </Suspense>
+    );
   }
+  const Variant = LAZY_VARIANTS[active];
+  if (!Variant) return plain; // 'original' | 'none' | bilinmeyen
+  return (
+    <Suspense fallback={plain}>
+      <Variant className={className}>{children}</Variant>
+    </Suspense>
+  );
 }

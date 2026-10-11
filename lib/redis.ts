@@ -29,6 +29,17 @@ export function isRedisConfigured(): boolean {
   return getRedis() !== null;
 }
 
+/** KEYS[1] sayaç, ARGV[1] pencere (ms). Dönüş: {sayı, kalan ms}. */
+const RATE_LIMIT_INCR_SCRIPT = `
+local c = redis.call('INCR', KEYS[1])
+local t = redis.call('PTTL', KEYS[1])
+if c == 1 or t < 0 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  t = tonumber(ARGV[1])
+end
+return {c, t}
+`;
+
 /** Atomik sayaç artır + ilk artışta TTL ata. Rate-limit için. Redis yoksa null döner. */
 export async function redisIncrWithTtl(
   key: string,
@@ -37,14 +48,15 @@ export async function redisIncrWithTtl(
   const r = getRedis();
   if (!r) return null;
   try {
-    const count = await r.incr(key);
-    if (count === 1) {
-      // İlk istek → pencere TTL'i ata.
-      await r.expire(key, windowSeconds);
-    }
-    // Kalan TTL (retryAfter için). pttl ms cinsinden; -1/-2 ise pencere bilinmiyor → window kadar say.
-    let ttl = await r.pttl(key);
-    if (ttl < 0) ttl = windowSeconds * 1000;
+    // Tek tur (perf O4): INCR + ilk artışta PEXPIRE + PTTL tek Lua betiğinde. Eskiden her oran
+    // sınırlı istek (defineRoute'taki tüm uçlar) Upstash'e 2–3 SIRALI REST turu atıyordu. Betik
+    // ayrıca TTL'siz kalmış sayacı (INCR sonrası EXPIRE yarıda kalırsa kalıcı kilit) onarır.
+    const windowMs = windowSeconds * 1000;
+    const res = await r.eval<[number], [number, number]>(RATE_LIMIT_INCR_SCRIPT, [key], [windowMs]);
+    const count = Number(Array.isArray(res) ? res[0] : NaN);
+    let ttl = Number(Array.isArray(res) ? res[1] : NaN);
+    if (!Number.isFinite(count)) return null; // beklenmeyen yanıt → çağıran DB'ye düşer
+    if (!Number.isFinite(ttl) || ttl < 0) ttl = windowMs;
     return { count, ttlMs: ttl };
   } catch {
     return null; // Redis hatası → çağıran DB'ye düşer.

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import { cn } from '@/lib/utils';
+import { resolveAvatarImage } from '@/lib/avatar-options';
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
@@ -25,11 +26,16 @@ const AvatarImage = React.forwardRef<
 >(({ className, src, ...props }, ref) => {
   // Boş string src tarayıcının sayfayı yeniden indirmesine neden olur; img render etme
   if (src === '' || src == null) return null;
+  // Hazır avatar yolu (DB'de kimlik olarak duran `/images/avatar/*.svg`) → içerik hash'li,
+  // 1 yıl `immutable` önbellekli küçük WebP (perf K2). Yüklenmiş/OAuth görselleri aynen geçer.
+  // Böylece header, sidebar, ekip, lig, klan gibi tüm Radix avatar noktaları tek yerden hafifler.
+  const resolved = typeof src === 'string' ? (resolveAvatarImage(src) ?? src) : src;
   return (
     <AvatarPrimitive.Image
       ref={ref}
       className={cn('aspect-square h-full w-full object-cover transition-opacity duration-200', className)}
-      src={src}
+      src={resolved}
+      decoding="async"
       {...props}
     />
   );

@@ -10,13 +10,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { InlineError } from '@/components/states';
 import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { resolveBadgeThumb } from '@/lib/badge-images';
 import { errorText } from './api';
 
 /** Rozet ikonu → BadgeGlyph kaynağı (yol/URL → görsel, aksi halde emoji). */
 export function glyphSource(icon: string | null | undefined): { imageSrc?: string; emoji?: string } {
   const v = (icon ?? '').trim();
   if (!v) return {};
-  if (v.startsWith('/') || /^https?:\/\//i.test(v)) return { imageSrc: v };
+  // Hazır rozet SVG'leri 0,5–1 MB; katalog ızgarası/sheet için 320 px WebP küçük resim (perf K2).
+  if (v.startsWith('/') || /^https?:\/\//i.test(v)) return { imageSrc: resolveBadgeThumb(v) ?? v };
   return { emoji: v };
 }
 

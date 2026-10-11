@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { shareCharacter } from '@/components/customer/character-share-card';
 import { categoryRevealTheme, badgeTier, LEGENDARY_OVERLAY, RARE_OVERLAY } from '@/lib/character-reveal-theme';
 import { getCharacterRevealText } from '@/lib/character-reveal-texts';
+import { resolveBadgeThumb } from '@/lib/badge-images';
 
 /**
  * KARAKTER ROZETİ REVEAL — göz alıcı, sinematik "sürpriz açığa çıkarma" modalı.
@@ -998,7 +999,7 @@ function RevealedBadge({
         >
           {character?.icon ? (
             <Image
-              src={character.icon}
+              src={resolveBadgeThumb(character.icon) ?? character.icon}
               alt={character.name}
               width={96}
               height={96}
