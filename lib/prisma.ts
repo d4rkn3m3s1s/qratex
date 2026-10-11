@@ -23,9 +23,20 @@ function createPrismaClient() {
   }
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+// Dev önbelleği PrismaClient SINIFINA göre anahtarlanır: Next dev'de her rota paketi kendi
+// generated-prisma-client kopyasını taşıyabilir; tek global örnek başka kopyanın `Prisma.sql`
+// parçalarını `instanceof Sql` ile tanımaz → iç içe parça `$1` parametresi olarak gider
+// ("syntax error at or near $1", e2e b-analitik-ai: kıyas/etki 500). Prod'da davranış aynı.
+const devClients = ((globalThis as unknown as { __prismaByCtor?: Map<unknown, PrismaClient> }).__prismaByCtor ??=
+  new Map<unknown, PrismaClient>());
+const cachedForThisCopy = devClients.get(PrismaClient) ?? (globalForPrisma.prisma instanceof PrismaClient ? globalForPrisma.prisma : undefined);
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const prisma = cachedForThisCopy ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  devClients.set(PrismaClient, prisma);
+  globalForPrisma.prisma = prisma;
+}
 
 /** Neon uyku, ağ kesintisi, bağlantı zaman aşımı vb. — geçici, yeniden denenebilir. */
 export function isPrismaConnectivityError(err: unknown): boolean {
