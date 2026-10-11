@@ -363,3 +363,32 @@ Yöntem: İddiaların her biri çürütülmeye çalışıldı. Okunan kod: `app/
 | 2 | `failed` oturumda yeniden oynatıp 409 | Doğrulandı |
 | 3 | İstemci skoru doğrulanmıyor | Doğrulandı |
 | 4 | Turnuva eşitlik belirsizliği | Doğrulandı (adalet kısmı kesin; ">3 ödül" kısmı doğrulanmadı) |
+
+## Uygulama (Dalga 2)
+
+Oyun ortak motora (v2 sözleşmesi, `/customer/games/[game]` dinamik rotası) taşındı. Kimlik aynı (`trust-merge`), bu yüzden eski statik `app/customer/games/trust-merge/page.tsx` dinamik rotayı gölgelememesi için silindi; eski bileşen `components/customer/games/trust-merge-game.tsx` kaldırıldı.
+
+**Dosyalar:** `components/customer/games/trust-merge/sim.ts` (saf, tohumlu simülasyon) · `components/customer/games/trust-merge/trust-merge-game.tsx` (v2 bileşen) · `lib/games/validators/trust-merge.ts` + `lib/games/registry/trust-merge.server.ts` (deterministik replay doğrulayıcısı) · `lib/games/registry/trust-merge.ts` (v2, pratik açık) · `lib/minigame-config.ts` (yalnız `trust-merge` satırı) · `lib/minigame-copy.ts` (yalnız `trust-merge` metinleri) · `__tests__/lib/trust-merge.test.ts` (16 test).
+
+**Skor normalizasyonu (§7.3 #14):** skor artık en yüksek karo değil, klasik 2048 **birleşim puanı**. Eşik 1.500 puan (≈ 256 karosu), tavan 10.000 (admin override sınırı içinde; ≈ 1024 karosu), `minDurationSec` 15, `maxScorePerSec` 150. Liderlik/turnuva artık 4 kademeye çökmez; `bestScorePct` başarımları diğer oyunlarla aynı birimde ölçülür (tek 64 karosu artık rozet açmaz — testli). En yüksek karo yalnız HUD/yıldız/kilometre taşı göstergesi.
+
+**Kapatılan bulgular (9):**
+- B1 — "Bitir" üst şeride taşındı (D-pad'den uzak), 700 ms **basılı tut ve onayla**; eşik altındaysa aria/etiket uyarır.
+- B2 (oyun tarafı) — sıralama birimi ince taneli birleşim puanı; eşitlikte ikincil anahtar ve turnuva dondurma paylaşılan katmanın işi (aşağıda).
+- B3 — tohum sunucudan (yenilemede aynı tohum); sıralıda girdi kaydı tohum anahtarlı sessionStorage'a yazılır, yenilemede tahta **aynı noktadan** geri kurulur; bitmiş oyun da özet ekranına geri yüklenir (yeniden deneme yok).
+- B4 — eşik/tavan `config`'ten (admin override); `won` kozmetik, karar sunucuda.
+- B5 — sunucu tohum + kayıtla replay eder; etkisiz hamle, insan üstü hız (hamle arası ≥ 5 adım), başka tohum, bitmemiş oyun, hızlandırılmış betik reddedilir; şişirilmiş beyan sunucu skoruna iner.
+- B6 — karolar ve arka plan hücreleri tek formülle konumlanır (hizasızlık yok), `transform` ile kayar; yutulan karo hedefe kayıp söner, birleşen karo kaymadan sonra "pop", yeni karo gecikmeli doğar; azaltılmış harekette süreler 0.
+- B7 — tek elemanlı girdi tamponu (hızlı hamle yutulmaz), `e.code` eşlemesi (Caps Lock / Türkçe klavye), dinleyiciler kararlı (motor kancaları).
+- B8 — tek sözlük: "karo" + "puan"; "rozet" kaldırıldı; etiketli HUD (Puan · En iyi karo · Hamle) + eşiğe ilerleme çubuğu; `rewardMissNote`, ayrı "Oyunu bitirdin / Hamle kalmadı" başlıkları.
+- B9 / B10 — boşta RAF yok (FxLayer kullanılmıyor; döngü yalnız 60 Hz sayaç); ekran okuyucu tablosu + hamle başına `aria-live` özeti; D-pad `aria-label`'lı ve `useCoarsePointer` ile (iPad dahil); AA kontrastlı palet (2048 mor/beyaz), ipucu metni ≥ 12 px; ses/titreşim/sarsıntı/konfeti `fx` politikası + oyuncu tercihi üzerinden (kabuk ayarları).
+
+**Ek özellikler:** ilk oynayışta öğretici, Pratik/Sıralı mod, duraklat/devam (Esc/P, sekme gizlenince), zorluk eğrisi (en yüksek karo büyüdükçe 4 doğma olasılığı %10 → %15 → %20), kilometre taşı kutlamaları (64…4096), sonuç ekranı (puan, kişisel en iyi, en yüksek karo, hamle, 0–3 yıldız, paylaş, sıralıda 15 sn otomatik gönderim).
+
+**Envanterde kapanan maddeler (22):** #14, #15, #16, #18, #19, #23, #24, #26, #28, #29, #31, #33, #35, #37, #39, #40, #41, #46, #48, #49, #50, #51, #54 (çoğu yukarıdaki bulgularla).
+
+**Kalan açıklar:**
+- B2'nin paylaşılan kısmı (liderlik/turnuva eşitlik ikincil anahtarı, haftalık sonucu dondurma `TournamentResult`) ve B11 (bildirim try, toast ön eki, liderlik hata durumu, UTC metni) turnuva/kabuk sahiplerinin.
+- #52 Geri al jetonu: ekonomi tasarımı (escrow/net-sıfır) gerektirir; eklenmedi.
+- **Admin dikkat:** canlı `MiniGameConfig` satırında `trust-merge` için eski birimle (ör. `rewardThreshold: 256`, `maxScore: 2048`) override varsa yeni birimde eşik bedavaya düşer / tavan kırpar — admin oyun ayarlarından temizlenmeli (DB'ye bağlanılmadı, doğrulanamadı).
+- Eski kayıtlar (karo birimi skorlar) tüm zamanlar liderliğinde yeni puanlarla karışır; tarihli kesim ya da sezon sıfırlaması liderlik sahibinin kararı.

@@ -377,15 +377,19 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'trust_merge_game',
     title: 'Güven Birleştir',
     description:
-      'Aynı güven rozetlerini kaydırıp birleştir! 2 → 4 → 8… güven skorunu en yükseğe taşı.',
+      'Aynı karoları kaydırıp birleştir: 2 → 4 → 8… Her birleşim puan getirir; 1.500 puanda ödül.',
     emoji: '🔢',
     accent: '#f59e0b',
-    maxScore: 2048,
-    rewardThreshold: 256,
+    // Skor = birleşim puanı (en yüksek karo DEĞİL; §7.3 #14 normalizasyon). 1.500 ≈ 256 karosu,
+    // 10.000 (admin tavanı) ≈ 1024 karosu. Replay: components/customer/games/trust-merge/sim.ts
+    maxScore: 10000,
+    rewardThreshold: 1500,
     rewardPoints: 170,
     rewardXp: 85,
-    minDurationSec: 12,
-    maxScorePerSec: 25,
+    // 256 karosu en az ~60 hamle; hamle hızı sim'de ≤ 12/sn (asıl hız sınırı replay'de). Oran tavanı hızlı
+    // dürüst oyuncuyu (≈8 hamle/sn × ~15 puan) cezalandırmayacak kadar geniş.
+    minDurationSec: 15,
+    maxScorePerSec: 150,
     maxDurationSec: 3600,
   },
   {

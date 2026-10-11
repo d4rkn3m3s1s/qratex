@@ -1,10 +1,11 @@
 /**
  * Güven Birleştir — kayıt defteri girdisi (istemci güvenli).
  *
- * KORU (§7.3 #14): skor birimi (karo değeri) başarımlar için normalize edilecek.
- *
- * OYUN AJANI: v2'ye taşırken `component`'i `{ contract: 'v2', load }` yap, doğrulayıcıyı
- * `./trust-merge.server.ts`'e yaz. Sözleşme: lib/games/README.md
+ * KORU + skor normalizasyonu (§7.3 #14): skor = birleşim puanı (karo değeri değil), böylece
+ * liderlik/turnuva ince taneli sıralanır ve başarımlar (`bestScorePct`) diğer oyunlarla aynı
+ * birimde ölçülür. Saf simülasyon `components/customer/games/trust-merge/sim.ts`; sunucu aynı
+ * tohum + girdi kaydıyla yeniden oynatır (`./trust-merge.server.ts` →
+ * `lib/games/validators/trust-merge.ts`).
  */
 import { defineGame } from './types';
 
@@ -12,18 +13,16 @@ export const trustMergeGame = defineGame({
   id: 'trust-merge',
   gameType: 'trust-merge',
   title: 'Güven Birleştir',
-  tagline:
-    'Aynı güven rozetlerini kaydırıp birleştir: 2 → 4 → 8… en yükseğe taşı.',
+  tagline: 'Aynı karoları kaydırıp birleştir: her birleşim puan getirir. En büyük karoyu köşede tut, eşiği aş.',
   emoji: '🔢',
   accent: '#f59e0b',
   status: 'live',
   role: 'puzzle',
   verification: 'deterministic',
-  // Eski sözleşmeli bileşen pratik modunu bilmiyor; v2'ye taşınınca true.
-  modes: { practice: false, ranked: { attemptsPerDay: 1 } },
+  modes: { practice: true, ranked: { attemptsPerDay: 1 } },
   component: {
-    contract: 'legacy',
-    load: () => import('@/components/customer/games/trust-merge-game').then((m) => m.TrustMergeGame),
+    contract: 'v2',
+    load: () => import('@/components/customer/games/trust-merge/trust-merge-game').then((m) => m.TrustMergeGame),
   },
-  controls: 'Ok tuşları / WASD ya da kaydırma.',
+  controls: 'Ok tuşları / WASD ya da tahtada kaydır; dokunmatikte yön düğmeleri. Bitirmek için “Bitir”e basılı tut. Esc/P: duraklat.',
 });
