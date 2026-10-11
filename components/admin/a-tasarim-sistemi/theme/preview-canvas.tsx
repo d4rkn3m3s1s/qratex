@@ -20,8 +20,10 @@ const hsl = (t: string) => `hsl(${t})`;
  * yalnız bu tuvale çizer. Belge köküne hiçbir şey yazılmaz → kaydetmeden çıkınca sızıntı yok.
  */
 function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
-  const label = mode === 'dark' ? 'Koyu mod' : 'Açık mod';
+  const label = mode === 'dark' ? 'Koyu mod' : ux.acikMod;
   return (
     <figure className="min-w-0 space-y-1.5">
       <figcaption className="qx-caption font-medium text-fg-muted">{label}</figcaption>
@@ -41,13 +43,13 @@ function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">{dx.panelSummary}</span>
               <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: hsl(t.accent), color: hsl(t.accentFg) }}>
-                Yeni
+                {uy.yeni}
               </span>
             </div>
             <div className="space-y-2 rounded-xl border p-3" style={{ background: hsl(t.card), borderColor: hsl(t.border) }}>
               <p className="text-sm font-medium">{dx.weeklyFeedback}</p>
               <p className="text-xs" style={{ color: hsl(t.mutedFg) }}>
-                İkincil metin bu renkte okunur.
+                {ux.ikincilMetinBuRenkte}
               </p>
               <div className="flex h-12 items-end gap-1.5" >
                 {[40, 65, 50, 85, 70, 95].map((h, i) => (
@@ -60,17 +62,17 @@ function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
               </div>
             </div>
             <div className="rounded-lg border px-2.5 py-1.5 text-xs" style={{ borderColor: hsl(t.border), color: hsl(t.mutedFg), boxShadow: `0 0 0 2px ${hsl(t.background)}, 0 0 0 4px ${hsl(t.primary)}` }}>
-              Odaklanmış giriş alanı
+              {ux.odaklanmisGirisAlani}
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>
-                Kaydet
+                {uy.kaydet}
               </span>
               <span className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: hsl(t.secondary), color: hsl(t.secondaryFg) }}>
-                İkincil
+                {ux.ikincil}
               </span>
               <span className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: hsl(t.border) }}>
-                Vazgeç
+                {ux.vazgec}
               </span>
             </div>
           </div>
@@ -81,10 +83,12 @@ function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
 }
 
 export function ContrastList({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
+  const fz = useDesignSystemCopy().fx;
+  const ux = useDesignSystemCopy().ui;
   const checks = contrastChecks(t);
   return (
     <div className="space-y-1.5">
-      <p className="qx-caption font-medium text-fg-muted">{mode === 'dark' ? 'Koyu mod kontrastı' : 'Açık mod kontrastı'}</p>
+      <p className="qx-caption font-medium text-fg-muted">{mode === 'dark' ? ux.koyuModKontrasti : ux.acikModKontrasti}</p>
       <ul className="space-y-1">
         {checks.map((c) => (
           <li key={c.id} className="qx-caption flex items-center justify-between gap-2">
@@ -97,7 +101,7 @@ export function ContrastList({ t, mode }: { t: ResolvedTokens; mode: ColorMode }
             >
               {c.pass ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <XCircle className="h-3 w-3" aria-hidden />}
               {formatRatio(c.ratio)}
-              <span className="sr-only">{c.pass ? `geçti, gereken ${c.min}:1` : `kaldı, gereken ${c.min}:1`}</span>
+              <span className="sr-only">{c.pass ? fz.passNeed(c.min) : fz.failNeed(c.min)}</span>
             </span>
           </li>
         ))}

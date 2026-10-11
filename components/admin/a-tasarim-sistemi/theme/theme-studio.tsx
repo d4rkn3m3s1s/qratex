@@ -33,7 +33,8 @@ import { FamilyPicker } from './family-picker';
 import { ColorField } from './color-field';
 import { PreviewCanvas } from './preview-canvas';
 import { HistoryList } from './history-list';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 const MODE_ICON: Record<DefaultMode, React.ReactNode> = {
   system: <Monitor className="h-4 w-4" aria-hidden />,
@@ -42,16 +43,17 @@ const MODE_ICON: Record<DefaultMode, React.ReactNode> = {
 };
 
 function LiveSwatches({ draft }: { draft: Pick<ThemeDraft, 'activeTheme' | 'customColors'> }) {
+  const ux = useDesignSystemCopy().ui;
   const rows = (['light', 'dark'] as const).map((mode) => ({ mode, p: paletteFor(draft, mode) }));
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {rows.map(({ mode, p }) => (
         <div key={mode} className="min-w-0 space-y-1">
-          <p className="qx-caption text-fg-muted">{mode === 'dark' ? 'Koyu mod' : 'Açık mod'}</p>
+          <p className="qx-caption text-fg-muted">{mode === 'dark' ? 'Koyu mod' : ux.acikMod}</p>
           <ul className="grid grid-cols-5 gap-1.5">
             {[
               { k: 'Birincil', v: p.primary },
-              { k: 'İkincil', v: p.secondary },
+              { k: ux.ikincil, v: p.secondary },
               { k: 'Vurgu', v: p.accent },
               { k: 'Zemin', v: p.background },
               { k: 'Metin', v: p.foreground },
@@ -63,7 +65,7 @@ function LiveSwatches({ draft }: { draft: Pick<ThemeDraft, 'activeTheme' | 'cust
                   style={{ background: s.v ?? undefined, backgroundImage: s.v ? undefined : 'repeating-linear-gradient(45deg,transparent 0 4px,hsl(var(--border)) 4px 5px)' }}
                 />
                 <span className="qx-caption block truncate text-fg-muted">{s.k}</span>
-                <span className="qx-caption block truncate font-mono text-fg-subtle">{s.v ?? 'varsayılan'}</span>
+                <span className="qx-caption block truncate font-mono text-fg-subtle">{s.v ?? ux.varsayilan}</span>
               </li>
             ))}
           </ul>
@@ -74,8 +76,10 @@ function LiveSwatches({ draft }: { draft: Pick<ThemeDraft, 'activeTheme' | 'cust
 }
 
 function ModeControl({ value, onChange }: { value: DefaultMode; onChange: (m: DefaultMode) => void }) {
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   return (
-    <div role="radiogroup" aria-label="Platform varsayılan modu" className="inline-flex rounded-control bg-surface-muted p-1">
+    <div role="radiogroup" aria-label={ux.platformVarsayilanModu} className="inline-flex rounded-control bg-surface-muted p-1">
       {DEFAULT_MODES.map((m) => (
         <button
           key={m}
@@ -90,7 +94,7 @@ function ModeControl({ value, onChange }: { value: DefaultMode; onChange: (m: De
           )}
         >
           {MODE_ICON[m]}
-          {DEFAULT_MODE_LABEL[m]}
+          {L(DEFAULT_MODE_LABEL[m])}
         </button>
       ))}
     </div>
@@ -98,6 +102,7 @@ function ModeControl({ value, onChange }: { value: DefaultMode; onChange: (m: De
 }
 
 function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: CustomColors) => void }) {
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const set = (patch: Partial<CustomColors>) => onChange({ ...value, ...patch });
   const setSurface = (mode: 'light' | 'dark', patch: { background?: string; foreground?: string } | null) => {
@@ -109,24 +114,24 @@ function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: 
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
-        <ColorField label="Birincil" hint="Butonlar, bağlantılar, odak" value={value.primary} onChange={(v) => set({ primary: v })} />
-        <ColorField label="İkincil" hint="İkincil buton, kenar çubuğu vurgusu" value={value.secondary} onChange={(v) => set({ secondary: v })} />
-        <ColorField label="Vurgu" hint="Rozet ve vurgu yüzeyleri" value={value.accent} onChange={(v) => set({ accent: v })} />
+        <ColorField label={ux.birincil} hint={ux.butonlarBaglantilarOdak} value={value.primary} onChange={(v) => set({ primary: v })} />
+        <ColorField label={ux.ikincil} hint={ux.ikincilButonKenarCubugu} value={value.secondary} onChange={(v) => set({ secondary: v })} />
+        <ColorField label={ux.vurgu} hint={ux.rozetVeVurguYuzeyleri} value={value.accent} onChange={(v) => set({ accent: v })} />
       </div>
       {(['light', 'dark'] as const).map((mode) => {
         const s = value.modes?.[mode];
-        const label = mode === 'dark' ? 'Koyu mod zemini' : 'Açık mod zemini';
+        const label = mode === 'dark' ? 'Koyu mod zemini' : ux.acikModZemini;
         return (
           <fieldset key={mode} className="space-y-3 rounded-card border p-3">
             <legend className="qx-small px-1 font-medium text-fg">{label}</legend>
             {s ? (
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <ColorField label="Zemin" value={s.background ?? '#FFFFFF'} onChange={(v) => setSurface(mode, { background: v })} />
-                  <ColorField label="Metin" value={s.foreground ?? '#111111'} onChange={(v) => setSurface(mode, { foreground: v })} />
+                  <ColorField label={ux.zemin} value={s.background ?? '#FFFFFF'} onChange={(v) => setSurface(mode, { background: v })} />
+                  <ColorField label={ux.metin} value={s.foreground ?? '#111111'} onChange={(v) => setSurface(mode, { foreground: v })} />
                 </div>
                 <Button type="button" size="sm" variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => setSurface(mode, null)}>
-                  Platform varsayılan zeminine dön
+                  {ux.platformVarsayilanZeminineDon}
                 </Button>
               </>
             ) : (
@@ -139,7 +144,7 @@ function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: 
                   className="min-h-11 sm:min-h-9"
                   onClick={() => setSurface(mode, mode === 'dark' ? { background: '#0B0B14', foreground: '#F1F5F9' } : { background: '#FAFAFC', foreground: '#1E1B4B' })}
                 >
-                  Özel zemin tanımla
+                  {ux.ozelZeminTanimla}
                 </Button>
               </div>
             )}
@@ -150,12 +155,12 @@ function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: 
   );
 }
 
-async function copy(text: string, what: string) {
+async function copy(text: string, what: string, fz: { copied: (w: string) => string; clipboardDenied: string }) {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${what} panoya kopyalandı.`);
+    toast.success(fz.copied(what));
   } catch {
-    toast.error('Pano erişimi reddedildi; tarayıcı izinlerini kontrol edin.');
+    toast.error(fz.clipboardDenied);
   }
 }
 
@@ -164,6 +169,9 @@ async function copy(text: string, what: string) {
  * Belge köküne hiçbir şey yazılmaz; yayın sonrası sağlayıcı yanıttaki satırlarla güncellenir.
  */
 export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: dsKeys.theme, queryFn: ({ signal }) => fetchTheme(signal), initialData: initial ?? undefined, staleTime: 30_000 });
@@ -217,16 +225,16 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
         return (
           <div className="flex flex-col gap-section">
             <SectionCard
-              title="Canlıdaki tema"
+              title={ux.canlidakiTema}
               icon={<Palette />}
               description={
                 data.lastPublished
-                  ? `Son yayın: ${formatIstanbul(data.lastPublished.at)} · ${data.lastPublished.actor ?? 'Bilinmeyen yönetici'}`
-                  : 'Bu ekrandan henüz yayın yapılmadı (önceki değişiklikler eski tema sayfasından).'
+                  ? fz.lastPublish(formatIstanbul(data.lastPublished.at), data.lastPublished.actor ?? fz.unknownAdmin)
+                  : ux.buEkrandanHenuzYayin
               }
               actions={
                 <span className="qx-small font-semibold text-fg">
-                  {describeDraft(data.snapshot)} · {DEFAULT_MODE_LABEL[data.snapshot.defaultMode]}
+                  {describeDraft(data.snapshot)} · {L(DEFAULT_MODE_LABEL[data.snapshot.defaultMode])}
                 </span>
               }
             >
@@ -235,8 +243,8 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                   <div role="alert" className="qx-small flex gap-2 rounded-control border border-warning-border bg-warning-subtle p-3 text-fg">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
                     <span>
-                      Saklı değer geçerli bir tema değil ({describeDraft(data.snapshot)}). Ziyaretçiler şu an platformun CSS varsayılan paletini görüyor
-                      olabilir. Aşağıdan bir tema seçip yayınlayarak düzeltin.
+                      {fz.invalidStored(describeDraft(data.snapshot))}{' '}
+                      {ux.olabilirAsagidanBirTema}
                     </span>
                   </div>
                 )}
@@ -245,11 +253,11 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                   <div role="status" className="qx-small flex flex-wrap items-center gap-2 rounded-control border border-info-border bg-info-subtle p-3 text-fg">
                     <CalendarClock className="h-4 w-4 shrink-0 text-info" aria-hidden />
                     <span className="min-w-0 flex-1">
-                      “{data.seasonal.name}” dönemsel konsepti etkin: {formatIstanbul(data.seasonal.endDate, { dateStyle: 'long' })} tarihine kadar kullanıcılar
-                      {data.seasonal.familyName ? ` “${data.seasonal.familyName}”` : ' konseptin'} paletini görür; burada yayınlanan tema konsept bitince görünür.
+                      {fz.seasonalActive(data.seasonal.name, formatIstanbul(data.seasonal.endDate, { dateStyle: 'long' }))}
+                      {fz.seasonalTail(data.seasonal.familyName ?? null)}
                     </span>
                     <Button asChild size="sm" variant="outline" className="min-h-11 sm:min-h-9">
-                      <Link href="/admin/campaigns-calendar">Konsepte git</Link>
+                      <Link href="/admin/campaigns-calendar">{fz.goToConcept}</Link>
                     </Button>
                   </div>
                 )}
@@ -262,13 +270,13 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
             <div className="grid gap-section lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
               <div className="flex min-w-0 flex-col gap-section">
                 <SectionCard
-                  title="Varsayılan mod"
-                  description="Kendi seçimini yapmamış ziyaretçilerin açık/koyu modu. Kullanıcının kendi tercihi her zaman önce gelir."
+                  title={ux.varsayilanMod}
+                  description={ux.kendiSeciminiYapmamisZiyaretcilerin}
                 >
                   <ModeControl value={draft.defaultMode} onChange={(m) => setDraft({ ...draft, defaultMode: m })} />
                 </SectionCard>
 
-                <SectionCard title="Palet" description="Seçim yalnız bu ekrandaki önizlemeyi değiştirir. Yayına almak için alttaki “Yayınla” adımı gerekir.">
+                <SectionCard title={ux.palet} description={ux.secimYalnizBuEkrandaki}>
                   <SectionTabs
                     variant="pill"
                     value={tab}
@@ -278,10 +286,10 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                       if (next === 'custom') setDraft({ ...draft, activeTheme: 'custom', customColors: custom });
                       else if (draft.activeTheme === 'custom') setDraft({ ...draft, activeTheme: liveDraft && liveDraft.activeTheme !== 'custom' ? liveDraft.activeTheme : DEFAULT_DRAFT.activeTheme });
                     }}
-                    ariaLabel="Palet türü"
+                    ariaLabel={ux.paletTuru}
                     tabs={[
-                      { value: 'preset', label: 'Hazır paletler' },
-                      { value: 'custom', label: 'Özel' },
+                      { value: 'preset', label: ux.hazirPaletler },
+                      { value: 'custom', label: ux.ozel },
                     ]}
                   >
                     {(active) =>
@@ -294,9 +302,9 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                   </SectionTabs>
                 </SectionCard>
 
-                <SectionCard title="Dışa aktar" description="Taslağın çalışma zamanında yazılacak CSS değişkenleri ya da kayıt biçimi.">
+                <SectionCard title={ux.disaAktar} description={ux.taslaginCalismaZamanindaYazilacak}>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void copy(draftToCss(draft), 'CSS değişkenleri')}>
+                    <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void copy(draftToCss(draft), ux.cssDegiskenleri, fz)}>
                       <ClipboardCopy className="h-3.5 w-3.5" aria-hidden /> CSS'i kopyala
                     </Button>
                     <Button
@@ -304,7 +312,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                       variant="outline"
                       size="sm"
                       className="min-h-11 sm:min-h-9"
-                      onClick={() => void copy(JSON.stringify(draft, null, 2), 'Tema JSON')}
+                      onClick={() => void copy(JSON.stringify(draft, null, 2), fz.themeJson, fz)}
                     >
                       <ClipboardCopy className="h-3.5 w-3.5" aria-hidden /> JSON'u kopyala
                     </Button>
@@ -318,7 +326,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                         setTab('preset');
                       }}
                     >
-                      <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Taslağı varsayılana sıfırla
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden /> {ux.taslagiVarsayilanaSifirla}
                     </Button>
                   </div>
                 </SectionCard>
@@ -326,8 +334,8 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
 
               <div className="min-w-0 lg:sticky lg:top-20">
                 <SectionCard
-                  title="Önizleme"
-                  description={`${describeDraft(draft)} · açık ve koyu mod yan yana. Yalnız bu tuval boyanır; platform değişmez.`}
+                  title={ux.onizleme}
+                  description={fz.canvasDesc(describeDraft(draft))}
                   tone={report && report.failing > 0 ? 'warning' : undefined}
                   stripe={!!report && report.failing > 0}
                 >
@@ -347,49 +355,49 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                     animate="visible"
                     exit="exit"
                     role="region"
-                    aria-label="Yayınlanmamış değişiklikler"
+                    aria-label={ux.yayinlanmamisDegisiklikler}
                     className="pointer-events-auto mx-auto flex max-w-4xl flex-col gap-3 rounded-card border bg-surface-1 p-3 qx-elevation-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="qx-small font-semibold text-fg">{dx.unpublished}</p>
                       <p className="qx-caption text-fg-muted">
-                        {describeDraft(draft)} · {DEFAULT_MODE_LABEL[draft.defaultMode]}
-                        {report && report.failing > 0 ? ` · ${report.failing} kontrast uyarısı` : ' · kontrast temiz'}
+                        {describeDraft(draft)} · {L(DEFAULT_MODE_LABEL[draft.defaultMode])}
+                        {report && report.failing > 0 ? fz.contrastWarnings(report.failing) : fz.contrastClean}
                       </p>
                       {conflict && (
                         <InlineError>
-                          Tema bu arada değişti.{' '}
+                          {fz.themeChanged}{' '}
                           <button type="button" className="underline" onClick={() => void reloadLatest()}>
-                            Güncel hâli yükle
+                            {ux.guncelHaliYukle}
                           </button>
                         </InlineError>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button type="button" variant="ghost" className="min-h-11 sm:min-h-10" onClick={() => liveDraft && setDraft(liveDraft)} disabled={!live?.valid}>
-                        Vazgeç
+                        {ux.vazgec}
                       </Button>
                       <ConfirmAction
                         tone="brand"
                         trigger={
                           <Button type="button" className="min-h-11 sm:min-h-10">
-                            <Upload className="h-4 w-4" aria-hidden /> Yayınla…
+                            <Upload className="h-4 w-4" aria-hidden /> {ux.yayinla}
                           </Button>
                         }
-                        title="Tema tüm kullanıcılara yayınlansın mı?"
+                        title={ux.temaTumKullanicilaraYayinlansin}
                         description={
                           <span className="block space-y-3">
                             <span className="block">{dx.publishScope}</span>
                             <span className="block space-y-1">
                               <label htmlFor="ds-theme-note" className="qx-small font-medium text-fg">
-                                Not (isteğe bağlı)
+                                {ux.notIstegeBagli}
                               </label>
                               <Textarea
                                 id="ds-theme-note"
                                 value={note}
                                 maxLength={280}
                                 onChange={(e) => setNote(e.target.value)}
-                                placeholder="Ör. Bahar kampanyası için marka mavisi"
+                                placeholder={ux.orBaharKampanyasiIcin}
                                 rows={2}
                               />
                             </span>
@@ -397,21 +405,21 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                         }
                         impact={{
                           items: [
-                            { label: 'Palet', value: describeDraft(draft), emphasis: true },
-                            { label: 'Varsayılan mod', value: DEFAULT_MODE_LABEL[draft.defaultMode] },
-                            { label: 'Kontrast uyarısı', value: report?.failing ?? 0, emphasis: (report?.failing ?? 0) > 0 },
+                            { label: ux.palet, value: describeDraft(draft), emphasis: true },
+                            { label: ux.varsayilanMod, value: L(DEFAULT_MODE_LABEL[draft.defaultMode]) },
+                            { label: ux.kontrastUyarisi, value: report?.failing ?? 0, emphasis: (report?.failing ?? 0) > 0 },
                           ],
                           warning:
                             report && report.failing > 0
-                              ? `${report.failing} renk çifti WCAG AA eşiğinin altında; bazı yazılar zor okunabilir. Önizlemedeki kırmızı rozetlere bakın.`
+                              ? fz.pairsBelow(report.failing)
                               : undefined,
                         }}
-                        confirmLabel="Yayınla"
+                        confirmLabel={ux.yayinla2}
                         onConfirm={async () => {
                           try {
                             const r = await publishTheme(draft, data.version, note.trim() || undefined);
                             await afterWrite(r);
-                            toast.success('Tema yayınlandı.');
+                            toast.success(ux.temaYayinlandi);
                           } catch (e) {
                             if (isConflict(e)) setConflict(true);
                             throw new Error(errorText(e));

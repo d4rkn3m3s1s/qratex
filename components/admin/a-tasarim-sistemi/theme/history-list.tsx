@@ -15,9 +15,11 @@ import {
   type ThemeSnapshot,
 } from '@/lib/design-system/theme-model';
 import { dsKeys, errorText, fetchHistory, formatIstanbul, rollbackTheme, type PublishResult } from '../api';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 function Mini({ s }: { s: ThemeSnapshot | null }) {
+  const L = useSourceT(DS_DICT);
   if (!s) return <span className="qx-caption text-fg-subtle">—</span>;
   const draft = { activeTheme: s.activeTheme ?? '', customColors: s.customColors };
   const valid = isValidActiveTheme(s);
@@ -33,7 +35,7 @@ function Mini({ s }: { s: ThemeSnapshot | null }) {
         </span>
       )}
       <span className="qx-small truncate text-fg">{describeDraft(s)}</span>
-      <span className="qx-caption shrink-0 text-fg-subtle">· {DEFAULT_MODE_LABEL[s.defaultMode]}</span>
+      <span className="qx-caption shrink-0 text-fg-subtle">· {L(DEFAULT_MODE_LABEL[s.defaultMode])}</span>
     </span>
   );
 }
@@ -46,6 +48,9 @@ export function HistoryList({
   version: string | null;
   onRolledBack: (r: PublishResult) => void | Promise<void>;
 }) {
+  const L = useSourceT(DS_DICT);
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const [page, setPage] = useState(1);
   const q = useQuery({ queryKey: dsKeys.history(page), queryFn: ({ signal }) => fetchHistory(page, signal), staleTime: 15_000 });
@@ -53,15 +58,15 @@ export function HistoryList({
 
   return (
     <SectionCard
-      title="Sürüm geçmişi"
-      description="Her yayın ve geri alma tek denetim kaydıdır. “Önceki temaya dön”, o yayından hemen önceki hâli yeniden yayınlar."
+      title={ux.surumGecmisi}
+      description={ux.herYayinVeGeri}
       icon={<History />}
     >
       <QueryState
         query={q}
         skeleton="list"
         isEmpty={(d) => d.items.length === 0}
-        empty={{ variant: 'first-use', title: 'Henüz yayın yok', description: 'Bu ekrandan yapılan ilk yayın burada listelenir.' }}
+        empty={{ variant: 'first-use', title: ux.henuzYayinYok, description: ux.buEkrandanYapilanIlk }}
       >
         {(data) => (
           <div className="space-y-3">
@@ -72,9 +77,9 @@ export function HistoryList({
                   <li key={h.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={h.action === 'rollback' ? 'warning' : 'brand'}>{h.action === 'rollback' ? 'Geri alma' : 'Yayın'}</Badge>
+                        <Badge variant={h.action === 'rollback' ? 'warning' : 'brand'}>{h.action === 'rollback' ? 'Geri alma' : ux.yayin}</Badge>
                         <span className="qx-caption text-fg-muted">
-                          {formatIstanbul(h.at)} · {h.actor ?? 'Bilinmeyen yönetici'}
+                          {formatIstanbul(h.at)} · {h.actor ?? ux.bilinmeyenYonetici}
                         </span>
                       </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -90,21 +95,21 @@ export function HistoryList({
                         trigger={
                           <Button type="button" size="sm" variant="outline" className="min-h-11 shrink-0 sm:min-h-9">
                             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                            Önceki temaya dön
+                            {ux.oncekiTemayaDon}
                           </Button>
                         }
-                        title="Önceki tema yeniden yayınlansın mı?"
-                        description="Tüm kullanıcıların arayüzü (müşteri, bayi, yönetim, landing) bu temaya geçer."
+                        title={ux.oncekiTemaYenidenYayinlansin}
+                        description={ux.tumKullanicilarinArayuzuMusteri}
                         impact={[
-                          { label: 'Yayına alınacak', value: h.before ? describeDraft(h.before) : '—', emphasis: true },
-                          { label: 'Varsayılan mod', value: h.before ? DEFAULT_MODE_LABEL[h.before.defaultMode] : '—' },
+                          { label: ux.yayinaAlinacak, value: h.before ? describeDraft(h.before) : '—', emphasis: true },
+                          { label: ux.varsayilanMod, value: h.before ? L(DEFAULT_MODE_LABEL[h.before.defaultMode]) : '—' },
                         ]}
-                        confirmLabel="Geri al ve yayınla"
+                        confirmLabel={ux.geriAlVeYayinla}
                         onConfirm={async () => {
                           try {
                             const r = await rollbackTheme(h.id, version);
                             await onRolledBack(r);
-                            toast.success('Önceki tema yeniden yayınlandı.');
+                            toast.success(ux.oncekiTemaYenidenYayinlandi);
                             setPage(1);
                           } catch (e) {
                             throw new Error(errorText(e));
@@ -119,15 +124,15 @@ export function HistoryList({
               })}
             </ol>
             {pages > 1 && (
-              <nav aria-label="Geçmiş sayfaları" className="flex items-center justify-between gap-2">
+              <nav aria-label={ux.gecmisSayfalari} className="flex items-center justify-between gap-2">
                 <Button type="button" size="sm" variant="ghost" className="min-h-11 sm:min-h-9" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Önceki
+                  {ux.onceki}
                 </Button>
                 <span className="qx-caption qx-num text-fg-muted">
                   Sayfa {page} / {pages}
                 </span>
                 <Button type="button" size="sm" variant="ghost" className="min-h-11 sm:min-h-9" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                  Sonraki
+                  {uy.sonraki}
                 </Button>
               </nav>
             )}

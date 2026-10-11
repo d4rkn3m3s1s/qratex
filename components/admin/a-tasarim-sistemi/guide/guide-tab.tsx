@@ -11,6 +11,8 @@ import { ColorTokensSection, ContrastAuditSection, ScalesSection, TypographySect
 import { MotionSection } from './motion-section';
 import { PrimitivesSection, StatesSection } from './component-sections';
 import { DriftSection } from './drift-section';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 const RULES: Array<{ do: string; dont: string }> = [
   { do: 'Durum rengi için tone="success|warning|danger|info" ya da text-success / bg-danger-subtle', dont: 'text-emerald-500, text-red-600 gibi ham palet sınıfları' },
@@ -45,6 +47,9 @@ function Anchor({ id, children }: { id: string; children: React.ReactNode }) {
 
 /** Yaşayan rehber: token'lar, kontrast, hareket ve bileşenler gerçek koddan canlı çizilir. */
 export function GuideTab({ drift }: { drift: DriftReport | null }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -53,7 +58,7 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
   return (
     <div className="flex flex-col gap-section">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <nav aria-label="Rehber bölümleri" className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
+        <nav aria-label={ux.rehberBolumleri} className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
           <ul className="flex w-max gap-1.5">
             {JUMPS.map((j) => (
               <li key={j.id}>
@@ -61,7 +66,7 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
                   href={`#${j.id}`}
                   className="qx-caption inline-flex min-h-11 items-center rounded-chip border bg-surface-1 px-3 font-medium text-fg-muted transition-colors duration-fast hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                 >
-                  {j.label}
+                  {L(j.label)}
                 </a>
               </li>
             ))}
@@ -72,10 +77,10 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
           variant="outline"
           className="min-h-11 shrink-0 sm:min-h-10"
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          aria-label={isDark ? 'Kendi ekranımda açık moda geç' : 'Kendi ekranımda koyu moda geç'}
+          aria-label={isDark ? ux.kendiEkranimdaAcikModa : ux.kendiEkranimdaKoyuModa}
         >
           {isDark ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
-          {isDark ? 'Açık modda gör' : 'Koyu modda gör'}
+          {isDark ? ux.acikModdaGor : ux.koyuModdaGor}
         </Button>
       </div>
 
@@ -102,7 +107,7 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
       </Anchor>
 
       <Anchor id="kurallar">
-        <SectionCard title="Yap / Yapma" description="Sayfa göçünde uygulanan kurallar. Uyum raporu bu kuralların üçünü (sabit hex, ham palet, küçük metin) koddan sayar.">
+        <SectionCard title={ux.yapYapma} description={ux.sayfaGocundeUygulananKurallar}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-left">
               <thead>
@@ -122,13 +127,13 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
                       <span className="mr-1.5 font-semibold text-success" aria-hidden>
                         ✓
                       </span>
-                      {r.do}
+                      {L(r.do)}
                     </td>
                     <td className="py-2.5 text-fg-muted">
                       <span className="mr-1.5 font-semibold text-danger" aria-hidden>
                         ✕
                       </span>
-                      {r.dont}
+                      {L(r.dont)}
                     </td>
                   </tr>
                 ))}
@@ -143,10 +148,10 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
       </Anchor>
 
       <SectionCard
-        title="Kaynaklar ve ilgili sayfalar"
-        description="Token değerleri: app/globals.css · Tailwind eşlemesi: tailwind.config.ts · Katalog: lib/design/tokens.ts · Hareket: lib/motion (README) · Durum bileşenleri: components/states · Tema modeli: lib/design-system/theme-model.ts"
+        title={ux.kaynaklarVeIlgiliSayfalar}
+        description={ux.tokenDegerleriAppGlobals}
       >
-        <nav aria-label="İlgili kalite sayfaları">
+        <nav aria-label={ux.ilgiliKaliteSayfalari}>
           <ul className="flex flex-wrap gap-2">
             <li>
               <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
@@ -158,7 +163,7 @@ export function GuideTab({ drift }: { drift: DriftReport | null }) {
             <li>
               <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
                 <Link href="/admin/design-system?tab=erisilebilirlik">
-                  Erişilebilirlik <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                  {fz.accessibility} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                 </Link>
               </Button>
             </li>

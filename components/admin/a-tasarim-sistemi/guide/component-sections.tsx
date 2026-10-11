@@ -20,7 +20,8 @@ import {
   StatTile,
   type QueryLike,
 } from '@/components/states';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -32,27 +33,29 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function PrimitivesSection() {
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('ornek@');
   const [on, setOn] = useState(true);
-  const emailError = email.includes('@') && email.split('@')[1]?.includes('.') ? null : 'Geçerli bir e-posta adresi girin.';
+  const emailError = email.includes('@') && email.split('@')[1]?.includes('.') ? null : ux.gecerliBirEPosta;
 
   return (
-    <SectionCard title="Temel bileşenler" description="components/ui — shadcn tabanlı; QDL rol token'larına bağlı. API'ler geriye uyumlu.">
+    <SectionCard title={ux.temelBilesenler} description={ux.componentsUiShadcnTabanli}>
       <div className="space-y-5">
-        <Row label="Button">
+        <Row label={ux.button}>
           <Button>Birincil</Button>
           <Button variant="secondary">{dx.secondary}</Button>
           <Button variant="outline">{dx.outline}</Button>
           <Button variant="ghost">Hayalet</Button>
           <Button variant="destructive">
             <Trash2 className="h-4 w-4" aria-hidden />
-            Sil
+            {uy.sil}
           </Button>
           <Button variant="link">{dx.link}</Button>
         </Row>
-        <Row label="Button loading">
+        <Row label={ux.buttonLoading}>
           <Button
             loading={loading}
             onClick={() => {
@@ -60,25 +63,25 @@ export function PrimitivesSection() {
               window.setTimeout(() => setLoading(false), 1600);
             }}
           >
-            Kaydet
+            {uy.kaydet}
           </Button>
           <span className="qx-caption text-fg-muted">{dx.loadingNote}</span>
         </Row>
-        <Row label="Badge">
+        <Row label={ux.badge}>
           <Badge>{dx.defaultLabel}</Badge>
           <Badge variant="brand">Marka</Badge>
-          <Badge variant="success">Aktif</Badge>
+          <Badge variant="success">{uy.aktif}</Badge>
           <Badge variant="warning">Beklemede</Badge>
-          <Badge variant="danger">Hata</Badge>
-          <Badge variant="info">Bilgi</Badge>
+          <Badge variant="danger">{uy.hata}</Badge>
+          <Badge variant="info">{uy.bilgi}</Badge>
           <Badge variant="outline">{dx.outline}</Badge>
         </Row>
-        <Row label="Alert">
+        <Row label={ux.alert}>
           <div className="grid w-full gap-2 lg:grid-cols-2">
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" aria-hidden />
               <AlertTitle>{dx.paymentFailed}</AlertTitle>
-              <AlertDescription>Kart bilgilerinizi kontrol edip tekrar deneyin.</AlertDescription>
+              <AlertDescription>{uy.kartBilgileriniziKontrolEdip}</AlertDescription>
             </Alert>
             <Alert variant="success">
               <Activity className="h-4 w-4" aria-hidden />
@@ -87,7 +90,7 @@ export function PrimitivesSection() {
             </Alert>
           </div>
         </Row>
-        <Row label="Input + InlineError">
+        <Row label={ux.inputInlineerror}>
           <div className="w-full max-w-sm space-y-1">
             <Label htmlFor="qdl-email">E-posta</Label>
             <Input
@@ -100,13 +103,13 @@ export function PrimitivesSection() {
             <InlineError id="qdl-email-error">{emailError}</InlineError>
           </div>
         </Row>
-        <Row label="Switch / Progress">
+        <Row label={ux.switchProgress}>
           <div className="flex items-center gap-2">
             <Switch id="qdl-switch" checked={on} onCheckedChange={setOn} />
             <Label htmlFor="qdl-switch">Bildirimler</Label>
           </div>
           <div className="w-full max-w-xs">
-            <Progress value={64} aria-label="Profil tamamlanma" />
+            <Progress value={64} aria-label={ux.profilTamamlanma} />
           </div>
         </Row>
       </div>
@@ -153,6 +156,9 @@ function demoQuery(kind: DemoKind, refetch: () => void): QueryLike<typeof ROWS> 
 }
 
 export function StatesSection() {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const [kind, setKind] = useState<DemoKind>('ready');
   const [visits, setVisits] = useState(12480);
@@ -161,11 +167,11 @@ export function StatesSection() {
   return (
     <div className="space-y-section">
       <SectionCard
-        title="QueryState — tek veri-durum bileşeni"
-        description="loading (statik iskelet) · error (+ tekrar dene; türüne göre metin) · empty · ready (+ bayat veri bandı, arka plan yenileme). Hata asla boş liste gibi görünmez. Örnek satırlar bileşen gösterimidir."
+        title={ux.querystateTekVeriDurum}
+        description={ux.loadingStatikIskeletError}
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Durum seç">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={ux.durumSec}>
             {(Object.keys(DEMO_LABEL) as DemoKind[]).map((k) => (
               <button
                 key={k}
@@ -178,7 +184,7 @@ export function StatesSection() {
                   kind === k ? 'border-brand-border bg-brand-subtle text-brand' : 'bg-surface-1 text-fg-muted hover:text-fg',
                 )}
               >
-                {DEMO_LABEL[k]}
+                {L(DEMO_LABEL[k])}
               </button>
             ))}
           </div>
@@ -188,12 +194,12 @@ export function StatesSection() {
               skeleton="table"
               empty={{
                 variant: 'first-use',
-                title: 'Henüz şube eklenmedi',
-                description: 'İlk şubenizi ekleyince puan ve geri bildirimler burada listelenir.',
+                title: ux.henuzSubeEklenmedi,
+                description: ux.ilkSubeniziEkleyincePuan,
                 action: (
                   <Button size="sm">
                     <Plus className="h-4 w-4" aria-hidden />
-                    Şube ekle
+                    {ux.subeEkle}
                   </Button>
                 ),
               }}
@@ -217,85 +223,85 @@ export function StatesSection() {
       </SectionCard>
 
       <div className="grid gap-section lg:grid-cols-2">
-        <SectionCard title="EmptyState" description="variant: first-use · no-results · filtered · permission">
+        <SectionCard title={ux.emptystate} description="variant: first-use · no-results · filtered · permission">
           <div className="grid gap-2 sm:grid-cols-2">
             <EmptyState compact variant="no-results" />
             <EmptyState compact variant="permission" />
           </div>
         </SectionCard>
-        <SectionCard title="ErrorState" description="kind: generic · offline · forbidden · moduleDisabled · notFound; digest gösterimi">
+        <SectionCard title={ux.errorstate} description={ux.kindGenericOfflineForbidden}>
           <ErrorState kind="generic" onRetry={() => new Promise((r) => window.setTimeout(r, 900))} digest="a1b2c3" />
         </SectionCard>
       </div>
 
       <SectionCard
-        title="StatTile"
-        description="Değer + değişim (ikon + metin; yalnız renge dayanmaz) + örneklem. Değer değişince sayar; ilk boyamada saymaz. Bu bölümdeki sayılar bileşen örneğidir, platform verisi değildir."
+        title={ux.stattile}
+        description={ux.degerDegisimIkonMetin}
         actions={
           <Button size="sm" variant="outline" onClick={() => setVisits((v) => v + 487)}>
-            Değeri artır
+            {ux.degeriArtir}
           </Button>
         }
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Ziyaret" value={visits} icon={<Users />} tone="brand" delta={{ value: 12.4 }} hint="Son 30 gün" />
-          <StatTile label="Ortalama puan" value={4.62} format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} unit="/ 5" icon={<Star />} tone="warning" delta={{ value: 0.3, format: 'absolute' }} hint="n = 842 yanıt" />
-          <StatTile label="Şikâyet" value={37} icon={<MessageSquare />} tone="danger" delta={{ value: -18, goodDirection: 'down' }} hint="Azalması iyi" />
-          <StatTile label="Dönüşüm" value={null} loading icon={<Activity />} tone="info" />
+          <StatTile label={ux.ziyaret} value={visits} icon={<Users />} tone="brand" delta={{ value: 12.4 }} hint={ux.son30Gun} />
+          <StatTile label={ux.ortalamaPuan} value={4.62} format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} unit="/ 5" icon={<Star />} tone="warning" delta={{ value: 0.3, format: 'absolute' }} hint={ux.n842Yanit} />
+          <StatTile label={ux.sikayet} value={37} icon={<MessageSquare />} tone="danger" delta={{ value: -18, goodDirection: 'down' }} hint={ux.azalmasiIyi} />
+          <StatTile label={ux.donusum} value={null} loading icon={<Activity />} tone="info" />
         </div>
       </SectionCard>
 
       <SectionCard
-        title="ConfirmAction"
-        description="Etki önizlemesi (sunucudan), tipli onay, işlem bitene kadar açık kalma, hata olursa kapanmadan gösterme. Native confirm() ve tek tıkla kalıcı işlem yerine. Buradaki düğmeler yalnız diyaloğu gösterir; hiçbir kayıt değişmez."
+        title={ux.confirmaction}
+        description={ux.etkiOnizlemesiSunucudanTipli}
       >
         <div className="flex flex-wrap items-center gap-3">
           <ConfirmAction
             trigger={
               <Button variant="destructive">
                 <Trash2 className="h-4 w-4" aria-hidden />
-                Kampanyayı sil
+                {ux.kampanyayiSil}
               </Button>
             }
-            title="“Yaz Kampanyası” silinsin mi?"
-            description="Kampanya ve ona bağlı QR yönlendirmeleri kalıcı olarak kaldırılır."
+            title={ux.yazKampanyasiSilinsinMi}
+            description={ux.kampanyaVeOnaBagli}
             loadImpact={() =>
               new Promise((r) =>
                 window.setTimeout(
                   () =>
                     r({
                       items: [
-                        { label: 'Bağlı QR kod', value: 14 },
-                        { label: 'Bekleyen ödül', value: 3, emphasis: true },
-                        { label: 'Son 30 gün tarama', value: '2.418' },
+                        { label: ux.bagliQrKod, value: 14 },
+                        { label: ux.bekleyenOdul, value: 3, emphasis: true },
+                        { label: ux.son30GunTarama, value: '2.418' },
                       ],
-                      warning: '3 müşterinin bekleyen ödülü iptal edilecek.',
+                      warning: ux.t3MusterininBekleyenOdulu,
                     }),
                   700,
                 ),
               )
             }
-            confirmPhrase="Yaz Kampanyası"
-            confirmLabel="Kalıcı olarak sil"
+            confirmPhrase={ux.yazKampanyasi}
+            confirmLabel={ux.kaliciOlarakSil}
             onConfirm={() =>
               new Promise<void>((resolve, reject) =>
-                window.setTimeout(() => (failNext ? reject(new Error('Sunucu 409: kampanya şu an kullanımda.')) : resolve()), 900),
+                window.setTimeout(() => (failNext ? reject(new Error(fz.serverConflict)) : resolve()), 900),
               )
             }
           />
           <ConfirmAction
             trigger={<Button variant="outline">{dx.sendNotification}</Button>}
             tone="brand"
-            title="Bildirim 1.204 müşteriye gönderilsin mi?"
+            title={ux.bildirim1204Musteriye}
             impact={[
-              { label: 'Alıcı', value: '1.204' },
-              { label: 'Kanal', value: 'Push + e-posta' },
+              { label: ux.alici, value: '1.204' },
+              { label: ux.kanal, value: 'Push + e-posta' },
             ]}
             onConfirm={() => new Promise((r) => window.setTimeout(r, 600))}
           />
           <label className="qx-small inline-flex items-center gap-2 text-fg-muted">
-            <Switch checked={failNext} onCheckedChange={setFailNext} aria-label="Sonraki silme hata versin" />
-            Silme hata versin (diyalog açık kalır)
+            <Switch checked={failNext} onCheckedChange={setFailNext} aria-label={ux.sonrakiSilmeHataVersin} />
+            {ux.silmeHataVersinDiyalog}
           </label>
         </div>
       </SectionCard>

@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { m as Motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { FAMILY_GROUP_LABEL, THEME_FAMILIES, type FamilyGroup, type Palette } from '@/lib/design-system/theme-model';
+import { useDesignSystemCopy } from '../copy';
 
 function Strip({ p, label }: { p: Palette; label: string }) {
   return (
@@ -28,6 +29,7 @@ const GROUPS: FamilyGroup[] = ['brand', 'cool', 'warm', 'vivid'];
  * harekette global MotionConfig kapatır).
  */
 export function FamilyPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled?: boolean }) {
+  const ux = useDesignSystemCopy().ui;
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
   const order = GROUPS.flatMap((g) => THEME_FAMILIES.filter((f) => f.group === g));
   const activeIndex = Math.max(0, order.findIndex((f) => f.id === value));
@@ -45,7 +47,7 @@ export function FamilyPicker({ value, onChange, disabled }: { value: string; onC
   };
 
   return (
-    <div role="radiogroup" aria-label="Hazır paletler" aria-disabled={disabled || undefined} className="space-y-5">
+    <div role="radiogroup" aria-label={ux.hazirPaletler} aria-disabled={disabled || undefined} className="space-y-5">
       {GROUPS.map((g) => {
         const fams = order.filter((f) => f.group === g);
         if (!fams.length) return null;
@@ -91,8 +93,8 @@ export function FamilyPicker({ value, onChange, disabled }: { value: string; onC
                       {selected && <Check className="h-4 w-4 text-brand" aria-hidden />}
                     </span>
                     <span className="qx-caption block text-fg-muted">{f.note}</span>
-                    <Strip p={f.variants.light} label="Açık" />
-                    <Strip p={f.variants.dark} label="Koyu" />
+                    <Strip p={f.variants.light} label={ux.acik2} />
+                    <Strip p={f.variants.dark} label={ux.koyu} />
                   </button>
                 );
               })}

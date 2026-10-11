@@ -24,7 +24,8 @@ import {
 import { THEME_FAMILIES, contrastChecks, resolvePaletteTokens } from '@/lib/design-system/theme-model';
 import type { ChecklistData, PrefsSummary } from '@/lib/design-system/a11y.server';
 import { dsKeys, errorText, fetchA11y, formatIstanbul, isConflict, patchChecklist } from '../api';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 type A11yData = { prefs: PrefsSummary; checklist: ChecklistData };
 
@@ -40,19 +41,22 @@ const STATUS_STYLE: Record<CheckStatus, string> = {
 };
 
 function PrefsCard({ prefs }: { prefs: PrefsSummary }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const t = prefs.totals;
   const tiles = [
-    { k: 'Yüksek kontrast', v: t.highContrast },
-    { k: 'Animasyonları azalt', v: t.reduceAnimations },
-    { k: 'Renk körü modu', v: t.colorblindMode },
-    { k: 'Büyük yazı', v: t.largeText },
+    { k: ux.yuksekKontrast, v: t.highContrast },
+    { k: ux.animasyonlariAzalt, v: t.reduceAnimations },
+    { k: ux.renkKoruModu, v: t.colorblindMode },
+    { k: ux.buyukYazi, v: t.largeText },
   ];
   return (
     <SectionCard
-      title="Kullanıcı tercihleri"
+      title={ux.kullaniciTercihleri}
       icon={<Users />}
-      description={`Hesaba kaydedilmiş erişilebilirlik tercihleri (yalnız cihazda kalanlar görünmez). ${fmt(t.saved)} kullanıcı tercih kaydetmiş · Ölçüm: ${formatIstanbul(prefs.generatedAt)} (10 dk önbellek).`}
+      description={fz.prefsDesc(fmt(t.saved), formatIstanbul(prefs.generatedAt))}
     >
       <div className="space-y-5">
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -60,7 +64,7 @@ function PrefsCard({ prefs }: { prefs: PrefsSummary }) {
             <div key={m.k} className="rounded-card border bg-surface-1 p-3">
               <dt className="qx-caption text-fg-muted">{m.k}</dt>
               <dd className="qx-h3 qx-num mt-1 text-fg">{fmt(m.v)}</dd>
-              <dd className="qx-caption text-fg-subtle">tüm kullanıcıların {pct(m.v, t.users)}’i</dd>
+              <dd className="qx-caption text-fg-subtle">{fz.ofAllUsers(pct(m.v, t.users))}</dd>
             </div>
           ))}
         </dl>
@@ -82,7 +86,7 @@ function PrefsCard({ prefs }: { prefs: PrefsSummary }) {
               {prefs.rows.map((r) => (
                 <tr key={r.role} className="border-t">
                   <th scope="row" className="qx-small px-3 py-2 font-medium text-fg">
-                    {ROLE_LABEL[r.role] ?? r.role}
+                    {L(ROLE_LABEL[r.role] ?? r.role)}
                   </th>
                   {[r.users, r.saved, r.highContrast, r.reduceAnimations, r.colorblindMode, r.largeText].map((v, i) => (
                     <td key={i} className="qx-small qx-num px-3 py-2 text-right text-fg-muted">
@@ -108,6 +112,9 @@ function ChecklistRow({
   data: ChecklistData;
   onSaved: (d: ChecklistData) => void;
 }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const entry = data.state[item.id];
   const status = entry?.status ?? 'untested';
   const [editing, setEditing] = useState<CheckStatus | null>(null);
@@ -123,9 +130,9 @@ function ChecklistRow({
       const d = await patchChecklist({ id: item.id, status: next, note: nextNote.trim() || undefined, baseVersion: data.version });
       onSaved(d);
       setEditing(null);
-      toast.success(`${item.sc} “${CHECK_STATUS_LABEL[next]}” olarak kaydedildi.`);
+      toast.success(fz.savedAs(item.sc, L(CHECK_STATUS_LABEL[next])));
     } catch (e) {
-      setErr(isConflict(e) ? 'Liste bu arada güncellendi; yenilendi, tekrar deneyin.' : errorText(e));
+      setErr(isConflict(e) ? ux.listeBuAradaGuncellendi : errorText(e));
       if (isConflict(e)) onSaved(data); // üst bileşen yeniden çeker
     } finally {
       setBusy(false);
@@ -144,7 +151,7 @@ function ChecklistRow({
           {entry?.note && <p className="qx-caption mt-1 text-fg">Not: {entry.note}</p>}
           {entry?.at && (
             <p className="qx-caption text-fg-subtle">
-              {formatIstanbul(entry.at)} · {entry.by ?? 'Bilinmeyen yönetici'}
+              {formatIstanbul(entry.at)} · {entry.by ?? ux.bilinmeyenYonetici}
             </p>
           )}
         </div>
@@ -170,7 +177,7 @@ function ChecklistRow({
                 status === s ? STATUS_STYLE[s] : 'bg-surface-1 text-fg-muted hover:text-fg',
               )}
             >
-              {CHECK_STATUS_LABEL[s]}
+              {L(CHECK_STATUS_LABEL[s])}
             </button>
           ))}
         </div>
@@ -178,7 +185,7 @@ function ChecklistRow({
       {editing && (
         <div className="space-y-2 rounded-control border bg-surface-muted p-3">
           <label htmlFor={noteId} className="qx-small font-medium text-fg">
-            {editing === 'fail' ? 'Nerede, ne bozuk? (zorunlu)' : 'Neden kapsam dışı? (isteğe bağlı)'}
+            {editing === 'fail' ? 'Nerede, ne bozuk? (zorunlu)' : ux.nedenKapsamDisiIstege}
           </label>
           <Textarea id={noteId} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="flex gap-2">
@@ -190,10 +197,10 @@ function ChecklistRow({
               disabled={editing === 'fail' && note.trim().length < 5}
               onClick={() => void save(editing, note)}
             >
-              “{CHECK_STATUS_LABEL[editing]}” olarak kaydet
+              {fz.saveAs(L(CHECK_STATUS_LABEL[editing]))}
             </Button>
             <Button type="button" size="sm" variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => setEditing(null)}>
-              Vazgeç
+              {ux.vazgec}
             </Button>
           </div>
         </div>
@@ -204,6 +211,10 @@ function ChecklistRow({
 }
 
 function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: ChecklistData | null) => void }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const progress = checklistProgress(data.state);
   const [filter, setFilter] = useState<'all' | CheckStatus>('all');
   const principles: WcagPrinciple[] = ['perceivable', 'operable', 'understandable', 'robust'];
@@ -211,15 +222,15 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
 
   return (
     <SectionCard
-      title="WCAG 2.2 AA el ile doğrulama listesi"
+      title={ux.wcag22Aa}
       icon={<ListChecks />}
-      description="Otomatik ölçülemeyen kriterler. Her değişiklik denetim günlüğüne yazılır; “Kaldı” için not zorunlu."
+      description={ux.otomatikOlculemeyenKriterlerHer}
     >
       <div className="space-y-4">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="qx-small font-medium text-fg">
-              %{progress.percent} tamamlandı · {progress.pass} geçti · {progress.fail} kaldı · {progress.na} kapsam dışı · {progress.untested} denetlenmedi
+              {fz.progress(progress.percent, progress.pass, progress.fail, progress.na, progress.untested)}
             </span>
           </div>
           <div
@@ -228,13 +239,13 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={progress.percent}
-            aria-label="Doğrulama listesi tamamlanma"
+            aria-label={ux.dogrulamaListesiTamamlanma}
           >
             <div className="h-full rounded-full bg-success" style={{ width: `${progress.percent}%` }} />
           </div>
         </div>
 
-        <div role="group" aria-label="Duruma göre süz" className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label={ux.durumaGoreSuz} className="flex flex-wrap gap-1.5">
           {(['all', ...CHECK_STATUSES] as const).map((s) => (
             <button
               key={s}
@@ -247,7 +258,7 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
                 filter === s ? 'border-brand-border bg-brand-subtle text-brand' : 'bg-surface-1 text-fg-muted hover:text-fg',
               )}
             >
-              {s === 'all' ? 'Tümü' : CHECK_STATUS_LABEL[s]}
+              {s === 'all' ? ux.tumu : L(CHECK_STATUS_LABEL[s])}
             </button>
           ))}
         </div>
@@ -268,7 +279,7 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
             </section>
           );
         })}
-        {A11Y_CHECKLIST.every((i) => !visible(i)) && <p className="qx-small text-fg-muted">Bu durumda kriter yok.</p>}
+        {A11Y_CHECKLIST.every((i) => !visible(i)) && <p className="qx-small text-fg-muted">{uy.buDurumdaKriterYok}</p>}
       </div>
     </SectionCard>
   );
@@ -276,6 +287,7 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
 
 /** Tüm hazır paletlerin kritik çiftleri — yayın öncesi hangi temanın sorunlu olduğu bir bakışta. */
 function PresetContrastCard() {
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const rows = useMemo(
     () =>
@@ -287,8 +299,8 @@ function PresetContrastCard() {
   );
   return (
     <SectionCard
-      title="Tema paletleri kontrast tablosu"
-      description="Her hazır paletin açık ve koyu varyantında WCAG eşiğinin altında kalan çiftler (metin 4,5:1, odak halkası 3:1). Kaynak: lib/theme-presets.ts."
+      title={ux.temaPaletleriKontrastTablosu}
+      description={ux.herHazirPaletinAcik}
     >
       <div className="overflow-x-auto rounded-control border">
         <table className="w-full min-w-[34rem] text-left">
@@ -330,9 +342,11 @@ const REFS = [
 ];
 
 function GuideCard() {
+  const fz = useDesignSystemCopy().fx;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   return (
-    <SectionCard title="Rehber ve referanslar" icon={<BookOpen />} description="Bu ekran hukuki bir uygunluk denetiminin yerine geçmez.">
+    <SectionCard title={ux.rehberVeReferanslar} icon={<BookOpen />} description={ux.buEkranHukukiBir}>
       <div className="space-y-4">
         <dl className="grid gap-3 sm:grid-cols-2">
           {(Object.keys(PRINCIPLE_LABEL) as WcagPrinciple[]).map((p) => (
@@ -342,7 +356,7 @@ function GuideCard() {
             </div>
           ))}
         </dl>
-        <nav aria-label="Dış referanslar">
+        <nav aria-label={ux.disReferanslar}>
           <ul className="flex flex-wrap gap-2">
             {REFS.map((r) => (
               <li key={r.href}>
@@ -363,8 +377,8 @@ function GuideCard() {
           </ul>
         </nav>
         <p className="qx-caption text-fg-muted">
-          Otomatik tarama (axe) henüz CI'a bağlı değil; bu nedenle burada otomatik ihlal sayısı gösterilmez. Kontrast sözleşmesi ise her
-          tema × mod × erişilebilirlik modu kombinasyonunda Jest ile denetlenir.
+          {fz.axeNote}{' '}
+          {ux.temaModErisilebilirlikModu}
         </p>
       </div>
     </SectionCard>

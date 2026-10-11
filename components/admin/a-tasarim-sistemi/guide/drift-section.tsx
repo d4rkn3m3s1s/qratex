@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { SectionCard, EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import type { DriftArea, DriftReport } from '@/lib/design-system/drift-scan';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 const AREA_LABEL: Record<DriftArea, string> = {
   admin: 'Yönetim paneli',
@@ -31,16 +32,19 @@ function formatDate(iso: string) {
  * canlı değil, ölçüm anının fotoğrafıdır.
  */
 export function DriftSection({ report }: { report: DriftReport | null }) {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const [showAll, setShowAll] = useState(false);
   if (!report || report.totals.files === 0) {
     return (
-      <SectionCard title="Uyum raporu" description="Kural dışı renk ve küçük metin kullanımının koddan sayımı.">
+      <SectionCard title={ux.uyumRaporu} description={ux.kuralDisiRenkVe}>
         <EmptyState
           compact
           variant="first-use"
-          title="Henüz ölçüm yok"
-          description="Rapor, depo kökünde UPDATE_DESIGN_DRIFT=1 npx jest __tests__/admin/a-tasarim-sistemi/drift.test.ts komutuyla üretilir."
+          title={ux.henuzOlcumYok}
+          description={ux.raporDepoKokundeUpdate}
         />
       </SectionCard>
     );
@@ -50,16 +54,16 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
 
   return (
     <SectionCard
-      title="Uyum raporu"
-      description={`Ölçüm: ${formatDate(report.generatedAt)} · app/ ve components/ altındaki ${fmt(totals.files)} .tsx dosyası. Sezgisel sayımdır; meşru istisnalar dosyaya “design-drift-ignore” yorumu eklenerek dışarıda bırakılır.`}
+      title={ux.uyumRaporu}
+      description={fz.driftDesc(formatDate(report.generatedAt), fmt(totals.files))}
     >
       <div className="space-y-6">
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             { k: 'Kurala uyan dosya', v: `%${pct(totals.clean, totals.files)}`, sub: `${fmt(totals.clean)} / ${fmt(totals.files)}` },
             { k: 'Sabit hex renk', v: fmt(totals.hex), sub: 'token yerine #rrggbb' },
-            { k: 'Ham palet sınıfı', v: fmt(totals.palette), sub: 'ör. text-red-500' },
-            { k: '12px altı metin', v: fmt(totals.tinyText), sub: 'text-[10px] vb.' },
+            { k: ux.hamPaletSinifi, v: fmt(totals.palette), sub: ux.orTextRed500 },
+            { k: ux.t12pxAltiMetin, v: fmt(totals.tinyText), sub: 'text-[10px] vb.' },
           ].map((m) => (
             <div key={m.k} className="rounded-card border bg-surface-1 p-3">
               <dt className="qx-caption text-fg-muted">{m.k}</dt>
@@ -76,14 +80,14 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
               const p = pct(a.clean, a.files);
               return (
                 <li key={a.area} className="grid gap-1 sm:grid-cols-[12rem_1fr_auto] sm:items-center sm:gap-3">
-                  <span className="qx-small font-medium text-fg">{AREA_LABEL[a.area]}</span>
+                  <span className="qx-small font-medium text-fg">{L(AREA_LABEL[a.area])}</span>
                   <div
                     className="h-2.5 overflow-hidden rounded-full bg-surface-muted"
                     role="meter"
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={p}
-                    aria-label={`${AREA_LABEL[a.area]} uyum yüzdesi`}
+                    aria-label={fz.areaPct(L(AREA_LABEL[a.area]))}
                   >
                     <div className="h-full rounded-full bg-brand" style={{ width: `${p}%` }} />
                   </div>
@@ -131,7 +135,7 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
           )}
           {top.length > 10 && (
             <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
-              {showAll ? 'İlk 10 dosyayı göster' : `Tümünü göster (${top.length})`}
+              {showAll ? ux.ilk10DosyayiGoster : fz.showAll(top.length)}
             </Button>
           )}
         </div>

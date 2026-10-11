@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/states';
 import { normalizeHex } from '@/lib/design-system/theme-model';
+import { useDesignSystemCopy } from '../copy';
 
 /**
  * Renk alanı: bağlı etiket, renk seçici + hex metni. Yarım/geçersiz hex taslağa YAZILMAZ
@@ -20,6 +21,8 @@ export function ColorField({
   onChange: (hex: string) => void;
   hint?: string;
 }) {
+  const fz = useDesignSystemCopy().fx;
+  const ux = useDesignSystemCopy().ui;
   const id = useId();
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
@@ -38,7 +41,7 @@ export function ColorField({
       <div className="flex items-center gap-2">
         <input
           type="color"
-          aria-label={`${label} — renk seçici`}
+          aria-label={fz.colorPicker(label)}
           value={normalizeHex(value) ?? '#000000'}
           onChange={(e) => {
             const n = normalizeHex(e.target.value);
@@ -69,7 +72,7 @@ export function ColorField({
           }}
         />
       </div>
-      <InlineError id={`${id}-err`}>{valid ? null : 'Renk #RRGGBB ya da #RGB biçiminde olmalı.'}</InlineError>
+      <InlineError id={`${id}-err`}>{valid ? null : ux.renkRrggbbYaDa}</InlineError>
     </div>
   );
 }

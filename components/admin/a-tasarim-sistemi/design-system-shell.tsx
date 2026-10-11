@@ -8,6 +8,7 @@ import { SkeletonForPreset } from '@/components/states/skeletons';
 import type { ThemeOverview } from '@/lib/design-system/theme.server';
 import type { ChecklistData, PrefsSummary } from '@/lib/design-system/a11y.server';
 import type { DriftReport } from '@/lib/design-system/drift-scan';
+import { useDesignSystemCopy } from './copy';
 
 export type DesignSystemTab = 'rehber' | 'temalar' | 'erisilebilirlik';
 
@@ -30,14 +31,15 @@ export function DesignSystemShell({
   a11y: { prefs: PrefsSummary; checklist: ChecklistData } | null;
   drift: DriftReport | null;
 }) {
+  const ux = useDesignSystemCopy().ui;
   return (
     <PanelPage
       register="ops"
       header={
         <PageHeader
-          eyebrow="Yönetim paneli · Tasarım"
-          title="Tasarım Sistemi"
-          description="Qratex Tasarım Dili v2'nin yaşayan rehberi, platform teması ve erişilebilirlik sağlığı. Rehberdeki her örnek gerçek koddan canlı çizilir; tema yalnız onaylı yayınla değişir."
+          eyebrow={ux.yonetimPaneliTasarim}
+          title={ux.tasarimSistemi}
+          description={ux.qratexTasarimDiliV2}
           icon={<LayoutTemplate />}
           meta={
             <>
@@ -51,11 +53,11 @@ export function DesignSystemShell({
       <PanelErrorBoundary>
         <SectionTabs
           defaultValue="rehber"
-          ariaLabel="Tasarım sistemi bölümleri"
+          ariaLabel={ux.tasarimSistemiBolumleri}
           tabs={[
-            { value: 'rehber', label: 'Yaşayan rehber', icon: <BookOpen /> },
-            { value: 'temalar', label: 'Temalar', icon: <Palette /> },
-            { value: 'erisilebilirlik', label: 'Erişilebilirlik', icon: <Accessibility /> },
+            { value: 'rehber', label: ux.yasayanRehber, icon: <BookOpen /> },
+            { value: 'temalar', label: ux.temalar, icon: <Palette /> },
+            { value: 'erisilebilirlik', label: ux.erisilebilirlik, icon: <Accessibility /> },
           ]}
         >
           {(active) =>

@@ -33,6 +33,7 @@ const ALL_COLOR_NAMES = [
 ] as const;
 
 function RatioPill({ ratio, min = 4.5 }: { ratio: number; min?: number }) {
+  const ux = useDesignSystemCopy().ui;
   const ok = Number.isFinite(ratio) && ratio >= min;
   const grade = gradeContrast(ratio);
   return (
@@ -45,7 +46,7 @@ function RatioPill({ ratio, min = 4.5 }: { ratio: number; min?: number }) {
     >
       {ok ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <XCircle className="h-3 w-3" aria-hidden />}
       {formatRatio(ratio)}
-      <span className="sr-only">{ok ? 'geçti' : 'kaldı'}</span>
+      <span className="sr-only">{ok ? ux.gecti : ux.kaldi}</span>
       <span aria-hidden className="text-fg-subtle">· {min === 3 && grade === 'AA-large' ? 'AA' : grade}</span>
     </span>
   );
@@ -70,14 +71,16 @@ function Swatch({ name, value, label, utility }: { name: string; value?: string;
 }
 
 export function ColorTokensSection() {
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const v = useLiveTokens(ALL_COLOR_NAMES);
   const c = (a: string, b: string) => contrastRatio(v[a] ?? '', v[b] ?? '');
 
   return (
     <SectionCard
-      title="Renk token'ları (canlı)"
-      description="Değerler belgeden okunur: aktif tema preset'i, dönemsel konsept, koyu/açık mod ve erişilebilirlik modları dahil. Oranlar WCAG 2.2 formülüyle anlık hesaplanır."
+      title={ux.renkTokenLariCanli}
+      description={ux.degerlerBelgedenOkunurAktif}
     >
       <div className="space-y-8">
         <div className="grid gap-6 lg:grid-cols-3">
@@ -88,7 +91,7 @@ export function ColorTokensSection() {
             ))}
           </div>
           <div className="space-y-3">
-            <h3 className="qx-overline text-fg-muted">Metin</h3>
+            <h3 className="qx-overline text-fg-muted">{uy.metin}</h3>
             {TEXT_TOKENS.map((t) => (
               <div key={t.name} className="flex items-center justify-between gap-2">
                 <Swatch name={t.name} value={v[t.name]} label={t.label} utility={t.utility} />
@@ -113,7 +116,7 @@ export function ColorTokensSection() {
             <table className="w-full min-w-[40rem] text-left">
               <thead className="bg-surface-muted">
                 <tr className="qx-caption text-fg-muted">
-                  <th scope="col" className="px-3 py-2 font-medium">Rol</th>
+                  <th scope="col" className="px-3 py-2 font-medium">{uy.rol}</th>
                   <th scope="col" className="px-3 py-2 font-medium">Dolgu (bg-*) + *-fg</th>
                   <th scope="col" className="px-3 py-2 font-medium">Metin (text-*) / kart</th>
                   <th scope="col" className="px-3 py-2 font-medium">Metin / sayfa zemini</th>
@@ -133,7 +136,7 @@ export function ColorTokensSection() {
                           className="qx-small rounded-control px-2.5 py-1 font-semibold"
                           style={{ background: `hsl(${v[n]})`, color: `hsl(${v[`${n}-fg`]})` }}
                         >
-                          Kaydet
+                          {uy.kaydet}
                         </span>
                         <RatioPill ratio={c(`${n}-fg`, n)} />
                       </div>
@@ -141,7 +144,7 @@ export function ColorTokensSection() {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <span className="qx-small font-medium" style={{ color: `hsl(${v[`${n}-text`]})` }}>
-                          Durum metni
+                          {uy.durumMetni}
                         </span>
                         <RatioPill ratio={c(`${n}-text`, 'surface-1')} />
                       </div>
@@ -159,7 +162,7 @@ export function ColorTokensSection() {
                             borderColor: `hsl(${v[`${n}-border`]})`,
                           }}
                         >
-                          Rozet
+                          {uy.rozet}
                         </span>
                         <RatioPill ratio={c(`${n}-text`, `${n}-subtle`)} />
                       </div>
@@ -170,9 +173,9 @@ export function ColorTokensSection() {
             </table>
           </div>
           <p className="qx-caption text-fg-muted">
-            Tailwind: <code className="font-mono">text-danger</code> / <code className="font-mono">text-destructive</code> → metin rolü (
+            Tailwind: <code className="font-mono">text-danger</code> / <code className="font-mono">text-destructive</code> {ux.metinRolu}
             <code className="font-mono">--danger-text</code>), <code className="font-mono">bg-danger</code> → dolgu. Dolgu rengi metin olarak
-            kullanılamaz.
+            {ux.kullanilamaz}
           </p>
         </div>
 
@@ -193,6 +196,8 @@ export function ColorTokensSection() {
 }
 
 export function ContrastAuditSection() {
+  const fz = useDesignSystemCopy().fx;
+  const ux = useDesignSystemCopy().ui;
   const pairs = useMemo(() => contrastContract(), []);
   const names = useMemo(() => Array.from(new Set(pairs.flatMap((p) => [p.fg, p.bg]))), [pairs]);
   const v = useLiveTokens(names);
@@ -202,8 +207,8 @@ export function ContrastAuditSection() {
 
   return (
     <SectionCard
-      title="Kontrast sözleşmesi"
-      description="Aktif temada zorunlu çiftlerin canlı denetimi. Aynı sözleşme CI'da her açık/koyu × renk körü × yüksek kontrast kombinasyonunda Jest ile çalışır (__tests__/design/tokens-contrast.test.ts)."
+      title={ux.kontrastSozlesmesi}
+      description={ux.aktifTemadaZorunluCiftlerin}
       tone={failing.length ? 'danger' : 'success'}
       stripe
     >
@@ -212,12 +217,12 @@ export function ContrastAuditSection() {
       ) : failing.length === 0 ? (
         <p className="qx-body flex items-center gap-2 font-medium text-success">
           <CheckCircle2 className="h-5 w-5" aria-hidden />
-          {results.length} çiftin tamamı AA eşiğini geçiyor.
+          {fz.allPairsPass(results.length)}
         </p>
       ) : (
         <div className="space-y-3" role="alert">
           <p className="qx-body font-medium text-danger">
-            {failing.length} / {results.length} çift eşik altında — büyük olasılıkla aktif tema preset'i rol token'larını ezmiş.
+            {fz.pairsFail(failing.length, results.length)}
           </p>
           <ul className="space-y-1.5">
             {failing.map((r) => (
@@ -237,8 +242,10 @@ export function ContrastAuditSection() {
 }
 
 export function TypographySection() {
+  const fz = useDesignSystemCopy().fx;
+  const ux = useDesignSystemCopy().ui;
   return (
-    <SectionCard title="Tipografi ölçeği" description="`qx-` sınıfları (tailwind-merge renk sınıflarıyla birleştirirken boyutu silmez). Bilgi taşıyan metin 12px altına inmez.">
+    <SectionCard title={ux.tipografiOlcegi} description={fz.typeScaleDesc}>
       <div className="divide-y">
         {TYPE_SCALE.map((t) => (
           <div key={t.cls} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[12rem_1fr] sm:items-baseline sm:gap-4">
@@ -256,9 +263,10 @@ export function TypographySection() {
 }
 
 export function ScalesSection() {
+  const ux = useDesignSystemCopy().ui;
   return (
     <div className="grid gap-section lg:grid-cols-2">
-      <SectionCard title="Radius" description="4 değer; kontroller 12, kartlar 16, hero/sheet/dialog 24.">
+      <SectionCard title={ux.radius} description={ux.t4DegerKontroller12}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {RADIUS_SCALE.map((r) => (
             <div key={r.token} className="space-y-1.5 text-center">
@@ -272,7 +280,7 @@ export function ScalesSection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Elevation" description="Ops kartları ≤ 1; açılır menü 2; diyalog 3. Glow yalnız play kaydında.">
+      <SectionCard title={ux.elevation} description={ux.opsKartlari1Acilir}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {ELEVATION_SCALE.map((e) => (
             <div key={e.cls} className="space-y-2 text-center">
@@ -284,7 +292,7 @@ export function ScalesSection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Boşluk ritmi" description="4px taban; sayfa ve kart ritmi token'a bağlı (ekran genişliğiyle büyür).">
+      <SectionCard title={ux.boslukRitmi} description={ux.t4pxTabanSayfaVe}>
         <ul className="space-y-3">
           {SPACING_SCALE.map((s) => (
             <li key={s.token} className="space-y-1">
@@ -302,7 +310,7 @@ export function ScalesSection() {
         </ul>
       </SectionCard>
 
-      <SectionCard title="Katmanlar (z-index)" description="Keyfi z-[N] yerine katman adı. Alt bant / toast / modal çakışmalarını bitirir.">
+      <SectionCard title={ux.katmanlarZIndex} description={ux.keyfiZNYerine}>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <tbody>

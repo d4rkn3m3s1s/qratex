@@ -24,7 +24,8 @@ import {
   subscribeReducedMotion,
   useMotionPolicy,
 } from '@/lib/motion';
-import { useDesignSystemCopy } from '../copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { DS_DICT, useDesignSystemCopy } from '../copy';
 
 type PresetKey = 'fadeUp' | 'fadeIn' | 'scaleIn' | 'popIn' | 'sheet' | 'stagger';
 
@@ -48,6 +49,10 @@ function usePolicySources() {
 }
 
 export function MotionSection() {
+  const fz = useDesignSystemCopy().fx;
+  const L = useSourceT(DS_DICT);
+  const uy = useDesignSystemCopy().ui2;
+  const ux = useDesignSystemCopy().ui;
   const dx = useDesignSystemCopy();
   const policy = useMotionPolicy();
   const sources = usePolicySources();
@@ -57,8 +62,8 @@ export function MotionSection() {
 
   return (
     <SectionCard
-      title="Motion dili"
-      description="Hareket durum değişikliğini anlatır, dekor değildir. Tek kaynak: lib/motion (README: lib/motion/README.md)."
+      title={ux.motionDili}
+      description={ux.hareketDurumDegisikliginiAnlatir}
     >
       <div className="space-y-6">
         <div
@@ -69,10 +74,10 @@ export function MotionSection() {
           )}
         >
           <span className={cn('font-semibold', policy.reduce ? 'text-warning' : 'text-success')}>
-            Hareket politikası: {policy.reduce ? 'azaltılmış' : 'normal'}
+            {fz.motionPolicy} {policy.reduce ? ux.azaltilmis : fz.normal}
           </span>
-          <span className="text-fg-muted">İşletim sistemi tercihi: {sources.os ? 'açık' : 'kapalı'}</span>
-          <span className="text-fg-muted">Uygulama ayarı (Animasyonları azalt): {sources.app ? 'açık' : 'kapalı'}</span>
+          <span className="text-fg-muted">{fz.osPref} {sources.os ? ux.acik : ux.kapali}</span>
+          <span className="text-fg-muted">{fz.appPref} {sources.app ? ux.acik : ux.kapali}</span>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -114,7 +119,7 @@ export function MotionSection() {
 
           <div className="space-y-3">
             <h3 className="qx-overline text-fg-muted">{dx.presetPlayer}</h3>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Varyant ön ayarı">
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label={ux.varyantOnAyari}>
               {PRESETS.map((p) => (
                 <button
                   key={p.key}
@@ -147,7 +152,7 @@ export function MotionSection() {
                   >
                     {Array.from({ length: 6 }, (_, i) => (
                       <Motion.li key={i} variants={listItem} className="qx-caption rounded-chip border bg-surface-1 px-3 py-1.5 text-fg">
-                        Satır {i + 1}
+                        {fz.row(i + 1)}
                       </Motion.li>
                     ))}
                   </Motion.ul>
@@ -164,7 +169,7 @@ export function MotionSection() {
                     )}
                   >
                     <p className="font-semibold">{preset.label}</p>
-                    <p className="qx-caption text-fg-muted">{preset.note}</p>
+                    <p className="qx-caption text-fg-muted">{L(preset.note)}</p>
                   </Motion.div>
                 )}
               </AnimatePresence>
@@ -174,20 +179,20 @@ export function MotionSection() {
                   preset.register === 'play' ? 'bg-category-8/15 text-brand' : 'bg-surface-1 text-fg-muted',
                 )}
               >
-                {preset.register === 'play' ? 'play kaydı' : 'ops kaydı'}
+                {preset.register === 'play' ? ux.playKaydi : ux.opsKaydi}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => setRun((r) => r + 1)}>
                 <Play className="h-3.5 w-3.5" aria-hidden />
-                Tekrar oynat
+                {uy.tekrarOynat}
               </Button>
               <Motion.button
                 type="button"
                 {...interactive}
                 className="qx-small min-h-9 rounded-control border bg-surface-1 px-3 font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                interactive (hover/basış)
+                {fz.interactive}
               </Motion.button>
             </div>
           </div>
@@ -208,8 +213,8 @@ export function MotionSection() {
             <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-brand [animation-duration:2.4s]" />
           </Ambient>
           <p className="qx-small text-fg-muted">
-            <code className="font-mono text-fg">&lt;Ambient&gt;</code>: sonsuz döngüler yalnız play kaydında ve bu sarmalayıcıyla — azaltılmış harekette hiç
-            render edilmez (statik kare), ekran dışındayken ve sekme gizliyken durur.
+            <code className="font-mono text-fg">&lt;Ambient&gt;</code>{fz.ambientNote}{' '}
+            {ux.renderEdilmezStatikKare}
           </p>
         </div>
       </div>
