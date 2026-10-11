@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { auditKeys, errorText, exportUrl, fetchAuditFacets, fetchAuditPage, fetchAuditSummary } from './api';
 import { actorText, AuditDetailBody } from './audit-detail';
 import { CATEGORY_ICON, SEVERITY_TO_DS, fmtAgo, fmtDateTime, fmtFull, fmtNumber } from './format';
+import { AdminDenetimText, useAdminDenetimCopy } from './copy';
 
 export type AuditInitial = { summary: AuditSummary | null; page: { qs: string; data: AuditPage } | null };
 
@@ -51,6 +52,7 @@ const VIEWS: Array<{ label: string; qs: string }> = [
  * Tüm süzgeç durumu URL'de (derin bağlantı), liste imleçli, detay sağdan açılan panelde.
  */
 export function AuditCenter({ initial }: { initial: AuditInitial }) {
+  const tx = useAdminDenetimCopy();
   const id = useId();
   const qc = useQueryClient();
   const url = useUrlState();
@@ -330,9 +332,9 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             <Input id={`${id}-q`} type="search" className="min-h-11" placeholder="Kayıt kimliği, eylem kodu, varlık ya da aktör e-postası" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="w-full space-y-1.5 sm:w-44">
-            <Label htmlFor={`${id}-p`}>Dönem</Label>
+            <Label htmlFor={`${id}-p`}><AdminDenetimText k="period" /></Label>
             <select id={`${id}-p`} className={selectCls} value={v('donem')} onChange={(e) => set({ donem: e.target.value || null, from: null, to: null })}>
-              <option value="">Tüm zamanlar</option>
+              <option value="">{tx.allTime}</option>
               {AUDIT_PERIODS.map((p) => (
                 <option key={p} value={p}>
                   {PERIOD_LABEL[p]}
@@ -350,7 +352,7 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-c`}>Kategori</Label>
             <select id={`${id}-c`} className={selectCls} value={v('kategori')} onChange={(e) => set({ kategori: e.target.value || null })}>
-              <option value="">Tümü</option>
+              <option value="">{tx.all}</option>
               {AUDIT_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {CATEGORY_LABEL[c]}
@@ -359,9 +361,9 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-s`}>Önem</Label>
+            <Label htmlFor={`${id}-s`}><AdminDenetimText k="severity" /></Label>
             <select id={`${id}-s`} className={selectCls} value={v('onem')} onChange={(e) => set({ onem: e.target.value || null })}>
-              <option value="">Tümü</option>
+              <option value="">{tx.all}</option>
               {AUDIT_SEVERITIES.map((x) => (
                 <option key={x} value={x}>
                   {SEVERITY_LABEL[x]}
@@ -370,9 +372,9 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-e`}>Varlık</Label>
+            <Label htmlFor={`${id}-e`}><AdminDenetimText k="entity" /></Label>
             <select id={`${id}-e`} className={selectCls} value={varlik} onChange={(e) => set({ varlik: e.target.value || null })} aria-busy={facets.isLoading}>
-              <option value="">Tüm varlıklar</option>
+              <option value="">{tx.allEntities}</option>
               {varlik && !entityOpts.some((o) => o.value === varlik) ? <option value={varlik}>{varlik.split(',').map(entityLabel).join(', ')}</option> : null}
               {entityOpts.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -384,7 +386,7 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-a`}>Eylem</Label>
             <select id={`${id}-a`} className={selectCls} value={eylem} onChange={(e) => set({ eylem: e.target.value || null })} aria-busy={facets.isLoading}>
-              <option value="">Tüm eylemler</option>
+              <option value="">{tx.allActions}</option>
               {eylem && !actionOpts.some((o) => o.value === eylem) ? <option value={eylem}>{eylem}</option> : null}
               {actionOpts.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -394,10 +396,10 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-u`}>Aktör</Label>
+            <Label htmlFor={`${id}-u`}><AdminDenetimText k="actor" /></Label>
             <select id={`${id}-u`} className={selectCls} value={aktor} onChange={(e) => set({ aktor: e.target.value || null })} aria-busy={facets.isLoading}>
               <option value="">Herkes</option>
-              {aktor && !actorOpts.some((o) => o.userId === aktor) ? <option value={aktor}>Seçili kullanıcı</option> : null}
+              {aktor && !actorOpts.some((o) => o.userId === aktor) ? <option value={aktor}>{tx.selectedUser}</option> : null}
               {actorOpts.map((o) => (
                 <option key={o.userId} value={o.userId}>
                   {o.name ?? o.email ?? o.userId}
@@ -407,9 +409,9 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-r`}>Aktör rolü</Label>
+            <Label htmlFor={`${id}-r`}><AdminDenetimText k="actorRole" /></Label>
             <select id={`${id}-r`} className={selectCls} value={v('rol')} onChange={(e) => set({ rol: e.target.value || null })}>
-              <option value="">Tüm roller</option>
+              <option value="">{tx.allRoles}</option>
               {ACTOR_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABEL[r]}
@@ -418,9 +420,9 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-t`}>Aktör türü</Label>
+            <Label htmlFor={`${id}-t`}><AdminDenetimText k="actorType" /></Label>
             <select id={`${id}-t`} className={selectCls} value={v('tur')} onChange={(e) => set({ tur: e.target.value || null })}>
-              <option value="">Tümü</option>
+              <option value="">{tx.all}</option>
               {ACTOR_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {ACTOR_KIND_LABEL[k]}
@@ -430,11 +432,11 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-f`}>Başlangıç</Label>
+              <Label htmlFor={`${id}-f`}><AdminDenetimText k="start" /></Label>
               <Input id={`${id}-f`} type="date" className="min-h-11 px-2" value={from} max={to || undefined} aria-invalid={!!rangeError} aria-describedby={rangeError ? `${id}-re` : undefined} onChange={(e) => set({ from: e.target.value || null, donem: null })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-to`}>Bitiş</Label>
+              <Label htmlFor={`${id}-to`}><AdminDenetimText k="end" /></Label>
               <Input id={`${id}-to`} type="date" className="min-h-11 px-2" value={to} min={from || undefined} aria-invalid={!!rangeError} onChange={(e) => set({ to: e.target.value || null, donem: null })} />
             </div>
           </div>
@@ -495,8 +497,8 @@ export function AuditCenter({ initial }: { initial: AuditInitial }) {
             Sıralama
           </Label>
           <select id={`${id}-sort`} className={cn(selectCls, 'w-auto')} value={sort} onChange={(e) => set({ siralama: e.target.value === 'eski' ? 'eski' : null })}>
-            <option value="yeni">En yeni önce</option>
-            <option value="eski">En eski önce</option>
+            <option value="yeni">{tx.newestFirst}</option>
+            <option value="eski">{tx.oldestFirst}</option>
           </select>
           <Label htmlFor={`${id}-lim`} className="text-sm">
             Sayfa boyutu

@@ -14,6 +14,7 @@ import { ACTOR_KIND_LABEL, ROLE_LABEL, type AuditActor, type AuditDetail, type D
 import { cn } from '@/lib/utils';
 import { REVERT_LABEL, auditKeys, errorText, fetchAuditDetail, revertEntry } from './api';
 import { CATEGORY_ICON, SEVERITY_TO_DS, fmtAgo, fmtDateTime, fmtFull } from './format';
+import { AdminDenetimText } from './copy';
 
 export function actorText(a: AuditActor): string {
   if (a.kind === 'system' || a.kind === 'cron') return ACTOR_KIND_LABEL[a.kind];
@@ -173,14 +174,14 @@ function DetailView({ d, onOpen }: { d: AuditDetail; onOpen: (id: string) => voi
           </div>
         ) : (
           <>
-            {changed.length === 0 ? <p className="text-sm text-fg-muted">Önceki ve sonraki değer arasında alan farkı yok.</p> : null}
+            {changed.length === 0 ? <p className="text-sm text-fg-muted"><AdminDenetimText k="noDiff" /></p> : null}
             {rows.length > 0 ? <DiffTable rows={rows} /> : null}
             {same > 0 ? (
               <Button variant="ghost" size="sm" className="min-h-11" onClick={() => setShowSame((s) => !s)} aria-expanded={showSame}>
                 {showSame ? 'Değişmeyen alanları gizle' : `Değişmeyen ${same} alanı göster`}
               </Button>
             ) : null}
-            {d.diffTruncated ? <p className="text-xs text-fg-muted">Fark ilk 400 alanla sınırlandı; tamamı için Ham JSON görünümüne geçin.</p> : null}
+            {d.diffTruncated ? <p className="text-xs text-fg-muted"><AdminDenetimText k="diffCapped" /></p> : null}
           </>
         )}
       </section>
@@ -252,7 +253,7 @@ function DiffTable({ rows }: { rows: DiffRow[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[32rem] text-sm">
-        <caption className="sr-only">Alan bazlı önce/sonra farkı</caption>
+        <caption className="sr-only"><AdminDenetimText k="diffCaption" /></caption>
         <thead className="bg-surface-muted text-left text-xs text-fg-muted">
           <tr>
             <th scope="col" className="px-3 py-2 font-medium">
@@ -300,7 +301,7 @@ function Value({ v, tone }: { v: string | null; tone: 'old' | 'new' | null }) {
         tone === 'new' && 'bg-success-subtle text-fg'
       )}
     >
-      {tone === 'old' ? <span className="sr-only">Önceki değer: </span> : tone === 'new' ? <span className="sr-only">Yeni değer: </span> : null}
+      {tone === 'old' ? <span className="sr-only"><AdminDenetimText k="oldValue" /> </span> : tone === 'new' ? <span className="sr-only"><AdminDenetimText k="newValue" /> </span> : null}
       {v}
     </span>
   );
