@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { createBadge, errorText, updateBadge, uploadBadgeIcon } from './api';
 import { glyphSource } from './parts';
 import { resolveBadgeThumb } from '@/lib/badge-images';
+import { useBadgesAdminCopy } from './copy';
 
 /** İkon galerisi tek kaynaktan: rozet kataloğu (ikinci elle yazılmış liste yok — Bulgu 11). */
 const ICON_GALLERY = Array.from(new Map(BADGE_CATALOG.map((b) => [b.icon, b.name])).entries()).map(([icon, name]) => ({ icon, name }));
@@ -67,6 +68,7 @@ export type BadgeEditorProps = {
 };
 
 export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorProps) {
+  const bx = useBadgesAdminCopy();
   const isCharacter = badge?.isCharacter === true;
   const form = useZodForm<BadgeUpsertValues>(
     (isCharacter ? characterBadgePatchSchema : badgeUpsertSchema) as unknown as typeof badgeUpsertSchema,
@@ -130,7 +132,7 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
 
           {!isCharacter && (
             <fieldset className="space-y-3 rounded-lg border border-border p-3">
-              <legend className="px-1 text-sm font-medium text-fg">Kazanma koşulu</legend>
+              <legend className="px-1 text-sm font-medium text-fg">{bx.earnCondition}</legend>
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
                 <SelectField
                   control={form.control}
@@ -172,8 +174,7 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
             }
           />
           <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-muted">
-            Müşteride görünürlük: tam sürpriz politikası — rozet <strong className="text-fg">kazanılana kadar görünmez</strong> ve puanla
-            satın alınamaz.
+            {bx.visibilityA} <strong className="text-fg">{bx.visibilityStrong}</strong> {bx.visibilityB}
           </p>
         </div>
         <PreviewCard control={form.control} />
@@ -183,11 +184,12 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
 }
 
 function PreviewCard({ control }: { control: Control<BadgeUpsertValues> }) {
+  const bx = useBadgesAdminCopy();
   const [name, icon, rarity, color] = useWatch({ control, name: ['name', 'icon', 'rarity', 'color'] });
   return (
     <aside aria-label="Önizleme" className="order-first lg:order-none">
       <div className="sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center">
-        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">Müşteri görünümü</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{bx.customerView}</span>
         <BadgeGlyph label={name || 'Rozet'} {...glyphSource(icon)} rarity={rarity} color={color ?? undefined} size="xl" register="play" />
         <span className="line-clamp-2 font-semibold text-fg">{name || 'Rozet adı'}</span>
         <RarityBadge rarity={rarity} />
@@ -331,10 +333,11 @@ function ColorRow({ control, name, label, hint }: { control: Control<BadgeUpsert
 }
 
 function ColorFields({ control, onReset }: { control: Control<BadgeUpsertValues>; onReset: () => void }) {
+  const bx = useBadgesAdminCopy();
   const [color, bgColor] = useWatch({ control, name: ['color', 'bgColor'] });
   return (
     <fieldset className="space-y-3 rounded-lg border border-border p-3">
-      <legend className="px-1 text-sm font-medium text-fg">Görünüm</legend>
+      <legend className="px-1 text-sm font-medium text-fg">{bx.appearance}</legend>
       <div className="grid gap-4 sm:grid-cols-2">
         <ColorRow control={control} name="color" label="Vurgu rengi" hint="Boş bırakılırsa nadirlik rengi kullanılır." />
         <ColorRow control={control} name="bgColor" label="Arka plan rengi" hint="Yalnız vurgu rengiyle birlikte uygulanır." />

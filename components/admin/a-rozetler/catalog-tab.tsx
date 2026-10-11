@@ -35,6 +35,7 @@ import {
 import { badgeKeys, bulkAction, errorText, fetchBadges } from './api';
 import { BADGE_STATUS, TRACKABILITY_TONE, fmtAgo, fmtNumber } from './format';
 import { glyphSource } from './parts';
+import { useBadgesAdminCopy } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -82,6 +83,7 @@ function CatalogBody({
   statsError: unknown;
   onRetryStats: () => void;
 }) {
+  const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const { set: setUrl } = useUrlState();
   const isSeries = set === 'series';
@@ -194,7 +196,7 @@ function CatalogBody({
         header: 'Son kazanım',
         meta: { label: 'Son kazanım' } satisfies DataTableColumnMeta,
         cell: ({ row }) =>
-          row.original.lastEarnedAt ? <time dateTime={row.original.lastEarnedAt}>{fmtAgo(row.original.lastEarnedAt)}</time> : <span className="text-fg-muted">Hiç</span>,
+          row.original.lastEarnedAt ? <time dateTime={row.original.lastEarnedAt}>{fmtAgo(row.original.lastEarnedAt)}</time> : <span className="text-fg-muted">{bx.never}</span>,
       },
       {
         id: 'status',

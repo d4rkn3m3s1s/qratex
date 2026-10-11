@@ -19,6 +19,7 @@ import type { Moment } from '@/lib/moments/types';
 import { badgeKeys, errorText, fetchBadges, fetchLabCatalog, fetchLabStatus, fetchLabTargets, labClassify, labPreview, labSandbox } from './api';
 import { fmtAgo, fmtNumber } from './format';
 import { ProgressBar } from './parts';
+import { useBadgesAdminCopy } from './copy';
 
 // Müşterinin gördüğü 3B/canvas içerik yalnız istenince yüklenir (ana paket dışında).
 const CharacterReveal = dynamic(() => import('@/components/customer/character-reveal').then((m) => m.CharacterReveal), { ssr: false });
@@ -51,6 +52,7 @@ export default function LabTab() {
 // ───────────────────────────── Sandbox ─────────────────────────────
 
 function SandboxSection() {
+  const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const user = get('user') ?? '';
   const [search, setSearch] = useState('');
@@ -66,7 +68,7 @@ function SandboxSection() {
     >
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="space-y-2">
-          <Label htmlFor={searchId}>Test hesabı ara</Label>
+          <Label htmlFor={searchId}>{bx.searchTestAccount}</Label>
           <Input id={searchId} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="E-posta ya da ad" className="min-h-11 sm:min-h-10" />
           <QueryState
             query={targets}
@@ -114,6 +116,7 @@ function SandboxSection() {
 }
 
 function TargetPanel({ s }: { s: LabStatus }) {
+  const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const [category, setCategory] = useState(s.categories[0]?.key ?? '');
   const [busy, setBusy] = useState<string | null>(null);
@@ -181,7 +184,7 @@ function TargetPanel({ s }: { s: LabStatus }) {
                 Hazır — müşteri açılışı başlatabilir
               </p>
             ) : c.available === 0 ? (
-              <p className="text-xs text-fg-muted">Tükendi (tüm karakterler alınmış ya da pasif)</p>
+              <p className="text-xs text-fg-muted">{bx.exhausted}</p>
             ) : null}
           </li>
         ))}
@@ -283,6 +286,7 @@ const AI_ERROR: Record<string, string> = {
 };
 
 function ClassifierSection() {
+  const bx = useBadgesAdminCopy();
   const id = useId();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -307,7 +311,7 @@ function ClassifierSection() {
         }}
       >
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-text`}>Örnek yorum</Label>
+          <Label htmlFor={`${id}-text`}>{bx.sampleReview}</Label>
           <Textarea id={`${id}-text`} value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={1000} aria-describedby={`${id}-count`} />
           <p id={`${id}-count`} className="text-xs text-fg-muted">
             {text.trim().length}/1000 · 8 karakterden kısa yorumlar üretimde sınıflandırılmaz.
@@ -329,9 +333,9 @@ function ClassifierSection() {
         {result ? (
           <div className="space-y-1 rounded-lg border border-border bg-surface-2 p-3 text-sm">
             {result.reason === 'too_short' ? (
-              <p>Yorum çok kısa: üretim bu yorumu hiçbir kategoriye saymaz.</p>
+              <p>{bx.tooShort}</p>
             ) : result.reason === 'unclassified' ? (
-              <p>Sınıflandırılamadı: AI geçerli bir kategori döndürmedi; yorum bara sayılmaz.</p>
+              <p>{bx.unclassified}</p>
             ) : (
               <>
                 <p>
@@ -356,6 +360,7 @@ function ClassifierSection() {
 // ───────────────────────────── 3B rozet sahnesi ─────────────────────────────
 
 function ScenePreviewSection() {
+  const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const sceneId = get('scene') ?? '';
   const pickerId = useId();
@@ -405,7 +410,7 @@ function ScenePreviewSection() {
           </div>
         )}
       </QueryState>
-      {sceneId && list.data && !badge ? <p className="mt-2 text-sm text-fg-muted">Seçili rozet bu listede yok (pasif/arşivli olabilir ya da ilk 100 dışında).</p> : null}
+      {sceneId && list.data && !badge ? <p className="mt-2 text-sm text-fg-muted">{bx.notInList}</p> : null}
       {playing && moment ? <BadgeScene moment={moment} onDone={() => setPlaying(false)} /> : null}
     </SectionCard>
   );
@@ -431,6 +436,7 @@ function CharacterGallerySection() {
 const TIER_LABEL: Record<string, string> = { common: 'Yaygın', rare: 'Nadir', legendary: 'Efsanevi' };
 
 function Gallery({ cat }: { cat: LabCatalog }) {
+  const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const selected = get('reveal') ?? '';
   const [variant, setVariant] = useState<'orb' | 'mascot'>('orb');
@@ -510,23 +516,23 @@ function Gallery({ cat }: { cat: LabCatalog }) {
           <p className="font-medium text-fg">{current.name} — açılış önizlemesi</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
-              <Label htmlFor={`${id}-variant`}>Görünüm</Label>
+              <Label htmlFor={`${id}-variant`}>{bx.appearance}</Label>
               <Select value={variant} onValueChange={(v) => setVariant(v as 'orb' | 'mascot')}>
                 <SelectTrigger id={`${id}-variant`} className="min-h-11 sm:min-h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="orb">Kader küresi</SelectItem>
+                  <SelectItem value="orb">{bx.fateOrb}</SelectItem>
                   <SelectItem value="mascot">Maskot</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor={`${id}-why`}>Gerekçe metni (isteğe bağlı)</Label>
+              <Label htmlFor={`${id}-why`}>{bx.reasonOptional}</Label>
               <Input id={`${id}-why`} value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} placeholder="Boşsa örnek gerekçe kullanılır" className="min-h-11 sm:min-h-10" />
             </div>
             <div className="space-y-1">
-              <Label htmlFor={`${id}-rate`}>Sahip oranı % (isteğe bağlı)</Label>
+              <Label htmlFor={`${id}-rate`}>{bx.ownerRate}</Label>
               <Input id={`${id}-rate`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="Gerçek oran" className="min-h-11 sm:min-h-10" />
             </div>
           </div>

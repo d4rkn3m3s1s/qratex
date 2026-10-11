@@ -22,6 +22,7 @@ import {
 } from '@/lib/admin-badges/contract';
 import { BadgesApiError, badgeKeys, errorText, fetchThresholdHistory, fetchThresholds, previewThresholds, saveThresholds } from './api';
 import { fmtAgo, fmtDateTime, fmtNumber } from './format';
+import { useBadgesAdminCopy } from './copy';
 
 type Draft = Record<string, { threshold: string; minReviewLength: string }>;
 
@@ -88,6 +89,7 @@ export function ThresholdsTab({ initial }: { initial: ThresholdsState | null }) 
 }
 
 function ThresholdsEditor({ state }: { state: ThresholdsState }) {
+  const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const { reduce } = useMotionPolicy();
   const [draft, setDraft] = useState<Draft>(() => toDraft(state));
@@ -146,9 +148,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
         title="Karakter kategori eşikleri"
         description={
           <>
-            Bir karakter açmak için gereken yorum sayısı ve (isteğe bağlı) yorumun sayılması için minimum uzunluk. Boş alan kod varsayılanını kullanır.
-            Değişiklik <strong>geriye dönük</strong> uygulanır: eşik düşerse geçmiş yorumlarla yeni rozetler (ve ödül puanı) açılabilir; yükselirse hazır
-            kullanıcılar geriler. Yayınlamadan önce etkiyi görürsünüz.
+            {bx.thresholdsIntro} {bx.retroA} <strong>{bx.retroStrong}</strong> {bx.retroB}
           </>
         }
         actions={
@@ -187,7 +187,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
               <span className="text-sm font-medium text-fg">
                 {fmtNumber(changedKeys.length)} kategori değişti{revertOf ? ' (geçmişten geri yükleme)' : ''}
               </span>
-              {hasErrors ? <span className="text-sm text-danger">Hatalı alanları düzeltin.</span> : null}
+              {hasErrors ? <span className="text-sm text-danger">{bx.fixErrors}</span> : null}
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => { setDraft(toDraft(state)); setRevertOf(null); }}>
                   <Undo2 className="h-4 w-4" aria-hidden />
@@ -245,6 +245,7 @@ function CategoryRow({
   onChange: (f: 'threshold' | 'minReviewLength', v: string) => void;
   onReset: () => void;
 }) {
+  const bx = useBadgesAdminCopy();
   const id = useId();
   const th = draft.threshold.trim() === '' ? c.defaultThreshold : Number(draft.threshold);
   const aggressive = Number.isFinite(th) && th < THRESHOLD_LIMITS.threshold.aggressiveBelow;
@@ -257,7 +258,7 @@ function CategoryRow({
           <p id={`${id}-name`} className="font-medium text-fg">
             <span aria-hidden>{c.emoji} </span>
             {c.name}
-            {changed ? <span className="ml-2 rounded bg-brand-subtle px-1.5 py-0.5 text-xs text-brand">değişti</span> : null}
+            {changed ? <span className="ml-2 rounded bg-brand-subtle px-1.5 py-0.5 text-xs text-brand">{bx.changed}</span> : null}
           </p>
           <p className="text-xs text-fg-muted">
             {fmtNumber(c.characterCount)} karakter · Etkin: {fmtNumber(c.effectiveThreshold)} yorum
@@ -339,6 +340,7 @@ function ReviewDialog({
   onPublish: () => Promise<void>;
   onReload: () => Promise<void>;
 }) {
+  const bx = useBadgesAdminCopy();
   const [impact, setImpact] = useState<ThresholdImpact | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -372,22 +374,22 @@ function ReviewDialog({
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Eşik değişikliğini gözden geçir</DialogTitle>
-          <DialogDescription>Etki bugünkü yorum ve rozet verisiyle hesaplanır (yazma yapılmaz). Yayınlanınca tüm müşterilerde anında geçerli olur.</DialogDescription>
+          <DialogTitle>{bx.reviewTitle}</DialogTitle>
+          <DialogDescription>{bx.reviewDesc}</DialogDescription>
         </DialogHeader>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <caption className="sr-only">Kategori bazında değişiklik ve etki</caption>
+            <caption className="sr-only">{bx.reviewCaption}</caption>
             <thead className="text-left text-xs text-fg-muted">
               <tr>
-                <th scope="col" className="py-2 pr-3 font-medium">Kategori</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Eşik</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Min. uzunluk</th>
-                <th scope="col" className="py-2 pr-3 text-right font-medium">Hazır</th>
-                <th scope="col" className="py-2 pr-3 text-right font-medium">Yeni hazır / gerileyen</th>
-                <th scope="col" className="py-2 pr-3 text-right font-medium">Ek rozet · ~puan</th>
-                <th scope="col" className="py-2 font-medium">Dağılım (taslak)</th>
+                <th scope="col" className="py-2 pr-3 font-medium">{bx.category}</th>
+                <th scope="col" className="py-2 pr-3 font-medium">{bx.threshold}</th>
+                <th scope="col" className="py-2 pr-3 font-medium">{bx.minLength}</th>
+                <th scope="col" className="py-2 pr-3 text-right font-medium">{bx.ready}</th>
+                <th scope="col" className="py-2 pr-3 text-right font-medium">{bx.newReadyRegressed}</th>
+                <th scope="col" className="py-2 pr-3 text-right font-medium">{bx.extraBadges}</th>
+                <th scope="col" className="py-2 font-medium">{bx.distribution}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
