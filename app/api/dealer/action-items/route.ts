@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { ADMIN_ALL_TENANTS, recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { z } from 'zod';
 import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
@@ -36,6 +37,12 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  const limited = await enforceRouteRateLimit('dealer.action-items.list', session.user.id, 'read');
+  if (limited) return limited;
+  if (session.user.role === 'ADMIN') {
+    // Yöneticinin TÜM işletmeleri kapsayan listesi denetime yazılır (guvenlik-bayi-api O6).
+    await recordAdminTenantAccess({ adminId: session.user.id, dealerId: ADMIN_ALL_TENANTS, context: 'dealer.action-items.list', method: 'GET' });
+  }
 
   try {
     const { searchParams } = new URL(request.url);

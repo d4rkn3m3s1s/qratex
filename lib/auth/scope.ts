@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { redisGetJson, redisSetJson } from '@/lib/redis';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
 
 export type ScopeRole = 'ADMIN' | 'DEALER' | 'STAFF' | 'CUSTOMER';
 
@@ -61,6 +62,12 @@ export interface ResolveDealerScopeOptions {
   allowRoles?: ReadonlyArray<Exclude<ScopeRole, 'CUSTOMER'>>;
   /** ADMIN hedefinin DB'de DEALER olduğunu doğrula (varsayılan: true). */
   verifyAdminTarget?: boolean;
+  /**
+   * ADMIN kiracılar arası erişim denetim kaydının bağlamı (uç adı / sayfa) ve HTTP yöntemi
+   * (guvenlik-bayi-api O6). Verilmezse bağlam `unknown` yazılır; kayıt her durumda yazılır.
+   */
+  auditContext?: string;
+  auditMethod?: string;
 }
 
 const DEFAULT_DEALER_ROLES: ReadonlyArray<Exclude<ScopeRole, 'CUSTOMER'>> = ['ADMIN', 'DEALER', 'STAFF'];
@@ -120,7 +127,7 @@ export async function invalidateStaffScope(userId: string): Promise<void> {
  *
  *   const scope = await resolveDealerScope(session, { dealerId: searchParams.get('dealerId') });
  *   if (!scope.ok) return scopeErrorResponse(scope);
- *   prisma.feedback.findMany({ where: { qrCode: { dealerId: scope.dealerId } } });
+ *   prisma.feedback.findMany({ where: { qrCode: { dealerId: scope.dealerId }, deletedAt: null } });
  */
 export async function resolveDealerScope(
   session: Session | null | undefined,
@@ -158,6 +165,13 @@ export async function resolveDealerScope(
       const target = await prisma.user.findUnique({ where: { id: requested }, select: { role: true } });
       if (!target || target.role !== 'DEALER') return deny(404, 'DEALER_NOT_FOUND', 'İşletme bulunamadı.');
     }
+    // O6: kiracılar arası yönetici erişimi denetime yazılır (yönetici × bayi × bağlam, 30 dk'da bir).
+    await recordAdminTenantAccess({
+      adminId: userId,
+      dealerId: requested,
+      context: options.auditContext,
+      method: options.auditMethod,
+    });
     return { ok: true, dealerId: requested, actorId: userId, actorRole: 'ADMIN', via: 'admin' };
   }
 

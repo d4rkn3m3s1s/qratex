@@ -1,6 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimitDb } from '@/lib/rate-limit';
+import { STREAM_LIFETIME_MS, STREAM_OPENS_PER_MINUTE, clampStreamCursor } from '@/lib/notification-stream-policy';
 import { parsePositiveIntEnv } from '@/lib/safe-env-number';
 
 export const dynamic = 'force-dynamic';
@@ -29,11 +32,23 @@ export async function GET(req: NextRequest) {
   if ('error' in auth) return auth.error;
   const userId = auth.session.user.id;
 
+  const rl = await checkRateLimitDb(`notif-stream:${userId}`, STREAM_OPENS_PER_MINUTE, 60_000).catch(() => null);
+  if (rl && !rl.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Çok fazla açık bildirim bağlantısı. Lütfen biraz sonra tekrar deneyin.', code: 'RATE_LIMITED' },
+      {
+        status: 429,
+        headers: {
+          ...PRIVATE_NO_STORE_HEADERS,
+          'Retry-After': String(Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))),
+        },
+      }
+    );
+  }
+
   const url = new URL(req.url);
   // İmleç: istemci son aldığı bildirim zamanını gönderebilir (reconnect'te kaçırma yok).
-  const sinceParam = url.searchParams.get('since');
-  let cursor = sinceParam ? new Date(sinceParam) : new Date();
-  if (Number.isNaN(cursor.getTime())) cursor = new Date();
+  let cursor = clampStreamCursor(url.searchParams.get('since'));
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -46,15 +61,25 @@ export async function GET(req: NextRequest) {
       };
 
       let pollTimer: ReturnType<typeof setTimeout> | null = null;
+      // Önceden tanımlı: istemci ilk sorgu sürerken koparsa cleanup TDZ hatası vermesin.
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      let lifetimeTimer: ReturnType<typeof setTimeout> | null = null;
       const cleanup = () => {
         if (closed) return;
         closed = true;
-        clearInterval(heartbeat);
+        if (heartbeat) clearInterval(heartbeat);
         if (pollTimer) clearTimeout(pollTimer);
+        if (lifetimeTimer) clearTimeout(lifetimeTimer);
         try { controller.close(); } catch { /* ignore */ }
       };
 
       req.signal.addEventListener('abort', cleanup);
+      // Akış ömrü sınırlı: sunucu kendisi kapatır, istemci imleçle yeniden bağlanır (O5).
+      lifetimeTimer = setTimeout(() => {
+        // `bye`: istemci güncel imleçle hemen yeniden bağlansın (yerel yeniden bağlanma eski URL'yi kullanır).
+        send('bye', { since: cursor.toISOString() });
+        cleanup();
+      }, STREAM_LIFETIME_MS);
 
       // İlk açılışta okunmamış sayısını gönder (UI rozeti hemen güncellensin).
       try {
@@ -64,7 +89,8 @@ export async function GET(req: NextRequest) {
         send('init', { unread: 0, since: cursor.toISOString() });
       }
 
-      const heartbeat = setInterval(() => {
+      if (closed) return;
+      heartbeat = setInterval(() => {
         if (closed) return;
         controller.enqueue(encoder.encode(': keepalive\n\n'));
       }, 15000);

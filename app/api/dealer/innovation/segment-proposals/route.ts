@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { requireAuth, requireDealerResource } from '@/lib/api-auth';
+import { requireAuth } from '@/lib/api-auth';
+import { resolveDealerScope, scopeErrorResponse } from '@/lib/auth/scope';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { segmentCampaignDraft, type SegmentKey } from '@/lib/innovation-segment-templates';
@@ -31,14 +32,20 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  const limitedRead = await enforceRouteRateLimit('dealer.innovation.segment-proposals.list', session.user.id, 'read');
+  if (limitedRead) return limitedRead;
 
   const { searchParams } = new URL(request.url);
-  const dealerIdParam = searchParams.get('dealerId');
-  const dealerId =
-    session.user.role === 'ADMIN' && dealerIdParam ? dealerIdParam : session.user.id;
-
-  const forbidden = requireDealerResource(session, dealerId);
-  if (forbidden) return forbidden;
+  // Yönetici yalnız AÇIK dealerId ile, hedef gerçekten bayi ise ve denetim kaydıyla (O6);
+  // eskiden dealerId'siz yönetici KENDİ kimliğiyle "bayi" sayılıyordu.
+  const scope = await resolveDealerScope(session, {
+    dealerId: session.user.role === 'ADMIN' ? searchParams.get('dealerId') : null,
+    allowRoles: ['DEALER', 'ADMIN'],
+    auditContext: 'dealer.innovation.segment-proposals',
+    auditMethod: 'GET',
+  });
+  if (!scope.ok) return scopeErrorResponse(scope);
+  const dealerId = scope.dealerId;
 
   const proposals = await prisma.segmentCampaignProposal.findMany({
     where: { dealerId },
@@ -70,11 +77,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  const dealerId =
-    session.user.role === 'ADMIN' && parsed.data.dealerId ? parsed.data.dealerId : session.user.id;
-
-  const forbidden = requireDealerResource(session, dealerId);
-  if (forbidden) return forbidden;
+  // Yönetici yalnız AÇIK dealerId ile, hedef gerçekten bayi ise ve denetim kaydıyla (O6);
+  // eskiden dealerId'siz yönetici KENDİ kimliğiyle "bayi" sayılıyordu.
+  const scope = await resolveDealerScope(session, {
+    dealerId: session.user.role === 'ADMIN' ? (parsed.data.dealerId ?? null) : null,
+    allowRoles: ['DEALER', 'ADMIN'],
+    auditContext: 'dealer.innovation.segment-proposals.create',
+    auditMethod: 'POST',
+  });
+  if (!scope.ok) return scopeErrorResponse(scope);
+  const dealerId = scope.dealerId;
 
   const pending = await prisma.segmentCampaignProposal.count({ where: { dealerId, status: 'PENDING' } });
   if (pending >= MAX_PENDING_PROPOSALS_PER_DEALER) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { ADMIN_ALL_TENANTS, recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -26,10 +28,21 @@ const MAX_ACTIVE_HAPPY_HOURS_PER_DEALER = 50;
 export async function GET(req: NextRequest) {
   try {
     const session = await getOptionalSession();
+    // Herkese açık okuma: oturumluysa kullanıcı, değilse IP başına tavan (kazıma / DB yükü).
+    const limited = await enforceRouteRateLimit(
+      'happy-hour.list',
+      session?.user?.id ?? `ip:${getClientIdentifier(req)}`,
+      'read'
+    );
+    if (limited) return limited;
     const { searchParams } = new URL(req.url);
     const list = searchParams.get('list') === '1';
 
     if (list && session?.user?.id && (session.user.role === 'DEALER' || session.user.role === 'ADMIN')) {
+      if (session.user.role === 'ADMIN') {
+        // Yöneticinin TÜM işletmelerin mutlu saat listesi denetime yazılır (guvenlik-bayi-api O6).
+        await recordAdminTenantAccess({ adminId: session.user.id, dealerId: ADMIN_ALL_TENANTS, context: 'happy-hour.list', method: 'GET' });
+      }
       const where = session.user.role === 'ADMIN' ? {} : { dealerId: session.user.id };
       const happyHours = await prisma.happyHour.findMany({
         where,
@@ -110,6 +123,8 @@ export async function POST(req: NextRequest) {
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('happy-hour.create', session.user.id, 'mutation');
+    if (limited) return limited;
 
     let body: unknown;
     try {

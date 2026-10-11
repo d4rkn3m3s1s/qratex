@@ -88,9 +88,11 @@ export async function GET() {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  const limited = await enforceRouteRateLimit('dealer.ai-settings.get', session.user.id, 'read');
+  if (limited) return limited;
 
   const dealerId = session.user.id;
-  const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const since7 =new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   let useSoftDelete = true;
   try {

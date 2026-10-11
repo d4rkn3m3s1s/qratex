@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { updateQRCodeSchema } from '@/lib/validations';
@@ -19,6 +20,8 @@ export async function GET(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('qr-codes.get', session.user.id, 'read');
+    if (limited) return limited;
     const { id } = await params;
     const qr = await prisma.qRCode.findUnique({
       where: { id },
@@ -52,6 +55,8 @@ export async function PATCH(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('qr-codes.update', session.user.id, 'mutation');
+    if (limited) return limited;
     const { id } = await params;
     const existing = await prisma.qRCode.findUnique({
       where: { id },
@@ -178,6 +183,8 @@ export async function DELETE(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('qr-codes.archive', session.user.id, 'mutation');
+    if (limited) return limited;
 
     const { id } = await params;
     const existing = await prisma.qRCode.findUnique({
@@ -189,7 +196,7 @@ export async function DELETE(
         isActive: true,
         archivedAt: true,
         revokedAt: true,
-        _count: { select: { feedbacks: true } },
+        _count: { select: { feedbacks: { where: { deletedAt: null } } } },
       },
     });
 

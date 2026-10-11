@@ -13,6 +13,7 @@ import {
   runConsumptionSideEffects,
   type ConsumptionErrorCode,
 } from '@/lib/consumption/service';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 /**
  * Bayi çevrimdışı kuyruğu (P0-18 sertleştirmesi).
@@ -68,6 +69,8 @@ export async function GET() {
     const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('dealer.offline-sync.list', session.user.id, 'read');
+    if (limited) return limited;
 
     const pendingItems = await prisma.offlineQueue.findMany({
       where: {
@@ -189,6 +192,8 @@ export async function PATCH(req: NextRequest) {
   try {
     const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('dealer.offline-sync.patch', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const dealerId = session.user.id;
     const auditMeta = getAuditRequestMeta(req);

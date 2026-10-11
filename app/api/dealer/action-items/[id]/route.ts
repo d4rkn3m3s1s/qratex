@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
 import { z } from 'zod';
 import { validateAssignee } from '@/lib/dealer/assignee';
 
@@ -37,6 +38,10 @@ export async function PATCH(
     }
     if (session.user.role === 'DEALER' && existing.dealerId !== session.user.id) {
       return NextResponse.json({ error: 'Bu aksiyonu güncelleme yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    if (session.user.role === 'ADMIN' && existing.dealerId) {
+      // Yöneticinin başka işletmenin kaydını değiştirmesi denetime yazılır (guvenlik-bayi-api O6).
+      await recordAdminTenantAccess({ adminId: session.user.id, dealerId: existing.dealerId, context: 'dealer.action-items.update', method: 'PATCH' });
     }
 
     const body: unknown = await request.json().catch(() => null);

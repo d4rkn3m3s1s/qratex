@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { ADMIN_ALL_TENANTS, recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
 import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
@@ -22,6 +23,12 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('qr-codes.list', session.user.id, 'read');
+    if (limited) return limited;
+    if (session.user.role === 'ADMIN') {
+      // Yöneticinin TÜM işletmeleri kapsayan QR listesi denetime yazılır (guvenlik-bayi-api O6).
+      await recordAdminTenantAccess({ adminId: session.user.id, dealerId: ADMIN_ALL_TENANTS, context: 'qr-codes.list', method: 'GET' });
+    }
 
     const { searchParams } = new URL(request.url);
     const page = clampPageParam(searchParams.get('page'));
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
             select: { id: true, name: true, businessName: true },
           },
           _count: {
-            select: { feedbacks: true },
+            select: { feedbacks: { where: { deletedAt: null } } },
           },
         },
       }),

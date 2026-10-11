@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getPublicAppOrigin, getPublicOriginFromRequest } from '@/lib/public-app-origin';
 import {
@@ -37,6 +38,8 @@ export async function GET() {
     const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
     if (moduleGate) return moduleGate;
     const dealerId = auth.session.user.id;
+    const limited = await enforceRouteRateLimit('dealer.staff.list', dealerId, 'read');
+    if (limited) return limited;
 
     const [staff, pendingInvitations] = await Promise.all([
       prisma.dealerStaff.findMany({

@@ -8,7 +8,7 @@ import { checkRateLimitDb } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-const schema = z.object({ planId: z.string().min(1) });
+const schema = z.object({ planId: z.string().trim().min(1).max(64) });
 
 /**
  * POST /api/dealer/billing/checkout — aboneliği OLMAYAN bayi bir plana abone olmak için

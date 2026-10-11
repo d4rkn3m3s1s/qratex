@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
   const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
   if (moduleGate) return moduleGate;
   const dealerId = auth.session.user.id;
+  const limited = await enforceRouteRateLimit('dealer.staff.tasks.list', dealerId, 'read');
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId');

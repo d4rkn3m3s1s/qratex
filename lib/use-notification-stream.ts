@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { nextReconnectDelayMs } from '@/lib/notification-stream-policy';
 
 export interface StreamNotification {
   id: string;
@@ -47,6 +48,8 @@ export function useNotificationStream({
 
     let es: EventSource | null = null;
     let stopped = false;
+    let failures = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
       if (stopped) return;
@@ -55,7 +58,10 @@ export function useNotificationStream({
         : '/api/dealer/notifications/stream';
       es = new EventSource(url);
 
-      es.addEventListener('open', () => setConnected(true));
+      es.addEventListener('open', () => {
+        failures = 0;
+        setConnected(true);
+      });
 
       es.addEventListener('init', (e) => {
         try {
@@ -76,12 +82,25 @@ export function useNotificationStream({
         } catch { /* ignore */ }
       });
 
+      // Sunucu akış ömrü doldu: güncel imleçle hemen yeniden bağlan (kaçırma yok).
+      es.addEventListener('bye', (e) => {
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          if (typeof data.since === 'string' && !sinceRef.current) sinceRef.current = data.since;
+        } catch { /* ignore */ }
+        es?.close();
+        if (!stopped) connect();
+      });
+
       es.addEventListener('error', () => {
         setConnected(false);
-        // EventSource kendi yeniden bağlanmasını yapar; ama kapanmışsa elle aç.
+        // EventSource kendi yeniden bağlanmasını yapar; ama kapanmışsa (ör. 429 bağlantı sınırı)
+        // elle aç — üstel geri çekilmeyle (3 sn → 60 sn), sunucuyu yeniden deneme fırtınasına boğmadan.
         if (es && es.readyState === EventSource.CLOSED && !stopped) {
           es.close();
-          setTimeout(connect, 3000);
+          const delay = nextReconnectDelayMs(failures);
+          failures += 1;
+          retryTimer = setTimeout(connect, delay);
         }
       });
     };
@@ -90,6 +109,7 @@ export function useNotificationStream({
 
     return () => {
       stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
       es?.close();
       setConnected(false);
     };

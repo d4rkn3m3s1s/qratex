@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('qr-codes.bulk', session.user.id, 'mutation');
+    if (limited) return limited;
 
     const raw = await request.json().catch(() => null);
     const parsed = bulkSchema.safeParse(raw);

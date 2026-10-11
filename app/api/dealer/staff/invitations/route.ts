@@ -1,6 +1,7 @@
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { listPendingInvitations } from '@/lib/staff-invitations';
 
@@ -14,6 +15,8 @@ export async function GET() {
     // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
     const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
     if (moduleGate) return moduleGate;
+    const limited = await enforceRouteRateLimit('dealer.staff.invitations.list', auth.session.user.id, 'read');
+    if (limited) return limited;
     const invitations = await listPendingInvitations(auth.session.user.id);
     return NextResponse.json({ success: true, invitations }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

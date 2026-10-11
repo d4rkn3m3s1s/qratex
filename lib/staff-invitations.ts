@@ -33,7 +33,7 @@ export const STAFF_INVITE_PATH = '/auth/staff-invite';
 /**
  * Bir işletmenin aktif personel + bekleyen davet toplamı üst sınırı (guvenlik-bayi-api O7/Y5:
  * personel sayısı sınırsızdı — bayi N hesap açıp personel başına limitleri N'e katlayabiliyordu).
- * Plan bazlı tavan için `PricingPlan.maxStaff` şema isteği: docs/audit/2026-10-08/SCHEMA-REQUESTS-ek.md.
+ * Plan bazlı tavan için `PricingPlan.maxStaff` şema isteği: docs/audit/2026-10-08/SCHEMA-REQUESTS.md.
  */
 export const MAX_TEAM_SIZE = 50;
 

@@ -516,7 +516,13 @@ export function defineRoute<
           ((roles as ReadonlyArray<AllowedRole>).filter((r) => r !== 'CUSTOMER') as Array<
             Exclude<AllowedRole, 'CUSTOMER'>
           >);
-        const scope = await resolveDealerScope(session, { dealerId: requested, allowRoles });
+        const scope = await resolveDealerScope(session, {
+          dealerId: requested,
+          allowRoles,
+          // Yönetici kiracılar arası erişimi uç adıyla denetime yazılır (guvenlik-bayi-api O6).
+          auditContext: routeKey,
+          auditMethod: method,
+        });
         if (!scope.ok) {
           const code: ApiErrorCode =
             scope.status === 401

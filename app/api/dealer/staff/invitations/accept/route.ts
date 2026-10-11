@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOptionalSession } from '@/lib/api-auth';
-import { authOptions } from '@/lib/auth';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
 import { acceptStaffInvitation, previewStaffInvitation } from '@/lib/staff-invitations';

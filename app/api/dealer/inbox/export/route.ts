@@ -47,7 +47,10 @@ function istanbulStamp(iso: string | null): string {
 export const GET = defineRoute(
   {
     name: 'dealer.inbox.export',
-    roles: ['DEALER', 'STAFF', 'ADMIN'],
+    // Toplu dışa aktarım yalnız işletme sahibi (ve kapıdan geçmiş yönetici): personel tek tek
+    // kayıtları görebilir ama müşteri adlı 5000 satırlık dökümü indiremez — müşteri, işlem ve
+    // katalog dışa aktarımlarıyla aynı kural (guvenlik-bayi-api Y4, KVKK veri minimizasyonu).
+    roles: ['DEALER', 'ADMIN'],
     tenant: 'dealer',
     rateLimit: { max: 10, windowMs: 60_000, by: 'user' },
     query: querySchema,

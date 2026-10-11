@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { recordAdminTenantAccess } from '@/lib/auth/admin-tenant-audit';
 import { z } from 'zod';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
@@ -35,6 +36,8 @@ export async function GET(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('dealer.incidents.get', session.user.id, 'read');
+    if (limited) return limited;
 
     const { id } = await params;
     const incident = await prisma.incident.findUnique({
@@ -45,15 +48,19 @@ export async function GET(
     });
     if (!incident) {
       return NextResponse.json(
-        { error: 'Incident bulunamadı' },
+        { error: 'Olay bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     if (session.user.role === 'DEALER' && incident.dealerId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Bu incident\'i görüntüleme yetkiniz yok' },
+        { error: 'Bu olayı görüntüleme yetkiniz yok' },
         { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
+    }
+    if (session.user.role === 'ADMIN') {
+      // Yöneticinin başka işletmenin kaydını okuması denetime yazılır (guvenlik-bayi-api O6).
+      await recordAdminTenantAccess({ adminId: session.user.id, dealerId: incident.dealerId, context: 'dealer.incidents.get', method: 'GET' });
     }
     return NextResponse.json(incidentDto(incident), { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
@@ -61,7 +68,7 @@ export async function GET(
     if (db) return db;
     console.error('incidents GET:', error);
     return NextResponse.json(
-      { error: 'Incident yüklenemedi' },
+      { error: 'Olay yüklenemedi' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
@@ -85,15 +92,19 @@ export async function PATCH(
     });
     if (!existing) {
       return NextResponse.json(
-        { error: 'Incident bulunamadı' },
+        { error: 'Olay bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     if (session.user.role === 'DEALER' && existing.dealerId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Bu incident\'i güncelleme yetkiniz yok' },
+        { error: 'Bu olayı güncelleme yetkiniz yok' },
         { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
+    }
+    if (session.user.role === 'ADMIN') {
+      // Yöneticinin başka işletmenin kaydını değiştirmesi denetime yazılır (guvenlik-bayi-api O6).
+      await recordAdminTenantAccess({ adminId: session.user.id, dealerId: existing.dealerId, context: 'dealer.incidents.update', method: 'PATCH' });
     }
 
     const body: unknown = await request.json().catch(() => null);
@@ -129,7 +140,7 @@ export async function PATCH(
       });
       if (!row) {
         return NextResponse.json(
-          { error: 'Incident bulunamadı' },
+          { error: 'Olay bulunamadı' },
           { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
@@ -155,7 +166,7 @@ export async function PATCH(
     });
     if (n.count === 0) {
       return NextResponse.json(
-        { error: 'Incident bulunamadı' },
+        { error: 'Olay bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
@@ -167,7 +178,7 @@ export async function PATCH(
     });
     if (!updated) {
       return NextResponse.json(
-        { error: 'Incident bulunamadı' },
+        { error: 'Olay bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
@@ -178,7 +189,7 @@ export async function PATCH(
     if (db) return db;
     console.error('incidents PATCH:', error);
     return NextResponse.json(
-      { error: 'Güncelleme başarısız' },
+      { error: 'Olay güncellenemedi' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

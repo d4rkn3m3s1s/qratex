@@ -32,8 +32,8 @@ export const POST = defineRoute(
     roles: ['STAFF'],
     tenant,
     schema: z.object({
-      startDate: z.string(),
-      endDate: z.string(),
+      startDate: z.string().max(10),
+      endDate: z.string().max(10),
       reason: z.string().trim().max(500).optional(),
     }),
     rateLimit: { max: 10, windowMs: 60 * 60_000, by: 'user' },
