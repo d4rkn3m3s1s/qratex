@@ -24,6 +24,7 @@ import { InfiniteFooter } from './infinite-footer';
 import { GroupHeading, PlaceAvatar, Stars } from './parts';
 import { useSearchParamState } from './use-param';
 import { readVisitsFilter } from './filters';
+import { consumptionVoiceHref } from '@/lib/navigation/deep-links';
 
 const sameFilter = (a: VisitsFilter, b: VisitsFilter) => a.review === b.review && a.q === b.q && a.dealer === b.dealer;
 
@@ -250,7 +251,7 @@ function PendingShelf({
         {items.map((v) => (
           <li key={v.id} className="w-[15rem] shrink-0 snap-start">
             <Link
-              href={`/customer/consumptions/${v.id}`}
+              href={consumptionVoiceHref(v.id)}
               className="flex h-full flex-col gap-2 rounded-control border border-subtle bg-surface-0 p-3 transition-colors duration-fast ease-standard hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-center gap-2">
@@ -363,7 +364,7 @@ function VisitList({ items, fmt, reward }: { items: VisitItem[]; fmt: Formatters
                 return (
                   <li key={v.id}>
                     <Link
-                      href={`/customer/consumptions/${v.id}`}
+                      href={consumptionVoiceHref(v.id)}
                       aria-label={copy.visitAria(place, v.product?.name ?? '', when, status)}
                       className="flex min-h-16 items-start gap-3 px-3 py-3 transition-colors duration-fast ease-standard hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
                     >

@@ -1,114 +1,146 @@
 /**
  * QRA asistanının uygulama-içi bilgi tabanı: müşteri sayfa haritası + "nasıl yapılır"
- * SSS eşlemesi. Sistem promptuna enjekte edilir ki QRA "kupon nasıl girilir?" gibi
+ * SSS eşlemesi. Sistem promptuna enjekte edilir ki QRA "puanımı nasıl harcarım?" gibi
  * sorularda internetten genel cevap yerine doğru sekmeye yönlendirsin.
  *
- * Buradaki yollar gerçek route'lardır (app/customer/**). Yeni müşteri sayfası
- * eklendiğinde buraya da bir satır eklenmeli ki QRA güncel kalsın.
+ * Yol ve sekme ADLARI tek navigasyon kaydından (`lib/navigation/registry.ts`) TÜRETİLİR —
+ * burada yalnız her sayfanın "ne işe yarar" metni ve SSS tutulur. Eskiden elle tutulan 19
+ * yollu liste menüden kopmuştu (B2): emekli URL'ler ve artık var olmayan sekme adları
+ * ("Çerçeve Dükkanı", "Sürpriz Kutularım"…) öneriliyordu. Yeni müşteri menü sayfası
+ * eklendiğinde `QRA_PURPOSE`'a bir satır eklenmezse
+ * `__tests__/lib/qra-knowledge-base.test.ts` düşer (iki yönlü).
  */
+import { isDynamicHref, routesForRole, type NavRoute } from '@/lib/navigation/registry';
 
 export interface QraSiteMapEntry {
-  /** Gerçek route — app/customer/** */
+  /** Kayıt kimliği (`NavRoute.id`). */
+  id: string;
+  /** Gerçek route — app/customer/** (kayıttan). */
   path: string;
-  /** Kullanıcıya görünen sekme adı (TR) */
+  /** Kullanıcıya görünen menü yolu (TR, kayıttan; ör. "Cüzdan › Ödüller"). */
   label: string;
-  /** Bu sayfada ne yapılır (kısa) */
+  /** Bu sayfada ne yapılır (kısa). */
   purpose: string;
 }
 
-/** Müşteri panelindeki sayfa haritası (sidebar ile uyumlu). */
-export const QRA_CUSTOMER_SITEMAP: QraSiteMapEntry[] = [
-  { path: '/customer', label: 'Panel', purpose: 'Ana özet: puan, seviye, son aktiviteler' },
-  { path: '/customer/my-card', label: 'Kartım', purpose: 'Kişisel sadakat kartı ve profil' },
-  { path: '/customer/rewards', label: 'Ödüller', purpose: 'Puanla ödül alma ve KUPON KODU kullanma' },
-  { path: '/customer/remedy', label: 'Telafi Teklifleri', purpose: 'İşletmeden gelen telafi/indirim tekliflerini açma' },
-  { path: '/customer/consumptions', label: 'Tüketimlerim', purpose: 'Geçmiş alışveriş/tüketim kayıtları' },
-  { path: '/customer/scan', label: 'Tara', purpose: 'QR kod okutma' },
-  { path: '/customer/feedbacks', label: 'Geri Bildirimlerim', purpose: 'Gönderdiğin yorum/değerlendirme geçmişi' },
-  { path: '/customer/badges', label: 'Rozetlerim', purpose: 'Kazanılan rozetler ve ilerleme' },
-  { path: '/customer/quests', label: 'Görevler', purpose: 'Aktif görevleri tamamlayıp ödül kazanma' },
-  { path: '/customer/shop', label: 'Çerçeve Dükkanı', purpose: 'Puan/XP ile çerçeve, rozet ve arka plan satın alma' },
-  { path: '/customer/leaderboard', label: 'Lig', purpose: 'Haftalık, sezonluk ve tüm zamanlar sıralaması (puan, yorum, rozet, davet); ligin ve bir üst lige kalan puan. Klan sıralaması Klan sayfasında.' },
-  { path: '/customer/squads', label: 'Klanlar', purpose: 'Klana katılma/kurma, klan savaşları' },
-  { path: '/customer/surprise-boxes', label: 'Sürpriz Kutularım', purpose: 'Günlük giriş kutusu ve hediye kutularını açma' },
-  { path: '/customer/donations', label: 'Sosyal Sorumluluk', purpose: 'Puanla bağış yapma' },
-  { path: '/customer/nearby', label: 'Yakınımdakiler', purpose: 'Yakındaki işletmeleri keşfetme' },
-  { path: '/customer/analytics', label: 'Kişisel Analitik', purpose: 'Kategori dağılımı, en çok tüketilen ürünler' },
-  { path: '/customer/spending-overview', label: 'Harcama Özeti', purpose: 'Harcama istatistikleri' },
-  { path: '/customer/experiences', label: 'Deneyimlerim', purpose: 'İşletmedeki deneyimler ve güvenli paylaşım' },
-  { path: '/customer/settings', label: 'Ayarlar', purpose: 'Hesap, dil ve bildirim ayarları' },
-];
+/** Müşteri menüsündeki her sayfanın amacı — anahtar: kayıt kimliği. */
+export const QRA_PURPOSE: Readonly<Record<string, string>> = {
+  'customer.home': 'Ana özet: puan bakiyesi, seri, günlük hedef ve son aktiviteler',
+  'customer.places': 'Yakındaki mekânlar, kaydettiğin (favori) mekânlar, fırsatlar/etkinlikler ve en iyi işletmeler; mekâna dokununca mekân detayı açılır',
+  'customer.scan': 'İşletmenin QR kodunu okutup puan kazanma ve geri bildirim bırakma; kart aktivasyonu',
+  'customer.games': 'Mini oyunlar ve turnuvalar',
+  'customer.quests': 'Günlük/haftalık görevleri tamamlayıp ödül kazanma',
+  'customer.squads': 'Klana katılma ya da klan kurma, klan savaşları',
+  'customer.leaderboard': 'Haftalık, sezonluk ve tüm zamanlar sıralaması; ligin ve bir üst lige kalan puan',
+  'customer.wallet': 'Kart, ödüller, hareketler ve bağış tek yerde',
+  'customer.wallet.card': 'Kasada göstereceğin QR kartın, statün (VIP kademesi) ve son hareketlerin',
+  'customer.wallet.rewards': 'Puanını ödüllere ve profil kozmetiklerine (çerçeve, rozet, arka plan) çevirme',
+  'customer.wallet.owned': 'Aldığın ödül kodları, kabul ettiğin telafi kuponları (kasada QR olarak gösterilir) ve sürpriz kutuların (günlük kutu dahil)',
+  'customer.wallet.activity': 'Puan geçmişin, ziyaretlerin/tüketimlerin ve harcama özetin',
+  'customer.wallet.donate': 'Puanınla sosyal sorumluluk projelerine bağış yapma',
+  'customer.me': 'Profilin, ilerlemen ve hesabınla ilgili her şey',
+  'customer.me.progress': 'Seviyen, katkın, deneyim skorun ve kişisel trendlerin',
+  'customer.me.badges': 'Kazandığın rozetler ve karakter rozeti ilerlemen',
+  'customer.me.year': 'Yılın özeti: en çok gittiğin mekânlar ve öne çıkan anların',
+  'customer.me.voices': 'Yorumların, işletmelerin yanıtları ve sana gelen telafi teklifleri (teklifi buradan kabul edersin)',
+  'customer.me.invite': 'Arkadaşını davet etme, davet kodun ve davet ödüllerin',
+  'customer.me.settings': 'Hesap, dil, bildirim ve gizlilik ayarları',
+};
+
+/** Qra'nın tanıttığı müşteri rotaları: menüde görünen (primary/secondary), statik, ekip dışı. */
+export function qraCustomerRoutes(): NavRoute[] {
+  return routesForRole('customer').filter(
+    (r) => (r.status === 'primary' || r.status === 'secondary') && !r.teamOnly && !isDynamicHref(r.href)
+  );
+}
+
+function menuPath(route: NavRoute, byId: Map<string, NavRoute>): string {
+  const parent = route.parent ? byId.get(route.parent) : undefined;
+  return parent ? `${parent.label.tr} › ${route.label.tr}` : route.label.tr;
+}
+
+/** Müşteri panelindeki sayfa haritası — kayıttan türetilir (menü ile birebir). */
+export function buildQraSiteMap(): QraSiteMapEntry[] {
+  const byId = new Map(routesForRole('customer').map((r) => [r.id, r]));
+  return qraCustomerRoutes()
+    .filter((r) => QRA_PURPOSE[r.id])
+    .map((r) => ({ id: r.id, path: r.href, label: menuPath(r, byId), purpose: QRA_PURPOSE[r.id] }));
+}
 
 export interface QraFaqEntry {
   /** Tipik kullanıcı sorusu */
   question: string;
-  /** Yönlendirilecek sekme adı + yol */
-  label: string;
-  path: string;
+  /** Yönlendirilecek sayfanın kayıt kimliği. */
+  routeId: string;
   /** Adımlar / kısa açıklama */
   answer: string;
 }
 
-/** Sık sorulan "nasıl yapılır" → doğru sayfa eşlemesi. */
+/** Sık sorulan "nasıl yapılır" → doğru sayfa eşlemesi (sayfa adı ve yolu kayıttan). */
 export const QRA_CUSTOMER_FAQ: QraFaqEntry[] = [
   {
-    question: 'Kupon kodunu nasıl girerim / kullanırım?',
-    label: 'Ödüller',
-    path: '/customer/rewards',
-    answer: 'Ödüller sayfasına git, "Kupon Kullan" bölümüne kodunu yapıştır ve uygula.',
+    question: 'Puanlarımı nasıl harcarım / ödüle çeviririm?',
+    routeId: 'customer.wallet.rewards',
+    answer: 'Ödüller sayfasında puanını bir ödüle ya da profil kozmetiğine çevirebilirsin.',
   },
   {
-    question: 'Puanlarımı nasıl harcarım / ödüle çeviririm?',
-    label: 'Ödüller',
-    path: '/customer/rewards',
-    answer: 'Ödüller sayfasında puanını ödüllerle değiştirebilirsin.',
+    question: 'Aldığım ödülün kodu / kuponum nerede, kasada nasıl gösteririm?',
+    routeId: 'customer.wallet.owned',
+    answer: 'Ödüllerim sayfasında kodunu aç; QR olarak kasada göster.',
+  },
+  {
+    question: 'Kartımı kasada nasıl gösteririm?',
+    routeId: 'customer.wallet.card',
+    answer: 'Kartım sayfasındaki QR kartını kasada okut.',
   },
   {
     question: 'QR kodu nasıl okuturum / tararım?',
-    label: 'Tara',
-    path: '/customer/scan',
+    routeId: 'customer.scan',
     answer: 'Tara sayfasından kameranla işletmenin QR kodunu okut.',
   },
   {
     question: 'Günlük kutumu / sürpriz kutumu nereden açarım?',
-    label: 'Sürpriz Kutularım',
-    path: '/customer/surprise-boxes',
-    answer: 'Sürpriz Kutularım sayfasında her gün giriş kutunu açabilirsin.',
+    routeId: 'customer.wallet.owned',
+    answer: 'Ödüllerim sayfasındaki Kutularım sekmesinde günlük kutunu ve hediye kutularını açabilirsin.',
   },
   {
     question: 'Telafi tekliflerimi nereden görürüm?',
-    label: 'Telafi Teklifleri',
-    path: '/customer/remedy',
-    answer: 'Telafi Teklifleri sayfasında işletmeden gelen indirim/telafi tekliflerini açabilirsin.',
+    routeId: 'customer.me.voices',
+    answer: 'Seslerim sayfasında işletmeden gelen teklifi açıp seçimini yaparsın; kupon türündeyse Ödüllerim’de kasada gösterirsin.',
   },
   {
     question: 'Rozetlerimi nereden görürüm?',
-    label: 'Rozetlerim',
-    path: '/customer/badges',
-    answer: 'Rozetlerim sayfasında kazandığın rozetleri ve ilerlemeni görürsün.',
+    routeId: 'customer.me.badges',
+    answer: 'Rozetler sayfasında kazandığın rozetleri ve ilerlemeni görürsün.',
   },
   {
     question: 'Klana nasıl katılırım?',
-    label: 'Klanlar',
-    path: '/customer/squads',
-    answer: 'Klanlar sayfasında davet koduyla bir klana katılabilir veya kendi klanını kurabilirsin.',
+    routeId: 'customer.squads',
+    answer: 'Klan sayfasında davet koduyla bir klana katılabilir ya da kendi klanını kurabilirsin.',
   },
   {
     question: 'Çerçeve / avatar çerçevesi nereden alırım?',
-    label: 'Çerçeve Dükkanı',
-    path: '/customer/shop',
-    answer: 'Çerçeve Dükkanı sayfasında puan/XP ile çerçeve, rozet ve arka plan alabilirsin.',
+    routeId: 'customer.wallet.rewards',
+    answer: 'Ödüller sayfasının kozmetik bölümünde puanla çerçeve, rozet ve arka plan alabilirsin.',
+  },
+  {
+    question: 'Puan geçmişimi / ziyaretlerimi nereden görürüm?',
+    routeId: 'customer.wallet.activity',
+    answer: 'Hareketler sayfasında puan defterini, ziyaretlerini ve harcama özetini görürsün.',
   },
   {
     question: 'Bağış nasıl yaparım?',
-    label: 'Sosyal Sorumluluk',
-    path: '/customer/donations',
-    answer: 'Sosyal Sorumluluk sayfasında puanınla bağış yapabilirsin.',
+    routeId: 'customer.wallet.donate',
+    answer: 'Bağış sayfasında puanınla bir projeye bağış yapabilirsin.',
+  },
+  {
+    question: 'Arkadaşımı nasıl davet ederim?',
+    routeId: 'customer.me.invite',
+    answer: 'Davet sayfasından davet kodunu paylaşabilirsin.',
   },
   {
     question: 'Dil ve bildirim ayarlarını nereden değiştiririm?',
-    label: 'Ayarlar',
-    path: '/customer/settings',
+    routeId: 'customer.me.settings',
     answer: 'Ayarlar sayfasından dil ve bildirim tercihlerini değiştirebilirsin.',
   },
 ];
@@ -118,17 +150,18 @@ export const QRA_CUSTOMER_FAQ: QraFaqEntry[] = [
  * net yönlendirme kuralı içerir.
  */
 export function buildQraKnowledgeBlock(): string {
-  const sitemap = QRA_CUSTOMER_SITEMAP.map(
-    (e) => `- ${e.label} (${e.path}): ${e.purpose}`
-  ).join('\n');
+  const sitemapEntries = buildQraSiteMap();
+  const byId = new Map(sitemapEntries.map((e) => [e.id, e]));
+  const sitemap = sitemapEntries.map((e) => `- ${e.label} (${e.path}): ${e.purpose}`).join('\n');
 
-  const faq = QRA_CUSTOMER_FAQ.map(
-    (f) => `- Soru: "${f.question}" → ${f.label} sayfası (${f.path}). ${f.answer}`
-  ).join('\n');
+  const faq = QRA_CUSTOMER_FAQ.flatMap((f) => {
+    const target = byId.get(f.routeId);
+    return target ? [`- Soru: "${f.question}" → ${target.label} (${target.path}). ${f.answer}`] : [];
+  }).join('\n');
 
   return `
 ## Uygulama Sayfa Haritası (Müşteri Paneli)
-Aşağıdaki sayfalar uygulamanın içindedir. Kullanıcı bir özelliği nerede bulacağını sorduğunda DOĞRU sekmeyi adıyla söyle.
+Aşağıdaki sayfalar uygulamanın içindedir. "A › B" biçimi menüdeki yeri gösterir (A menüsünün altındaki B sayfası). Kullanıcı bir özelliği nerede bulacağını sorduğunda DOĞRU sayfayı bu adla söyle.
 ${sitemap}
 
 ## Sık Sorulan Sorular → Sayfa Yönlendirmesi
@@ -136,7 +169,7 @@ ${faq}
 
 ## Yönlendirme Kuralı (ÇOK ÖNEMLİ)
 - Kullanıcı "nasıl yaparım / nerede" diye bir özellik sorduğunda, internetten genel bilgi VERME.
-- Yukarıdaki harita ve SSS'yi kullanarak uygulama içindeki DOĞRU sekmenin adını ve ne yapacağını söyle.
-- Emin değilsen en yakın sekmeyi öner ve kullanıcıya o sekmeye bakmasını söyle.
-- Yolları (örn. /customer/rewards) kullanıcıya ham link olarak verme; sekme ADIYLA tarif et ("Ödüller sayfasına git").`;
+- Yukarıdaki harita ve SSS'yi kullanarak uygulama içindeki DOĞRU sayfanın adını ve ne yapacağını söyle.
+- Haritada olmayan bir sayfa ya da özellik UYDURMA; emin değilsen en yakın sayfayı öner ve kullanıcıya o sayfaya bakmasını söyle.
+- Yolları (örn. /customer/wallet/rewards) kullanıcıya ham link olarak verme; menü adıyla tarif et ("Cüzdan › Ödüller'e git").`;
 }

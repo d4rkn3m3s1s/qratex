@@ -213,7 +213,7 @@ describe('getJourneyPage', () => {
     const page = await getJourneyPage('u1', { filter: 'all' });
     expect(page.items.map((e) => e.type)).toEqual(['level', 'heard', 'review']);
     const review = page.items.find((e) => e.type === 'review')!;
-    expect(review).toMatchObject({ href: '/customer/consumptions/c1', data: { rating: 2, place: 'Kafe', source: 'consumption' } });
+    expect(review).toMatchObject({ href: '/customer/me/voices?id=cs-c1', data: { rating: 2, place: 'Kafe', source: 'consumption' } });
     expect(page.items.find((e) => e.type === 'level')?.href).toBeNull();
     expect(page.nextCursor).toBeNull();
   });

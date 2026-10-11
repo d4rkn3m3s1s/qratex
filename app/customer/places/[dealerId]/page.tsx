@@ -72,7 +72,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
   const { dealerId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/customer/places/${dealerId}`)}`);
+    redirect(`/auth/login?callbackUrl=${encodeURIComponent(`/customer/places/${dealerId}`)}`);
   }
   const locale = await getServerLocale();
   const copy = getVenueCopy(locale);

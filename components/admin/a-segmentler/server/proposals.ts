@@ -362,7 +362,7 @@ export async function decideProposal(
           ? `“${proposal.title}” onaylandı. Müşterilerinize göndermek için İnovasyon sayfasını açın.${noteCheck.note ? ` Not: ${noteCheck.note}` : ''}`
           : `“${proposal.title}” onaylanmadı. Gerekçe: ${noteCheck.note}`,
         type: approved ? 'success' : 'warning',
-        data: { kind: 'innovation_segment_decision', proposalId: id, decision: input.decision, href: '/dealer/innovation' } as Prisma.InputJsonValue,
+        data: { kind: 'innovation_segment_decision', proposalId: id, decision: input.decision, href: '/dealer/offers?from=innovation' } as Prisma.InputJsonValue,
       },
     });
   });

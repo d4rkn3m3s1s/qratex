@@ -39,6 +39,11 @@ jobs:
       - name: Run Type Check
         run: npx tsc --noEmit
 
+      # Navigasyon kaydı ↔ dosya sistemi, yönlendirmeler, iç bağlantılar (404 / emekli koçanı),
+      # Qra site haritası ve arama iniş adresleri — DB gerektirmez.
+      - name: Navigation guards
+        run: npm run verify:menu
+
   # ─────────────────────────────────────────────────────────────
   # BUILD
   # ─────────────────────────────────────────────────────────────

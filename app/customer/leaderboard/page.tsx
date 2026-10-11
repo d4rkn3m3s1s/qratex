@@ -59,7 +59,7 @@ function parseParams(sp: Record<string, string | string[] | undefined>) {
 export default async function CustomerLeaguePage({ searchParams }: PageProps) {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) {
-    if (auth.error.status === 401) redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fleaderboard');
+    if (auth.error.status === 401) redirect('/auth/login?callbackUrl=%2Fcustomer%2Fleaderboard');
     return <LeagueUnavailable kind="forbidden" />;
   }
   const userId = auth.session.user.id;

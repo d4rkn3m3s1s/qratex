@@ -20,7 +20,7 @@ export default async function CustomerQuestsPage({
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fquests');
+    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fquests');
   }
   const userId = session.user.id;
   const params = await searchParams;

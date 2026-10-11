@@ -19,6 +19,7 @@ import type { prisma as prismaClient } from '@/lib/prisma';
 import { decodeCursor, encodeCursor } from '../cursor';
 import { istanbulMonthStart } from '../periods';
 import { GROUP_SOURCES, groupOfSource, normalizeSource, type SourceGroup } from './sources';
+import { consumptionVoiceHref } from '@/lib/navigation/deep-links';
 
 type Db = Pick<typeof prismaClient, '$queryRaw' | 'user' | 'pointsLedger' | 'analyticsEvent'>;
 
@@ -123,7 +124,7 @@ function hrefFor(source: string, ref: string | null): string | null {
   const safe = /^[A-Za-z0-9_-]{1,64}$/.test(ref) ? ref : null;
   if (!safe) return null;
   if (source === 'dealer_passive' || source === 'consumption' || source === 'consumption_passive') {
-    return `/customer/consumptions/${safe}`;
+    return consumptionVoiceHref(safe);
   }
   if (source === 'donation') return `/customer/wallet/donate?tab=history&receipt=${safe}`;
   return null;

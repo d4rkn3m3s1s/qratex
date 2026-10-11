@@ -1,8 +1,7 @@
 /**
  * Emekli rotalar (/customer/my-card, /customer/lounge) → Cüzdan → Kartım; sorgu korunur.
- * Tip burada tanımlı ki koçan dosyası JSX/jenerik içermesin (`lib/navigation/next-redirects.js`
- * `isRetirementStub` sezgisi `<Harf` gördüğünde dosyayı emekli saymaz → next.config yönlendirmesi
- * etkinleşmez).
+ * Koçan dosyası var olduğu sürece yönlendirmeyi koçan yapar (`lib/navigation/next-redirects.js`:
+ * next.config eşlemesi yalnız eski sayfa dosyası silinince etkinleşir).
  */
 export type LegacySearchParams = Promise<Record<string, string | string[] | undefined>>;
 

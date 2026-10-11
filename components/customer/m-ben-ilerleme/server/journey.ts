@@ -12,6 +12,7 @@ import { routeHref } from '@/lib/navigation/registry';
 import { badgeColor, badgeVisual } from '../badge-visual';
 import { decodeCursor, mergeJourney, type Cursor } from '../journey-cursor';
 import type { JourneyEvent, JourneyFilter, JourneyPage } from '../types';
+import { consumptionVoiceHref, feedbackVoiceHref } from '@/lib/navigation/deep-links';
 
 export const JOURNEY_PAGE_SIZE = 15;
 const EXTRA = 5;
@@ -62,7 +63,7 @@ export async function getJourneyPage(
               key: `fb:${r.id}`,
               type: 'review',
               at: r.createdAt.toISOString(),
-              href: `/customer/feedbacks/${r.id}/journey`,
+              href: feedbackVoiceHref(r.id),
               data: { rating: r.rating, place: placeName(r.qrCode?.dealer), source: 'qr' },
             })),
           )
@@ -86,7 +87,7 @@ export async function getJourneyPage(
               key: `cr:${r.id}`,
               type: 'review',
               at: r.createdAt.toISOString(),
-              href: `/customer/consumptions/${r.consumptionId}`,
+              href: consumptionVoiceHref(r.consumptionId),
               data: { rating: r.rating, place: placeName(r.consumption?.dealer), source: 'consumption' },
             })),
           )
@@ -106,7 +107,7 @@ export async function getJourneyPage(
                 key: `fbh:${r.id}`,
                 type: 'heard',
                 at: (r.dealerRepliedAt as Date).toISOString(),
-                href: `/customer/feedbacks/${r.id}/journey`,
+                href: feedbackVoiceHref(r.id),
                 data: { place: placeName(r.qrCode?.dealer), source: 'qr' },
               })),
           )
@@ -131,7 +132,7 @@ export async function getJourneyPage(
                 key: `crh:${r.id}`,
                 type: 'heard',
                 at: (r.dealerRepliedAt as Date).toISOString(),
-                href: `/customer/consumptions/${r.consumptionId}`,
+                href: consumptionVoiceHref(r.consumptionId),
                 data: { place: placeName(r.consumption?.dealer), source: 'consumption' },
               })),
           )
@@ -199,7 +200,7 @@ export async function getJourneyPage(
               key: `cs:${r.id}`,
               type: 'visit',
               at: r.createdAt.toISOString(),
-              href: `/customer/consumptions/${r.id}`,
+              href: consumptionVoiceHref(r.id),
               data: { place: placeName(r.dealer), product: r.product?.name ?? null },
             })),
           )

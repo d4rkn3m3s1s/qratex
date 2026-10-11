@@ -8,6 +8,7 @@
 import {
   PALETTE_STATUSES,
   groupsForRole,
+  hrefPatternMatches,
   isDynamicHref,
   resolveRouteId,
   routesForRole,
@@ -74,6 +75,17 @@ export type ShellShortcut = Pick<NavShortcut, 'id' | 'label' | 'icon' | 'href' |
   keywords: string[];
 };
 
+/**
+ * Sayfa düzeyi erişim kapısı (B11): menüden gizlenen ya da modülü kapalı rota URL'den
+ * (yer imi, bildirim, Qra yanıtı) açılınca da "kullanılamıyor" durumu gösterilir.
+ * `blocked` ve `open` rolün kayıttaki tüm rota desenleri; yola EN ÖZGÜL eşleşen desen
+ * `blocked`'daysa sayfa kapalıdır. Admin/personel için ikisi de boş (kapı yok).
+ */
+export interface RouteGate {
+  blocked: string[];
+  open: string[];
+}
+
 export interface ShellConfig {
   role: NavRole;
   homeHref: string;
@@ -82,6 +94,7 @@ export interface ShellConfig {
   palette: PaletteEntry[];
   shortcuts: ShellShortcut[];
   links: { settings?: string; me?: string; scan?: string; assistant?: string };
+  gate: RouteGate;
 }
 
 const ROLE_HOME: Record<NavRole, string> = {
@@ -151,6 +164,39 @@ function resolveLabel(base: Bilingual, override: GroupLabelOverride | undefined)
     en: override.en?.trim() || base.en,
   };
 }
+
+/** Desenin yolu kapsaması: tam/dinamik eşleşme ya da statik desenin alt yolu. */
+function patternCovers(pattern: string, pathname: string): boolean {
+  if (hrefPatternMatches(pattern, pathname)) return true;
+  return !isDynamicHref(pattern) && pathname.startsWith(pattern.endsWith('/') ? pattern : `${pattern}/`);
+}
+
+/** Özgüllük: bölüm sayısı, eşitlikte statik bölümü fazla olan. */
+function specificity(pattern: string): number {
+  const segs = pattern.split('/').filter(Boolean);
+  return segs.length * 100 + segs.filter((s) => !s.startsWith('[')).length;
+}
+
+/**
+ * Yol bu kabukta kapalı mı? Yola eşleşen EN ÖZGÜL kayıt deseni `blocked`'daysa evet
+ * (ör. `/dealer/analytics` gizliyken `/dealer/analytics/heatmap` kendi anahtarıyla açık kalır).
+ * Saf; istemci kapısı ve test kullanır.
+ */
+export function isRouteBlocked(gate: RouteGate | null | undefined, pathname: string): boolean {
+  if (!gate || !gate.blocked.length) return false;
+  const path = pathname.replace(/\/+$/, '') || '/';
+  let best: { pattern: string; blocked: boolean } | null = null;
+  const consider = (pattern: string, blocked: boolean) => {
+    if (!patternCovers(pattern, path)) return;
+    if (!best || specificity(pattern) > specificity(best.pattern)) best = { pattern, blocked };
+  };
+  gate.open.forEach((p) => consider(p, false));
+  gate.blocked.forEach((p) => consider(p, true));
+  return (best as { pattern: string; blocked: boolean } | null)?.blocked ?? false;
+}
+
+/** Hiçbir ayarla kapatılamayan rotalar: rol ana sayfası ve ayarlar (hesap/abonelik/KVKK erişimi). */
+const NEVER_BLOCKED = new Set(['customer.home', 'customer.me.settings', 'dealer.today', 'dealer.settings']);
 
 /** DB sıra listesini kayıt kimliklerine çevirir (eski kimlikler göç eder, tekrarlar düşer). */
 export function canonicalOrder(role: NavRole, raw: readonly string[] | null | undefined): string[] {
@@ -288,5 +334,15 @@ export function buildShellConfig(role: NavRole, snapshot: NavSettingsSnapshot = 
     links.settings = byId.get('admin.settings')?.href;
   }
 
-  return { role, homeHref: ROLE_HOME[role], nodes, bottomTabs, palette, shortcuts, links };
+  const gate: RouteGate = { blocked: [], open: [] };
+  if (role === 'customer' || role === 'dealer') {
+    for (const r of routes) {
+      if (r.status === 'deprecated') continue; // emekli koçanı zaten yönlendirir
+      if (enabled.has(r.id) || NEVER_BLOCKED.has(r.id)) gate.open.push(r.href);
+      else gate.blocked.push(r.href);
+    }
+    if (!gate.blocked.length) gate.open = [];
+  }
+
+  return { role, homeHref: ROLE_HOME[role], nodes, bottomTabs, palette, shortcuts, links, gate };
 }

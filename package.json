@@ -12,7 +12,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:contract": "jest __tests__/api/contract.test.ts",
-    "verify:menu": "jest __tests__/menu-visibility-catalog.test.ts",
+    "verify:menu": "jest __tests__/menu-visibility-catalog.test.ts __tests__/lib/navigation-shell.test.ts __tests__/lib/navigation-search-targets.test.ts __tests__/lib/qra-knowledge-base.test.ts __tests__/architecture/nav-links.test.ts",
     "synthetic": "npx ts-node scripts/synthetic-monitor.ts",
     "postinstall": "prisma generate",
     "db:push": "node scripts/db-schema-guard.mjs push",

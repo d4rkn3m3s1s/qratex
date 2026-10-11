@@ -36,6 +36,8 @@ export interface CommandPaletteItem {
   /** Tuş ipucu (ör. "⌘J"). */
   hint?: string;
   keywords?: readonly string[];
+  /** Yalnız sorgu boşken gösterilir (ör. "Son kullanılanlar"); aramada tekrar etmez. */
+  idleOnly?: boolean;
   onSelect: () => void;
 }
 
@@ -127,6 +129,7 @@ export function CommandPalette({
       });
     } else {
       list = items
+        .filter((it) => !it.idleOnly)
         .map((it, i) => ({ it, i, s: scoreMatch(q, it.label, it.keywords ?? [], it.context ? [it.context] : []) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s || a.i - b.i)

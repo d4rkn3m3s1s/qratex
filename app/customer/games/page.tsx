@@ -56,7 +56,7 @@ function enabledNavIds(shell: ShellConfig): Set<string> {
 
 export default async function PlayHubPage({ searchParams }: PageProps) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fgames');
+  if (!session?.user?.id) redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
   if (session.user.role !== 'CUSTOMER') redirect(roleHome(session.user.role));
 
   const [sp, locale, shell] = await Promise.all([
@@ -77,7 +77,7 @@ export default async function PlayHubPage({ searchParams }: PageProps) {
         </PanelPage>
       );
     }
-    redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fgames');
+    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
   }
   const userId = auth.session.user.id;
 

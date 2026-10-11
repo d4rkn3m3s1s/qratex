@@ -1,34 +1,14 @@
-import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import {
-  normalizeSidebarNavGroups,
-  type SidebarGroupRole,
-  SIDEBAR_NAV_GROUPS_SETTINGS_KEY,
-} from '@/lib/sidebar-groups-settings';
+/**
+ * EMEKLİ UÇ (bilgi mimarisi B8). Eskiden sidebar her panel açılışında bu ucu istemciden,
+ * önbelleksiz çağırıyordu (gizli öğe önce görünüp sonra kayboluyordu, açılış başına ek DB
+ * sorgusu). Menü artık RSC layout'ta `getShellConfig(role)` ile tek sorgu + önbellekle çözülür;
+ * hiçbir istemci bu yolu çağırmıyor. Sahipsiz okuma yüzeyi açık kalmasın diye 410 döner.
+ * Yönetim (yazma) uçları: `/api/admin/navigation`, `/api/admin/settings/visibility`.
+ */
+import { ApiError, defineRoute } from '@/lib/http/define-route';
 
-export const dynamic = 'force-dynamic';
+const gone = () => {
+  throw new ApiError('GONE', 'Menü grupları artık panel kabuğunda sunucuda çözülüyor (lib/navigation/get-shell-config).', { status: 410 });
+};
 
-function roleToGroupRole(role: string | undefined): SidebarGroupRole | null {
-  if (role === 'DEALER') return 'dealer';
-  if (role === 'CUSTOMER') return 'customer';
-  return null; // admin menüsünde grup override yok
-}
-
-/** Runtime: sidebar için çağıranın rolüne ait grup override'ını döndürür. */
-export async function GET() {
-  const auth = await requireAuth(['ADMIN', 'DEALER', 'CUSTOMER']);
-  if ('error' in auth) return auth.error;
-  const gr = roleToGroupRole(auth.session.user.role);
-  if (!gr) {
-    return NextResponse.json({ success: true, groups: null }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const row = await prisma.settings.findUnique({
-    where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
-    select: { value: true },
-  });
-  const payload = normalizeSidebarNavGroups(row?.value);
-  const groups = payload[gr] ?? null;
-  return NextResponse.json({ success: true, groups }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+export const GET = defineRoute({ name: 'settings.sidebar-groups.retired', roles: ['ADMIN', 'DEALER', 'CUSTOMER'] }, gone);

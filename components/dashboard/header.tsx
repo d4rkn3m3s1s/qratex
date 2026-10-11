@@ -13,7 +13,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   Search,
@@ -50,6 +50,8 @@ import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { UserAvatarFrame } from '@/components/ui/avatar-frame';
 import { CommandPalette, type CommandPaletteItem } from '@/components/ds/command-palette';
 import { navIcon } from '@/lib/navigation/icons';
+import { matchActiveHref } from '@/lib/navigation/registry';
+import { trackNav } from '@/lib/navigation/track';
 import { useBilingual, useCanSeeTeam, useShell } from './shell-context';
 
 function NotificationCenterSkeleton() {
@@ -96,12 +98,35 @@ interface SearchApiResults {
   qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
 }
 
+/** Son ziyaret edilen kayıt sayfaları (rol başına, en çok 5) — yalnız bu tarayıcıda; ⌘K boşken üstte. */
+const RECENT_LIMIT = 5;
+const recentKey = (role: string) => `qx:nav-recent:${role}`;
+
+function readRecent(role: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(recentKey(role));
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string').slice(0, RECENT_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecent(role: string, ids: string[]): void {
+  try {
+    window.localStorage.setItem(recentKey(role), JSON.stringify(ids.slice(0, RECENT_LIMIT)));
+  } catch {
+    /* özel pencere / engellenmiş depolama: yalnız bu oturumda bellekte kalır */
+  }
+}
+
 const isMacLike = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
   const t = useAppT();
   const bl = useBilingual();
   const router = useRouter();
+  const pathname = usePathname() ?? '';
   const { data: session } = useSession();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const ctx = useShell();
@@ -184,11 +209,26 @@ export function DashboardHeader({ title, description, showSearch = true, actions
 
   const sections = useMemo(
     () => ({
+      recent: bl({ tr: 'Son kullanılanlar', en: 'Recent' }),
       shortcuts: bl({ tr: 'Kısayollar', en: 'Shortcuts' }),
       pages: bl({ tr: 'Sayfalar', en: 'Pages' }),
     }),
     [bl]
   );
+
+  // Son kullanılanlar: gezilen yol kayıttaki bir palet sayfasına çözülürse listenin başına alınır.
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!shell || !role) return;
+    const entries = shell.palette.filter((p) => !p.teamOnly || canSeeTeam);
+    const byHref = new Map(entries.map((p) => [p.href.split('?')[0], p.id]));
+    const hit = matchActiveHref(pathname, [...byHref.keys()], shell.homeHref);
+    const prev = readRecent(role);
+    const id = hit ? byHref.get(hit) : undefined;
+    const next = id ? [id, ...prev.filter((x) => x !== id)].slice(0, RECENT_LIMIT) : prev;
+    if (id && next.join() !== prev.join()) writeRecent(role, next);
+    setRecentIds(next);
+  }, [pathname, shell, role, canSeeTeam]);
 
   const paletteItems: CommandPaletteItem[] = useMemo(() => {
     if (!shell) return [];
@@ -200,7 +240,10 @@ export function DashboardHeader({ title, description, showSearch = true, actions
       hint: sc.hint,
       keywords: sc.keywords,
       onSelect: () => {
-        if (sc.href) router.push(sc.href);
+        if (sc.href) {
+          trackNav('shortcut', sc.href, sc.id);
+          router.push(sc.href);
+        }
         else if (sc.action === 'open-assistant') setAssistantOpen?.(true);
         else if (sc.action === 'toggle-theme') themeRef.current.apply(themeRef.current.resolvedTheme === 'dark' ? 'light' : 'dark');
       },
@@ -214,10 +257,32 @@ export function DashboardHeader({ title, description, showSearch = true, actions
         context: p.section ? bl(p.section) : undefined,
         icon: navIcon(p.icon),
         keywords: p.keywords,
-        onSelect: () => router.push(p.href),
+        onSelect: () => {
+          trackNav('palette', p.href, p.id);
+          router.push(p.href);
+        },
       }));
-    return [...shortcutItems, ...pageItems];
-  }, [shell, bl, sections, router, canSeeTeam, setAssistantOpen]);
+    // Son kullanılanlar (yalnız sorgu boşken, şu anki sayfa hariç) — sayfa öğesinin kopyası.
+    const current = matchActiveHref(pathname, shell.palette.map((p) => p.href.split('?')[0]), shell.homeHref);
+    const recentItems: CommandPaletteItem[] = recentIds.flatMap((id) => {
+      const page = pageItems.find((it) => it.id === id);
+      const entry = shell.palette.find((p) => p.id === id);
+      if (!page || !entry || entry.href.split('?')[0] === current) return [];
+      return [
+        {
+          ...page,
+          id: `recent-${id}`,
+          section: sections.recent,
+          idleOnly: true,
+          onSelect: () => {
+            trackNav('recent', entry.href, entry.id);
+            router.push(entry.href);
+          },
+        },
+      ];
+    });
+    return [...recentItems, ...shortcutItems, ...pageItems];
+  }, [shell, bl, sections, router, canSeeTeam, setAssistantOpen, recentIds, pathname]);
 
   const searchData = useCallback(
     async (q: string, signal: AbortSignal): Promise<CommandPaletteItem[]> => {

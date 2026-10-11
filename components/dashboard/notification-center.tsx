@@ -23,6 +23,7 @@ import { tr, enUS } from 'date-fns/locale';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { claimNotificationToast, markNotificationsSeen } from '@/lib/notification-toast-dedupe';
 import { api, apiErrorMessage } from '@/lib/api-client';
+import { remedyOfferHref } from '@/lib/navigation/deep-links';
 
 // ─── Types ──────────────────────────────────────────────────
 export interface Notification {
@@ -524,7 +525,7 @@ export function NotificationCenter() {
                                             className="bg-amber-500 hover:bg-amber-600"
                                             onClick={() => {
                                                 setDetailOpen(false);
-                                                router.push(`/customer/remedy/${selected.data?.remedyOfferId ?? ''}`);
+                                                router.push(remedyOfferHref(String(selected.data?.remedyOfferId ?? '')));
                                             }}
                                         >
                                             <ExternalLink className="h-4 w-4 mr-2" />

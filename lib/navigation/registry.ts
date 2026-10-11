@@ -14,8 +14,11 @@
  * 1. Buraya bir satır ekle (`id` kalıcıdır; DB sıra/grup ayarları onu tutar).
  * 2. Eski bir URL'nin yerini alıyorsa `redirectFrom`'a yaz, sonra
  *    `UPDATE_NAV_REDIRECTS=1 npx jest __tests__/menu-visibility-catalog.test.ts`
- *    ile `redirects.json`'ı yenile. (Yönlendirme yalnız hedef sayfa VARSA ve eski
- *    sayfa emekli koçanına çevrildiyse ya da silindiyse etkinleşir — next.config.js.)
+ *    ile `redirects.json`'ı yenile. (Kenar yönlendirmesi yalnız hedef sayfa VARSA ve eski
+ *    sayfa dosyası SİLİNDİYSE etkinleşir; eski URL'de emekli koçanı varsa sekme/parametre
+ *    eşlemesini koçan yapar — `lib/navigation/next-redirects.js`.)
+ * 4. Menüden kaldırılan sayfayı koçana çevirdiysen rotayı `deprecated` yap: menü/palet öğesi
+ *    koçana inemez, yeni kod da koçana bağlanamaz (`__tests__/architecture/nav-links.test.ts`).
  * 3. Bayi/müşteri menüsünde admin'in gizleyebilmesi gerekiyorsa `menuKey` ver.
  *
  * Durumlar:
@@ -507,7 +510,7 @@ const CUSTOMER: NavRoute[] = [
     href: '/customer/ekip',
     label: { tr: 'Ekip', en: 'Team' },
     labelKey: 'team',
-    icon: 'Users2',
+    icon: 'UsersRound',
     parent: 'customer.me',
     status: 'secondary',
     teamOnly: true,
@@ -524,7 +527,8 @@ const CUSTOMER: NavRoute[] = [
     status: 'child',
     teamOnly: true,
   },
-  // Derin linkler (bildirim, e-posta) — menüde yok; yüzey ajanları detay çekmecesine bağlar.
+  // Eski derin linkler (DB'de kalmış bildirim/e-posta bağlantıları) — emekli koçanları Seslerim
+  // detay çekmecesine yönlendirir; yeni kod doğrudan `/customer/me/voices?id=…` üretir.
   {
     id: 'customer.consumption.detail',
     role: 'customer',
@@ -532,7 +536,7 @@ const CUSTOMER: NavRoute[] = [
     label: { tr: 'Tüketim yorumu', en: 'Consumption review' },
     icon: 'Receipt',
     parent: 'customer.me.voices',
-    status: 'hidden',
+    status: 'deprecated',
   },
   {
     id: 'customer.feedback.journey',
@@ -541,8 +545,7 @@ const CUSTOMER: NavRoute[] = [
     label: { tr: 'Geri bildirim yolculuğu', en: 'Feedback journey' },
     icon: 'MessageSquare',
     parent: 'customer.me.voices',
-    status: 'hidden',
-    entity: 'feedback',
+    status: 'deprecated',
   },
   {
     id: 'customer.remedy.offer',
@@ -551,7 +554,7 @@ const CUSTOMER: NavRoute[] = [
     label: { tr: 'Telafi teklifi', en: 'Remedy offer' },
     icon: 'Gift',
     parent: 'customer.me.voices',
-    status: 'hidden',
+    status: 'deprecated',
   },
 ];
 
@@ -952,7 +955,7 @@ const DEALER: NavRoute[] = [
     keywords: ['işletme', 'hesabım', 'bildirimler', 'güvenlik', 'ai ayarları', 'abonelik', 'fatura', 'ödeme', 'billing'],
     redirectFrom: ['/dealer/ai-settings', '/dealer/billing'],
   },
-  // §6.2 "PARÇALA": içerik Teklifler/Kampanyalar/Gelen Kutusu/Bugün'e dağıtılana dek URL'den erişilir.
+  // §6.2 "PARÇALA" tamamlandı: emekli koçanı → Pazarlama › Teklifler (`?from=innovation`).
   {
     id: 'dealer.innovation',
     role: 'dealer',
@@ -960,7 +963,7 @@ const DEALER: NavRoute[] = [
     label: { tr: 'İnovasyon', en: 'Innovation' },
     labelKey: 'innovation_hub',
     icon: 'Lightbulb',
-    status: 'hidden',
+    status: 'deprecated',
     legacyIds: ['innovation_hub'],
   },
 ];
@@ -973,16 +976,17 @@ const STAFF: NavRoute[] = [
     label: { tr: 'Bugün', en: 'Today' },
     icon: 'LayoutDashboard',
     status: 'primary',
-    keywords: ['vardiya', 'görevler', 'checklist', 'izin', 'eğitim'],
+    keywords: ['vardiya', 'görevler', 'checklist', 'izin', 'eğitim', 'saha bildirimi', 'field report'],
   },
   {
+    // Emekli: saha bildirimi Bugün ekranında alt sayfa olarak açılır (koçan → `/staff?bildir=1`).
+    // Menüde ayrı öğe olarak durursa her tıklama yönlendirmeye iner ve hiç "aktif" görünmez.
     id: 'staff.field',
     role: 'staff',
     href: '/staff/field',
     label: { tr: 'Saha bildirimi', en: 'Field report' },
     icon: 'Flag',
-    status: 'primary',
-    keywords: ['saha', 'bildirim', 'field'],
+    status: 'deprecated',
   },
 ];
 
@@ -1424,7 +1428,7 @@ const ADMIN: NavRoute[] = [
     group: 'team',
     status: 'primary',
     legacyIds: ['team'],
-    keywords: ['pano', 'kanban', 'görevler', 'ekip yönetimi'],
+    keywords: ['pano', 'kanban', 'görevler', 'ekip yönetimi', 'girişimler', 'yol haritası', 'roadmap'],
   },
   {
     id: 'admin.team.departments',
@@ -1436,6 +1440,7 @@ const ADMIN: NavRoute[] = [
     status: 'secondary',
   },
   {
+    // Emekli: Ekip › Girişimler sekmesi (koçan → `/admin/ekip?tab=initiatives`).
     id: 'admin.roadmap',
     role: 'admin',
     href: '/admin/roadmap',
@@ -1443,9 +1448,8 @@ const ADMIN: NavRoute[] = [
     labelKey: 'roadmap',
     icon: 'GitBranch',
     parent: 'admin.team',
-    status: 'secondary',
+    status: 'deprecated',
     legacyIds: ['roadmap'],
-    keywords: ['yol haritası', 'roadmap'],
   },
   {
     id: 'admin.inbox',
@@ -1483,6 +1487,18 @@ const ADMIN: NavRoute[] = [
     keywords: ['genel', 'kimlik', 'güvenlik', 'bakım', 'görünürlük'],
   },
   {
+    // Yöneticinin kendi 2FA kurulumu — 2FA kapalıyken üst şerit buraya bağlanır; palette de bulunur.
+    id: 'admin.account-security',
+    role: 'admin',
+    href: '/admin/account-security',
+    label: { tr: 'Hesap güvenliği', en: 'Account security' },
+    description: { tr: 'İki adımlı doğrulama (TOTP) ve kurtarma kodları', en: 'Two-step verification (TOTP) and recovery codes' },
+    icon: 'Lock',
+    parent: 'admin.settings',
+    status: 'child',
+    keywords: ['2fa', 'iki adımlı doğrulama', 'totp', 'kurtarma kodu', 'two-factor', 'authenticator'],
+  },
+  {
     // Kapı ekranı: menüdeki kamuflajlı etiket ve ikon KORUNUR (proje kuralı). Arama
     // anahtar kelimesi bilerek verilmez.
     id: 'admin.gate-settings',
@@ -1494,7 +1510,7 @@ const ADMIN: NavRoute[] = [
     group: 'system',
     status: 'primary',
   },
-  // §6.3: içerik Bayi Sağlığı/Segmentler/Özellik'e dağıtılana dek URL'den erişilir.
+  // §6.3 tamamlandı: emekli koçanı → Segmentler › Modüller.
   {
     id: 'admin.innovation',
     role: 'admin',
@@ -1502,7 +1518,7 @@ const ADMIN: NavRoute[] = [
     label: { tr: 'İnovasyon', en: 'Innovation' },
     labelKey: 'innovation_platform',
     icon: 'Radar',
-    status: 'hidden',
+    status: 'deprecated',
   },
 ];
 

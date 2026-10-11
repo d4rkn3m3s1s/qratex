@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { prisma } from '@/lib/prisma';
-import { buildShellConfig, canonicalOrder, type ShellConfig, type ShellItem } from '@/lib/navigation/shell-config';
+import { buildShellConfig, canonicalOrder, isRouteBlocked, type ShellConfig, type ShellItem } from '@/lib/navigation/shell-config';
 import { loadShellConfig, snapshotFromRows } from '@/lib/navigation/get-shell-config';
 import { canonicalizeGroupsPayload, canonicalizeOrderIds } from '@/lib/navigation/settings';
 import { matchActiveHref, resolveRouteId } from '@/lib/navigation/registry';
@@ -76,6 +76,32 @@ describe('buildShellConfig', () => {
     expect(ids).not.toContain('dealer.assistant');
     expect(ids).not.toContain('dealer.analytics.insights');
     expect(roleOff.links.assistant).toBeUndefined();
+  });
+
+  it('sayfa kapısı (B11): gizli bölüm URL\'den de kapalı; en özgül desen karar verir; ana sayfa/ayarlar asla', () => {
+    const open = buildShellConfig('customer');
+    expect(open.gate).toEqual({ blocked: [], open: [] });
+    expect(isRouteBlocked(open.gate, '/customer/wallet/rewards')).toBe(false);
+
+    const shell = buildShellConfig('customer', { menuVisibility: { wallet: false, nearby: false, dashboard: false, me: false } });
+    expect(isRouteBlocked(shell.gate, '/customer/wallet')).toBe(true);
+    expect(isRouteBlocked(shell.gate, '/customer/wallet/rewards')).toBe(true); // üst kapalı → alt da
+    expect(isRouteBlocked(shell.gate, '/customer/places/abc123')).toBe(true); // dinamik detay
+    expect(isRouteBlocked(shell.gate, '/customer/games')).toBe(false);
+    expect(isRouteBlocked(shell.gate, '/customer')).toBe(false); // ana sayfa kapatılamaz
+    expect(isRouteBlocked(shell.gate, '/customer/me/settings')).toBe(false); // ayarlar kapatılamaz
+    expect(isRouteBlocked(shell.gate, '/customer/me/badges')).toBe(true);
+
+    // Bayi: Genel analitik kapalıyken kendi anahtarı açık alt yol açık kalır.
+    const dealer = buildShellConfig('dealer', { menuVisibility: { analytics: false } });
+    expect(isRouteBlocked(dealer.gate, '/dealer/analytics')).toBe(true);
+    expect(isRouteBlocked(dealer.gate, '/dealer/analytics/heatmap')).toBe(false);
+    const ai = buildShellConfig('dealer', { featureVisibility: { ai_features: false } });
+    expect(isRouteBlocked(ai.gate, '/dealer/assistant')).toBe(true);
+    expect(isRouteBlocked(ai.gate, '/dealer/settings')).toBe(false);
+
+    // Admin kapısı yok.
+    expect(buildShellConfig('admin', { moduleControls: { observability: false } }).gate.blocked).toEqual([]);
   });
 
   it('admin görünürlük ayarlarından etkilenmez; 10 alan grup olarak gelir', () => {
@@ -241,16 +267,30 @@ describe('next.config yönlendirme güvenlik kuralı', () => {
   });
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  it('yalnız hedef var + eski sayfa emekli/silinmişse etkin', () => {
+  it('yalnız hedef var + eski sayfa SİLİNMİŞSE etkin; koçan varsa eşlemeyi koçan yapar', () => {
     const out = buildNavRedirects(dir);
-    expect(out).toEqual([
-      { source: '/customer/my-card', destination: '/customer/wallet/card', permanent: true },
-      { source: '/customer/gone', destination: '/customer/wallet/card', permanent: true },
-    ]);
+    // my-card koçanı kendi (sekme/parametre) eşlemesini yapar → kenar yönlendirmesi üretilmez;
+    // rewards hedefi yok; badges hâlâ çalışan sayfa; yalnız silinmiş /customer/gone etkin.
+    expect(out).toEqual([{ source: '/customer/gone', destination: '/customer/wallet/card', permanent: true }]);
   });
 
-  it('emekli koçanı tanıma', () => {
+  it('emekli koçanı tanıma (TypeScript jenerikleri JSX sayılmaz)', () => {
     expect(isRetirementStub(path.join(dir, 'app/customer/my-card/page.tsx'))).toBe(true);
     expect(isRetirementStub(path.join(dir, 'app/customer/badges/page.tsx'))).toBe(false);
+    write(
+      'app/customer/typed/page.tsx',
+      [
+        "import { permanentRedirect } from 'next/navigation';",
+        'export default async function P({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {',
+        '  permanentRedirect(`/customer/places?${new URLSearchParams()}`);',
+        '}',
+      ].join('\n')
+    );
+    expect(isRetirementStub(path.join(dir, 'app/customer/typed/page.tsx'))).toBe(true);
+    write(
+      'app/customer/jsx/page.tsx',
+      ["import { redirect } from 'next/navigation';", "export default function P(){ if (!1) redirect('/x'); return <Main />; }"].join('\n')
+    );
+    expect(isRetirementStub(path.join(dir, 'app/customer/jsx/page.tsx'))).toBe(false);
   });
 });

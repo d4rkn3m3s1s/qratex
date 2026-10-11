@@ -35,6 +35,7 @@ import {
   type NavRole,
 } from '@/lib/navigation/registry';
 import { adminNavItems, customerNavItems, dealerNavItems, getNavOrderId } from '@/lib/navigation/legacy-nav';
+const { isRetirementStub } = require('@/lib/navigation/next-redirects') as { isRetirementStub: (file: string) => boolean };
 
 const ROOT = process.cwd();
 const ROLES: NavRole[] = ['customer', 'dealer', 'admin', 'staff'];
@@ -193,6 +194,44 @@ describe('Dosya sistemi ↔ kayıt (iki yönlü)', () => {
       (p) => !list.some((r) => hrefPatternMatches(r.href, p)) && !redirectSources.has(p)
     );
     expect(orphans).toEqual([]);
+  });
+
+  // Birleştirilen yüzeyin canlı kopyası kalmasın (B5): eski URL'de dosya varsa yalnız yönlendirme yapar.
+  it.each(ROLES)('%s: yönlendirme kaynağı ve emekli rota sayfaları yalnız emekli koçanı', (role) => {
+    const list = routesForRole(role);
+    const legacy = new Set([
+      ...list.flatMap((r) => r.redirectFrom ?? []),
+      ...list.filter((r) => r.status === 'deprecated' && !isDynamicHref(r.href)).map((r) => r.href),
+    ]);
+    const live = [...legacy].filter((href) => {
+      const file = path.join(ROOT, 'app', ...href.split('/').filter(Boolean), 'page.tsx');
+      return fs.existsSync(file) && !isRetirementStub(file);
+    });
+    expect(live).toEqual([]);
+  });
+
+  // Menü/palet öğesi bir emekli koçanına inmesin (her tıklamada fazladan yönlendirme). Alt öğeleri
+  // olan dizin yolu (ör. Cüzdan → Kartım) bilinçli istisnadır.
+  it('menü/palet rotası emekli koçanı değil (alt öğeli dizin yolu hariç)', () => {
+    const parents = new Set(NAV_ROUTES.flatMap((r) => (r.parent ? [r.parent] : [])));
+    const stubs = NAV_ROUTES.filter(
+      (r) =>
+        PALETTE_STATUSES.has(r.status) &&
+        !isDynamicHref(r.href) &&
+        !parents.has(r.id) &&
+        isRetirementStub(path.join(ROOT, 'app', ...r.href.split('/').filter(Boolean), 'page.tsx'))
+    ).map((r) => `${r.id} → ${r.href}`);
+    expect(stubs).toEqual([]);
+  });
+});
+
+describe('Erişilebilirlik (B10)', () => {
+  // Daraltılmış menüde yalnız ikon görünür: aynı roldeki menü öğeleri ayırt edilebilmeli.
+  it.each(ROLES)('%s: menü öğelerinin (primary/secondary) ikonları tekil', (role) => {
+    const menu = routesForRole(role).filter((r) => r.status === 'primary' || r.status === 'secondary');
+    const icons = menu.map((r) => r.icon);
+    const dupes = menu.filter((r, i) => icons.indexOf(r.icon) !== i).map((r) => `${r.id}:${r.icon}`);
+    expect(dupes).toEqual([]);
   });
 });
 

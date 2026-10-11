@@ -4,6 +4,7 @@ import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { ShellProvider } from '@/components/dashboard/shell-context';
 import { getShellConfig } from '@/lib/navigation/get-shell-config';
+import { NavClickTracker } from '@/components/dashboard/nav-click-tracker';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -37,7 +38,9 @@ export default async function AdminLayout({
     <ShellProvider shell={shell}>
     <div className="flex min-h-dvh overflow-x-hidden">
       <SkipToMainContent />
-      <Sidebar role="ADMIN" siteName={seo.siteName} />
+      <NavClickTracker source="sidebar">
+        <Sidebar role="ADMIN" siteName={seo.siteName} />
+      </NavClickTracker>
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-4 sm:pr-4 lg:pl-6 lg:pr-6">
         <DashboardHeader showSearch={true} />
         <Admin2faBanner />

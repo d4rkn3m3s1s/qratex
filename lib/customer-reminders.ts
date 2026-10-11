@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isChannelEnabled } from '@/lib/notification-prefs';
+import { consumptionVoiceHref } from '@/lib/navigation/deep-links';
 
 /**
  * Hatırlatma dürtmeleri müşterinin "Hatırlatmalar" bildirim tercihine (uygulama içi kanal)
@@ -83,7 +84,7 @@ async function createMissingCommentNudge(
         kind: 'reminder-missing-comment',
         module: 'customer_reminder',
         nudgeType: `rated_without_comment:${pendingConsumptionId}`,
-        ctaPath: `/customer/consumptions/${pendingConsumptionId}`,
+        ctaPath: consumptionVoiceHref(pendingConsumptionId),
       },
     },
   });

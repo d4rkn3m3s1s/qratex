@@ -28,14 +28,14 @@ export async function GET(request: NextRequest) {
     const menuGate = await assertMenuItemVisible('nearby', 'customer', {
       request,
       userId: session.user.id,
-      routeKey: '/customer/nearby',
+      routeKey: '/customer/places',
     });
     if (menuGate) return menuGate;
     const gate = await assertModuleEnabled('discovery', {
       role: 'customer',
       request,
       userId: session.user.id,
-      routeKey: '/customer/nearby',
+      routeKey: '/customer/places',
     });
     if (gate) return gate;
 

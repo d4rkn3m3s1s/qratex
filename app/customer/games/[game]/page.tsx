@@ -74,7 +74,7 @@ function kipOf(v: string | string[] | undefined): 'practice' | 'ranked' | undefi
 export default async function GamePage({ params, searchParams }: PageProps) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
+    redirect('/auth/login');
   }
 
   const { game } = await params;

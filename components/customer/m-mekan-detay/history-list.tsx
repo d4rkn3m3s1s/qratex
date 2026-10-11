@@ -16,6 +16,7 @@ import type { VenueHistoryItem, VenueHistoryPage, VenueShareLink } from '@/lib/v
 import { getVenueCopy, type VenueCopy, type VenueLocale } from './copy';
 import { copyText } from './clipboard';
 import type { ShareTarget } from './share-sheet';
+import { consumptionVoiceHref, feedbackVoiceHref } from '@/lib/navigation/deep-links';
 
 // Paylaşım alt sayfası yalnız "Paylaş"a basılınca yüklenir (ilk JS'te yok).
 const ShareSheet = dynamic(() => import('./share-sheet').then((m) => m.ShareSheet), { ssr: false });
@@ -95,7 +96,7 @@ function HistoryRow({
           )}
           <div className="mt-2 flex flex-wrap gap-2">
             <Button asChild variant="ghost" size="sm" className="min-h-11 gap-1 px-2 sm:min-h-9">
-              <Link href={`/customer/consumptions/${item.id}`}>
+              <Link href={consumptionVoiceHref(item.id)}>
                 {review ? copy.viewConsumption : copy.writeReview}
                 <ChevronRight aria-hidden className="h-4 w-4" />
               </Link>
@@ -142,7 +143,7 @@ function HistoryRow({
         {item.dealerReply && <DealerReply text={item.dealerReply} at={item.dealerRepliedAt} copy={copy} />}
         <div className="mt-2 flex flex-wrap gap-2">
           <Button asChild variant="ghost" size="sm" className="min-h-11 gap-1 px-2 sm:min-h-9">
-            <Link href={`/customer/feedbacks/${item.id}/journey`}>
+            <Link href={feedbackVoiceHref(item.id)}>
               {copy.viewJourney}
               <ChevronRight aria-hidden className="h-4 w-4" />
             </Link>

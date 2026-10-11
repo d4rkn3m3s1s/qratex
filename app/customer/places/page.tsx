@@ -66,7 +66,7 @@ async function canonicalHref(sp: SearchParams): Promise<string | null> {
  */
 export default async function PlacesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== 'CUSTOMER') redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fplaces');
+  if (!session?.user?.id || session.user.role !== 'CUSTOMER') redirect('/auth/login?callbackUrl=%2Fcustomer%2Fplaces');
   const sp = await searchParams;
   const canonical = await canonicalHref(sp);
   if (canonical) redirect(canonical);

@@ -26,7 +26,7 @@ export default async function SquadsPage({ searchParams }: PageProps) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
     const back = joinCode ? `${SQUADS_PATH}?join=${joinCode}` : SQUADS_PATH;
-    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(back)}`);
+    redirect(`/auth/login?callbackUrl=${encodeURIComponent(back)}`);
   }
 
   // Modül kapalıyken sayfa açılıp her aksiyon hata vermesin (envanter 2).

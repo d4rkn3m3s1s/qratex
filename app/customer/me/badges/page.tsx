@@ -23,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function CustomerBadgesPage() {
   const auth = await requireAuth(['CUSTOMER']);
-  if ('error' in auth) redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fme%2Fbadges');
+  if ('error' in auth) redirect('/auth/login?callbackUrl=%2Fcustomer%2Fme%2Fbadges');
 
   let initialData: CollectionOverview | null = null;
   try {

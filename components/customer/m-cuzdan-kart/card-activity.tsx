@@ -12,6 +12,7 @@ import { SectionCard, TONE_CALLOUT } from '@/components/states';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { WalletCardPayload } from '@/lib/wallet-card/dto';
 import type { CardCopy, CardLocale } from './copy';
+import { consumptionVoiceHref } from '@/lib/navigation/deep-links';
 
 export function PendingReviews({
   pending,
@@ -41,7 +42,7 @@ export function PendingReviews({
         {pending.items.map((item) => (
           <li key={item.id}>
             <Link
-              href={`/customer/consumptions/${encodeURIComponent(item.id)}`}
+              href={consumptionVoiceHref(item.id)}
               className="flex min-h-12 items-center gap-3 px-3 py-2 transition-colors duration-fast hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <Store className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
@@ -95,7 +96,7 @@ export function RecentActivity({ recent, copy, locale }: { recent: WalletCardPay
           {recent.map((c) => (
             <li key={c.id}>
               <Link
-                href={`/customer/consumptions/${encodeURIComponent(c.id)}`}
+                href={consumptionVoiceHref(c.id)}
                 className="-mx-2 flex min-h-12 items-center gap-3 rounded-control px-2 py-2.5 transition-colors duration-fast hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted">

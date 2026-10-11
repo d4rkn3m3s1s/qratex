@@ -196,7 +196,8 @@ const nextConfig = {
     return buildHeaders();
   },
   // Emekli rotalar → birleştirildikleri yüzey (308, sorgu korunur). Yalnız hedef sayfa var
-  // ve eski sayfa emekli koçanına çevrilmişse etkinleşir — bkz. lib/navigation/next-redirects.js.
+  // ve eski sayfa dosyası silinmişse etkinleşir; koçan varsa sekme/parametre eşlemesini koçan
+  // yapar — bkz. lib/navigation/next-redirects.js.
   async redirects() {
     return buildNavRedirects(__dirname);
   },
