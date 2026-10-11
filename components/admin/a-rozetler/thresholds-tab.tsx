@@ -125,7 +125,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
       Object.fromEntries(
         state.categories.map((c) => [c.key, { threshold: fieldError(draft[c.key]?.threshold ?? '', 'threshold', fz), minReviewLength: fieldError(draft[c.key]?.minReviewLength ?? '', 'minReviewLength', fz) }])
       ),
-    [state.categories, draft]
+    [state.categories, draft, fz]
   );
   const hasErrors = Object.values(errors).some((e) => e.threshold || e.minReviewLength);
   const dirty = stable(next) !== stable(state.overrides);
