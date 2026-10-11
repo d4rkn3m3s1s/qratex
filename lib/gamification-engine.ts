@@ -43,11 +43,12 @@ export async function addToSquadTreasury(
   if (membership) {
     // Klan gücü payı — oran TEK kaynaktan (lib/squads/rules); sayfa metni de oradan okur.
     const treasuryShare = Math.ceil(points * SQUAD_POWER_SHARE);
-    await db.squad.update({
-      where: { id: membership.squadId },
+    // Dondurulmuş (askıdaki) klan güç biriktirmez (admin_squads Bulgu 1); üyenin kişisel puanı etkilenmez.
+    const r = await db.squad.updateMany({
+      where: { id: membership.squadId, isFrozen: false },
       data: { treasuryPoints: { increment: treasuryShare } },
     });
-    return treasuryShare;
+    return r.count > 0 ? treasuryShare : 0;
   }
   return 0;
 }

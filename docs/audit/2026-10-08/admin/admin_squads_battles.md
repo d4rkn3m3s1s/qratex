@@ -229,3 +229,61 @@ Her iddia, çağıran ve çağrılan taraflar baştan okunarak çürütülmeye �
 | 4 | Admin POST invariant/doğrulama atlıyor | Doğrulandı | ORTA-YÜKSEK (`respond` kabulünde kontrol eksikliğiyle birleşince fonlu savaşın skorunu bozabiliyor) |
 
 Düzeltme önceliği: (1) admin DELETE'i `cancelBattle` servisine çevirip atomik claim + escrow iadesi + bildirim + `auditLog` eklemek, hard delete'i kaldırmak; (2) `respond` kabulüne ve admin POST'a aynı transaction içinde açık-savaş kontrolü eklemek; (3) genel PATCH'i kaldırıp açık durum geçişli uçlara bölmek ve ödemeye `paidOutAt` idempotency bayrağı eklemek; (4) admin savaşları için `origin` alanı ekleyip ödül kopyasını `rewardFunded` durumuna göre koşullamak ya da platform hazinesinden gerçek fonlama akışı kurmak.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa `/admin/squads` Klan Merkezi'nin **Savaşlar** sekmesine taşındı; `app/admin/squads/battles/page.tsx` artık `permanentRedirect('/admin/squads?tab=battles&…')` (sorgu korunur). İptal ve ödeme çekirdeği `lib/squad-battle-service.ts` (P0-20 durum makinesi: atomik claim, `paidOutAt`, `rewardRefunded`, soft-cancel); admin uçları `defineRoute` ile yeniden yazıldı (`lib/admin-squads/actions.server.ts`). Hard DELETE ucu kaldırıldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR — ortak QDL `PageHeader` |
+| 2 | Yükleme göstergesi | ÇALIŞIYOR — her sorguda (DataTable + QueryState) |
+| 3 | Savaş listesi | ÇALIŞIYOR — sunucu sayfalama, durum sekmeleri, arama, köken, klan süzgeci |
+| 4 | Hata durumu | ÇALIŞIYOR — hata ile boş liste ayrışır (ErrorState + Tekrar dene) |
+| 5 | Klan seçeneklerinin kaynağı | ÇALIŞIYOR — `GET /api/admin/squads/options?q=` (hafif, PII yok, aranabilir) |
+| 6 | Yeni savaş düğmesi | ÇALIŞIYOR — "Onur savaşı planla" |
+| 7-8 | Klan seçimleri | ÇALIŞIYOR — aranabilir seçici; dondurulmuş / açık savaşlı / üyesiz klan gerekçeyle devre dışı, seçilen diğer listeden çıkar |
+| 9 | Başlangıç zamanı | KALDIRILDI (sahteydi) — yerine mod: "Davet gönder" (kabulde başlar) / "Hemen başlat" (kadro şimdi donar) |
+| 10 | Bitiş zamanı | ÇALIŞIYOR — süre ön ayarları (6 sa–7 gün); saat dilimi kayması yok (sunucu `now + süre`) |
+| 11 | Ödül havuzu alanı | KALDIRILDI — yönetici savaşı ödülsüz "onur savaşı" (mint yok); arayüz ve bildirimler bunu açıkça söyler |
+| 12 | Aynı klan doğrulaması | ÇALIŞIYOR — istemci + sunucu (zod refine; aynı lidere ait iki klan da reddedilir) |
+| 13 | Oluştur + spinner | ÇALIŞIYOR |
+| 14 | Form sıfırlama | ÇALIŞIYOR — kapanınca tüm durum sıfırlanır |
+| 15 | Dialog iptal | ÇALIŞIYOR |
+| 16 | Sunucu doğrulaması | ÇALIŞIYOR — zod, var olmayan klan 404, dondurulmuş 409, tek açık savaş 409 (kilit altında, transaction içinde) |
+| 17 | Rakip lidere bildirim | ÇALIŞIYOR — davette rakip lider + kendi lider; hemen başlatta iki kadro |
+| 18 | Boş durum | ÇALIŞIYOR — sekmeye göre doğru metin, filtreliyse "Süzgeçleri temizle" |
+| 19 | Durum rozeti | ÇALIŞIYOR — Canlı / Yanıt bekliyor / Süresi doldu·kapanmadı / Tamamlandı / İptal |
+| 20 | Tarih gösterimi | ÇALIŞIYOR — Europe/Istanbul tarih+saat, kalan/geçen süre |
+| 21 | Klan adları + skorlar | ÇALIŞIYOR — oransal skor çubuğu (azaltılmış harekete uyan tween) |
+| 22 | Ödül rozeti | ÇALIŞIYOR — "puan" birimi; fonlu havuz tutarı ya da "Ödülsüz" |
+| 23 | Kazanan / beraberlik | ÇALIŞIYOR — liste vurgusu + detayda kupa satırı |
+| 24 | "Detaylar" linki | ÇALIŞIYOR — 404 veren sayfa yerine `?battle=<id>` derin linkli detay paneli (kadro, katkı, puan defteri dökümü, zaman çizelgesi) |
+| 25 | Savaşı bitir | ÇALIŞIYOR — etki önizlemeli onay; toast sunucunun gerçek `paidOut/refunded` değerini söyler, aktif değilse 409 |
+| 26 | İptal | ÇALIŞIYOR — **iade durum makinesi (B3 talimatı)**: soft-cancel, fonlu havuz meydan okuyana tek sefer iade, liderlere bildirim, gerekçe zorunlu, AuditLog |
+| 27 | Kart animasyonu | ÇALIŞIYOR — dekoratif giriş yerine yalnız skor çubuğu tween'i |
+| 28 | Yenile | ÇALIŞIYOR — başlıkta; canlı sekme ve canlı detay 30 sn'de bir (görünürken) tazelenir |
+| 29 | Aktif/geçmiş ayrımı | ÇALIŞIYOR — sayaçlı durum sekmeleri |
+| 30 | Filtre/arama/sayfalama | ÇALIŞIYOR |
+| 31 | Yetki | ÇALIŞIYOR — `defineRoute(['ADMIN'])` |
+| 32 | Navigasyon | ÇALIŞIYOR — Klan Merkezi sekmesi (sidebar kaydı navigasyon ajanının) |
+| 33 | Mobil | ÇALIŞIYOR — kart düzeni, tek sütun form, tam genişlik sheet |
+| 34 | Form erişilebilirliği | ÇALIŞIYOR — `fieldset/legend`, `htmlFor/id`, skor `aria-live` |
+| 35 | Denetim izi | ÇALIŞIYOR — oluştur/bitir/iptal/uzat/skor düzeltme |
+| 36 | Skor/durum düzenleme | ÇALIŞIYOR — yalnız `adjust_score` (aktif savaş, gerekçe ≥5) ve `extend` (gerekçeli); ham durum yazımı yok |
+| 37 | Onay diyalogları | ÇALIŞIYOR — `ConfirmAction`/gerekçe diyaloğu, etki önizlemeli; native `confirm()` yok |
+
+### Kapanan bulgular
+B1 (iadesiz silme), B2 (sahte ödül: admin savaşı açıkça ödülsüz), B3 (doğrulama + tek açık savaş), B4 (ham PATCH → adlandırılmış geçişler), B5 (kırık detay linki + yetim sayfa), B6 (20 klan sınırı), B7 (form/hata/toast), B8 (saat dilimi + sahte başlangıç), B9 (durum/kazanan/zaman), B10 (a11y, dil), B11 (sınırsız liste, canlılık), B12 (denetim). Eksik özelliklerden durum sekmeleri + sayaç, detay paneli + puan hareketi dökümü, güvenli aksiyonlar, ekonomi görünürlüğü (escrow, 7 günlük ödenen/iade, süresi dolan) uygulandı.
+
+### Kalanlar
+- **Müşteri paneli metni** (`components/customer/squad-battle-panel.tsx`): yönetici savaşında squad1 üyelerine "meydan okudunuz" deniyor (`challengedById=null` ayrımı yapılmıyor) — müşteri klan yüzeyinin dosyası; bildirimler artık "Qratex ekibinin onur savaşı" diyor.
+- **Platform fonlu havuz** (seçenek a) bilinçli olarak yapılmadı: kayıtlı bütçe kaynağı olmadan puan basmak ekonomi değişmezlerine aykırı.
+- **Zamanlanmış (ileri tarihli) yönetici savaşı**: cron adımı + köken alanı gerektirir — ŞEMA İSTEĞİ (`SquadBattle.origin`, isteğe bağlı `scheduledStart`); köken şimdilik `challengedById` boş/dolu ile türetiliyor.
+- Toplu iptal ve savaş CSV'si uygulanmadı (tek tek iadeli iptal güvenli yol).
+- `e2e/squad-management.spec.ts` eski düğme metnini (`/Savaş Planla|Start New Battle/`) bekliyor; yeni metin "Onur savaşı planla" — e2e dosyası bu yüzeyin sahipliğinde değil.

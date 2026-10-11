@@ -243,3 +243,54 @@ Hepsi `useReducedMotion` ile kapatılabilir olmalı. Liste stagger'ı veya dekor
 **Yeniden üretim:** Rolü ADMIN olan ama gate cevabını bilmeyen bir kullanıcı (proxy.ts:76-77 yorumundaki "rolü kazara ADMIN yapılan stajyer" senaryosu) giriş yapar. `/admin/squads` sayfası onu `/admin-gate`'e yönlendirir; ancak aynı tarayıcıdan `fetch('/api/admin/squads', {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({squadId:'<id>', action:'freeze'})})` çağrısı 200 döner ve klan dondurulur. Aynı durum `GET /api/admin/squads` (tüm klan sahiplerinin e-posta/puan verisi) ve diğer tüm `/api/admin/*` uçları için geçerlidir.
 
 **Ek gözlem (doğrulandı):** Sayfa tarafındaki kontrol de kriptografik değildir: `lib/admin-gate-edge.ts:14-22` `gateCookieBelongsTo` HMAC'i doğrulamaz, yalnız `"<kendi userId>.<64 hex>"` biçimine bakar. ADMIN rollü kullanıcı kendi userId'sini bildiği için `admin_gate=<userId>.<herhangi 64 hex>` cookie'sini elle koyarak sayfa kapısını da geçebilir. Dolayısıyla düzeltme yalnız `requireAuth`'a biçim kontrolü eklemek değil; Node runtime'daki API katmanında `verifyGateCookie` (HMAC + güncel cevap, `lib/admin-gate.ts:54-61`) ile gerçek doğrulama yapmak olmalı; proxy'de ise Web Crypto (`crypto.subtle`, edge'de async HMAC mümkün) ile aynı doğrulama yapılmalı. `/api/admin/gate` kendisi bu kontrolden muaf tutulmalı (aksi halde döngü).
+
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/squads` yeniden inşa edildi: **Klan Merkezi** (sekmeler: Klanlar | Savaşlar | Moderasyon günlüğü). Sunucu bileşeni KPI ile etkin sekmenin ilk sayfasını paralel çeker (`app/admin/squads/page.tsx`), istemci adası `components/admin/a-klanlar/**`. Sunucu mantığı `lib/admin-squads/{contract,server,actions.server}.ts`; tüm uçlar `defineRoute` (ADMIN + zod + rate limit). `/admin/squads/battles` → `?tab=battles` kalıcı yönlendirme (sorgu korunur). Test: `__tests__/admin/a-klanlar/squads-server.test.ts` (15/15).
+
+Yeni / yeniden yazılan uçlar: `GET /api/admin/squads` (liste), `/stats`, `/options`, `/export`, `/audit`, `GET /api/admin/squads/[id]`, `POST /api/admin/squads/[id]/actions`. Eski `PATCH /api/admin/squads` kaldırıldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR (proxy + sunucu bileşeninde DB'den `requireAuth(['ADMIN'])`) |
+| 2 | API yetkisi | ÇALIŞIYOR — `defineRoute` (rol + zod + rate limit). Gizli kapının API katmanı sistem geneli konu (Bulgu 2), bu yüzeyin dışında |
+| 3 | Başlık | ÇALIŞIYOR — QDL `PageHeader` "Klan Merkezi", tek terim "Klan" |
+| 4 | CSV | ÇALIŞIYOR — sunucu ucu, filtrenin tamamı (≤10.000), BOM, Türkçe başlıklar, formül enjeksiyonu nötr, denetime yazılır |
+| 5 | Yenile + yükleniyor | ÇALIŞIYOR — react-query; hata görünür (ErrorState/QueryState + Tekrar dene), kilitlenme yok |
+| 6 | Arama | ÇALIŞIYOR — FilterBar, debounce'lu canlı arama, URL'de |
+| 7 | Sıralama | ÇALIŞIYOR — kuruluş, üye, klan puanı, klan gücü, ad (sunucu, kararlı) |
+| 8 | "Filtrele" düğmesi | KALDIRILDI — canlı arama + URL durumu; yarış, iptal sinyalli tek sorguyla kapandı |
+| 9-11 | Statlar | ÇALIŞIYOR — 8 KPI (klan, aktif 7g, dondurulmuş, canlı savaş, süresi dolan, escrow, ödenen/iade 7g); yüklenirken iskelet, sayı tipi tutarlı |
+| 12 | Klan adı | ÇALIŞIYOR — slogan da gösterilir |
+| 13 | Lider + davet kodu | ÇALIŞIYOR — liderden Kullanıcı 360'a link; kod kopyalanabilir (detay) |
+| 14 | Üye listesi | ÇALIŞIYOR — detay panelinde katılma tarihi/puan, 360 linki, çıkar / lider yap |
+| 15 | Dondur / Çöz | ÇALIŞIYOR — tek kaynak `Squad.isFrozen`; müşteri katılma/meydan okuma/kabul/hedef ödülü bu kolonu okuyor (lib/squads), klan gücü payı artık dondurulmuşta birikmiyor, açık savaşlar iadeli iptal ediliyor |
+| 16 | Dondurulmuş göstergesi | ÇALIŞIYOR — durum rozeti + filtre + KPI + detayda tarih/gerekçe/kim |
+| 17 | Onay + gerekçe | ÇALIŞIYOR — etkiler madde madde, zorunlu gerekçe |
+| 18 | Audit log | ÇALIŞIYOR — her aksiyon transaction içinde AuditLog; detayda "Moderasyon geçmişi", ayrı sekmede günlük |
+| 19-20 | Sayfalama + gösterge | ÇALIŞIYOR — DataTable sunucu sayfalama, sayfa boyutu seçimi, "1 / 0" yok |
+| 21-23 | Yükleniyor / boş / hata | ÇALIŞIYOR — iskelet, filtreli/ilk-kullanım boş durumu, görünür hata |
+| 24 | Toast | ÇALIŞIYOR — sunucu sonucuna göre (no-op, iptal edilen savaş sayısı) |
+| 25 | Mobil | ÇALIŞIYOR — tablo kart düzenine geçer, detay alttan tam genişlik sheet, ≥44px hedefler |
+| 26 | Etiket / aria | ÇALIŞIYOR — FilterBar etiketli, üye düğmeleri bağlamlı `aria-label`, sonuç sayısı `aria-live` |
+| 27 | i18n / dil | ÇALIŞIYOR (Türkçe, tam karakter; "Owner/Soft Freeze/Squad" kalktı). Ayrı `adminSquads.*` anahtarlarına taşınmadı: diğer Dalga 2 admin ekranlarıyla aynı düzen |
+| 28 | Savaşlara geçiş | ÇALIŞIYOR — "Savaşlar" sekmesi; klan detayından klanın savaşlarına derin link |
+| 29 | Klan detayı | ÇALIŞIYOR — puan, güç, sicil (G/M/B/iptal), son 20 savaş, kuruluş. Haftalık ilerleme gösterilmedi: `weeklyTeamProgress` müşteri tarafında hesaplanan hedefle değişti, eski alan yanıltıcı olurdu |
+| 30 | Moderasyon aksiyonları | ÇALIŞIYOR — yeniden adlandır, sloganı kaldır, davet kodu yenile, üye çıkar, liderlik devri. **Klan silme KALDIRILDI** (cascade silme yasak; dondurma = arşiv) |
+| 31 | URL durumu | ÇALIŞIYOR — q/status/sort/page/size/tab/squad |
+| 32 | Durum filtresi | ÇALIŞIYOR — etkin / dondurulmuş / savaşta |
+| 33-34 | Parametre doğrulama | ÇALIŞIYOR — zod (`.catch` ile NaN → 1, boyut 10–100, sort izin listesi), 404/409/400 kodlu |
+
+### Kapanan bulgular
+1 (dondurma etkisiz — tek kaynak + yaptırım + savaş iadesi), 3 (hata yönetimi), 4 (yarış/Enter), 5 (onay/gerekçe/iz + lider bildirimi), 6 (CSV), 7 (API sözleşmesi, `any` yok, üyeler listede çekilmiyor), 8 (yetim savaş sayfası + 20 klan sınırı → aranabilir seçici `/options`), 9 (durum görünürlüğü), 10 (dil), 11 (erişilebilirlik). Eksik özelliklerden 1 (detay paneli), 2 (moderasyon seti, silme hariç), 4 (filtreler, URL'de), 6'nın bir kısmı (7 günlük aktif klan, yeni klan) uygulandı.
+
+### Kalanlar
+- **Bulgu 2 (gizli kapı API katmanı):** sistem geneli `requireAuth`/proxy işi; bu yüzeyin sahipliğinde değil.
+- **Tüketim puanının klan toplamı (`totalPoints`)** dondurulmuş klanda hâlâ artıyor: yazım `lib/consumption/service.ts` (tüketim yüzeyi), geri alma `lib/dealer/kasa/server.ts`; tek taraflı değişiklik geri almada asimetri yaratırdı. Klan gücü (hazine) ve savaş skoru dondurmada duruyor.
+- **Süreli dondurma (`frozenUntil`)** ve dondurma meta alanları: ŞEMA İSTEĞİ (`Squad.frozenAt/frozenReason/frozenUntil`). Şimdilik zaman/gerekçe AuditLog'dan okunuyor.
+- Toplu dondurma ve kötüye kullanım sinyali sütunları (tek kaynaklı puan yoğunluğu, aynı cihaz) uygulanmadı: güvenilir sinyal kaynağı fraud yüzeyinde; sahte sütun yazılmadı.
