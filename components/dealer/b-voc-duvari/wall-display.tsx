@@ -41,7 +41,7 @@ function AmbientField() {
       className="absolute left-1/2 top-1/2 h-[160vmax] w-[160vmax] -translate-x-1/2 -translate-y-1/2 opacity-60"
       style={{
         background:
-          'radial-gradient(closest-side at 30% 35%, hsl(262 83% 58% / 0.28), transparent 70%), radial-gradient(closest-side at 70% 65%, hsl(189 94% 43% / 0.18), transparent 70%)',
+          'radial-gradient(closest-side at 30% 35%, hsl(var(--primary) / 0.28), transparent 70%), radial-gradient(closest-side at 70% 65%, hsl(var(--category-6) / 0.18), transparent 70%)',
       }}
     />
   );
