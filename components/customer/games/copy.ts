@@ -125,6 +125,7 @@ const tr = {
     disabledTitle: 'Bu oyun şu anda kapalı',
     disabledDesc: 'Oyun yönetici tarafından geçici olarak kapatıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin.',
     backToHub: 'Oyun Merkezi’ne dön',
+    unavailable: 'Bu oyun şu anda oynanamıyor.',
   },
 };
 
@@ -246,6 +247,7 @@ const en: Copy = {
     disabledTitle: 'This game is turned off right now',
     disabledDesc: 'An admin has paused this game for now. Pick another one from the Game Center.',
     backToHub: 'Back to Game Center',
+    unavailable: 'This game can’t be played right now.',
   },
 };
 

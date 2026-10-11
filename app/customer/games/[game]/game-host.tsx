@@ -9,6 +9,8 @@ import { gameFx } from '@/lib/games/engine/fx';
 import { getGameEntry, isPlayable, type GameEntry, type GameFinish, type GameMode, type V2GameComponent } from '@/lib/games/registry';
 import { getGameCopy } from '@/lib/minigame-copy';
 import { LoadingLabel } from '@/components/layout/loading-label';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { useGamesCopy } from '@/components/customer/games/copy';
 
 /**
  * Dinamik oyun sayfasının istemci adası. Kayıt defterinden bileşeni `next/dynamic` ile yükler
@@ -49,11 +51,7 @@ export function GameHost({ id, initialMode }: { id: string; initialMode?: GameMo
   const entry = getGameEntry(id);
   if (!isPlayable(entry)) {
     // Sunucu sayfası zaten yönlendirir; istemci kaydı ile uyumsuzluk olursa dürüst durum.
-    return (
-      <p role="alert" className="rounded-2xl border border-border p-6 text-center text-sm text-muted-foreground">
-        Bu oyun şu anda oynanamıyor.
-      </p>
-    );
+    return <GameUnavailable />;
   }
   const Comp = lazyComponent(entry);
   if (entry.component.contract === 'legacy') {
@@ -63,6 +61,15 @@ export function GameHost({ id, initialMode }: { id: string; initialMode?: GameMo
   return <V2Host entry={entry} Game={Comp as unknown as V2GameComponent} initialMode={initialMode} />;
 }
 
+function GameUnavailable() {
+  const t = useGamesCopy().page;
+  return (
+    <p role="alert" className="rounded-2xl border border-border p-6 text-center text-sm text-muted-foreground">
+      {t.unavailable}
+    </p>
+  );
+}
+
 /** v2 sözleşmeli oyunların kabuğu: mod, duraklatma, oturum, sonuç. */
 function V2Host({ entry, Game, initialMode }: { entry: GameEntry; Game: V2GameComponent; initialMode?: GameMode }) {
   const rankedOn = entry.modes.ranked !== false;
@@ -70,7 +77,9 @@ function V2Host({ entry, Game, initialMode }: { entry: GameEntry; Game: V2GameCo
     !rankedOn || (initialMode === 'practice' && entry.modes.practice) ? 'practice' : 'ranked';
   const game = useMiniGame(entry.gameType, { initialMode: startMode });
   const [paused, setPaused] = useState(false);
-  const copy = useMemo(() => getGameCopy(entry.gameType), [entry.gameType]);
+  // Oyuna özel varyant metinleri (lib/minigame-copy) yalnız Türkçe; İngilizcede kabuğun EN varsayılanları kullanılır.
+  const locale = useLocaleSafe();
+  const copy = useMemo(() => (locale === 'en' ? undefined : getGameCopy(entry.gameType)), [entry.gameType, locale]);
 
   const accent = game.config?.accent ?? entry.accent;
   const playing = game.phase === 'playing';

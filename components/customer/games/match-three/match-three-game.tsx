@@ -34,7 +34,9 @@ import {
   Trophy,
   type LucideIcon,
 } from 'lucide-react';
-import { useGameLoop } from '@/lib/games/engine/hooks';
+import { useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useMatchThreeCopy } from './copy';
 import { createInputRecorder, type InputLog } from '@/lib/games/engine/record';
 import type { GameComponentProps } from '@/lib/games/registry/types';
 import type { DeterministicProof } from '@/lib/games/verify';
@@ -47,7 +49,6 @@ import {
   LEVEL_COUNT,
   MAX_RUN_SCORE,
   ROWS,
-  goalText,
   type LevelDef,
 } from './levels';
 import {
@@ -84,7 +85,6 @@ const SESSION_SAFETY_SEC = 45;
 const T = { swap: 130, pop: 190, fall: 230, shuffle: 320 };
 
 const BADGE_ICON: LucideIcon[] = [Star, Heart, Shield, MessageSquare, QrCode, Trophy];
-const SP_NAME: Record<Special, string> = { 0: '', 1: 'yatay Hat', 2: 'dikey Hat', 3: 'Bomba', 4: 'Prizma' };
 
 function readStore(store: 'local' | 'session', key: string): string | null {
   try {
@@ -224,6 +224,7 @@ function BadgeGlyph({ kind, sp, size = '58%' }: { kind: number; sp: Special; siz
 }
 
 function GoalChip({ level, done, total }: { level: LevelDef; done: number; total: number }) {
+  const t = useMatchThreeCopy();
   const g = level.goal;
   return (
     <span className="flex items-center gap-1.5">
@@ -237,15 +238,16 @@ function GoalChip({ level, done, total }: { level: LevelDef; done: number; total
         <Target className="h-5 w-5 text-amber-300" aria-hidden />
       )}
       <span className="tabular-nums">
-        {done.toLocaleString('tr-TR')}/{total.toLocaleString('tr-TR')}
+        {done.toLocaleString(t.numberLocale)}/{total.toLocaleString(t.numberLocale)}
       </span>
     </span>
   );
 }
 
 function Stars({ n, size = 'h-8 w-8', label }: { n: number; size?: string; label?: string }) {
+  const t = useMatchThreeCopy();
   return (
-    <span className="flex gap-1" role="img" aria-label={label ?? `3 yıldızdan ${n}`}>
+    <span className="flex gap-1" role="img" aria-label={label ?? t.stars(n)}>
       {[1, 2, 3].map((i) => (
         <Star
           key={i}
@@ -281,6 +283,10 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
   const threshold = config.rewardThreshold;
   const maxScore = config.maxScore || MAX_RUN_SCORE;
   const reduce = useReducedMotionPref();
+  const t = useMatchThreeCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
+  const goalText = t.goal;
   const ranked = mode === 'ranked';
 
   const [boot] = useState<Boot>(() => (ranked ? restoreRanked(seed) : { sim: null, log: [], resumed: false }));
@@ -308,7 +314,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
   const [cursor, setCursor] = useState(27);
   const [selected, setSelected] = useState<number | null>(null);
   const [hint, setHint] = useState<[number, number] | null>(null);
-  const [announce, setAnnounce] = useState(boot.resumed ? 'Kaldığın yerden devam ediyorsun.' : '');
+  const [announce, setAnnounce] = useState(boot.resumed ? t.resumed : '');
   const [sparks, setSparks] = useState<Spark[]>([]);
   const [beams, setBeams] = useState<Beam[]>([]);
   const [comboText, setComboText] = useState<{ id: number; text: string } | null>(null);
@@ -411,8 +417,8 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
     setSelected(null);
     setHint(null);
     setStage('summary');
-    const why = s.reason === 'complete' ? 'Rota tamamlandı' : s.reason === 'failed' ? 'Hamle bitti' : 'Oyunu bitirdin';
-    setAnnounce(`${why}. Skor ${s.score}.`);
+    const tt = tRef.current;
+    setAnnounce(tt.endAnnounce(tt.endHead(s.reason), s.score));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ranked, persist]);
 
@@ -480,7 +486,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         }
         if (p.created.length) fx.sfx(() => sfxPowerUp());
         if (p.depth >= 2) {
-          const text = p.depth >= 4 ? `Muhteşem ×${p.depth}` : `Kombo ×${p.depth}`;
+          const text = tRef.current.combo(p.depth, p.depth >= 4);
           setComboText({ id: idSeq.current++, text });
         }
         if (d(T.pop)) await sleep(d(T.pop));
@@ -489,7 +495,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         if (d(T.fall)) await sleep(d(T.fall));
       }
       if (r.shuffled && aliveRef.current) {
-        setAnnounce('Hamle kalmadı, tahta karıştırıldı.');
+        setAnnounce(tRef.current.shuffled);
         setTiles(r.shuffled);
         if (d(T.shuffle)) await sleep(d(T.shuffle));
       }
@@ -498,12 +504,13 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
       setHud(snapHud(sim));
       lastInputAt.current = Date.now();
 
+      const tt = tRef.current;
       const parts: string[] = [];
       const total = r.phases.reduce((s, p) => s + p.cleared.length, 0);
-      parts.push(`${total} rozet temizlendi, +${r.gained} puan.`);
+      parts.push(tt.cleared(total, r.gained));
       const created = r.phases.flatMap((p) => p.created);
-      if (created.length) parts.push(`Özel taş: ${created.map((c) => SP_NAME[c.sp]).join(', ')}.`);
-      if (r.phases.length > 1) parts.push(`Kombo ${r.phases.length}.`);
+      if (created.length) parts.push(tt.specials(created.map((cr) => tt.special[cr.sp] ?? '').join(', ')));
+      if (r.phases.length > 1) parts.push(tt.comboLine(r.phases.length));
 
       if (r.level) {
         const lv = r.level;
@@ -512,16 +519,16 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           fx.sfx(() => sfxWin());
           fx.haptic('success');
           fx.confetti('sides');
-          parts.push(`Seviye ${lv.n} geçildi, ${lv.stars} yıldız, +${lv.levelScore} skor.`);
+          parts.push(tt.levelPassed(lv.n, lv.stars, lv.levelScore));
         } else {
           fx.sfx(() => sfxHit());
           fx.haptic('big');
-          parts.push(`Hamle bitti, seviye ${lv.n} geçilemedi.`);
+          parts.push(tt.levelFailed(lv.n));
         }
         if (ranked && !crossedRef.current && sim.score >= threshold) {
           crossedRef.current = true;
           fx.sfx(() => sfxFanfare());
-          parts.push(`Ödül eşiği ${threshold} geçildi!`);
+          parts.push(tt.thresholdLine(threshold));
         }
         setAnnounce(parts.join(' '));
         if (sim.over) {
@@ -532,10 +539,10 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         }
         return;
       }
-      parts.push(`Kalan hamle ${sim.movesLeft}.`);
+      parts.push(tt.movesLeftLine(sim.movesLeft));
       setAnnounce(parts.join(' '));
     },
-    [reduce, burst, fx, shake, ranked, threshold, endRun]
+    [reduce, burst, fx, shake, ranked, threshold, endRun, tRef]
   );
 
   const trySwap = useCallback(
@@ -559,7 +566,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         fx.sfx(() => sfxClick());
         fx.haptic('tap');
         setSelected(null);
-        setAnnounce('Bu takas eşleşme oluşturmuyor.');
+        setAnnounce(tRef.current.noMatch);
         if (!reduce) {
           const dx = colOf(b) - colOf(a);
           const dy = rowOf(b) - rowOf(a);
@@ -636,12 +643,12 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
       const left = Math.round(maxSec - SESSION_SAFETY_SEC - (Date.now() - startedAt.current) / 1000);
       setTimeLeft(left);
       if (left <= 0 && !animatingRef.current) {
-        setAnnounce('Oturum süresi doluyor; koşu kaydedilmek üzere bitirildi.');
+        setAnnounce(tRef.current.sessionEnding);
         quit();
       }
     }, 1000);
     return () => window.clearInterval(id);
-  }, [ranked, stage, maxSec, quit]);
+  }, [ranked, stage, maxSec, quit, tRef]);
 
   // "Bitir": basılı tut (yanlış dokunuşla günün hakkı yanmasın).
   const [hold, setHold] = useState(0);
@@ -714,7 +721,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
     setSelected(null);
     setHint(null);
     lastInputAt.current = Date.now();
-    setAnnounce(`Seviye ${sim.level.n}: ${goalText(sim.level)}. ${sim.movesLeft} hamle.`);
+    setAnnounce(t.levelStart(sim.level.n, goalText(sim.level), sim.movesLeft));
     setStage('playing');
   };
 
@@ -743,19 +750,19 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
     const url = `${window.location.origin}/customer/games/match-three`;
     const passed = summary.results.filter((r) => r.passed).length;
     const text = ranked
-      ? `Qratex Eşleştir-3 günlük rotasında ${passed}/5 seviye geçtim, skorum ${summary.score}! Sen kaç seviye geçebilirsin?`
-      : `Qratex Eşleştir-3'te Seviye ${summary.levels[0]}'i ${summary.results[0]?.stars ?? 0} yıldızla geçtim!`;
+      ? t.shareRanked(passed, summary.score)
+      : t.sharePractice(summary.levels[0], summary.results[0]?.stars ?? 0);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Eşleştir-3', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
@@ -852,7 +859,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
       if (m) {
         setHint(m);
         setCursor(m[0]);
-        setAnnounce(`İpucu: ${describeCell(m[0])} ile ${describeCell(m[1])} yer değiştir.`);
+        setAnnounce(t.hint(describeCell(m[0]), describeCell(m[1])));
       }
     }
   };
@@ -864,9 +871,13 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
   }, [tiles]);
 
   function describeCell(cell: number): string {
-    const t = tileAt.get(cell);
-    const name = t ? (t.sp === SP_PRISM ? 'Prizma' : `${BADGES[t.kind]?.name ?? ''}${t.sp ? ` (${SP_NAME[t.sp]})` : ''}`) : 'boş';
-    return `satır ${rowOf(cell) + 1}, sütun ${colOf(cell) + 1}: ${name}${glass[cell] ? ', camlı' : ''}`;
+    const tile = tileAt.get(cell);
+    const name = tile
+      ? tile.sp === SP_PRISM
+        ? t.prism
+        : `${t.badge[tile.kind] ?? ''}${tile.sp ? ` (${t.special[tile.sp] ?? ''})` : ''}`
+      : t.empty;
+    return t.cell(rowOf(cell) + 1, colOf(cell) + 1, name, !!glass[cell]);
   }
 
   // ───────── çizim ─────────
@@ -876,7 +887,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
   const cellPct = 100 / COLS;
   const pos = (cell: number, nudge?: { dx: number; dy: number }) =>
     `translate(${(colOf(cell) + (nudge?.dx ?? 0)) * 100}%, ${(rowOf(cell) + (nudge?.dy ?? 0)) * 100}%)`;
-  const fmt = (n: number) => n.toLocaleString('tr-TR');
+  const fmt = (n: number) => n.toLocaleString(t.numberLocale);
   const unlocked = unlockedUpTo(progress);
   const routeLevels = useMemo(() => (ranked ? rankedLevels(seed) : []), [ranked, seed]);
   const lowMoves = hud.moves <= 3;
@@ -904,18 +915,18 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         <dl className="grid flex-1 grid-cols-3 gap-1.5 text-center">
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
-              {ranked ? `Seviye ${hud.levelIndex + 1}/5` : 'Seviye'}
+              {ranked ? t.levelOf(hud.levelIndex + 1) : t.level}
             </dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{hud.levelN}</dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Hamle</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.moves}</dt>
             <dd className={`text-lg font-black tabular-nums leading-tight ${lowMoves && stage === 'playing' ? 'text-[#ffb4a8]' : ''}`}>
               {hud.moves}
             </dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{ranked ? 'Skor' : 'Puan'}</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{ranked ? t.score : t.points}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{fmt(ranked ? hud.score : hud.points)}</dd>
           </div>
         </dl>
@@ -923,7 +934,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           type="button"
           onClick={onPauseRequest}
           className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -938,7 +949,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           <div
             className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Seviye hedefine ilerleme"
+            aria-label={t.goalProgress}
             aria-valuemin={0}
             aria-valuemax={hud.total}
             aria-valuenow={hud.done}
@@ -951,9 +962,9 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           {ranked && (
             <p className="mt-1 text-xs text-white/70">
               {hud.score >= threshold
-                ? 'Ödül eşiği geçildi — devam et, her seviye skor ekler.'
-                : `Ödül eşiği ${threshold} skor · ${threshold - hud.score} kaldı`}
-              {timeLeft !== null && timeLeft <= 180 && stage !== 'summary' ? ` · Oturum: ${Math.max(0, timeLeft)} sn` : ''}
+                ? t.passedHint
+                : t.toGo(threshold, threshold - hud.score)}
+              {timeLeft !== null && timeLeft <= 180 && stage !== 'summary' ? t.session(Math.max(0, timeLeft)) : ''}
             </p>
           )}
         </div>
@@ -973,12 +984,12 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
             onKeyUp={(e) => {
               if (e.key === 'Enter' || e.key === ' ') cancelHold();
             }}
-            aria-label="Oyunu bitir. Onay için basılı tut."
+            aria-label={t.bankLabel}
             className="relative flex h-11 shrink-0 touch-manipulation items-center gap-1.5 overflow-hidden rounded-xl border border-white/20 px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span aria-hidden className="absolute inset-y-0 left-0 bg-white/25" style={{ width: `${hold * 100}%` }} />
             <Flag className="relative h-4 w-4" aria-hidden />
-            <span className="relative">{hold > 0 ? 'Bırakma…' : 'Bitir'}</span>
+            <span className="relative">{hold > 0 ? t.holding : t.bank}</span>
           </button>
         )}
       </div>
@@ -987,8 +998,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
         {announce}
       </p>
       <p id="m3-rules" className="sr-only">
-        8’e 8 rozet tahtası. Ok tuşlarıyla gez, Enter ya da Boşluk ile rozeti seç, ardından ok tuşuyla komşusuyla yer
-        değiştir. H ipucu verir, Esc duraklatır. Hedef: {goalText(level)}. Kalan hamle {hud.moves}.
+        {t.rules(goalText(level), hud.moves)}
       </p>
 
       <div ref={shakeRef}>
@@ -997,7 +1007,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
             ref={boardRef}
             tabIndex={stage === 'playing' ? 0 : -1}
             role="grid"
-            aria-label={`Eşleştir-3 tahtası, seviye ${level.n}`}
+            aria-label={t.board(level.n)}
             aria-describedby="m3-rules"
             aria-activedescendant={stage === 'playing' ? `m3-cell-${cursor}` : undefined}
             onPointerDown={onPointerDown}
@@ -1160,7 +1170,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           {stage === 'tutorial' && (
             <Overlay labelledBy="m3-tut-title">
               <h3 id="m3-tut-title" className="text-xl font-bold">
-                Nasıl oynanır?
+                {c.howTo}
               </h3>
               <ol className="max-w-sm space-y-2.5 text-left text-sm">
                 <li className="flex gap-3">
@@ -1168,8 +1178,8 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                     <BadgeGlyph kind={4} sp={SP_NONE} />
                   </span>
                   <span>
-                    <b>Kaydır ya da dokun-dokun:</b> komşu iki rozeti yer değiştir; aynı rozetten 3 ve fazlası yan yana
-                    gelirse patlar.
+                    <b>{t.swapTitle}</b>
+                    {t.swapBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
@@ -1177,29 +1187,33 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                     <BadgeGlyph kind={2} sp={SP_LINE_H} />
                   </span>
                   <span>
-                    <b>4’lü → Hat</b> (satır/sütun temizler), <b>L/T → Bomba</b> (3×3), <b>5’li → Prizma</b> (yer
-                    değiştirdiği rengin hepsini). İki özel taşı takas etmek dev etki yapar.
+                    <b>{t.lineTitle}</b>
+                    {t.lineBody}
+                    <b>{t.bombTitle}</b>
+                    {t.bombBody}
+                    <b>{t.prismTitle}</b>
+                    {t.prismBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <span className="mt-0.5 inline-block h-6 w-6 shrink-0 rounded border-2 border-sky-200 bg-sky-200/40" aria-hidden />
                   <span>
-                    <b>Hedefler:</b> puana ulaş, belirli rozeti topla ya da camları kır (camın üstündeki rozeti patlat).
-                    Zincirleme düşüşler kombo puanını katlar.
+                    <b>{t.goalsTitle}</b>
+                    {t.goalsBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Star className="mt-0.5 h-6 w-6 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>Yıldız:</b> hedefi az hamleyle bitir. {ranked
-                      ? `Sıralı modda 5 seviyelik günlük rota oynarsın; her geçilen seviye skor ekler, ödül eşiği ${threshold}.`
-                      : 'Pratikte haritadan seviye seç; ödülsüzdür.'}
+                    <b>{t.starTitle}</b>
+                    {t.starBody}
+                    {ranked ? t.starRanked(threshold) : t.starPractice}
                   </span>
                 </li>
               </ol>
-              <p className="text-xs text-white/70">Klavye: oklar + Enter · H ipucu · Esc duraklat</p>
+              <p className="text-xs text-white/70">{t.keys}</p>
               <button type="button" autoFocus onClick={finishTutorial} className={btnPrimary} style={{ background: '#F5C542' }}>
-                Anladım
+                {t.gotIt}
               </button>
             </Overlay>
           )}
@@ -1208,10 +1222,10 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
             <Overlay labelledBy="m3-route-title">
               <MapIcon className="h-8 w-8 text-amber-300" aria-hidden />
               <h3 id="m3-route-title" className="text-xl font-bold">
-                Günün rotası
+                {t.routeTitle}
               </h3>
               <p className="max-w-xs text-sm text-white/80">
-                Beş seviye, kolaydan zora. Bir seviyede hamlen biterse koşu biter; geçtiğin her seviye skoruna eklenir.
+                {t.routeBody}
               </p>
               <ol className="w-full max-w-xs space-y-1.5 text-left text-sm">
                 {routeLevels.map((n, i) => {
@@ -1219,17 +1233,17 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                   return (
                     <li key={i} className="flex items-center justify-between gap-2 rounded-lg bg-white/10 px-3 py-2">
                       <span className="font-bold">
-                        {i + 1}. Seviye {n}
+                        {t.routeItem(i + 1, n)}
                       </span>
                       <span className="truncate text-white/80">
-                        {goalText(l)} · {l.moves} hamle
+                        {goalText(l)} · {t.movesCount(l.moves)}
                       </span>
                     </li>
                   );
                 })}
               </ol>
               <button type="button" autoFocus onClick={startRanked} className={btnPrimary} style={{ background: '#F5C542' }}>
-                Başla
+                {t.start}
               </button>
             </Overlay>
           )}
@@ -1237,9 +1251,9 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           {stage === 'map' && (
             <Overlay labelledBy="m3-map-title">
               <h3 id="m3-map-title" className="text-xl font-bold">
-                Seviye haritası
+                {t.mapTitle}
               </h3>
-              <p className="text-xs text-white/70">Bu cihazdaki ilerlemen · {unlocked}/{LEVEL_COUNT} açık</p>
+              <p className="text-xs text-white/70">{t.mapProgress(unlocked, LEVEL_COUNT)}</p>
               <ol className="grid w-full max-w-sm grid-cols-5 gap-2">
                 {LEVELS.map((l) => {
                   const open = l.n <= unlocked;
@@ -1252,8 +1266,8 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                         onClick={() => startPractice(l.n)}
                         aria-label={
                           open
-                            ? `Seviye ${l.n}: ${goalText(l)}, ${l.moves} hamle${st ? `, en iyi ${st} yıldız` : ''}`
-                            : `Seviye ${l.n}, kilitli`
+                            ? t.mapOpen(l.n, goalText(l), l.moves, st)
+                            : t.mapLocked(l.n)
                         }
                         className={`flex h-14 w-full flex-col items-center justify-center rounded-xl text-sm font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                           open ? 'bg-white/15 hover:bg-white/25' : 'cursor-not-allowed bg-white/5 text-white/40'
@@ -1278,18 +1292,18 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
           {stage === 'levelEnd' && lastLevel && (
             <Overlay labelledBy="m3-lv-title">
               <h3 id="m3-lv-title" className="text-xl font-bold">
-                Seviye {lastLevel.n} geçildi!
+                {t.levelDone(lastLevel.n)}
               </h3>
               <Stars n={lastLevel.stars} size="h-10 w-10" />
               <p className="text-sm text-white/80">
-                {lastLevel.movesLeft} hamle arttı · +{lastLevel.levelScore} skor
+                {t.levelEndStats(lastLevel.movesLeft, lastLevel.levelScore)}
               </p>
               <p className="text-3xl font-black tabular-nums">{fmt(hud.score)}</p>
               <p className="text-xs text-white/70">
-                Sıradaki: Seviye {level.n} — {goalText(level)}, {level.moves} hamle
+                {t.nextUp(level.n, goalText(level), level.moves)}
               </p>
               <button type="button" autoFocus onClick={nextLevel} className={btnPrimary} style={{ background: '#F5C542' }}>
-                Sonraki seviye
+                {t.nextLevel}
               </button>
             </Overlay>
           )}
@@ -1299,11 +1313,11 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
               <h3 id="m3-sum-title" className="text-xl font-bold">
                 {summary.reason === 'complete'
                   ? ranked
-                    ? 'Rota tamamlandı!'
-                    : `Seviye ${summary.levels[0]} geçildi!`
+                    ? t.routeDone
+                    : t.levelDone(summary.levels[0])
                   : summary.reason === 'failed'
-                    ? 'Hamle bitti'
-                    : 'Oyunu bitirdin'}
+                    ? t.outOfMoves
+                    : t.ended}
               </h3>
               <Stars
                 n={ranked ? runStars(summary.score, threshold, maxScore) : (summary.results[0]?.stars ?? 0)}
@@ -1312,11 +1326,11 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="text-4xl font-black tabular-nums">{fmt(summary.score)}</p>
               <p className="text-xs text-white/75">
                 {summary.prevBest === null
-                  ? 'İlk skorun bu cihazda kaydedildi.'
+                  ? c.firstScore
                   : summary.score > summary.prevBest
-                    ? `Yeni kişisel rekor! (önceki ${fmt(summary.prevBest)})`
-                    : `En iyin: ${fmt(summary.prevBest)}`}
-                {ranked ? '' : ' · Pratik'}
+                    ? c.newBest(fmt(summary.prevBest))
+                    : c.best(fmt(summary.prevBest))}
+                {ranked ? '' : c.practiceSuffix}
               </p>
               {ranked && (
                 <ol className="w-full max-w-xs space-y-1 text-left text-xs">
@@ -1325,7 +1339,7 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                     return (
                       <li key={i} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-1.5">
                         <span>
-                          {i + 1}. Seviye {n}
+                          {t.routeItem(i + 1, n)}
                         </span>
                         {r ? (
                           r.passed ? (
@@ -1334,10 +1348,10 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
                               <span className="tabular-nums">+{r.levelScore}</span>
                             </span>
                           ) : (
-                            <span className="text-[#ffb4a8]">Geçilemedi</span>
+                            <span className="text-[#ffb4a8]">{t.failed}</span>
                           )
                         ) : (
-                          <span className="text-white/50">Oynanmadı</span>
+                          <span className="text-white/50">{t.notPlayed}</span>
                         )}
                       </li>
                     );
@@ -1347,17 +1361,17 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="max-w-xs text-xs text-white/75">
                 {ranked
                   ? summary.score >= threshold
-                    ? 'Ödül eşiğini geçtin — sunucu hamlelerini yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                    : `Ödül eşiği ${threshold} skor; ${threshold - summary.score} kaldı.`
-                  : 'Pratik ödülsüzdür; sıralı modda günlük rota ödül getirir.'}
+                    ? t.passedRanked
+                    : t.remaining(threshold, threshold - summary.score)
+                  : t.practiceNote}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button type="button" onClick={share} className={btnGhost}>
-                  <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                  <Share2 className="h-4 w-4" aria-hidden /> {c.share}
                 </button>
                 <button type="button" autoFocus onClick={submit} className={btnPrimary} style={{ background: '#F5C542' }}>
                   {ranked ? <Trophy className="h-4 w-4" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-                  {ranked ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                  {ranked ? c.save(autoLeft) : c.cont}
                 </button>
               </div>
               <p className="min-h-[1rem] text-xs text-white/75" aria-live="polite">
@@ -1369,8 +1383,8 @@ export function MatchThreeGame({ mode, seed, config, paused, onPauseRequest, onF
       </div>
 
       <p className="mt-2 text-center text-xs text-white/70">
-        {boot.resumed && stage === 'playing' ? 'Kaldığın yerden devam ediyorsun. · ' : ''}
-        {ranked ? 'Sıralı: hamlelerin sunucuda yeniden oynatılarak doğrulanır.' : 'Pratik: ödülsüz, liderliğe girmez.'}
+        {boot.resumed && stage === 'playing' ? t.resumedFoot : ''}
+        {ranked ? t.footRanked : c.footPractice}
       </p>
     </div>
   );
