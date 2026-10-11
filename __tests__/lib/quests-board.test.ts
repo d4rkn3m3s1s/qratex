@@ -113,8 +113,23 @@ describe('mechanics', () => {
     };
     await expect(countMechanicProgress(db as never, 'u1', 'give_feedback', window)).resolves.toBe(3);
     expect(db.feedback.count).toHaveBeenCalledWith({
-      where: { userId: 'u1', deletedAt: null, createdAt: { gte: window.from, lt: window.to } },
+      where: { userId: 'u1', deletedAt: null, trustFlagged: false, createdAt: { gte: window.from, lt: window.to } },
     });
+  });
+
+  it('güven işaretli (işletme içi / şüpheli) geri bildirim hiçbir mekanikte sayılmaz', async () => {
+    const findMany = jest.fn(async () => []);
+    const db = {
+      feedback: { count: jest.fn(async () => 0), findMany },
+      consumptionReview: { count: jest.fn(async () => 0), findMany: jest.fn(async () => []) },
+      consumption: { findMany: jest.fn(async () => []) },
+    };
+    for (const m of ['give_feedback', 'feedback_with_photo', 'detailed_feedback', 'visit_businesses'] as const) {
+      await countMechanicProgress(db as never, 'u1', m, window);
+    }
+    const calls = [...db.feedback.count.mock.calls, ...findMany.mock.calls] as unknown as Array<[{ where: Record<string, unknown> }]>;
+    expect(calls).toHaveLength(4);
+    for (const [args] of calls) expect(args.where).toMatchObject({ deletedAt: null, trustFlagged: false });
   });
 
   it('fotoğraflı ve ayrıntılı yorum sayımı', async () => {

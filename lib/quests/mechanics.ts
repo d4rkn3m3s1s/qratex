@@ -134,6 +134,14 @@ function hasMedia(media: unknown): boolean {
 }
 
 /**
+ * Göreve sayılan geri bildirim: silinmemiş ve GÜVEN İŞARETSİZ. `trustFlagged` hem işletme
+ * içinden (personel/sahip kendi mekânına — puan almaz) hem güven motorunun şüpheli bulduğu
+ * yorumları kapsar; sayılsaydı puan basmayan yorumlar görev ödülüyle puana çevrilirdi
+ * (lig ve klan hedefiyle aynı kural).
+ */
+export const COUNTED_FEEDBACK = { deletedAt: null, trustFlagged: false } as const;
+
+/**
  * Bir mekaniğin pencere içindeki ilerlemesi. "Geri bildirim" hem QR geri bildirimini hem tüketim
  * yorumunu kapsar (ikisi de müşterinin işletmeye sesi). Silinmiş (moderasyon) kayıtlar sayılmaz.
  */
@@ -150,14 +158,14 @@ export async function countMechanicProgress(
   switch (mechanic) {
     case 'give_feedback': {
       const [fb, rv] = await Promise.all([
-        db.feedback.count({ where: { userId, deletedAt: null, createdAt } }),
+        db.feedback.count({ where: { ...COUNTED_FEEDBACK, userId, createdAt } }),
         db.consumptionReview.count({ where: { customerId: userId, deletedAt: null, createdAt } }),
       ]);
       return fb + rv;
     }
     case 'feedback_with_photo': {
       const rows = await db.feedback.findMany({
-        where: { userId, deletedAt: null, createdAt },
+        where: { ...COUNTED_FEEDBACK, userId, createdAt },
         select: { media: true },
         take: SCAN_LIMIT,
       });
@@ -167,7 +175,7 @@ export async function countMechanicProgress(
       const min = req.minLength;
       const [fb, rv] = await Promise.all([
         db.feedback.findMany({
-          where: { userId, deletedAt: null, createdAt, text: { not: null } },
+          where: { ...COUNTED_FEEDBACK, userId, createdAt, text: { not: null } },
           select: { text: true },
           take: SCAN_LIMIT,
         }),
@@ -183,7 +191,7 @@ export async function countMechanicProgress(
     case 'visit_businesses': {
       const [fb, cons] = await Promise.all([
         db.feedback.findMany({
-          where: { userId, deletedAt: null, createdAt },
+          where: { ...COUNTED_FEEDBACK, userId, createdAt },
           select: { qrCode: { select: { dealerId: true } } },
           take: SCAN_LIMIT,
         }),
