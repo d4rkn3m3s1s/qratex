@@ -25,6 +25,8 @@ import {
 } from '@/lib/admin-store/contract';
 import { errorText, fetchCosmetics, seedCosmetics, storeKeys } from './api';
 import { COSMETIC_STATUS, fmtNumber } from './format';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { localizeFields, useSourceT } from '@/components/ds/page/source-dict';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const SORT_IDS = ['name', 'price', 'owners', 'sales30d', 'rarity', 'created'];
@@ -63,8 +65,13 @@ export function CosmeticsTab({
   onRetryStats: () => void;
   onCreate: () => void;
 }) {
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const uy = useStoreCopy().ui2;
+  const ux = useStoreCopy().ui;
   const qc = useQueryClient();
-  const filters = useFilterState(FIELDS);
+  const fields = useMemo(() => localizeFields(FIELDS, L), [L]);
+  const filters = useFilterState(fields);
   const sheet = useDetailSheet('kozmetik');
   const table = useUrlTableState({ defaultPageSize: STORE_PAGE_SIZE, defaultSort: [{ id: 'created', desc: true }], sortableIds: SORT_IDS });
   const qs = cosmeticsQs({
@@ -88,9 +95,9 @@ export function CosmeticsTab({
     () => [
       {
         id: 'name',
-        header: 'Ürün',
+        header: ux.urun2,
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Ürün' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: ux.urun2 } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const c = row.original;
           return (
@@ -99,8 +106,8 @@ export function CosmeticsTab({
               <div className="min-w-0">
                 <span className="block truncate font-medium text-fg">{c.name}</span>
                 <span className="flex items-center gap-1 truncate text-xs text-fg-muted">
-                  {c.assetWarning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="Görünüm uyarısı" /> : null}
-                  {c.type !== 'other' ? COSMETIC_TYPE_LABEL[c.type] : 'Bilinmeyen tür'}
+                  {c.assetWarning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-label={ux.gorunumUyarisi} /> : null}
+                  {c.type !== 'other' ? L(COSMETIC_TYPE_LABEL[c.type]) : ux.bilinmeyenTur}
                   {c.slug ? <span className="font-mono"> · {c.slug}</span> : null}
                 </span>
               </div>
@@ -111,30 +118,30 @@ export function CosmeticsTab({
       {
         id: 'rarity',
         header: 'Nadirlik',
-        meta: { mobile: 'subtitle', label: 'Nadirlik' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'subtitle', label: ux.nadirlik } satisfies DataTableColumnMeta,
         cell: ({ row }) => <RarityBadge rarity={row.original.rarity} />,
       },
       {
         id: 'price',
         header: 'Fiyat',
-        meta: { numeric: true, label: 'Fiyat' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <span className="tabular-nums">{row.original.price > 0 ? `${fmtNumber(row.original.price)} puan` : 'Ücretsiz'}</span>,
+        meta: { numeric: true, label: ux.fiyat } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <span className="tabular-nums">{row.original.price > 0 ? `${fmtNumber(row.original.price)} puan` : ux.ucretsiz}</span>,
       },
       {
         id: 'owners',
         header: 'Sahip',
-        meta: { numeric: true, label: 'Sahip' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.sahip } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="text-right">
             <span className="block tabular-nums">{fmtNumber(row.original.owners)}</span>
-            <span className="block text-xs text-fg-muted">{fmtNumber(row.original.equipped)} kuşanmış</span>
+            <span className="block text-xs text-fg-muted">{fx.equippedN(fmtNumber(row.original.equipped))}</span>
           </div>
         ),
       },
       {
         id: 'sales30d',
-        header: '30 gün',
-        meta: { numeric: true, label: '30 gün satış' } satisfies DataTableColumnMeta,
+        header: ux.t30Gun,
+        meta: { numeric: true, label: ux.t30GunSatis } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="text-right">
             <span className="block tabular-nums">{fmtNumber(row.original.sales30d)}</span>
@@ -146,8 +153,8 @@ export function CosmeticsTab({
         id: 'status',
         header: 'Durum',
         enableSorting: false,
-        meta: { label: 'Durum' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(COSMETIC_STATUS, row.original.status)} />,
+        meta: { label: ux.durum } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(COSMETIC_STATUS, row.original.status)} label={L(statusBadgeProps(COSMETIC_STATUS, row.original.status).label)} />,
       },
     ],
     []
@@ -156,20 +163,20 @@ export function CosmeticsTab({
   const href = (status: string) => `?tab=kozmetik&status=${status}`;
   const seed = async () => {
     const r = await seedCosmetics();
-    toast.success(r.added.length ? `${fmtNumber(r.added.length)} demo ürün satışta-değil olarak eklendi` : 'Eksik demo ürün yok');
+    toast.success(r.added.length ? fx.demoAdded(fmtNumber(r.added.length)) : ux.eksikDemoUrunYok);
     await qc.invalidateQueries({ queryKey: storeKeys.all });
   };
   const seedButton = stats && stats.demoMissing > 0 ? (
     <ConfirmAction
       tone="brand"
-      title="Eksik demo ürünleri eklensin mi?"
-      description="Yalnız katalogda olmayan demo ürünleri “satışta değil” olarak eklenir. Mevcut ürünlerin fiyatı, adı ve durumu DEĞİŞMEZ."
-      impact={[{ label: 'Eklenecek ürün', value: fmtNumber(stats.demoMissing) }]}
-      confirmLabel="Eksikleri ekle"
+      title={ux.eksikDemoUrunleriEklensin}
+      description={ux.yalnizKatalogdaOlmayanDemo}
+      impact={[{ label: ux.eklenecekUrun, value: fmtNumber(stats.demoMissing) }]}
+      confirmLabel={ux.eksikleriEkle}
       trigger={
         <Button variant="outline" className="min-h-11">
           <Sparkles className="h-4 w-4" aria-hidden />
-          Eksik demo ürünleri ekle ({fmtNumber(stats.demoMissing)})
+          {fx.addMissingDemo(fmtNumber(stats.demoMissing))}
         </Button>
       }
       onConfirm={seed}
@@ -179,47 +186,47 @@ export function CosmeticsTab({
   return (
     <div className="space-y-4 pt-4">
       {statsError ? (
-        <ErrorState title="Kozmetik sayıları yüklenemedi" description={errorText(statsError)} onRetry={onRetryStats} />
+        <ErrorState title={ux.kozmetikSayilariYuklenemedi} description={errorText(statsError)} onRetry={onRetryStats} />
       ) : (
         <MetricGrid cols={5}>
-          <MetricTile size="compact" label="Satışta" metric={{ value: stats?.active ?? null }} icon={<CheckCircle2 />} tone="success" loading={!stats} href={href('active')} />
-          <MetricTile size="compact" label="Satışta değil" metric={{ value: stats?.inactive ?? null }} icon={<CircleOff />} loading={!stats} href={href('inactive')} hint="Satın alınamaz, hediye edilemez; sahipler kullanır" />
-          <MetricTile size="compact" label="30 gün satış + hediye" metric={{ value: stats?.sales30d ?? null }} icon={<ShoppingBag />} loading={!stats} />
+          <MetricTile size="compact" label={ux.satista} metric={{ value: stats?.active ?? null }} icon={<CheckCircle2 />} tone="success" loading={!stats} href={href('active')} />
+          <MetricTile size="compact" label={ux.satistaDegil} metric={{ value: stats?.inactive ?? null }} icon={<CircleOff />} loading={!stats} href={href('inactive')} hint={ux.satinAlinamazHediyeEdilemez} />
+          <MetricTile size="compact" label={ux.t30GunSatisHediye} metric={{ value: stats?.sales30d ?? null }} icon={<ShoppingBag />} loading={!stats} />
           <MetricTile
             size="compact"
-            label="30 gün yakılan puan"
+            label={ux.t30GunYakilanPuan}
             metric={{ value: stats?.burned30d ?? null, unit: 'puan', compact: true }}
             icon={<Flame />}
             tone="brand"
             loading={!stats}
-            hint="Puan defteri: satın alma + hediye"
+            hint={ux.puanDefteriSatinAlma}
           />
           <MetricTile
             size="compact"
-            label="En çok satan (30 gün)"
+            label={ux.enCokSatan30}
             metric={{ value: stats?.topSeller?.count ?? null }}
             icon={<Trophy />}
             loading={!stats}
-            hint={stats ? (stats.topSeller ? stats.topSeller.name : 'Son 30 günde satış yok') : undefined}
+            hint={stats ? (stats.topSeller ? stats.topSeller.name : ux.son30GundeSatis) : undefined}
           />
         </MetricGrid>
       )}
       {stats && stats.nonStandard > 0 ? (
         <p role="status" className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          {fmtNumber(stats.nonStandard)} ürünün görünümü müşteride doğru çizilmeyebilir (ör. adresli çerçeve, sınıf tabanlı arka plan). Satırdaki uyarı
-          simgesine bakıp ürünü düzenleyin.
+          {fx.nonStandard(fmtNumber(stats.nonStandard))}{' '}
+          {ux.simgesineBakipUrunuDuzenleyin}
         </p>
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <FilterBar fields={FIELDS} ariaLabel="Kozmetik filtreleri" />
+        <FilterBar fields={fields} ariaLabel={ux.kozmetikFiltreleri} />
         {seedButton}
       </div>
       <p className="sr-only" aria-live="polite">
-        {list.data ? `${fmtNumber(list.data.total)} ürün bulundu` : ''}
+        {list.data ? fx.itemsFound(fmtNumber(list.data.total)) : ''}
       </p>
       <DataTable
-        ariaLabel="Kozmetik kataloğu"
+        ariaLabel={ux.kozmetikKatalogu}
         columns={columns}
         data={list.data?.items}
         query={list}
@@ -237,20 +244,20 @@ export function CosmeticsTab({
           filters.activeCount > 0
             ? {
                 variant: 'filtered',
-                title: 'Filtrelere uyan ürün yok',
+                title: ux.filtrelereUyanUrunYok,
                 secondaryAction: (
                   <Button variant="outline" className="min-h-11" onClick={filters.clear}>
-                    Filtreleri temizle
+                    {uy.filtreleriTemizle}
                   </Button>
                 ),
               }
             : {
                 icon: Archive,
-                title: 'Kozmetik katalog boş',
-                description: 'Avatar çerçevesi, profil rozeti ve arka planlar müşterinin puan harcadığı ikinci vitrindir.',
+                title: ux.kozmetikKatalogBos,
+                description: ux.avatarCercevesiProfilRozeti,
                 action: (
                   <Button className="min-h-11" onClick={onCreate}>
-                    İlk ürünü oluştur
+                    {ux.ilkUrunuOlustur}
                   </Button>
                 ),
                 secondaryAction: seedButton,

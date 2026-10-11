@@ -16,6 +16,7 @@ import { RedemptionsTab } from './redemptions-tab';
 import { CosmeticsTab, type CosmeticsInitial } from './cosmetics-tab';
 import { CosmeticDetailBody } from './cosmetic-sheet';
 import { CosmeticEditor } from './cosmetic-editor';
+import { useStoreCopy } from './copy';
 
 export type StoreInitial = {
   rewardStats: RewardStats | null;
@@ -31,6 +32,8 @@ export type StoreInitial = {
  * Eski /admin/shop buraya (?tab=kozmetik) kalıcı yönlenir.
  */
 export function StoreCenter({ initial }: { initial: StoreInitial }) {
+  const uy = useStoreCopy().ui2;
+  const ux = useStoreCopy().ui;
   const qc = useQueryClient();
   const { get } = useUrlState();
   const tab = get('tab') ?? 'oduller';
@@ -50,19 +53,19 @@ export function StoreCenter({ initial }: { initial: StoreInitial }) {
       register="ops"
       header={
         <PageHeader
-          title="Mağaza ve Ödüller"
-          description="Müşterinin puan harcadığı her şey: ödül kataloğu, kozmetik vitrini ve talep teslim zinciri."
+          title={ux.magazaVeOduller}
+          description={ux.musterininPuanHarcadigiHer}
           icon={<ShoppingBag />}
           actions={
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => qc.invalidateQueries({ queryKey: storeKeys.all })}>
                 <RefreshCw className="h-4 w-4" aria-hidden />
-                Yenile
+                {uy.yenile}
               </Button>
               {tab !== 'talepler' ? (
                 <Button className="min-h-11 sm:min-h-10" onClick={create}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  {onCosmetic ? 'Yeni ürün' : 'Yeni ödül'}
+                  {onCosmetic ? ux.yeniUrun : ux.yeniOdul}
                 </Button>
               ) : null}
             </div>
@@ -73,21 +76,21 @@ export function StoreCenter({ initial }: { initial: StoreInitial }) {
       {initial.rewardsModuleOff ? (
         <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-fg">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-          Ödül modülü kapalı: müşteriler ödül kataloğunu göremez ve talep edemez. Burada yönetmeye devam edebilirsiniz.
+          {ux.odulModuluKapaliMusteriler}
           <Link href="/admin/features" className="inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline sm:min-h-0">
-            Modüller sayfasına git
+            {ux.modullerSayfasinaGit}
           </Link>
         </p>
       ) : null}
 
       <SectionTabs
-        ariaLabel="Mağaza bölümleri"
+        ariaLabel={ux.magazaBolumleri}
         defaultValue="oduller"
         resetKeys={['page', 'size', 'sort', 'q', 'status', 'type', 'rarity', 'rewardId', 'odul', 'kozmetik']}
         tabs={[
-          { value: 'oduller', label: 'Ödüller', icon: <Gift />, count: rewardStats.data ? rewardStats.data.published + rewardStats.data.draft : undefined },
-          { value: 'kozmetik', label: 'Kozmetik', icon: <Palette />, count: cosmeticStats.data ? cosmeticStats.data.active + cosmeticStats.data.inactive : undefined },
-          { value: 'talepler', label: 'Talepler', icon: <Inbox />, count: redemptionStats.data?.pending },
+          { value: 'oduller', label: ux.oduller, icon: <Gift />, count: rewardStats.data ? rewardStats.data.published + rewardStats.data.draft : undefined },
+          { value: 'kozmetik', label: ux.kozmetik, icon: <Palette />, count: cosmeticStats.data ? cosmeticStats.data.active + cosmeticStats.data.inactive : undefined },
+          { value: 'talepler', label: ux.talepler, icon: <Inbox />, count: redemptionStats.data?.pending },
         ]}
       >
         {(t) =>
@@ -113,10 +116,10 @@ export function StoreCenter({ initial }: { initial: StoreInitial }) {
         }
       </SectionTabs>
 
-      <DetailSheet paramKey="odul" size="lg" title="Ödül ayrıntısı" description="Talep eğilimi, stok, kod havuzu ve değişiklik geçmişi">
+      <DetailSheet paramKey="odul" size="lg" title={ux.odulAyrintisi} description={ux.talepEgilimiStokKod}>
         {(id) => <RewardDetailBody id={id} onEdit={(r) => setRewardEditor({ open: true, item: r })} onOpenOther={(other) => rewardSheet.open(other)} />}
       </DetailSheet>
-      <DetailSheet paramKey="kozmetik" size="lg" title="Ürün ayrıntısı" description="Edinim eğilimi, sahipler ve değişiklik geçmişi">
+      <DetailSheet paramKey="kozmetik" size="lg" title={ux.urunAyrintisi} description={ux.edinimEgilimiSahiplerVe}>
         {(id) => <CosmeticDetailBody id={id} onEdit={(c) => setCosmeticEditor({ open: true, item: c })} onOpenOther={(other) => cosmeticSheet.open(other)} />}
       </DetailSheet>
 

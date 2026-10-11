@@ -14,7 +14,8 @@ import { POOL_MAX, REWARD_TYPE_LABEL, splitCodes, type RewardDetail, type Reward
 import { errorText, fetchReward, poolAction, rewardAction, storeKeys } from './api';
 import { REDEMPTION_STATUS, REWARD_STATUS, fieldLabel, fmtDate, fmtDateTime, fmtNumber, rulesSummary, showValue, stockLabel } from './format';
 import { RewardIcon } from './parts';
-import { useStoreCopy } from './copy';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
 
 export function RewardDetailBody({ id, onEdit, onOpenOther }: { id: string; onEdit: (r: RewardListItem) => void; onOpenOther: (id: string) => void }) {
   const q = useQuery({ queryKey: storeKeys.reward(id), queryFn: () => fetchReward(id), staleTime: 15_000 });
@@ -26,6 +27,9 @@ export function RewardDetailBody({ id, onEdit, onOpenOther }: { id: string; onEd
 }
 
 function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r: RewardListItem) => void; onOpenOther: (id: string) => void }) {
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const ux = useStoreCopy().ui;
   const qc = useQueryClient();
   const r = d.item;
   const archived = r.status === 'archived';
@@ -42,7 +46,7 @@ function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r
   const events: TimelineEvent[] = d.history.map((h) => ({
     id: h.id,
     title: h.label,
-    description: h.changes.length ? h.changes.map((c) => `${fieldLabel(c.field)}: ${showValue(c.from)} → ${showValue(c.to)}`).join(' · ') : undefined,
+    description: h.changes.length ? h.changes.map((c) => `${L(fieldLabel(c.field))}: ${L(showValue(c.from))} → ${L(showValue(c.to))}`).join(' · ') : undefined,
     at: h.at,
     actor: h.actor ?? 'Sistem',
   }));
@@ -55,8 +59,8 @@ function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r
           <h3 className="qx-h3 truncate text-fg">{r.name}</h3>
           <p className="text-sm text-fg-muted">{r.description}</p>
           <div className="flex flex-wrap gap-1.5">
-            <StatusBadge size="sm" {...statusBadgeProps(REWARD_STATUS, r.status)} />
-            <StatusBadge size="sm" icon={null} tone="neutral" label={REWARD_TYPE_LABEL[r.type]} />
+            <StatusBadge size="sm" {...statusBadgeProps(REWARD_STATUS, r.status)} label={L(statusBadgeProps(REWARD_STATUS, r.status).label)} />
+            <StatusBadge size="sm" icon={null} tone="neutral" label={L(REWARD_TYPE_LABEL[r.type])} />
             {rules.map((x) => (
               <StatusBadge key={x} size="sm" icon={null} tone="info" label={x} />
             ))}
@@ -69,94 +73,94 @@ function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r
           <>
             <Button className="min-h-11 sm:min-h-9" size="sm" onClick={() => onEdit(r)}>
               <Pencil className="h-4 w-4" aria-hidden />
-              Düzenle
+              {ux.duzenle}
             </Button>
             {r.isActive ? (
-              <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'unpublish' }, 'Ödül taslağa alındı').catch((e) => toast.error(errorText(e)))}>
+              <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'unpublish' }, ux.odulTaslagaAlindi).catch((e) => toast.error(errorText(e)))}>
                 <EyeOff className="h-4 w-4" aria-hidden />
-                Taslağa al
+                {ux.taslagaAl}
               </Button>
             ) : (
               <ConfirmAction
                 tone="brand"
-                title={`“${r.name}” yayınlansın mı?`}
-                description={`Müşteri mağazasında görünür ve ${fmtNumber(r.cost)} puana alınabilir.`}
-                confirmLabel="Yayınla"
+                title={fx.publishTitle(r.name)}
+                description={fx.publishDesc(fmtNumber(r.cost))}
+                confirmLabel={ux.yayinla}
                 trigger={
                   <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9">
                     <Rocket className="h-4 w-4" aria-hidden />
-                    Yayınla
+                    {ux.yayinla}
                   </Button>
                 }
-                onConfirm={() => run({ action: 'publish' }, 'Ödül yayında')}
+                onConfirm={() => run({ action: 'publish' }, ux.odulYayinda)}
               />
             )}
-            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'duplicate' }, 'Taslak kopya oluşturuldu').catch((e) => toast.error(errorText(e)))}>
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'duplicate' }, ux.taslakKopyaOlusturuldu).catch((e) => toast.error(errorText(e)))}>
               <Copy className="h-4 w-4" aria-hidden />
-              Çoğalt
+              {ux.cogalt}
             </Button>
             <ConfirmAction
               tone="warning"
-              title={`“${r.name}” arşivlensin mi?`}
-              description="Yeni talep durur ve katalogdan kalkar. Müşterilerin aldığı ödüller ve kodlar korunur; puan iadesi gerekmez. Arşivden geri alabilirsiniz."
+              title={fx.archiveTitle(r.name)}
+              description={ux.yeniTalepDururVe}
               impact={[
-                { label: 'Toplam talep', value: fmtNumber(r.claimsTotal) },
-                { label: 'Bekleyen (kullanılmamış)', value: fmtNumber(r.pending), emphasis: r.pending > 0 },
+                { label: ux.toplamTalep, value: fmtNumber(r.claimsTotal) },
+                { label: ux.bekleyenKullanilmamis, value: fmtNumber(r.pending), emphasis: r.pending > 0 },
               ]}
               irreversibleNote={false}
               confirmPhrase={r.claimsTotal > 0 ? r.name : undefined}
-              confirmLabel="Arşivle"
+              confirmLabel={ux.arsivle}
               trigger={
                 <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9">
                   <Archive className="h-4 w-4" aria-hidden />
-                  Arşivle
+                  {ux.arsivle}
                 </Button>
               }
-              onConfirm={() => run({ action: 'archive' }, 'Ödül arşivlendi')}
+              onConfirm={() => run({ action: 'archive' }, ux.odulArsivlendi)}
             />
           </>
         ) : (
-          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'restore' }, 'Ödül taslak olarak geri alındı').catch((e) => toast.error(errorText(e)))}>
+          <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run({ action: 'restore' }, ux.odulTaslakOlarakGeri).catch((e) => toast.error(errorText(e)))}>
             <ArchiveRestore className="h-4 w-4" aria-hidden />
-            Arşivden geri al
+            {ux.arsivdenGeriAl}
           </Button>
         )}
       </div>
 
       <MetricGrid cols={3}>
-        <MetricTile size="compact" label="30 gün talep" metric={{ value: total30, series: d.series.map((x) => x.count) }} sparklineLabel={`Son 30 günde ${total30} talep`} />
-        <MetricTile size="compact" label="Toplam talep" metric={{ value: r.claimsTotal }} />
-        <MetricTile size="compact" label="Bekleyen" metric={{ value: r.pending }} tone={r.pending > 0 ? 'warning' : 'neutral'} href={`?tab=talepler&rewardId=${r.id}&status=pending`} />
+        <MetricTile size="compact" label={ux.t30GunTalep} metric={{ value: total30, series: d.series.map((x) => x.count) }} sparklineLabel={fx.requests30(total30)} />
+        <MetricTile size="compact" label={ux.toplamTalep} metric={{ value: r.claimsTotal }} />
+        <MetricTile size="compact" label={ux.bekleyen} metric={{ value: r.pending }} tone={r.pending > 0 ? 'warning' : 'neutral'} href={`?tab=talepler&rewardId=${r.id}&status=pending`} />
       </MetricGrid>
 
       <KeyValueList
         items={[
-          { label: 'Maliyet', value: `${fmtNumber(r.cost)} puan` },
-          { label: 'Stok', value: stockLabel(r.stock).label },
-          { label: 'Oluşturuldu', value: fmtDate(r.createdAt) },
-          { label: 'Son değişiklik', value: fmtDateTime(r.updatedAt) },
+          { label: ux.maliyet, value: `${fmtNumber(r.cost)} puan` },
+          { label: ux.stok, value: L(stockLabel(r.stock).label) },
+          { label: ux.olusturuldu, value: fmtDate(r.createdAt) },
+          { label: ux.sonDegisiklik, value: fmtDateTime(r.updatedAt) },
         ]}
       />
 
       {!archived ? <StockSection r={r} onDone={refresh} /> : null}
       {!archived && (r.type === 'coupon' || r.pool.enabled) ? <PoolSection d={d} onDone={refresh} /> : null}
 
-      <SectionCard title="Son talepler" description="Teslim, kullanım ve iptal “Talepler” sekmesinde.">
+      <SectionCard title={ux.sonTalepler} description={ux.teslimKullanimVeIptal}>
         {d.recent.length === 0 ? (
-          <EmptyState compact title="Henüz talep yok" description={null} />
+          <EmptyState compact title={ux.henuzTalepYok} description={null} />
         ) : (
           <ul className="divide-y divide-border text-sm">
             {d.recent.map((x) => (
               <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span className="min-w-0">
-                  <span className="block truncate text-fg">{x.user.name || x.user.email || 'Kullanıcı'}</span>
+                  <span className="block truncate text-fg">{x.user.name || x.user.email || ux.kullanici}</span>
                   <span className="block font-mono text-xs text-fg-muted">{x.code ?? '—'}</span>
                 </span>
                 <span className="flex items-center gap-2">
                   <time className="text-xs text-fg-muted" dateTime={x.redeemedAt}>
                     {fmtDateTime(x.redeemedAt)}
                   </time>
-                  <StatusBadge size="sm" {...statusBadgeProps(REDEMPTION_STATUS, x.status)} />
+                  <StatusBadge size="sm" {...statusBadgeProps(REDEMPTION_STATUS, x.status)} label={L(statusBadgeProps(REDEMPTION_STATUS, x.status).label)} />
                 </span>
               </li>
             ))}
@@ -164,14 +168,18 @@ function DetailContent({ d, onEdit, onOpenOther }: { d: RewardDetail; onEdit: (r
         )}
       </SectionCard>
 
-      <SectionCard title="Değişiklik geçmişi">
-        <Timeline events={events} dense groupByDay ariaLabel="Ödül değişiklik geçmişi" emptyLabel="Kayıtlı değişiklik yok" />
+      <SectionCard title={ux.degisiklikGecmisi}>
+        <Timeline events={events} dense groupByDay ariaLabel={ux.odulDegisiklikGecmisi} emptyLabel={ux.kayitliDegisiklikYok} />
       </SectionCard>
     </div>
   );
 }
 
 function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown }) {
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const uy = useStoreCopy().ui2;
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const [delta, setDelta] = useState('');
   const [busy, setBusy] = useState(false);
@@ -192,14 +200,14 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
   };
   if (r.pool.enabled) return null;
   return (
-    <SectionCard title="Stok" description="Göreli değişir: siz düzenlerken gelen talepler ezilmez.">
+    <SectionCard title={ux.stok} description={ux.goreliDegisirSizDuzenlerken}>
       {r.stock < 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2 text-sm text-fg">
-            <InfinityIcon className="h-4 w-4" aria-hidden /> Sınırsız stok
+            <InfinityIcon className="h-4 w-4" aria-hidden /> {ux.sinirsizStok}
           </p>
-          <Button variant="outline" className="min-h-11 sm:min-h-9" size="sm" disabled={busy} onClick={() => act({ action: 'unlimited', unlimited: false }, 'Sınırlı stoğa geçildi (0)')}>
-            Sınırlı stoğa geç
+          <Button variant="outline" className="min-h-11 sm:min-h-9" size="sm" disabled={busy} onClick={() => act({ action: 'unlimited', unlimited: false }, ux.sinirliStogaGecildi0)}>
+            {ux.sinirliStogaGec}
           </Button>
         </div>
       ) : (
@@ -207,7 +215,7 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
           className="flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (valid) void act({ action: 'stock', delta: n }, n > 0 ? `${fmtNumber(n)} adet eklendi` : `${fmtNumber(-n)} adet düşüldü`);
+            if (valid) void act({ action: 'stock', delta: n }, n > 0 ? fx.stockAdded(fmtNumber(n)) : fx.stockRemoved(fmtNumber(-n)));
           }}
         >
           <div className="space-y-1.5">
@@ -215,13 +223,13 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
             <Input id={`stock-${r.id}`} inputMode="numeric" className="min-h-11 w-32" value={delta} onChange={(e) => setDelta(e.target.value.replace(/[^\d-]/g, ''))} placeholder="+50" />
           </div>
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={!valid || busy}>
-            Uygula
+            {uy.uygula}
           </Button>
-          <Button type="button" variant="ghost" className="min-h-11 sm:min-h-10" disabled={busy} onClick={() => act({ action: 'unlimited', unlimited: true }, 'Stok sınırsız')}>
-            Sınırsız yap
+          <Button type="button" variant="ghost" className="min-h-11 sm:min-h-10" disabled={busy} onClick={() => act({ action: 'unlimited', unlimited: true }, ux.stokSinirsiz)}>
+            {ux.sinirsizYap}
           </Button>
           <p className="w-full text-sm text-fg-muted">
-            Şu an: <strong className="text-fg">{stockLabel(r.stock).label}</strong>
+            {fx.currentLabel} <strong className="text-fg">{L(stockLabel(r.stock).label)}</strong>
           </p>
         </form>
       )}
@@ -230,6 +238,8 @@ function StockSection({ r, onDone }: { r: RewardListItem; onDone: () => unknown 
 }
 
 function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) {
+  const fx = useStoreCopy().fx;
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const r = d.item;
   const [text, setText] = useState('');
@@ -239,7 +249,7 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
     setBusy(true);
     try {
       const res = await poolAction(r.id, { action: 'add', codes });
-      const skipped = res.skipped.length ? ` · ${fmtNumber(res.skipped.length)} kod atlandı (geçersiz, tekrar ya da daha önce dağıtılmış)` : '';
+      const skipped = res.skipped.length ? fx.codesSkipped(fmtNumber(res.skipped.length)) : '';
       toast.success(`${fmtNumber(res.added)} kod eklendi · havuzda ${fmtNumber(res.remaining)}${skipped}`);
       setText('');
       await onDone();
@@ -251,11 +261,11 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
   };
   return (
     <SectionCard
-      title="Partner kod havuzu"
+      title={ux.partnerKodHavuzu}
       description={
         r.pool.enabled
-          ? `Her talep havuzdan sıradaki kodu alır. Havuzda ${fmtNumber(r.pool.remaining)} kod var; stok = kod sayısı.`
-          : 'Partnerin verdiği kodları yükleyin: her talep sıradaki kodu alır, kodlar bitince ödül tükenir.'
+          ? fx.poolOnDesc(fmtNumber(r.pool.remaining))
+          : ux.partnerinVerdigiKodlariYukleyin
       }
     >
       <div className="space-y-3">
@@ -263,7 +273,7 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
           <Label htmlFor={`pool-${r.id}`}>{sx.codesInput}</Label>
           <Textarea id={`pool-${r.id}`} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={'PARTNER-AB12\nPARTNER-CD34'} className="font-mono" />
           <p className="text-xs text-fg-muted">
-            {fmtNumber(codes.length)} kod algılandı · harf, rakam, tire ve alt çizgi; 3–64 karakter · havuz en fazla {fmtNumber(POOL_MAX)} kod.
+            {fx.codesDetected(fmtNumber(codes.length), fmtNumber(POOL_MAX))}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -274,10 +284,10 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
           {r.pool.enabled ? (
             <ConfirmAction
               tone="danger"
-              title="Kod havuzu kapatılsın mı?"
-              description="Dağıtılmamış kodlar silinir ve stok 0 olur. Dağıtılmış kodlar müşterilerde kalır."
-              impact={[{ label: 'Silinecek dağıtılmamış kod', value: fmtNumber(r.pool.remaining), emphasis: true }]}
-              confirmLabel="Havuzu kapat"
+              title={ux.kodHavuzuKapatilsinMi}
+              description={ux.dagitilmamisKodlarSilinirVe}
+              impact={[{ label: ux.silinecekDagitilmamisKod, value: fmtNumber(r.pool.remaining), emphasis: true }]}
+              confirmLabel={ux.havuzuKapat}
               trigger={
                 <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9">
                   Havuzu kapat
@@ -285,7 +295,7 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
               }
               onConfirm={async () => {
                 await poolAction(r.id, { action: 'disable' });
-                toast.success('Kod havuzu kapatıldı');
+                toast.success(ux.kodHavuzuKapatildi);
                 await onDone();
               }}
             />
@@ -294,8 +304,8 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
         {d.poolCodes.length ? (
           <details className="rounded-md border border-border p-2">
             <summary className="min-h-11 cursor-pointer content-center px-1 text-sm text-fg">
-              Sıradaki kodlar ({fmtNumber(r.pool.remaining)}
-              {r.pool.remaining > d.poolCodes.length ? `, ilk ${fmtNumber(d.poolCodes.length)} gösteriliyor` : ''})
+              {fx.nextCodes(fmtNumber(r.pool.remaining))}
+              {r.pool.remaining > d.poolCodes.length ? fx.firstShown(fmtNumber(d.poolCodes.length)) : ''})
             </summary>
             <ul className="mt-2 max-h-56 space-y-1 overflow-auto">
               {d.poolCodes.map((c) => (
@@ -305,11 +315,11 @@ function PoolSection({ d, onDone }: { d: RewardDetail; onDone: () => unknown }) 
                     variant="ghost"
                     size="icon"
                     className="size-11 sm:size-8"
-                    aria-label={`${c} kodunu havuzdan çıkar`}
+                    aria-label={fx.removeCode(c)}
                     onClick={() =>
                       poolAction(r.id, { action: 'remove', code: c })
                         .then(() => {
-                          toast.success('Kod çıkarıldı');
+                          toast.success(ux.kodCikarildi);
                           return onDone();
                         })
                         .catch((e) => toast.error(errorText(e)))

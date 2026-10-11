@@ -24,7 +24,8 @@ import {
 import { errorText, fetchRedemptions, redemptionAction, storeKeys } from './api';
 import { REDEMPTION_STATUS, fmtDateTime, fmtNumber } from './format';
 import { RewardIcon } from './parts';
-import { useStoreCopy } from './copy';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { localizeFields, useSourceT } from '@/components/ds/page/source-dict';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -35,9 +36,13 @@ const FIELDS: FilterField[] = [
 ];
 
 export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: RedemptionStats | undefined; statsError: unknown; onRetryStats: () => void }) {
+  const L = useSourceT(STORE_DICT);
+  const uy = useStoreCopy().ui2;
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const qc = useQueryClient();
-  const filters = useFilterState(FIELDS);
+  const fields = useMemo(() => localizeFields(FIELDS, L), [L]);
+  const filters = useFilterState(fields);
   const { get, set } = useUrlState();
   const rewardId = get('rewardId') ?? '';
   const table = useUrlTableState({ defaultPageSize: STORE_PAGE_SIZE });
@@ -61,10 +66,10 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
     () => [
       {
         id: 'reward',
-        header: 'Ödül',
+        header: ux.odul,
         enableSorting: false,
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Ödül' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: ux.odul } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const x = row.original;
           return (
@@ -80,9 +85,9 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
       },
       {
         id: 'user',
-        header: 'Müşteri',
+        header: ux.musteri,
         enableSorting: false,
-        meta: { mobile: 'subtitle', label: 'Müşteri' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'subtitle', label: ux.musteri } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="min-w-0">
             <span className="block truncate">{row.original.user.name || '—'}</span>
@@ -92,9 +97,9 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
       },
       {
         id: 'paid',
-        header: 'Ödenen',
+        header: ux.odenen,
         enableSorting: false,
-        meta: { numeric: true, label: 'Ödenen puan' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.odenenPuan } satisfies DataTableColumnMeta,
         cell: ({ row }) =>
           row.original.paidPoints > 0 ? (
             <div className="text-right">
@@ -109,17 +114,17 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
         id: 'redeemedAt',
         header: 'Talep',
         enableSorting: false,
-        meta: { label: 'Talep zamanı' } satisfies DataTableColumnMeta,
+        meta: { label: ux.talepZamani } satisfies DataTableColumnMeta,
         cell: ({ row }) => <time dateTime={row.original.redeemedAt}>{fmtDateTime(row.original.redeemedAt)}</time>,
       },
       {
         id: 'status',
         header: 'Durum',
         enableSorting: false,
-        meta: { label: 'Durum' } satisfies DataTableColumnMeta,
+        meta: { label: ux.durum } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="space-y-1">
-            <StatusBadge size="sm" {...statusBadgeProps(REDEMPTION_STATUS, row.original.status)} />
+            <StatusBadge size="sm" {...statusBadgeProps(REDEMPTION_STATUS, row.original.status)} label={L(statusBadgeProps(REDEMPTION_STATUS, row.original.status).label)} />
             {row.original.claimedAt && row.original.status === 'fulfilled' ? (
               <span className="block text-xs text-fg-muted">{fmtDateTime(row.original.claimedAt)}</span>
             ) : null}
@@ -128,10 +133,10 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
       },
       {
         id: 'actions',
-        header: 'İşlem',
+        header: ux.islem,
         enableSorting: false,
         enableHiding: false,
-        meta: { label: 'İşlem' } satisfies DataTableColumnMeta,
+        meta: { label: ux.islem } satisfies DataTableColumnMeta,
         cell: ({ row }) => (row.original.status === 'pending' ? <RowActions x={row.original} onDone={refresh} /> : <span className="text-fg-muted">—</span>),
       },
     ],
@@ -142,29 +147,29 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
   return (
     <div className="space-y-4 pt-4">
       {statsError ? (
-        <ErrorState title="Talep sayıları yüklenemedi" description={errorText(statsError)} onRetry={onRetryStats} />
+        <ErrorState title={ux.talepSayilariYuklenemedi} description={errorText(statsError)} onRetry={onRetryStats} />
       ) : (
         <MetricGrid cols={4}>
-          <MetricTile size="compact" label="Bekleyen" metric={{ value: stats?.pending ?? null }} icon={<Clock />} tone={stats && stats.pending > 0 ? 'warning' : 'neutral'} loading={!stats} href="?tab=talepler&status=pending" />
-          <MetricTile size="compact" label="Bekleyen fiziksel" metric={{ value: stats?.pendingPhysical ?? null }} icon={<Truck />} tone={stats && stats.pendingPhysical > 0 ? 'warning' : 'neutral'} loading={!stats} href="?tab=talepler&status=pending&type=physical" hint="Elden/kargo teslimi bekliyor" />
-          <MetricTile size="compact" label="30 gün teslim / kullanım" metric={{ value: stats?.fulfilled30d ?? null }} icon={<PackageCheck />} tone="success" loading={!stats} />
-          <MetricTile size="compact" label="30 gün iptal" metric={{ value: stats?.cancelled30d ?? null }} icon={<XCircle />} loading={!stats} href="?tab=talepler&status=cancelled" />
+          <MetricTile size="compact" label={ux.bekleyen} metric={{ value: stats?.pending ?? null }} icon={<Clock />} tone={stats && stats.pending > 0 ? 'warning' : 'neutral'} loading={!stats} href="?tab=talepler&status=pending" />
+          <MetricTile size="compact" label={ux.bekleyenFiziksel} metric={{ value: stats?.pendingPhysical ?? null }} icon={<Truck />} tone={stats && stats.pendingPhysical > 0 ? 'warning' : 'neutral'} loading={!stats} href="?tab=talepler&status=pending&type=physical" hint={ux.eldenKargoTeslimiBekliyor} />
+          <MetricTile size="compact" label={ux.t30GunTeslimKullanim} metric={{ value: stats?.fulfilled30d ?? null }} icon={<PackageCheck />} tone="success" loading={!stats} />
+          <MetricTile size="compact" label={ux.t30GunIptal} metric={{ value: stats?.cancelled30d ?? null }} icon={<XCircle />} loading={!stats} href="?tab=talepler&status=cancelled" />
         </MetricGrid>
       )}
       {rewardId ? (
         <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-          Tek ödülün talepleri gösteriliyor.
+          {ux.tekOdulunTalepleriGosteriliyor}
           <Button variant="link" size="sm" className="h-auto min-h-11 px-1 sm:min-h-0" onClick={() => set({ rewardId: null, page: null })}>
-            Tüm ödüllere dön
+            {ux.tumOdullereDon}
           </Button>
         </p>
       ) : null}
-      <FilterBar fields={FIELDS} ariaLabel="Talep filtreleri" />
+      <FilterBar fields={fields} ariaLabel={ux.talepFiltreleri} />
       <p className="sr-only" aria-live="polite">
         {list.data ? `${fmtNumber(list.data.total)} talep bulundu` : ''}
       </p>
       <DataTable
-        ariaLabel="Ödül talepleri"
+        ariaLabel={ux.odulTalepleri}
         columns={columns}
         data={list.data?.items}
         query={list}
@@ -179,7 +184,7 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
           filters.activeCount > 0 || rewardId
             ? {
                 variant: 'filtered',
-                title: 'Filtrelere uyan talep yok',
+                title: ux.filtrelereUyanTalepYok,
                 secondaryAction: (
                   <Button
                     variant="outline"
@@ -189,11 +194,11 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
                       set({ rewardId: null });
                     }}
                   >
-                    Filtreleri temizle
+                    {uy.filtreleriTemizle}
                   </Button>
                 ),
               }
-            : { title: 'Henüz talep yok', description: 'Müşteriler bir ödülü puanla aldığında talep burada görünür.' }
+            : { title: ux.henuzTalepYok, description: ux.musterilerBirOduluPuanla }
         }
       />
     </div>
@@ -201,6 +206,8 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
 }
 
 function RowActions({ x, onDone }: { x: RedemptionItem; onDone: () => unknown }) {
+  const fx = useStoreCopy().fx;
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const [reason, setReason] = useState('');
   const isPhysical = x.reward.type === 'physical';
@@ -208,47 +215,47 @@ function RowActions({ x, onDone }: { x: RedemptionItem; onDone: () => unknown })
     <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
       <ConfirmAction
         tone="brand"
-        title={isPhysical ? 'Teslim edildi olarak işaretlensin mi?' : 'Kullanıldı olarak işaretlensin mi?'}
-        description={`${x.user.name || x.user.email || 'Müşteri'} · ${x.reward.name}. Kod tekrar kullanılamaz; müşteriye bildirim gider.`}
-        confirmLabel={isPhysical ? 'Teslim edildi' : 'Kullanıldı'}
+        title={isPhysical ? ux.teslimEdildiOlarakIsaretlensin : ux.kullanildiOlarakIsaretlensinMi}
+        description={fx.fulfilDesc(x.user.name || x.user.email || fx.customer, x.reward.name)}
+        confirmLabel={isPhysical ? 'Teslim edildi' : ux.kullanildi}
         trigger={
           <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9">
             <CheckCheck className="h-4 w-4" aria-hidden />
-            {isPhysical ? 'Teslim edildi' : 'Kullanıldı'}
+            {isPhysical ? 'Teslim edildi' : ux.kullanildi}
           </Button>
         }
         onConfirm={async () => {
           await redemptionAction(x.id, { action: 'fulfil' });
-          toast.success('Talep tamamlandı');
+          toast.success(ux.talepTamamlandi);
           await onDone();
         }}
       />
       <ConfirmAction
         tone="danger"
-        title="Talep iptal edilip puan iade edilsin mi?"
+        title={ux.talepIptalEdilipPuan}
         description={
           <div className="space-y-3">
             <p>
-              Kod geçersiz olur{x.paidPoints > 0 ? ` ve ${fmtNumber(x.paidPoints)} puan müşterinin hesabına iade edilir` : '; bu talep ödemesiz (hediye) olduğu için iade edilecek puan yok'}.
-              Sınırlı stoklu ödülde stok bir artar.
+              {fx.codeInvalidated}{x.paidPoints > 0 ? fx.refundPart(fmtNumber(x.paidPoints)) : ux.buTalepOdemesizHediye}.
+              {ux.sinirliStokluOduldeStok}
             </p>
             <div className="space-y-1.5">
               <Label htmlFor={`cancel-${x.id}`}>{sx.cancelReason}</Label>
-              <Textarea id={`cancel-${x.id}`} rows={2} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Örn: Stokta kalmadı" />
+              <Textarea id={`cancel-${x.id}`} rows={2} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={ux.ornStoktaKalmadi} />
             </div>
           </div>
         }
-        impact={[{ label: 'İade edilecek puan', value: fmtNumber(x.paidPoints), emphasis: x.paidPoints > 0 }]}
-        confirmLabel="İptal et ve iade et"
+        impact={[{ label: ux.iadeEdilecekPuan, value: fmtNumber(x.paidPoints), emphasis: x.paidPoints > 0 }]}
+        confirmLabel={ux.iptalEtVeIade}
         disabled={false}
         trigger={
           <Button size="sm" variant="ghost" className="min-h-11 text-danger sm:min-h-9">
             <XCircle className="h-4 w-4" aria-hidden />
-            İptal
+            {ux.iptal}
           </Button>
         }
         onConfirm={async () => {
-          if (reason.trim().length < 3) throw new Error('Kısa bir gerekçe yazın (en az 3 karakter).');
+          if (reason.trim().length < 3) throw new Error(fx.reasonTooShort);
           await redemptionAction(x.id, { action: 'cancel', reason: reason.trim() });
           toast.success('Talep iptal edildi');
           setReason('');

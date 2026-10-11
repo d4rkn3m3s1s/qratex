@@ -25,7 +25,8 @@ import {
 import { changedFields, createCosmetic, errorText, fetchCosmetic, updateCosmetic, uploadStoreImage } from './api';
 import { ADMIN_PREVIEW_USER } from './cosmetics-tab';
 import { fmtNumber } from './format';
-import { useStoreCopy } from './copy';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
 
 const EMPTY: CosmeticUpsertValues = {
   name: '',
@@ -64,6 +65,9 @@ export type CosmeticEditorProps = {
  * önizleme (Bulgu 3/12). Sahibi olan ürünün türü kilitli (Bulgu 9).
  */
 export function CosmeticEditor({ open, onOpenChange, item, onSaved }: CosmeticEditorProps) {
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const ux = useStoreCopy().ui;
   const [base, setBase] = useState<CosmeticListItem | null>(item);
   const form = useZodForm<CosmeticUpsertValues>(cosmeticUpsertSchema, { defaultValues: item ? toValues(item) : EMPTY });
   const { reset } = form;
@@ -80,12 +84,12 @@ export function CosmeticEditor({ open, onOpenChange, item, onSaved }: CosmeticEd
       open={open}
       onOpenChange={onOpenChange}
       mode={base ? 'edit' : 'create'}
-      entityLabel="ürün"
-      title={base ? `“${base.name}” düzenle` : 'Yeni kozmetik ürün'}
+      entityLabel={ux.urun}
+      title={base ? fx.editTitle(base.name) : ux.yeniKozmetikUrun}
       description={
         base && base.owners > 0
-          ? `${fmtNumber(base.owners)} sahibi var: yeni fiyat yalnız yeni satın almaları etkiler; tür kilitli.`
-          : 'Yeni ürün “satışta değil” başlar; önizlemeyi kontrol edip satışa açın.'
+          ? fx.ownersNote(fmtNumber(base.owners))
+          : ux.yeniUrunSatistaDegil
       }
       form={form}
       width="xl"
@@ -113,33 +117,33 @@ export function CosmeticEditor({ open, onOpenChange, item, onSaved }: CosmeticEd
             }
           : undefined
       }
-      successToast={base ? 'Ürün güncellendi' : 'Ürün oluşturuldu'}
+      successToast={base ? ux.urunGuncellendi : ux.urunOlusturuldu}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <div className="space-y-4">
-          <TextField control={form.control} name="name" label="Ürün adı" required maxLength={200} />
+          <TextField control={form.control} name="name" label={ux.urunAdi} required maxLength={200} />
           <SlugField form={form} />
-          <TextareaField control={form.control} name="description" label="Açıklama" optional maxLength={2000} rows={3} emptyAsNull />
+          <TextareaField control={form.control} name="description" label={ux.aciklama} optional maxLength={2000} rows={3} emptyAsNull />
           <div className="grid gap-4 sm:grid-cols-2">
             <SelectField
               control={form.control}
               name="type"
-              label="Tür"
+              label={ux.tur}
               disabled={typeLocked}
-              labelAside={typeLocked ? <Lock className="h-3.5 w-3.5 text-fg-muted" aria-label="Kilitli" /> : undefined}
-              description={typeLocked ? 'Sahibi olan ürünün türü değiştirilemez; farklı tür için çoğaltın.' : undefined}
-              options={COSMETIC_TYPES.map((t) => ({ value: t, label: COSMETIC_TYPE_LABEL[t] }))}
+              labelAside={typeLocked ? <Lock className="h-3.5 w-3.5 text-fg-muted" aria-label={ux.kilitli} /> : undefined}
+              description={typeLocked ? ux.sahibiOlanUrununTuru : undefined}
+              options={COSMETIC_TYPES.map((t) => ({ value: t, label: L(COSMETIC_TYPE_LABEL[t]) }))}
             />
-            <NumberField control={form.control} name="price" label="Fiyat" min={0} max={10_000_000} unit="puan" required description="Puan bakiyesinden düşer (XP değil)." />
+            <NumberField control={form.control} name="price" label={ux.fiyat} min={0} max={10_000_000} unit="puan" required description={ux.puanBakiyesindenDuserXp} />
           </div>
           <AssetPicker control={form.control} setAsset={(v) => form.setValue('asset', v, { shouldDirty: true, shouldValidate: true })} />
           <RarityPicker control={form.control} />
           <SwitchField
             control={form.control}
             name="isActive"
-            label="Satışta"
+            label={ux.satista}
             variant="card"
-            description="Kapalı ürün satın alınamaz ve hediye edilemez; sahipleri kullanmaya devam eder."
+            description={ux.kapaliUrunSatinAlinamaz}
           />
         </div>
         <Preview control={form.control} />
@@ -149,15 +153,16 @@ export function CosmeticEditor({ open, onOpenChange, item, onSaved }: CosmeticEd
 }
 
 function SlugField({ form }: { form: UseFormReturn<CosmeticUpsertValues> }) {
+  const ux = useStoreCopy().ui;
   return (
     <TextField
       control={form.control}
       name="slug"
-      label="Kısa ad (slug)"
+      label={ux.kisaAdSlug}
       optional
       emptyAsNull
       maxLength={80}
-      description="Yalnız küçük harf, rakam ve tire. Boş bırakılabilir."
+      description={ux.yalnizKucukHarfRakam}
       endAdornment={
         <Button
           type="button"
@@ -167,7 +172,7 @@ function SlugField({ form }: { form: UseFormReturn<CosmeticUpsertValues> }) {
           onClick={() => form.setValue('slug', slugify(form.getValues('name')) || null, { shouldDirty: true, shouldValidate: true })}
         >
           <Wand2 className="h-4 w-4" aria-hidden />
-          Addan üret
+          {ux.addanUret}
         </Button>
       }
     />
@@ -175,6 +180,7 @@ function SlugField({ form }: { form: UseFormReturn<CosmeticUpsertValues> }) {
 }
 
 function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertValues>; setAsset: (v: string) => void }) {
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const type = useWatch({ control, name: 'type' });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -190,7 +196,7 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
         <fieldset className="space-y-2" aria-describedby={fieldState.error ? 'asset-err' : undefined}>
           <legend className="text-sm font-medium text-fg">{sx.appearance}</legend>
           {presets.length ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Hazır görünümler">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={ux.hazirGorunumler}>
               {presets.map((p) => {
                 const selected = field.value === p.id;
                 return (
@@ -232,9 +238,9 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
                   setUploading(true);
                   try {
                     setAsset(await uploadStoreImage(file, 'cosmetics'));
-                    toast.success('Görsel yüklendi');
+                    toast.success(ux.gorselYuklendi);
                   } catch (e) {
-                    toast.error(errorText(e, 'Görsel yüklenemedi.'));
+                    toast.error(errorText(e, ux.gorselYuklenemedi));
                   } finally {
                     setUploading(false);
                   }
@@ -242,17 +248,17 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
               />
               <Button type="button" variant="outline" className="min-h-11" disabled={uploading} onClick={() => fileRef.current?.click()}>
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
-                {uploading ? 'Yükleniyor…' : type === 'profile_background' ? 'Arka plan görseli yükle' : 'Özel rozet görseli yükle'}
+                {uploading ? ux.yukleniyor : type === 'profile_background' ? ux.arkaPlanGorseliYukle : ux.ozelRozetGorseliYukle}
               </Button>
               {isImageSrc(field.value) ? <span className="truncate text-xs text-fg-muted">{sx.uploadedImage}</span> : null}
             </div>
           ) : null}
           <p className="text-xs text-fg-muted">
             {type === 'avatar_frame'
-              ? 'Çerçeveler müşteride efekt olarak çizilir; görsel adresli çerçeve desteklenmez.'
+              ? ux.cercevelerMusterideEfektOlarak
               : type === 'profile_badge'
-                ? 'Hazır rozetlerden birini seçin ya da PNG/SVG yükleyin (en fazla 2 MB).'
-                : 'Arka plan profil kartının ardında görsel olarak gösterilir (PNG/SVG, en fazla 2 MB).'}
+                ? ux.hazirRozetlerdenBiriniSecin
+                : ux.arkaPlanProfilKartinin}
           </p>
           {fieldState.error ? (
             <p id="asset-err" className="text-xs text-danger">
@@ -266,6 +272,8 @@ function AssetPicker({ control, setAsset }: { control: Control<CosmeticUpsertVal
 }
 
 function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
+  const L = useSourceT(STORE_DICT);
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   return (
     <Controller
@@ -274,7 +282,7 @@ function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
       render={({ field }) => (
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-fg">Nadirlik</legend>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Nadirlik">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={ux.nadirlik}>
             {COSMETIC_RARITIES.map((r) => (
               <button
                 key={r}
@@ -288,7 +296,7 @@ function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
                 )}
               >
                 <RarityBadge rarity={r} />
-                <span className="sr-only">{COSMETIC_RARITY_LABEL[r]}</span>
+                <span className="sr-only">{L(COSMETIC_RARITY_LABEL[r])}</span>
               </button>
             ))}
           </div>
@@ -300,17 +308,18 @@ function RarityPicker({ control }: { control: Control<CosmeticUpsertValues> }) {
 }
 
 function Preview({ control }: { control: Control<CosmeticUpsertValues> }) {
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const [name, type, asset, rarity, price] = useWatch({ control, name: ['name', 'type', 'asset', 'rarity', 'price'] });
   return (
-    <aside aria-label="Müşteri önizlemesi" className="order-first lg:order-none">
+    <aside aria-label={ux.musteriOnizlemesi} className="order-first lg:order-none">
       <div className="group sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center" tabIndex={0}>
         <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.storefront}</span>
-        <CosmeticPreview item={{ type, asset: asset || null, name: name || 'Ürün' }} preview={ADMIN_PREVIEW_USER} size="lg" />
-        <span className="line-clamp-2 font-semibold text-fg">{name || 'Ürün adı'}</span>
+        <CosmeticPreview item={{ type, asset: asset || null, name: name || ux.urun2 }} preview={ADMIN_PREVIEW_USER} size="lg" />
+        <span className="line-clamp-2 font-semibold text-fg">{name || ux.urunAdi}</span>
         <RarityBadge rarity={rarity} />
         <span className="rounded-full bg-brand-subtle px-3 py-1 text-sm font-semibold tabular-nums text-brand">
-          {Number(price) > 0 ? `${fmtNumber(Number(price))} puan` : 'Ücretsiz'}
+          {Number(price) > 0 ? `${fmtNumber(Number(price))} puan` : ux.ucretsiz}
         </span>
         <span className="text-xs text-fg-muted">{sx.effectsHint}</span>
       </div>

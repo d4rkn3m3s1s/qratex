@@ -21,6 +21,8 @@ import {
 import { errorText, fetchRewards, storeKeys } from './api';
 import { REWARD_STATUS, REWARD_TYPE_TONE, fmtNumber, rulesSummary } from './format';
 import { RewardIcon, StockBadge } from './parts';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { localizeFields, useSourceT } from '@/components/ds/page/source-dict';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const SORT_IDS = ['cost', 'name', 'claims30d', 'created', 'stock'];
@@ -61,7 +63,12 @@ export function RewardsTab({
   onRetryStats: () => void;
   onCreate: () => void;
 }) {
-  const filters = useFilterState(FIELDS);
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const uy = useStoreCopy().ui2;
+  const ux = useStoreCopy().ui;
+  const fields = useMemo(() => localizeFields(FIELDS, L), [L]);
+  const filters = useFilterState(fields);
   const sheet = useDetailSheet('odul');
   const table = useUrlTableState({ defaultPageSize: STORE_PAGE_SIZE, defaultSort: [{ id: 'cost', desc: false }], sortableIds: SORT_IDS });
   const qs = rewardsQs({
@@ -84,9 +91,9 @@ export function RewardsTab({
     () => [
       {
         id: 'name',
-        header: 'Ödül',
+        header: ux.odul,
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Ödül' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: ux.odul } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const r = row.original;
           const rules = rulesSummary(r.rules);
@@ -103,27 +110,27 @@ export function RewardsTab({
       },
       {
         id: 'type',
-        header: 'Tür',
+        header: ux.tur,
         enableSorting: false,
-        meta: { mobile: 'subtitle', label: 'Tür' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <StatusBadge size="sm" icon={null} tone={REWARD_TYPE_TONE[row.original.type]} label={REWARD_TYPE_LABEL[row.original.type]} />,
+        meta: { mobile: 'subtitle', label: ux.tur } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <StatusBadge size="sm" icon={null} tone={REWARD_TYPE_TONE[row.original.type]} label={L(REWARD_TYPE_LABEL[row.original.type])} />,
       },
       {
         id: 'cost',
         header: 'Maliyet',
-        meta: { numeric: true, label: 'Maliyet' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.maliyet } satisfies DataTableColumnMeta,
         cell: ({ row }) => <span className="tabular-nums">{fmtNumber(row.original.cost)} puan</span>,
       },
       {
         id: 'stock',
         header: 'Stok',
-        meta: { label: 'Stok' } satisfies DataTableColumnMeta,
+        meta: { label: ux.stok } satisfies DataTableColumnMeta,
         cell: ({ row }) => <StockBadge stock={row.original.stock} pool={row.original.pool} />,
       },
       {
         id: 'claims30d',
         header: 'Talep',
-        meta: { numeric: true, label: 'Talep' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.talep } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="text-right">
             <span className="block tabular-nums">{fmtNumber(row.original.claims30d)}</span>
@@ -135,15 +142,15 @@ export function RewardsTab({
         id: 'pending',
         header: 'Bekleyen',
         enableSorting: false,
-        meta: { numeric: true, label: 'Bekleyen' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.bekleyen } satisfies DataTableColumnMeta,
         cell: ({ row }) => (row.original.pending > 0 ? <span className="tabular-nums text-warning">{fmtNumber(row.original.pending)}</span> : <span className="text-fg-muted">—</span>),
       },
       {
         id: 'status',
         header: 'Durum',
         enableSorting: false,
-        meta: { label: 'Durum' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(REWARD_STATUS, row.original.status)} />,
+        meta: { label: ux.durum } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(REWARD_STATUS, row.original.status)} label={L(statusBadgeProps(REWARD_STATUS, row.original.status).label)} />,
       },
     ],
     []
@@ -154,14 +161,14 @@ export function RewardsTab({
   return (
     <div className="space-y-4 pt-4">
       {statsError ? (
-        <ErrorState title="Ödül sayıları yüklenemedi" description={errorText(statsError)} onRetry={onRetryStats} />
+        <ErrorState title={ux.odulSayilariYuklenemedi} description={errorText(statsError)} onRetry={onRetryStats} />
       ) : (
         <MetricGrid cols={3}>
-          <MetricTile size="compact" label="Yayında" metric={{ value: stats?.published ?? null }} icon={<Rocket />} tone="success" loading={!stats} href={href('published')} />
-          <MetricTile size="compact" label="Taslak" metric={{ value: stats?.draft ?? null }} icon={<CircleDashed />} loading={!stats} href={href('draft')} hint="Müşteri görmez" />
+          <MetricTile size="compact" label={ux.yayinda} metric={{ value: stats?.published ?? null }} icon={<Rocket />} tone="success" loading={!stats} href={href('published')} />
+          <MetricTile size="compact" label={ux.taslak} metric={{ value: stats?.draft ?? null }} icon={<CircleDashed />} loading={!stats} href={href('draft')} hint={ux.musteriGormez} />
           <MetricTile
             size="compact"
-            label="Tükenen"
+            label={ux.tukenen}
             metric={{ value: stats?.soldOut ?? null }}
             icon={<PackageX />}
             tone={stats && stats.soldOut > 0 ? 'danger' : 'neutral'}
@@ -170,17 +177,17 @@ export function RewardsTab({
           />
           <MetricTile
             size="compact"
-            label="Az kalan"
+            label={ux.azKalan}
             metric={{ value: stats?.low ?? null }}
             icon={<AlertTriangle />}
             tone={stats && stats.low > 0 ? 'warning' : 'neutral'}
             loading={!stats}
             href={href('low')}
-            hint="Stok 10'un altında"
+            hint={ux.stok10UnAltinda}
           />
           <MetricTile
             size="compact"
-            label="Bekleyen fiziksel teslim"
+            label={ux.bekleyenFizikselTeslim}
             metric={{ value: stats?.pendingFulfilment ?? null }}
             icon={<Truck />}
             tone={stats && stats.pendingFulfilment > 0 ? 'warning' : 'neutral'}
@@ -189,7 +196,7 @@ export function RewardsTab({
           />
           <MetricTile
             size="compact"
-            label="Son 30 gün harcanan"
+            label={ux.son30GunHarcanan}
             metric={{ value: stats?.spent30d ?? null, unit: 'puan', compact: true }}
             icon={<Coins />}
             tone="brand"
@@ -199,12 +206,12 @@ export function RewardsTab({
         </MetricGrid>
       )}
 
-      <FilterBar fields={FIELDS} ariaLabel="Ödül filtreleri" />
+      <FilterBar fields={fields} ariaLabel={ux.odulFiltreleri} />
       <p className="sr-only" aria-live="polite">
-        {list.data ? `${fmtNumber(list.data.total)} ödül bulundu` : ''}
+        {list.data ? fx.rewardsFound(fmtNumber(list.data.total)) : ''}
       </p>
       <DataTable
-        ariaLabel="Ödül kataloğu"
+        ariaLabel={ux.odulKatalogu}
         columns={columns}
         data={list.data?.items}
         query={list}
@@ -222,19 +229,19 @@ export function RewardsTab({
           filters.activeCount > 0
             ? {
                 variant: 'filtered',
-                title: 'Filtrelere uyan ödül yok',
+                title: ux.filtrelereUyanOdulYok,
                 secondaryAction: (
                   <Button variant="outline" className="min-h-11" onClick={filters.clear}>
-                    Filtreleri temizle
+                    {uy.filtreleriTemizle}
                   </Button>
                 ),
               }
             : {
-                title: 'Henüz ödül yok',
-                description: 'Müşteriler puanlarını burada tanımladığınız ödüllerle harcar. Yeni ödüller taslak olarak başlar; hazır olunca yayınlarsınız.',
+                title: ux.henuzOdulYok,
+                description: ux.musterilerPuanlariniBuradaTanimladiginiz,
                 action: (
                   <Button className="min-h-11" onClick={onCreate}>
-                    İlk ödülü oluştur
+                    {ux.ilkOduluOlustur}
                   </Button>
                 ),
               }

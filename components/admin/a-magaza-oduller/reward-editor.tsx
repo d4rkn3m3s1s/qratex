@@ -20,7 +20,8 @@ import {
 import { changedFields, createReward, errorText, fetchReward, updateReward, uploadStoreImage } from './api';
 import { fmtNumber, stockLabel } from './format';
 import { RewardIcon } from './parts';
-import { useStoreCopy } from './copy';
+import { STORE_DICT, useStoreCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
 
 const EMPTY: RewardUpsertValues = {
   name: '',
@@ -80,6 +81,9 @@ export type RewardEditorProps = {
  * yalnız değişen alanlar + iyimser kilit gider (B6). Stok burada değil, ayrıntıdaki stok hareketiyle değişir.
  */
 export function RewardEditor({ open, onOpenChange, reward, onSaved }: RewardEditorProps) {
+  const fx = useStoreCopy().fx;
+  const L = useSourceT(STORE_DICT);
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const [base, setBase] = useState<RewardListItem | null>(reward);
   const form = useZodForm<RewardUpsertValues>(rewardUpsertSchema, { defaultValues: reward ? toValues(reward) : EMPTY });
@@ -97,12 +101,12 @@ export function RewardEditor({ open, onOpenChange, reward, onSaved }: RewardEdit
       open={open}
       onOpenChange={onOpenChange}
       mode={base ? 'edit' : 'create'}
-      entityLabel="ödül"
-      title={base ? `“${base.name}” düzenle` : 'Yeni ödül'}
+      entityLabel={ux.odul2}
+      title={base ? fx.editTitle(base.name) : ux.yeniOdul}
       description={
         base
-          ? 'Yalnız değiştirdiğiniz alanlar kaydedilir; her değişiklik geçmişe yazılır.'
-          : 'Yeni ödül taslak olarak başlar; “Yayında” açıkken kaydederseniz müşteri mağazasına hemen düşer.'
+          ? ux.yalnizDegistirdiginizAlanlarKaydedilir
+          : ux.yeniOdulTaslakOlarak
       }
       form={form}
       width="lg"
@@ -131,49 +135,49 @@ export function RewardEditor({ open, onOpenChange, reward, onSaved }: RewardEdit
             }
           : undefined
       }
-      successToast={base ? 'Ödül güncellendi' : 'Ödül oluşturuldu'}
+      successToast={base ? ux.odulGuncellendi : ux.odulOlusturuldu}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_14rem]">
         <div className="space-y-4">
-          <TextField control={form.control} name="name" label="Ödül adı" required maxLength={50} placeholder="Örn: Bir fincan filtre kahve" />
-          <TextareaField control={form.control} name="description" label="Açıklama" required maxLength={200} showCount="always" description="Müşteri ödül kartında görür." />
+          <TextField control={form.control} name="name" label={ux.odulAdi} required maxLength={50} placeholder={ux.ornBirFincanFiltre} />
+          <TextareaField control={form.control} name="description" label={ux.aciklama} required maxLength={200} showCount="always" description={ux.musteriOdulKartindaGorur} />
           <IconField control={form.control} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField control={form.control} name="type" label="Tür" options={REWARD_TYPES.map((t) => ({ value: t, label: REWARD_TYPE_LABEL[t] }))} />
-            <NumberField control={form.control} name="cost" label="Puan maliyeti" min={1} max={1_000_000} unit="puan" required />
+            <SelectField control={form.control} name="type" label={ux.tur} options={REWARD_TYPES.map((t) => ({ value: t, label: L(REWARD_TYPE_LABEL[t]) }))} />
+            <NumberField control={form.control} name="cost" label={ux.puanMaliyeti} min={1} max={1_000_000} unit="puan" required />
           </div>
-          <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-muted">{REWARD_TYPE_HINT[type]}</p>
+          <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-muted">{L(REWARD_TYPE_HINT[type])}</p>
           {base ? (
             <p className="text-sm text-fg-muted">
-              Stok: <strong className="text-fg">{stockLabel(base.stock).label}</strong> — talepleri ezmemek için stok, ayrıntıdaki “Stok” bölümünden
-              göreli olarak değişir{base.pool.enabled ? ' (kod havuzu açık: stok = havuzdaki kod sayısı)' : ''}.
+              {fx.stockNow} <strong className="text-fg">{L(stockLabel(base.stock).label)}</strong> {ux.talepleriEzmemekIcinStok}
+              {fx.relativeChange}{base.pool.enabled ? ux.kodHavuzuAcikStok : ''}.
             </p>
           ) : (
             <NumberField
               control={form.control}
               name="stock"
-              label="Başlangıç stoğu"
+              label={ux.baslangicStogu}
               min={-1}
               max={1_000_000}
-              description="-1 = sınırsız. Partner kodu yükleyecekseniz 0 bırakıp ayrıntıdan kod havuzunu açın."
+              description={ux.t1SinirsizPartnerKodu}
             />
           )}
 
           <fieldset className="space-y-3 rounded-lg border border-border p-3">
             <legend className="px-1 text-sm font-medium text-fg">{sx.rulesOptional}</legend>
-            <NumberField control={form.control} name="perUserLimit" label="Kişi başı en fazla" min={1} max={1000} optional description="Boş = sınırsız." />
+            <NumberField control={form.control} name="perUserLimit" label={ux.kisiBasiEnFazla} min={1} max={1000} optional description={ux.bosSinirsiz} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <DateTimeField control={form.control} name="validFrom" label="Başlangıç (İstanbul saati)" />
-              <DateTimeField control={form.control} name="validUntil" label="Bitiş (İstanbul saati)" />
+              <DateTimeField control={form.control} name="validFrom" label={ux.baslangicIstanbulSaati} />
+              <DateTimeField control={form.control} name="validUntil" label={ux.bitisIstanbulSaati} />
             </div>
           </fieldset>
 
           <SwitchField
             control={form.control}
             name="isActive"
-            label="Yayında"
+            label={ux.yayinda}
             variant="card"
-            description="Kapalıyken taslaktır: müşteri görmez ve alamaz. Alınmış ödüller etkilenmez."
+            description={ux.kapaliykenTaslaktirMusteriGormez}
           />
         </div>
         <PreviewCard control={form.control} />
@@ -213,6 +217,8 @@ function DateTimeField({ control, name, label }: { control: Control<RewardUpsert
 }
 
 function IconField({ control }: { control: Control<RewardUpsertValues> }) {
+  const fx = useStoreCopy().fx;
+  const ux = useStoreCopy().ui;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   return (
@@ -221,13 +227,13 @@ function IconField({ control }: { control: Control<RewardUpsertValues> }) {
       name="icon"
       render={({ field }) => (
         <div className="space-y-2">
-          <TextField control={control} name="icon" label="İkon" required description="Emoji ya da yüklenen görsel (PNG/SVG, en fazla 2 MB)." />
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Hızlı emoji">
+          <TextField control={control} name="icon" label={ux.ikon} required description={ux.emojiYaDaYuklenen} />
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={ux.hizliEmoji}>
             {QUICK_EMOJI.map((e) => (
               <button
                 key={e}
                 type="button"
-                aria-label={`İkon ${e}`}
+                aria-label={fx.iconAria(e)}
                 aria-pressed={field.value === e}
                 onClick={() => field.onChange(e)}
                 className="grid size-11 place-items-center rounded-control border border-subtle bg-surface-1 text-xl transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-brand aria-pressed:bg-brand-subtle"
@@ -249,9 +255,9 @@ function IconField({ control }: { control: Control<RewardUpsertValues> }) {
                 setUploading(true);
                 try {
                   field.onChange(await uploadStoreImage(file, 'rewards'));
-                  toast.success('Görsel yüklendi');
+                  toast.success(ux.gorselYuklendi);
                 } catch (e) {
-                  toast.error(errorText(e, 'Görsel yüklenemedi.'));
+                  toast.error(errorText(e, ux.gorselYuklenemedi));
                 } finally {
                   setUploading(false);
                 }
@@ -259,7 +265,7 @@ function IconField({ control }: { control: Control<RewardUpsertValues> }) {
             />
             <Button type="button" variant="outline" className="min-h-11" disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
-              {uploading ? 'Yükleniyor…' : 'Görsel yükle'}
+              {uploading ? ux.yukleniyor : ux.gorselYukle}
             </Button>
           </div>
         </div>
@@ -269,18 +275,20 @@ function IconField({ control }: { control: Control<RewardUpsertValues> }) {
 }
 
 function PreviewCard({ control }: { control: Control<RewardUpsertValues> }) {
+  const L = useSourceT(STORE_DICT);
+  const ux = useStoreCopy().ui;
   const sx = useStoreCopy();
   const [name, description, icon, cost, stock, type] = useWatch({ control, name: ['name', 'description', 'icon', 'cost', 'stock', 'type'] });
   const s = stockLabel(Number(stock));
   return (
-    <aside aria-label="Önizleme" className="order-first lg:order-none">
+    <aside aria-label={ux.onizleme} className="order-first lg:order-none">
       <div className="sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center">
         <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.customerCard}</span>
-        <RewardIcon icon={icon} name={name || 'Ödül'} size="lg" />
-        <span className="line-clamp-2 font-semibold text-fg">{name || 'Ödül adı'}</span>
-        <span className="line-clamp-3 text-xs text-fg-muted">{description || 'Açıklama'}</span>
+        <RewardIcon icon={icon} name={name || ux.odul} size="lg" />
+        <span className="line-clamp-2 font-semibold text-fg">{name || ux.odulAdi}</span>
+        <span className="line-clamp-3 text-xs text-fg-muted">{description || ux.aciklama}</span>
         <span className="rounded-full bg-brand-subtle px-3 py-1 text-sm font-semibold tabular-nums text-brand">{fmtNumber(Number(cost) || 0)} puan</span>
-        <StatusBadge size="sm" icon={null} tone={s.tone} label={`${REWARD_TYPE_LABEL[type]} · ${s.label}`} />
+        <StatusBadge size="sm" icon={null} tone={s.tone} label={`${L(REWARD_TYPE_LABEL[type])} · ${L(s.label)}`} />
       </div>
     </aside>
   );
