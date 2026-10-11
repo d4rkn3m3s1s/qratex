@@ -134,14 +134,21 @@ function eventsSinceReopen(events: ReadonlyArray<{ type: string }>): ReadonlyArr
   return events.slice(start);
 }
 
+/** `notified` olayı yalnız başvuru makbuzuysa (detail.kind === 'receipt') true. */
+export function isReceiptNotice(e: { type: string; detail?: unknown }): boolean {
+  if (e.type !== 'notified' || !e.detail || typeof e.detail !== 'object') return false;
+  return (e.detail as Record<string, unknown>).kind === 'receipt';
+}
+
 /** Kapanış için eksik kanıtlar (olaylar kronolojik sırada verilmelidir). */
-export function missingEvidence(type: string, events: ReadonlyArray<{ type: string }>): DsrEventType[] {
+export function missingEvidence(type: string, events: ReadonlyArray<{ type: string; detail?: unknown }>): DsrEventType[] {
   if (!isDsrType(type)) return ['received'];
-  const have = new Set(eventsSinceReopen(events).map((e) => e.type));
+  // Başvuru makbuzu ("alındı" bildirimi) teslim kanıtı DEĞİLDİR: yalnız sonuç bildirimleri sayılır.
+  const have = new Set(eventsSinceReopen(events.filter((e) => !isReceiptNotice(e))).map((e) => e.type));
   return REQUIRED_EVIDENCE[type].filter((group) => !group.some((t) => have.has(t))).map((group) => group[0]);
 }
 
-export function canComplete(type: string, events: ReadonlyArray<{ type: string }>): boolean {
+export function canComplete(type: string, events: ReadonlyArray<{ type: string; detail?: unknown }>): boolean {
   return missingEvidence(type, events).length === 0;
 }
 
@@ -308,7 +315,7 @@ export async function completeDsrIfEvidenced(
   const events = await tx.dsrEvent.findMany({
     where: { requestId },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { type: true },
+    select: { type: true, detail: true },
   });
   const missing = missingEvidence(request.type, events);
   if (missing.length > 0) throw new DsrEvidenceError(missing);

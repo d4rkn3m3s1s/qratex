@@ -256,3 +256,70 @@ Salt okunur inceleme; kod, veritabanı, build veya test çalıştırılmadı. He
 - Ancak burada yetki sınırı aşılmıyor: aynı ADMIN `GET /api/security/suspicious` (`app/api/security/suspicious/route.ts:24` yalnızca ADMIN, `:43-52` `include` ile tüm skaler alanları, yani maskelenmemiş `ipAddress` ve `userAgent` alanlarını döndürüyor) üzerinden ham IP'leri bayraksız da alabiliyor. Ayrıca `userAgent` bu uçta hiç maskelenmiyor. ADMIN olmayan bir kullanıcının bu veriye ulaştığı bir senaryo kurulamadı; UI'da bu parametreyi kullanan bir çağrı da yok.
 
 Bu maddede somut bir kullanıcıya ya da veriye zarar yok; bulgu, veri minimizasyonu açısından tutarsızlık. Öneri: maskeleme tek bir yardımcıda (`lib/pii-redact.ts`) merkezileşmeli ve IP döndüren tüm admin uçlarına (suspicious dahil) uygulanmalı. Maskesiz görüntüleme gerekçe isteyen ve AuditLog'a yazılan ayrı bir eylem olmalı. Önceliği orta/düşük.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/privacy` (KVKK merkezi). `/admin/compliance` artık sorgu parametrelerini koruyarak `permanentRedirect` ile oraya yönlenir. 427 satırlık tek istemci dosyası kaldırıldı. Yerine sunucu bileşeni sayfa (genel bakış sunucuda ölçülür) ve `components/admin/a-kvkk/` altında sekme başına tembel yüklenen bileşenler geldi: Genel bakış · Talepler · Envanter · Saklama · Rıza · 5651 kayıtları. Eski `GET /api/admin/compliance/overview` ve `/logs` uçları silindi. Yerlerine `defineRoute` tabanlı yeni uçlar geldi: `GET /api/admin/privacy?section=overview|retention|consent`, `GET /api/admin/privacy/logs`, `GET /api/admin/privacy/logs/export`. Sunucu mantığı `lib/admin-privacy/{contract,server}.ts` dosyalarında.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero başlık | ÇALIŞIYOR | `PageHeader` ("KVKK merkezi"), ops kaydı. |
+| 2 | Yetki | ÇALIŞIYOR | Tüm uçlar `defineRoute` roles ADMIN + rate limit (dışa aktarım `sensitive`). |
+| 3 | Log araması | ÇALIŞIYOR | Sunucuda: işlem/varlık metni + kullanıcı (ad/e-posta → kimlik çözümü). |
+| 4 | Genel Yenile | ÇALIŞIYOR | "Şimdi ölç" `fresh=1` ile Redis önbelleğini atlar. |
+| 5 | Satır içi hata | ÇALIŞIYOR | Her sekme bağımsız `QueryState`; bir bölümün hatası diğerlerini gizlemez (`PanelErrorBoundary`). |
+| 6 | Tüm Loglar filtresi | ÇALIŞIYOR | Ortak `LogSource` tipi; erişim engeli satırları etiketli ve "90 gün saklanır" rozetli. |
+| 7–9 | Denetim / Kart / Şüpheli filtreleri | ÇALIŞIYOR | `radiogroup` + `aria-checked`. |
+| 10 | Runtime guard filtresi | ÇALIŞIYOR | "Erişim engeli" seçeneği eklendi. |
+| 11 | Kaynak değişiminde yarış | ÇALIŞIYOR | TanStack Query anahtarı filtrelerden oluşur; eski yanıt yeni filtrenin üstüne yazılamaz. Filtreler URL'de. |
+| 12–13 | KPI: kullanıcı / denetim logu sayısı | KALDIRILDI | Ham hacim sayısı uyum sinyali değil; yerine ölçülen kontroller ve oranlar geldi. |
+| 14 | IP kapsamı KPI | ÇALIŞIYOR | Payda düzeltildi: son 7 gün, kişi aktörlü kayıtlar (sistem olayları hariç). IP'siz yazan ilk 5 işlem listeleniyor (doğrulamadaki "payda" notu). |
+| 15 | Çözülmemiş şüpheli olay | ÇALIŞIYOR | Yüksek/kritik ayrı sayılıyor, `/admin/trust` sayfasına bağlantı var. |
+| 16 | Gösterilmeyen ölü alanlar | KALDIRILDI | Kullanılmayan sayımlar sorgudan çıkarıldı; UA kapsamı gösteriliyor. |
+| 17 | DSR kuyruğu kartı | ÇALIŞIYOR | Kopya kaldırıldı. Kanonik kuyruk "Talepler" sekmesinde; genel bakışta açık/geciken/en yakın son tarih var. |
+| 18 | `#kvkk-queue` derin bağlantısı | ÇALIŞIYOR | Eski bağlantılar yönlendirmeyle merkeze iner; kanonik derin bağlantı `?tab=talepler&status=overdue`. |
+| 19 | DSR Yenile | ÇALIŞIYOR | |
+| 20 | Geliştirici jargonu açıklaması | KALDIRILDI | Yerine boş durumda şu metin geldi: "Başvurular müşteri ayarlarındaki Gizlilik bölümünden gelir; e-postayla geleni Talep ekle ile kuyruğa alın." |
+| 21–22 | Ham tür/durum | ÇALIŞIYOR | TR etiketler ve tonlu rozetler. |
+| 23 | Makbuz ve tarih | ÇALIŞIYOR | `tr-TR` + Europe/Istanbul biçimleyiciler (`format.ts`). |
+| 24 | DSR mesajı | ÇALIŞIYOR | Detay panelinde. |
+| 25 | SLA | ÇALIŞIYOR | Kalan gün rozeti ve sayaçlar. |
+| 26 | "İncelemede" | ÇALIŞIYOR | Durum makinesi; geçersiz geçişte 409. |
+| 27 | "Tamamlandı" | KALDIRILDI | Elle kapanış yok; kapanış yalnız yürütme kanıtıyla. |
+| 28 | Reddet | ÇALIŞIYOR | Gerekçeli. |
+| 29 | Export / anonimleştirme | ÇALIŞIYOR | Talep detay panelinde. |
+| 30–31 | DSR yükleniyor/boş/hata | ÇALIŞIYOR | Hata ayrı durum ("Talepler yüklenemedi"). |
+| 32 | KVKK veri envanteri (statik) | ÇALIŞIYOR | Sabit 4 kategori kaldırıldı. "Envanter" sekmesi `PII_REGISTRY`'nin kendisini gösteriyor: model, kategori, alanlar, dışa aktarım, silme stratejisi, saklama, hukuki sebep. Sürüklenmeye karşı şema testi var (`__tests__/lib/pii-registry.test.ts`). |
+| 33 | 5651 log tablosu | ÇALIŞIYOR | Kaynaklar arası keyset sayfalama (her kaynaktan en fazla size+1 satır), tarih aralığı (İstanbul günü), "Daha fazla yükle". |
+| 34 | IP maskeleme | ÇALIŞIYOR | |
+| 35 | `includeSensitive=true` | KALDIRILDI | Maskesiz IP bu yüzeyden alınamaz (veri minimizasyonu). |
+| 36–37 | Kullanıcı / UA sütunu | ÇALIŞIYOR | UA 160 karakterle kesilir, tamamı `title` ile. |
+| 38 | Önem rozeti | ÇALIŞIYOR | Önem tonlu (Düşük/Orta/Yüksek/Kritik); `reason` ayrı alan olarak dönüyor. |
+| 39 | Zaman | ÇALIŞIYOR | |
+| 40 | "Toplam gösterilen" sayacı | KALDIRILDI | Yanıltıcı toplam yerine cursor sayfalama kullanılıyor. |
+| 41 | Log boş durumu | ÇALIŞIYOR | Filtreye göre "Bu filtrede kayıt yok" / "Henüz kayıt yok". |
+| 42 | Satır detayı | ÇALIŞIYOR (kısmi kapsam) | `entityId` gösteriliyor. `oldData/newData` farkı `/admin/audit` yüzeyinde (sahibi başka ajan). |
+| 43 | Log dışa aktarma | ÇALIŞIYOR | CSV (BOM, `;`, formül kaçışı), en fazla 5000 satır, `x-content-sha256` özeti; her dışa aktarım `AuditLog`'a (`compliance_log_export`, filtreler, satır sayısı, özet) yazılır. |
+| 44 | Hukuki kontrol listesi (statik) | ÇALIŞIYOR | Ölçülen "Uyum kontrolleri" ile değiştirildi: KVKK süresi, saklama işinin son 48 saatte çalışması, 5651 IP kapsamı, rıza kanıtı, yüksek önemli olaylar. Ölçülemeyen kontrol `unknown` döner, sessizce "ok" sayılmaz. |
+| 45 | Uyum notları (statik) | KALDIRILDI | Sabit metin yerine her kontrol kendi gerekçe cümlesini taşıyor. |
+| 46 | İlk yükleme | ÇALIŞIYOR | Genel bakış sunucuda ön yüklenir; diğer sekmelerde iskelet var. |
+| 47 | Mobil | ÇALIŞIYOR | Log ve envanter tabloları `md` altında kart listesine döner; dokunma hedefleri ≥44px. |
+| 48 | Erişilebilirlik | ÇALIŞIYOR | `radiogroup`, etiketli alanlar, tablolarda `caption`/`scope`, rıza çubuklarında `role=meter`, grafik için ekran okuyucu tablosu. |
+
+### Yeni (eksik özellikler listesinden)
+- **Saklama ve imha politikası görünümü:** Otomatik uygulanan süreler `PII_REGISTRY.retentionField` ve analitik 90 gün kuralından okunur. Her kural için şu an süresi dolmuş ve bir sonraki çalışmada silinecek satır sayısı gösterilir. Temizlik işlerinin (`db-cleanup`, `analytics-event-cleanup`) son başarılı çalışması, ardışık hata sayısı ve son hatası günlük orkestratörün kalıcı izinden okunur. Yalnız politika olarak yazılı süreler ayrı listede durur.
+- **Rıza kaydı görünümü:** `ConsentRecord` üzerinden 7/30/90 günlük pencere: karar sayısı, farklı kişi/cihaz sayısı, kategori bazında onay oranları, yalnız zorunluya izin oranı, sürüme ve kaynağa göre dağılım, İstanbul günlerine göre günlük dağılım.
+- **İmzalı kanıt dışa aktarma:** SHA-256 özeti ve denetim kaydıyla.
+
+### Kapanan bulgular
+B1, B2, B5, B6, B7, B8, B9, B10, B11, B12, B13, B14: 14 bulgudan 12'si kapandı. B3 doğrulamada çürütülmüştü; paydası düzeltildi ve kırılım eklendi. B4 (`AuditLog` Cascade) şema dalgasında `SetNull` + `actorSnapshot` ile kapanmıştı ve doğrulandı.
+
+### Kalanlar
+- **Düzenlenebilir ve sürümlü envanter (DB'de `DataInventoryItem`):** Uygulanmadı, bilinçli olarak. Envanter kodda tek kaynak, aynı kayıt silme ve dışa aktarmayı da yürütüyor. DB'de düzenlenebilir bir kopya ikinci bir doğruluk kaynağı yaratırdı. Gerekirse ŞEMA İSTEĞİ olarak açılabilir.
+- **Erişim incelemesi (admin 2FA, son giriş):** Bu yüzeyin kapsamı dışında bırakıldı (kullanıcı/yetki yüzeyi).
+- **Log satırında diff ve korelasyon:** `/admin/audit` yüzeyinde.
+- **Geciken DSR için cron bildirimi:** `app/api/cron/daily/jobs.ts` başka bir ajanda staged olduğu için eklenmedi.

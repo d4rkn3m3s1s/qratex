@@ -239,3 +239,63 @@ Yöntem: Her iddia çürütülmeye çalışıldı. Okunan kodlar: `app/admin/pri
 | 4 | Denetim izi yok | Doğrulandı | Yüksek |
 | 5 | Eksik anonimleştirme | Doğrulandı (AuditLog.newData içindeki PII en kritik kalıntı) | Yüksek |
 | 6 | Keyfi adrese makbuz, hız sınırı yok | Doğrulandı | Orta |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/privacy` (KVKK merkezi, sekme `?tab=talepler`). `/admin/privacy-requests` artık sorgu parametrelerini koruyarak `permanentRedirect` ile `/admin/privacy?tab=talepler` adresine yönlenir. Talep kuyruğu `components/admin/a-kvkk/requests/` altına taşındı. Durum makinesi, kanıt zinciri (`DsrEvent` + `AuditLog`, aktör yönetici), `PII_REGISTRY` tabanlı dışa aktarma ve silme, `sessionVersion` ile oturum düşürme ve self-servis kanalların kuyruğa bağlanması P0-34/P0-25 kapsamında (Dalga 1) yapılmıştı; bu dalgada yeniden doğrulandılar ve merkezle birleştirildiler.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero başlık | ÇALIŞIYOR | QDL `PanelPage` + `PageHeader` (ops kaydı). |
+| 2 | "Denetim günlüğüne yazılır" vaadi | ÇALIŞIYOR | Her komut `recordDsrEvent` ile `DsrEvent` ve `AuditLog` (aktör yönetici, IP/UA) yazar; manuel talep de dahil. |
+| 3 | Talep listesi | ÇALIŞIYOR | Cursor sayfalama (30), durum/tür/e-posta filtresi sunucuda. |
+| 4 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState` + `aria-busy`. |
+| 5 | Boş durum | ÇALIŞIYOR | Filtreye göre metin ("Açık talep yok" / "Bu filtrede kayıt yok") + "Talep ekle" yönlendirmesi. |
+| 6 | Hata durumu | ÇALIŞIYOR | Zarf v2; hata boş liste olmaz, "Tekrar dene" ile. |
+| 7 | Tür etiketi | ÇALIŞIYOR | Sunucuda zod enum; TR etiketler tek kaynaktan (`DSR_TYPE_LABELS`). |
+| 8 | Durum rozeti | ÇALIŞIYOR | |
+| 9 | Makbuz işareti | ÇALIŞIYOR | Makbuz `notified`/`notify_failed` olayı olarak zamanıyla kanıt zincirinde. |
+| 10 | E-posta ve tarih | ÇALIŞIYOR | Başvuru e-postası ile hesap e-postası ayrı; uyuşmazlıkta uyarı rozeti. |
+| 11 | "İşlendi" tarihi | ÇALIŞIYOR | İyimser yerel durum yok; komut sonrası sunucudan yeniden okunur. |
+| 12 | Başvuru mesajı | ÇALIŞIYOR | |
+| 13 | "İncelemeye al" | ÇALIŞIYOR | Yalnız `received` → `in_review`; yeniden açma ayrı gerekçeli komut. |
+| 14 | Veri paketi | ÇALIŞIYOR | "Paketi hazırla ve bildir" (hesaptan indirme, özet hash) + ayrıca denetlenen "Paketi indir". |
+| 15 | Anonimleştir | ÇALIŞIYOR | "Sil ve kapat": `anonymizeUser` + envanter temizliği + `sessionVersion` artışı; aktör kaydı. |
+| 16 | Anonimleştirme onayı | ÇALIŞIYOR | `ConfirmAction`: etki önizlemesi (kayıt sayıları) + başvuru e-postasını yazarak onay. |
+| 17 | Reddet | ÇALIŞIYOR | Gerekçe zorunlu (≥10 karakter), başvurana e-posta. |
+| 18 | "Tamamlandı" | KALDIRILDI | Elle kapanış yok; kapanış yalnız türüne özgü yürütme kanıtıyla (`completeDsrIfEvidenced`). |
+| 19 | Satır meşgul kilidi | ÇALIŞIYOR | Tek mutasyon; çift tıklama yok. |
+| 20 | Toast | ÇALIŞIYOR | `sonner`, Türkçe metin; sunucu mesajları Türkçe yazılı. |
+| 21 | Yetki | ÇALIŞIYOR | `defineRoute` roles ADMIN + rate limit. DPO alt rolü yok (aşağıda). |
+| 22 | Eylem ile tür eşleşmesi | ÇALIŞIYOR | `checkDsrCommand` (tür/durum/hesap/gerekçe) + tx içinde tekrar kontrol. |
+| 23 | Atomiklik | ÇALIŞIYOR | Silme, kanıt ve kapanış aynı transaction'da. |
+| 24 | Kuyruğu besleyen müşteri arayüzü | ÇALIŞIYOR | Müşteri Ayarlar › Gizlilik başvuru formu (`/api/customer/privacy-request`). |
+| 25 | Self-servis silme/export kuyruğa düşmesi | ÇALIŞIYOR | `delete-account` ve `self-export` DSR kaydı + kanıt üretir; sert silme yerine anonimleştirme. |
+| 26 | Filtre/arama/sıralama | ÇALIŞIYOR | Durum sekmeleri, tür, e-posta araması; URL'de (`?status&type&q&id`). |
+| 27 | Sayfalama | ÇALIŞIYOR | Cursor + "Daha fazla yükle". |
+| 28 | SLA göstergesi | ÇALIŞIYOR | Kalan gün rozeti, Geciken/7 gün sekmeleri, genel bakışta "en yakın son tarih". |
+| 29 | Kimlik doğrulama adımı | ÇALIŞIYOR (kısmi kapsam) | E-posta uyuşmazlık uyarısı + hesaba bağlı olmayan talepte yürütme komutları kapalı. Ayrı "doğrulandı" olayı UI'da yok. |
+| 30 | Sonuç bildirimi | ÇALIŞIYOR | Ret/tamamlanma/paket hazır e-postaları (`lib/dsr-email`). |
+| 31 | Detay ve zaman çizelgesi | ÇALIŞIYOR | Sağ panel (`Sheet`), kanıt zinciri, aktör ve zaman; `?id=` derin bağlantı. |
+| 32 | Yenile | ÇALIŞIYOR | |
+| 33 | Mobil düzen | ÇALIŞIYOR | Tek sütun, dokunma hedefleri ≥44px, panel tam genişlik. |
+| 34 | Erişilebilirlik | ÇALIŞIYOR | `role=tablist/tab`, `aria-selected`, `aria-busy`, etiketli arama, erişilebilir diyaloglar. |
+| 35 | Azaltılmış hareket | ÇALIŞIYOR | `m` + `fadeUp` varyantı, `motion-reduce` dönen ikonlar. |
+| 36 | Sayfa başlığı | ÇALIŞIYOR | Sunucu bileşeni `metadata` ("KVKK merkezi"), `robots: noindex`. |
+
+### Yeni (eksik özellikler listesinden)
+- **Manuel talep oluştur** (Bulgu 6c): e-posta/telefon/posta/elden gelen başvuru `POST /api/admin/privacy-requests` ile kuyruğa alınır. Yasal süre başvurunun alındığı günden başlar (en fazla 60 gün geriye). E-posta kayıtlı hesapla eşleşirse talep o hesaba bağlanır. Aynı türde açık talep varsa 409 döner. Makbuz gönderilir ve `received` olayı yöneticiyle birlikte yazılır.
+- **Makbuz teslim kanıtı sayılmaz:** `missingEvidence` artık `notified{kind:'receipt'}` olayını erişim talebinin teslim kanıtı olarak saymıyor (önceden başvuru makbuzu "teslim edildi" grubunu tek başına doldurabiliyordu).
+
+### Kapanan bulgular
+1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13 (Dalga 1 çekirdeği + bu dalgada birleştirme, URL durumu ve manuel giriş). Toplam 13 bulgunun 12'si tamamen kapandı. Bulgu 10 kısmen kapandı: paket yöneticinin makinesine inmiyor, veri sahibi hesabından indiriyor, yönetici indirmesi denetleniyor; R2'de süreli ve imzalı bağlantı ise yok.
+
+### Kalanlar
+- **DPO / ince taneli yetki:** Anonimleştirme ve tam export ayrı bir izne bağlı değil; tüm ADMIN'ler yapabiliyor. Rol modelinde alt yetki gerekiyor (admin alt rolleri navigasyon/yetki ajanının alanında).
+- **Geciken DSR alarmı (cron):** `app/api/cron/daily/jobs.ts` başka bir ajanın staged dosyası olduğu için dokunulmadı. Gecikme şimdilik merkezde (kontrol "Aksiyon gerekli") ve sayaçlarda görünüyor.
+- **Ayrı "Kimlik doğrulandı" komutu:** `verified` olay türü var ama UI komutu yok. Eklenmesi için durum makinesinde `verify` komutu gerekir.
+- **Düzeltme talebinde profil düzenleme bağlantısı:** Admin kullanıcı detay sayfasının biçimi başka bir yüzeyde; şimdilik yapılan düzeltme gerekçeyle kaydediliyor.

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,6 +15,7 @@ import {
   Gavel,
   Loader2,
   PenLine,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -38,7 +40,6 @@ import {
   ConfirmAction,
   EmptyState,
   InlineError,
-  PageHeader,
   QueryState,
   SectionCard,
   SkeletonDetail,
@@ -70,6 +71,7 @@ import {
   type DsrListRow,
   type DsrListStatus,
 } from './api';
+import { ManualRequestDialog } from './manual-request-dialog';
 
 const STATUS_TABS: Array<{ key: DsrListStatus; label: string }> = [
   { key: 'open', label: 'Açık' },
@@ -629,16 +631,49 @@ function RequestRow({ row, onOpen }: { row: DsrListRow; onOpen: (id: string) => 
   );
 }
 
-export function PrivacyRequestsClient() {
-  const [status, setStatus] = useState<DsrListStatus>('open');
-  const [type, setType] = useState<string>('');
-  const [search, setSearch] = useState('');
-  const q = useDebounced(search.trim(), 300);
-  const [openId, setOpenId] = useState<string | null>(null);
+const STATUS_KEYS = new Set<DsrListStatus>(STATUS_TABS.map((t) => t.key));
+
+/** Filtreler ve açık talep URL'de (?status=&type=&q=&id=) — paylaşılabilir ve yenilemede kalır. */
+function useRequestsUrlState() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const rawStatus = sp.get('status') as DsrListStatus | null;
+  const status: DsrListStatus = rawStatus && STATUS_KEYS.has(rawStatus) ? rawStatus : 'open';
+  const rawType = sp.get('type') ?? '';
+  const type = (Object.keys(DSR_TYPE_LABELS) as string[]).includes(rawType) ? rawType : '';
+  const q = sp.get('q') ?? '';
+  const id = sp.get('id');
+  const set = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(sp.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === '') next.delete(k);
+        else next.set(k, v);
+      }
+      if (!next.get('tab')) next.set('tab', 'talepler');
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [sp, router, pathname]
+  );
+  return { status, type, q, id, set };
+}
+
+export function RequestsPanel() {
+  const url = useRequestsUrlState();
+  const [search, setSearch] = useState(url.q);
+  const debounced = useDebounced(search.trim(), 300);
+  const [manualOpen, setManualOpen] = useState(false);
+  const { status, type, set } = url;
+
+  useEffect(() => {
+    if (debounced !== url.q) set({ q: debounced || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
   const list = useInfiniteQuery({
-    queryKey: ['admin-dsr', 'list', status, type, q],
-    queryFn: ({ pageParam }) => fetchDsrList({ status, type: type || undefined, q: q || undefined, cursor: pageParam }),
+    queryKey: ['admin-dsr', 'list', status, type, url.q],
+    queryFn: ({ pageParam }) => fetchDsrList({ status, type: type || undefined, q: url.q || undefined, cursor: pageParam }),
     initialPageParam: null as string | null,
     getNextPageParam: (last: DsrListResponse) => last.nextCursor,
   });
@@ -646,22 +681,10 @@ export function PrivacyRequestsClient() {
   const rows = useMemo(() => list.data?.pages.flatMap((p) => p.requests) ?? [], [list.data]);
   const stats = list.data?.pages[0]?.stats;
   const listLike = { ...list, data: list.data ? { requests: rows } : undefined };
+  const unfiltered = status === 'open' && !type && !url.q;
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHeader
-        eyebrow="Uyum"
-        title="KVKK Talepleri"
-        description="Veri sahibi başvuruları yasal 30 günlük süre içinde, türüne özgü yürütmeyle ve kanıtıyla sonuçlandırılır. Hiçbir talep elle “Tamamlandı” yapılamaz."
-        icon={<ShieldCheck />}
-        actions={
-          <Button variant="outline" size="sm" onClick={() => void list.refetch()} disabled={list.isFetching}>
-            <RefreshCw className={cn('h-4 w-4', list.isFetching && 'animate-spin')} aria-hidden />
-            Yenile
-          </Button>
-        }
-      />
-
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile label="Açık talep" value={stats?.open} loading={!stats} icon={<FileText />} tone="brand" />
         <StatTile
@@ -685,10 +708,10 @@ export function PrivacyRequestsClient() {
 
       <SectionCard
         title="Talep kuyruğu"
-        description="Satıra dokunarak ayrıntıyı, kanıt zincirini ve türüne özgü işlemi açın."
+        description="Satıra dokunarak ayrıntıyı, kanıt zincirini ve türüne özgü işlemi açın. Hiçbir talep elle “Tamamlandı” yapılamaz."
         density="flush"
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
               <Input
@@ -697,14 +720,14 @@ export function PrivacyRequestsClient() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="E-posta ara"
                 aria-label="Başvuru e-postasında ara"
-                className="h-9 pl-8 sm:w-56"
+                className="h-11 pl-8 sm:h-9 sm:w-56"
               />
             </div>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => set({ type: e.target.value || null })}
               aria-label="Talep türü"
-              className="h-9 rounded-md border border-border bg-background px-2 text-sm text-fg"
+              className="h-11 rounded-md border border-border bg-background px-2 text-sm text-fg sm:h-9"
             >
               <option value="">Tüm türler</option>
               {(Object.keys(DSR_TYPE_LABELS) as DsrType[]).map((t) => (
@@ -713,6 +736,22 @@ export function PrivacyRequestsClient() {
                 </option>
               ))}
             </select>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 flex-1 sm:min-h-9"
+                onClick={() => void list.refetch()}
+                disabled={list.isFetching}
+              >
+                <RefreshCw className={cn('h-4 w-4', list.isFetching && 'animate-spin motion-reduce:animate-none')} aria-hidden />
+                Yenile
+              </Button>
+              <Button size="sm" className="min-h-11 flex-1 sm:min-h-9" onClick={() => setManualOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Talep ekle
+              </Button>
+            </div>
           </div>
         }
       >
@@ -726,9 +765,9 @@ export function PrivacyRequestsClient() {
                 type="button"
                 role="tab"
                 aria-selected={status === t.key}
-                onClick={() => setStatus(t.key)}
+                onClick={() => set({ status: t.key === 'open' ? null : t.key })}
                 className={cn(
-                  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9',
                   status === t.key ? 'bg-brand-subtle font-medium text-brand' : 'text-fg-muted hover:bg-surface-muted hover:text-fg'
                 )}
               >
@@ -756,9 +795,11 @@ export function PrivacyRequestsClient() {
             <EmptyState
               compact
               icon={ShieldCheck}
-              title={status === 'open' ? 'Açık talep yok' : 'Bu filtrede kayıt yok'}
+              title={unfiltered ? 'Açık talep yok' : 'Bu filtrede kayıt yok'}
               description={
-                status === 'open' ? 'Yeni bir başvuru geldiğinde burada, son tarihiyle birlikte görünür.' : 'Filtreleri değiştirerek diğer talepleri görebilirsiniz.'
+                unfiltered
+                  ? 'Başvurular müşteri ayarlarındaki Gizlilik bölümünden gelir. E-postayla gelen başvuruyu “Talep ekle” ile kuyruğa alın.'
+                  : 'Filtreleri değiştirerek diğer talepleri görebilirsiniz.'
               }
             />
           }
@@ -769,13 +810,19 @@ export function PrivacyRequestsClient() {
               <ul className="divide-y divide-border" aria-busy={list.isFetching}>
                 <AnimatePresence initial={false}>
                   {rows.map((row) => (
-                    <RequestRow key={row.id} row={row} onOpen={setOpenId} />
+                    <RequestRow key={row.id} row={row} onOpen={(id) => set({ id })} />
                   ))}
                 </AnimatePresence>
               </ul>
               {list.hasNextPage ? (
                 <div className="flex justify-center border-t border-border p-3">
-                  <Button variant="ghost" size="sm" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-11 sm:min-h-9"
+                    onClick={() => void list.fetchNextPage()}
+                    disabled={list.isFetchingNextPage}
+                  >
                     {list.isFetchingNextPage ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                     Daha fazla yükle
                   </Button>
@@ -786,7 +833,8 @@ export function PrivacyRequestsClient() {
         </QueryState>
       </SectionCard>
 
-      <DetailPanel id={openId} onClose={() => setOpenId(null)} />
+      <DetailPanel id={url.id} onClose={() => set({ id: null })} />
+      <ManualRequestDialog open={manualOpen} onClose={() => setManualOpen(false)} onCreated={(id) => set({ id, status: null })} />
     </div>
   );
 }

@@ -137,3 +137,22 @@ export async function runDsrCommand(
   }
   return parse<CommandResult>(res);
 }
+
+export interface ManualDsrBody {
+  type: DsrTypeKey;
+  email: string;
+  channel: 'email' | 'phone' | 'mail' | 'in_person' | 'other';
+  receivedOn?: string;
+  message?: string;
+}
+
+/** E-posta/telefon/posta ile gelen başvuruyu kuyruğa alır (yasal süre başvuru gününden başlar). */
+export async function createManualDsr(body: ManualDsrBody): Promise<{ id: string; linkedAccount: boolean; receiptSent: boolean; message: string }> {
+  const res = await fetch('/api/admin/privacy-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  return parse(res);
+}
