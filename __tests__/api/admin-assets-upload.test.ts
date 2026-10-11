@@ -6,6 +6,7 @@
 const mockRequireAuth = jest.fn();
 jest.mock('@/lib/api-auth', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
 jest.mock('@/lib/api-http', () => ({ PRIVATE_NO_STORE_HEADERS: {} }));
+jest.mock('@/lib/http/route-rate-limit', () => ({ enforceRouteRateLimit: async () => null }));
 
 const mockIsR2Configured = jest.fn();
 const mockUploadToR2 = jest.fn();
@@ -18,6 +19,7 @@ jest.mock('@/lib/media-validation', () => ({
   validateMimeMagic: () => true,
   svgContainsScript: (buf: Buffer) => buf.toString('utf8').includes('<script'),
   stripExifPng: async (buf: Buffer) => buf,
+  assetContentDisposition: (mime: string) => (mime === 'image/svg+xml' ? 'attachment; filename="x.svg"' : undefined),
 }));
 
 const mockWriteFile = jest.fn();
@@ -73,7 +75,7 @@ describe('POST /api/admin/assets/upload', () => {
     expect(json.storage).toBe('r2');
     expect(json.url).toMatch(/^https:\/\/pub\.r2\.dev\/assets\/rewards\/rozet-ikonu-\d+-[0-9a-f]{8}\.svg$/);
     expect(json.path).toBe(json.url); // geriye uyumlu alan
-    expect(mockUploadToR2).toHaveBeenCalledWith(expect.stringMatching(/^assets\/rewards\//), expect.any(Buffer), 'image/svg+xml');
+    expect(mockUploadToR2).toHaveBeenCalledWith(expect.stringMatching(/^assets\/rewards\//), expect.any(Buffer), 'image/svg+xml', expect.stringMatching(/^attachment;/));
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 

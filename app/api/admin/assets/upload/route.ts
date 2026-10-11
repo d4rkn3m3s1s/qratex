@@ -7,6 +7,7 @@ import { isR2Configured, uploadToR2 } from '@/lib/r2-storage';
 import {
   validateMimeMagic,
   svgContainsScript,
+  assetContentDisposition,
   stripExifPng,
 } from '@/lib/media-validation';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
@@ -109,7 +110,7 @@ export async function POST(req: Request) {
 
     // SVG: script / XSS kontrolü
     if (file.type === 'image/svg+xml' && svgContainsScript(bytes)) {
-      return json({ success: false, error: 'SVG güvenlik nedeniyle reddedildi (betik içeriyor)' }, 400);
+      return json({ success: false, error: 'SVG güvenlik nedeniyle reddedildi: betik, olay özniteliği, dış bağlantı ya da gömülü içerik barındırıyor. Sade bir SVG ya da PNG yükleyin.' }, 400);
     }
 
     // PNG: EXIF temizle
@@ -129,7 +130,8 @@ export async function POST(req: Request) {
 
     if (isR2Configured() && hasPublicR2Url()) {
       const key = `assets/${folder}/${filename}`;
-      const url = await uploadToR2(key, bytes, file.type);
+      // SVG doğrudan açılırsa belge olarak çalışmasın: attachment (img içinde normal görünür).
+      const url = await uploadToR2(key, bytes, file.type, assetContentDisposition(file.type, filename));
       // `path` geriye uyumluluk için korunur (rozet/ödül formları bu alanı okur).
       return json({ success: true, path: url, url, storage: 'r2' });
     }
