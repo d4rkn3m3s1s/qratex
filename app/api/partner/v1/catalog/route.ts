@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { authenticatePartnerApiKey } from '@/lib/partner-api-auth';
+import { authenticatePartnerApiKey, partnerAuthFailure } from '@/lib/partner-api-auth';
 import { PARTNER_EVENTS, WEBHOOK_HEADERS } from '@/lib/partner-integration-catalog';
 import { getClientIp } from '@/lib/request-metadata';
 
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const auth = await authenticatePartnerApiKey(request.headers.get('authorization'), undefined, { ip: getClientIp(request) });
   if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status , headers: PRIVATE_NO_STORE_HEADERS });
+    return partnerAuthFailure(auth);
   }
 
   return NextResponse.json({

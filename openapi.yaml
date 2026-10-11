@@ -266,11 +266,20 @@ paths:
         '200': { description: OK }
         '401': { description: Unauthorized }
 
-  /api/dealer/stats:
+  /api/partner/v1/digest:
     get:
-      summary: Bayi dashboard istatistikleri
-      description: Bayi için özet (geri bildirim sayısı, ortalama puan, QR, tarama, sentiment, haftalık veri vb.).
-      security: [{ bearerAuth: [] }]
+      summary: Partner özeti (son 24 saat NPS + geri bildirim)
+      description: |
+        Dış entegrasyon (POS / partner) uç noktası. `Authorization: Bearer qrx_...`, kapsam `read:partner_digest`.
+        Kiracı kapsamı anahtardan gelir: bayiye bağlı anahtar yalnız o bayiyi görür (başka `dealerId` → 403);
+        partnere bağlı anahtar partnerin bayileriyle sınırlıdır. Anahtar başına dakikada 120 istek (aşımda 429 + Retry-After).
+      security: [{ partnerApiKey: [] }]
+      parameters:
+        - name: dealerId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Yalnız platform geneli / partner anahtarlarında süzme için.
       responses:
         '200':
           description: OK
@@ -278,13 +287,74 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [generatedAt, windowHours, dealers]
                 properties:
-                  success: { type: boolean }
-                  data: { type: object }
-        '401': { description: Unauthorized }
+                  generatedAt: { type: string, format: date-time }
+                  windowHours: { type: integer, example: 24 }
+                  dealers:
+                    type: array
+                    items:
+                      type: object
+                      required: [dealerId, label, feedbackCount24h, npsAvg24h, npsResponses24h, avgRating24h]
+                      properties:
+                        dealerId: { type: string }
+                        label: { type: string }
+                        feedbackCount24h: { type: integer }
+                        npsAvg24h: { type: number, nullable: true }
+                        npsResponses24h: { type: integer }
+                        avgRating24h: { type: number, nullable: true }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '429': { $ref: '#/components/responses/ApiError' }
+        '503': { $ref: '#/components/responses/ApiError' }
+
+  /api/partner/v1/catalog:
+    get:
+      summary: Partner olay kataloğu ve webhook imza başlıkları
+      security: [{ partnerApiKey: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, events, webhookHeaders, digestEndpoints]
+                properties:
+                  version: { type: string, example: '1.0' }
+                  events: { type: array, items: { type: object } }
+                  webhookHeaders: { type: object }
+                  digestEndpoints: { type: object }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '429': { $ref: '#/components/responses/ApiError' }
 
 components:
+  responses:
+    ApiError:
+      description: |
+        Zarf v2 hata gövdesi (lib/http/define-route.ts). `error` Türkçe ve kullanıcıya gösterilebilir;
+        istemci davranışı `code` alanına göre seçer. 429'da `Retry-After` başlığı döner.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, error, code]
+            properties:
+              ok: { type: boolean, example: false }
+              success: { type: boolean, example: false }
+              error: { type: string }
+              code:
+                type: string
+                enum: [BAD_REQUEST, VALIDATION, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, RATE_LIMITED, MODULE_DISABLED, INSUFFICIENT_POINTS, TENANT_REQUIRED, SERVICE_UNAVAILABLE, INTERNAL, GONE]
+              details: { type: array, items: { type: object } }
+              retryable: { type: boolean }
+              requestId: { type: string }
   securitySchemes:
+    partnerApiKey:
+      type: http
+      scheme: bearer
+      description: Partner API anahtarı (`qrx_` önekli; yönetici Entegrasyon Merkezi'nde üretir).
     bearerAuth:
       type: http
       scheme: bearer

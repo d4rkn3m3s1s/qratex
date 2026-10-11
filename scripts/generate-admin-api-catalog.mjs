@@ -8,6 +8,8 @@
  *             requireTeamAccess (ekip), CRON_SECRET/verifyCron (cron), hiçbiri → 'none'
  *  - usedBy:  app/admin/** ve components/admin/** içinde bu yolu metin olarak anan dosyalar
  *             (metin taraması — tahmini ters indeks)
+ *  - policy:  (mimari-api B14) oran sınırı var mı, modül kapısı anahtarları, gövde şeması var mı,
+ *             emekli (410) mi — rapor §2.2 kapsam tablosunun otomatik sürümü
  * Yöntemi tespit edilemeyen route olursa uyarı basar (sessiz kalmaz).
  */
 import fs from 'fs';
@@ -63,8 +65,20 @@ export function detectAuth(source) {
   if (req) return { kind: 'role', roles: rolesFrom(req[1]) };
   if (/requireTeamAccess|requireTeamManager/.test(source)) return { kind: 'team' };
   if (/CRON_SECRET|verifyCron|isCronAuthorized/.test(source)) return { kind: 'cron' };
-  if (/requireAuth\(|getServerSession\(/.test(source)) return { kind: 'role', roles: [] };
+  if (/requireAuth\(|getOptionalSession\(/.test(source)) return { kind: 'role', roles: [] };
   return { kind: 'none' };
+}
+
+/** Yorumsuz kaynak üzerinden politika özeti (statik; defineRoute meta alanlarıyla aynı adlar). */
+export function detectPolicy(source) {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  const modules = [...new Set((code.match(/module:\s*'([a-z_]+)'|assertModuleEnabled\(\s*'([a-z_]+)'/g) || []).map((m) => m.replace(/.*'([a-z_]+)'.*/, '$1')))];
+  return {
+    rateLimited: /rateLimit\s*:|enforceRouteRateLimit|checkRateLimitDb|check\w*RateLimit\w*\(/.test(code),
+    modules,
+    bodySchema: /schema\s*:|safeParse|parseJsonBody|\.parse\(/.test(code),
+    retired: /status:\s*410/.test(code),
+  };
 }
 
 function routeMatcher(apiPath) {
@@ -100,7 +114,7 @@ for (const file of files) {
   if (methods.length === 0) undetected.push(apiPath);
   const matcher = routeMatcher(apiPath);
   const usedBy = consumers.filter((c) => c.refs.some((r) => matcher.test(r))).map((c) => c.file);
-  routes.push({ path: apiPath, methods, file: rel(file), auth: detectAuth(src), usedBy });
+  routes.push({ path: apiPath, methods, file: rel(file), auth: detectAuth(src), policy: detectPolicy(src), usedBy });
 }
 
 const outDir = path.join(root, 'lib', 'data');

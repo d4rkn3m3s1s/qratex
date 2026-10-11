@@ -18,7 +18,11 @@ export type CatalogRoute = {
   auth: CatalogAuth;
   /** Bu ucu çağıran admin sayfaları (üretici ters indeksi; eski üretimde boş). */
   usedBy: string[];
+  /** Politika özeti (mimari-api B14); eski üretimde yok → null. */
+  policy: CatalogPolicy | null;
 };
+
+export type CatalogPolicy = { rateLimited: boolean; modules: string[]; bodySchema: boolean; retired: boolean };
 
 export type CatalogPayload = {
   generatedAt: string;
@@ -28,7 +32,18 @@ export type CatalogPayload = {
   hasUsageInfo: boolean;
 };
 
-type RawRoute = { path?: unknown; methods?: unknown; file?: unknown; auth?: unknown; usedBy?: unknown };
+type RawRoute = { path?: unknown; methods?: unknown; file?: unknown; auth?: unknown; usedBy?: unknown; policy?: unknown };
+
+function toPolicy(raw: unknown): CatalogPolicy | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    rateLimited: o.rateLimited === true,
+    modules: Array.isArray(o.modules) ? o.modules.filter((m): m is string => typeof m === 'string') : [],
+    bodySchema: o.bodySchema === true,
+    retired: o.retired === true,
+  };
+}
 
 export function domainOf(path: string): string {
   const seg = path.replace(/^\/api\/admin\/?/, '').split('/')[0];
@@ -58,6 +73,7 @@ export function normalizeCatalog(raw: { generatedAt?: unknown; routes?: unknown 
         undetected: methods.length === 0,
         auth: toAuth(r.auth),
         usedBy: Array.isArray(r.usedBy) ? r.usedBy.filter((u): u is string => typeof u === 'string') : [],
+        policy: toPolicy(r.policy),
       };
     });
   return {

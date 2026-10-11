@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { authenticatePartnerApiKey } from '@/lib/partner-api-auth';
+import { authenticatePartnerApiKey, partnerAuthFailure } from '@/lib/partner-api-auth';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { buildPartnerDigestPayload } from '@/lib/partner-digest-core';
 import { getClientIp } from '@/lib/request-metadata';
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     ip: getClientIp(request),
   });
   if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status, headers: PRIVATE_NO_STORE_HEADERS });
+    return partnerAuthFailure(auth);
   }
 
   const requested = new URL(request.url).searchParams.get('dealerId');

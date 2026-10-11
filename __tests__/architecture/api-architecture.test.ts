@@ -62,6 +62,7 @@ const PUBLIC_BY_DESIGN: Record<string, string> = {
   'app/api/public/auth-features/route.ts': 'giriş ekranı özellik bayrakları',
   'app/api/public/stats/route.ts': 'tanıtım sayfası toplu sayılar',
   'app/api/qr-codes/public/[code]/route.ts': 'QR tarama açılışı',
+  'app/api/security/csp-report/route.ts': 'tarayıcı CSP ihlal raporu (kimlik/DB yok, IP sınırlı, her zaman 204)',
   'app/api/settings/background/route.ts': 'herkese aynı tema arka planı',
   'app/api/settings/seasonal-concept/route.ts': 'herkese aynı sezon teması',
   'app/api/settings/theme/route.ts': 'herkese aynı tema',
@@ -133,7 +134,7 @@ describe('API mimarisi — girdi doğrulama (B6)', () => {
 
 describe('API mimarisi — oran sınırı (B7)', () => {
   const RATE_LIMITED =
-    /rateLimit\s*:|enforceRouteRateLimit|checkRateLimitDb|checkAdminRateLimit|checkAuthEmailActionLimit|checkQraChatRateLimit|\bcheck\w*RateLimit\w*\s*\(/;
+    /rateLimit\s*:|enforceRouteRateLimit|checkRateLimitDb|checkAdminRateLimit|checkAuthEmailActionLimit|checkQraChatRateLimit|\bcheck\w*RateLimit\w*\s*\(|\bredisIncrWithTtl\s*\(/;
   /** Oran sınırı gerekmeyen yazma uçları (sır/imza ile korunan makine uçları, DB'siz). */
   const EXEMPT = [
     /^app\/api\/(cron|internal)\//,

@@ -42,7 +42,7 @@ export async function GET() {
         createdAt: true,
         _count: {
           select: {
-            feedbacks: true,
+            feedbacks: { where: { deletedAt: null } },
             badges: true,
             rewards: true,
           }
@@ -69,6 +69,7 @@ export async function GET() {
       getPointsMatrix(),
       prisma.feedback.findMany({
         where: {
+          deletedAt: null,
           userId,
           createdAt: { gte: thirtyDaysAgo },
         },
@@ -81,13 +82,13 @@ export async function GET() {
         take: TRENDS_ROW_CAP,
       }),
       prisma.feedback.count({
-        where: { userId, createdAt: { gte: sevenDaysAgo } },
+        where: { deletedAt: null, userId, createdAt: { gte: sevenDaysAgo } },
       }),
       prisma.feedback.count({
-        where: { userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
+        where: { deletedAt: null, userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
       }),
       prisma.feedback.count({
-        where: { userId, createdAt: { gte: thirtyDaysAgo } },
+        where: { deletedAt: null, userId, createdAt: { gte: thirtyDaysAgo } },
       }),
     ]);
     
@@ -99,20 +100,20 @@ export async function GET() {
       consumptionReviewCount30d,
     ] = await Promise.all([
       prisma.consumptionReview.findMany({
-        where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
+        where: { deletedAt: null, customerId: userId, createdAt: { gte: thirtyDaysAgo } },
         select: { createdAt: true, rating: true },
         orderBy: { createdAt: 'asc' },
         take: TRENDS_ROW_CAP,
       }),
       prisma.consumption.count({ where: { customerId: userId } }),
       prisma.consumptionReview.count({
-        where: { customerId: userId, createdAt: { gte: sevenDaysAgo } },
+        where: { deletedAt: null, customerId: userId, createdAt: { gte: sevenDaysAgo } },
       }),
       prisma.consumptionReview.count({
-        where: { customerId: userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
+        where: { deletedAt: null, customerId: userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
       }),
       prisma.consumptionReview.count({
-        where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
+        where: { deletedAt: null, customerId: userId, createdAt: { gte: thirtyDaysAgo } },
       }),
     ]);
     
@@ -336,7 +337,7 @@ export async function GET() {
     if (db) return db;
     console.error('Trends API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, code: 'INTERNAL', error: 'Eğilimler şu an yüklenemedi. Lütfen tekrar deneyin.' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

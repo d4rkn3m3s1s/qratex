@@ -1,6 +1,9 @@
 import { createHash } from 'crypto';
+import { NextResponse } from 'next/server';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
 import { redisIncrWithTtl } from '@/lib/redis';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { FULL_ACCESS_SCOPE } from '@/lib/integrations/contract';
 import { ipAllowed, keyLifecycle, parsePartnerMeta, parseKeyMeta } from '@/lib/integrations/meta';
 import { istanbulDayKey } from '@/lib/integrations/time';
@@ -19,7 +22,37 @@ export type PartnerAuthOk = {
   partnerDealerIds: string[];
   scopes: string[];
 };
-export type PartnerAuthFail = { ok: false; status: number; error: string };
+export type PartnerAuthFail = { ok: false; status: number; error: string; retryAfterSec?: number };
+
+/** Anahtar başına oran sınırı (mimari-api B13): dakikada en fazla bu kadar başarılı istek. */
+export const PARTNER_RATE_LIMIT_PER_MINUTE = 120;
+
+const PARTNER_ERROR_CODES: Record<number, string> = {
+  401: 'UNAUTHENTICATED',
+  403: 'FORBIDDEN',
+  429: 'RATE_LIMITED',
+  503: 'SERVICE_UNAVAILABLE',
+};
+
+/** Partner kimlik hatasının tek yanıt biçimi (zarf v2 alanları + 429'da `Retry-After`). */
+export function partnerAuthFailure(fail: PartnerAuthFail): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      success: false,
+      code: PARTNER_ERROR_CODES[fail.status] ?? 'FORBIDDEN',
+      error: fail.error,
+      ...(fail.status === 429 || fail.status === 503 ? { retryable: true } : {}),
+    },
+    {
+      status: fail.status,
+      headers: {
+        ...PRIVATE_NO_STORE_HEADERS,
+        ...(fail.retryAfterSec ? { 'Retry-After': String(fail.retryAfterSec) } : {}),
+      },
+    }
+  );
+}
 
 /** Günlük kullanım sayacı (Redis; yoksa sessizce atlanır). 35 gün saklanır. */
 export const usageKey = (keyId: string, day: string, kind: 'ok' | 'denied') => `apikey:usage:${keyId}:${day}:${kind}`;
@@ -88,6 +121,23 @@ export async function authenticatePartnerApiKey(
   if (requiredScope && !meta.scopes.includes(requiredScope) && !meta.scopes.includes(FULL_ACCESS_SCOPE)) {
     await countUsage(key.id, 'denied');
     return { ok: false, status: 403, error: `Gerekli yetki: ${requiredScope}` };
+  }
+
+  // Anahtar başına oran sınırı (Redis öncelikli paylaşılan sayaç). Sayaç altyapısı çökerse
+  // istek kesilmez (fail-open, defineRoute ile aynı karar) ama görünür kılınır.
+  try {
+    const rl = await checkRateLimitDb(`partner-api:${key.id}`, PARTNER_RATE_LIMIT_PER_MINUTE, 60_000);
+    if (!rl.ok) {
+      await countUsage(key.id, 'denied');
+      return {
+        ok: false,
+        status: 429,
+        error: 'Bu API anahtarı için istek sınırı aşıldı. Lütfen biraz sonra tekrar deneyin.',
+        retryAfterSec: Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)),
+      };
+    }
+  } catch (err) {
+    console.warn('[partner-api-auth] oran sınırı kontrolü başarısız:', err);
   }
 
   await countUsage(key.id, 'ok');

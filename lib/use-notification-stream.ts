@@ -53,6 +53,12 @@ export function useNotificationStream({
 
     const connect = () => {
       if (stopped) return;
+      if (document.visibilityState === 'hidden') {
+        // Gizliyken açılmaz; görünür olunca `onVisibility` yeniden bağlar.
+        es?.close();
+        es = null;
+        return;
+      }
       const url = sinceRef.current
         ? `/api/dealer/notifications/stream?since=${encodeURIComponent(sinceRef.current)}`
         : '/api/dealer/notifications/stream';
@@ -105,10 +111,30 @@ export function useNotificationStream({
       });
     };
 
-    connect();
+    // Gizli sekmede akış KAPALI (mimari-api B9): her açık bayi sekmesi 60 sn'lik bir sunucu
+    // fonksiyonunu sürekli açık tutuyor ve süresi dolunca yeniden bağlanıyordu. Görünür olunca
+    // `since` imleciyle yeniden bağlanılır; aradaki bildirimler kaçırılmaz.
+    const pause = () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      es?.close();
+      es = null;
+      setConnected(false);
+    };
+    const onVisibility = () => {
+      if (stopped) return;
+      if (document.visibilityState === 'hidden') pause();
+      else if (!es) {
+        failures = 0;
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (document.visibilityState !== 'hidden') connect();
 
     return () => {
       stopped = true;
+      document.removeEventListener('visibilitychange', onVisibility);
       if (retryTimer) clearTimeout(retryTimer);
       es?.close();
       setConnected(false);
