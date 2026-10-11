@@ -14,3 +14,12 @@ describe('safe-webhook-post SSRF', () => {
       await expect(safeWebhookPost(u, '{}', {})).rejects.toThrow(/SSRF/);
     });
 });
+
+describe('isPrivateIp — sıfır önekli IPv6 biçimleri', () => {
+  it.each(['::a9fe:a9fe', '::169.254.169.254', '0:0:0:0:0:ffff:a9fe:a9fe', '0:0:0:0:0:ffff:127.0.0.1', '::7f00:1'])('%s özel sayılır', (ip) => {
+    expect(isPrivateIp(ip)).toBe(true);
+  });
+  it('genel IPv6 geçer', () => {
+    expect(isPrivateIp('2606:4700:4700::1111')).toBe(false);
+  });
+});

@@ -34,7 +34,13 @@ export function isPrivateIp(ip: string): boolean {
     const mapped = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
     if (mapped) return isPrivateIp(mapped[1]);
     if (h.startsWith('::ffff:')) return true;
+    // Gömülü IPv4 (ör. 0:0:0:0:0:ffff:1.2.3.4, ::1.2.3.4) → v4 kuralıyla da denetle.
+    const v4 = h.match(/(\d+\.\d+\.\d+\.\d+)$/);
+    if (v4 && isPrivateIp(v4[1])) return true;
     const first = parseInt(h.split(':')[0] || '0', 16);
+    // İlk blok 0 olan her adres (::/16: IPv4-uyumlu ::a9fe:a9fe, açık yazılmış ::ffff eşlemesi,
+    // ayrılmış aralıklar) genel internet adresi değildir → reddet.
+    if (first === 0) return true;
     if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7
     if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10
     if ((first & 0xff00) === 0xff00) return true; // multicast
