@@ -182,3 +182,49 @@ Bu sayfa tek bir kavramın, yani "rol bazlı navigasyon yapısı"nın üç parç
 Üçü aynı katalogu (`components/dashboard/sidebar.tsx` exportları) okuyor ve aynı render fonksiyonunu etkiliyor, ama birbirlerinin etkisini göstermiyorlar. Grup sırası örtük olarak öğe sırasından türüyor; bu yüzden admin bir sayfada yaptığı değişikliğin sonucunu ancak diğer sayfadaki ayarı da bilerek tahmin edebiliyor. Admin sidebar'ında da iki ayrı menü maddesi var (`sidebar.tsx:200-201`).
 
 **Öneri:** Bu sayfa `/admin/menu-groups` ile birleştirilip `/admin/navigation` ("Navigasyon Yöneticisi") olmalı. `/admin/settings` içindeki menü görünürlüğü bloğu bu sayfaya taşınmalı ve Ayarlar'da yalnızca bir bağlantı bırakılmalı. Eski iki rota `redirect` ile yeni sayfaya yönlenmeli, admin menüsünde tek madde kalmalı. Bu birleştirme B1, B4, B9 ve B10'u yapısal olarak çözüyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/admin/sidebar-order` emekli; `permanentRedirect` ile **`/admin/navigation` (Navigasyon Stüdyosu)** rotasına yönlenir. Ayrıntılı yapı: `admin_menu-groups.md` → Uygulama (Dalga 2). Sürüm kontrolsüz `PUT /api/admin/settings/sidebar-order` ucu SİLİNDİ (tek istemcisi bu sayfaydı); sıra artık `PUT /api/admin/navigation` ile C2 kilitli yazılır.
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR: proxy + admin kapısı + sunucu bileşeninde `requireAuth`. |
+| 2 | API yetkisi | ÇALIŞIYOR: defineRoute ADMIN. |
+| 3 | Hero | ÇALIŞIYOR: QDL `PageHeader` (ops, compact). |
+| 4 | Yenile | KALDIRILDI: onaysız taslak silen düğme yerine 409'da DirtyBar "güncel hali yükle"; "Geri al" açık bir eylem. |
+| 5 | Tümünü kaydet | ÇALIŞIYOR: "Yayınla" yalnız kirliyken açık; yalnız kirli rolleri ve yalnız değişen ayar anahtarlarını yazar. |
+| 6 | Kaydediliyor durumu | ÇALIŞIYOR: DirtyBar spinner. |
+| 7 | "Nasıl çalışır?" metni | KALDIRILDI: yanlış "yer değiştirir" metni yerine kontroller kendini anlatır (yukarı/aşağı taşı, grup seçimi). |
+| 8 | Yükleniyor | ÇALIŞIYOR: iskelet. |
+| 9 | Yükleme hatası | ÇALIŞIYOR: C2 yükleme kilidi (form yok, Tekrar dene). |
+| 10 | Kayıtlı sıra + yeni öğeler | ÇALIŞIYOR: `effectiveOrder` (kabukla aynı kural); eski kimlikler okumada kayda göç eder. |
+| 11 | Rol sekmeleri | ÇALIŞIYOR: URL durumlu, kirli noktalı. |
+| 12 | Fareyle sıralama | ÇALIŞIYOR: yukarı/aşağı düğmeleri; 200 ms `layout` geçişi + önizlemede vurgu halkası. |
+| 13 | Dokunmatik | ÇALIŞIYOR: ≥44px düğmeler (native DnD kaldırıldı). |
+| 14 | Klavye ile sıralama | ÇALIŞIYOR: her satırda etiketli düğmeler; gruplar bütün olarak taşınır. |
+| 15 | Sıra numarası | KALDIRILDI: düz numara gruplu menüde yanıltıcıydı; konum ağaçta ve önizlemede görünür. |
+| 16 | Çevrilmiş etiket | ÇALIŞIYOR: TR + EN birlikte. |
+| 17 | Teknik kimlik | ÇALIŞIYOR: yol (`href`) gösterilir. |
+| 18 | Menü ikonu | ÇALIŞIYOR: kayıttaki ikon. |
+| 19 | Grup bağlamı | ÇALIŞIYOR: gerçek grup ağacı (B1 kapandı). |
+| 20 | Görünürlük/modül/teamOnly | ÇALIŞIYOR: anahtar + rozetler. |
+| 21 | Dirty / beforeunload | ÇALIŞIYOR |
+| 22 | Varsayılana sıfırla | ÇALIŞIYOR: rol bazında; varsayılana eşit sıra saklanmaz. |
+| 23 | Son güncelleme (zaman/kişi) | ÇALIŞIYOR: başlık bilgisi. |
+| 24 | Eşzamanlı düzenleme | ÇALIŞIYOR: 428/409 (C2). |
+| 25 | Sunucu doğrulaması | ÇALIŞIYOR: dizi üst sınırı 400, tekilleştirme, kayıt kimliği zorunlu. |
+| 26 | Rate limit | ÇALIŞIYOR: `checkRateLimitDb`. |
+| 27 | Denetim | ÇALIŞIYOR: aynı transaction, tek satır. |
+| 28 | Admin'in kendi sidebar'ı | ÇALIŞIYOR: `revalidateTag(nav-settings)`; kabuk sunucuda çözüldüğü için sonraki gezinmede günceldir. |
+| 29 | Kayıt hata mesajı | ÇALIŞIYOR: Türkçe zarf mesajı DirtyBar'da. |
+| 30 | Tüketici okuma ucu | ÇALIŞIYOR (artık gereksiz): kabuk `getShellConfig` ile sunucuda ve önbellekli; `/api/settings/sidebar-*` uçlarını kullanan istemci kalmadı. |
+| 31 | Sıranın uygulanması | ÇALIŞIYOR: sunucuda, sıçrama yok (B4). |
+| 32 | Arama | ÇALIŞIYOR |
+| 33 | Azaltılmış hareket | ÇALIŞIYOR |
+
+**Kapanan bulgular (12/12):** B1 (gruplu gerçek görünüm), B2 (klavye/dokunmatik), B3 (yalnız kirli rol + C2), B4 (sunucu kabuğu, navigasyon ajanı), B5 (dirty/onay/sıfırla), B6 (Türkçe hata), B7 (kimlik/tekillik/sınır), B8 (yanlış yardım metni kaldırıldı), B9 (önbellek tazeleme), B10 (gizli/kapalı rozetleri), B11 (rol başına tekrar yerine tek sözleşme), B12 (defineRoute → `requireAuth`, admin kapısı dahil).
+
+**Kalanlar:** `/api/settings/sidebar-order` ve `/api/settings/sidebar-groups` (salt okuma, istemcisi yok) kaldırılmadı; navigasyon ajanı kaldırabilir.

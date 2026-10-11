@@ -214,3 +214,56 @@ Sayfa küçük ve temel işini yapıyor: kayıt, audit log ve runtime'da sidebar
 - Sunucu: PUT gövdesine `baseUpdatedAt` ekle; mevcut satırın `updatedAt` değeri farklıysa 409 dön (iyimser kilit). İstemci GET'ten aldığı `updatedAt`'ı saklayıp gönderir; 409'da "Başka bir admin değiştirdi, yeniden yükle" diyaloğu gösterir. Okuma + yazma + audit tek `prisma.$transaction` içinde yapılmalı.
 - GET handler'ını try/catch ile sar, her durumda `{ success: false, error }` JSON döndür (yanıt sözleşmesi tutarlı olsun).
 - İsteğe bağlı: PUT'u "rolün tam durumu" yerine yalnızca değişen anahtarların farkı (patch) olarak tasarlamak, kısmi yükleme hatalarında kaybı yapısal olarak engeller.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/admin/menu-groups` emekli; `permanentRedirect` ile **`/admin/navigation` (Navigasyon Stüdyosu)** rotasına yönlenir (sorgu parametreleri korunur). Sıra + grup + görünürlük tek yüzeyde, menünün gerçek yapısında (gruplar ilk üyesinin konumunda, alt sayfalar üst sayfanın altında) düzenlenir.
+
+**Yeni yapı:** `app/admin/navigation/page.tsx` (sunucu bileşeni; durum sunucuda ön yüklenir) → `components/admin/a-navigasyon-studyosu/` (`studio.tsx` istemci adası, `preview.tsx`, `history-sheet.tsx`, saf `tree.ts`, `api.ts`). Sözleşme `lib/admin-navigation/contract.ts` (zod + budama + fark özeti; istemci/sunucu ortak), çekirdek `lib/admin-navigation/navigation.server.ts`. Uçlar: `GET/PUT /api/admin/navigation`, `GET /api/admin/navigation/history` (defineRoute, ADMIN, rate limit, zod). Test: `__tests__/admin/a-navigasyon-studyosu/navigation-server.test.ts` (10 test).
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Admin menüsünde giriş | ÇALIŞIYOR: kayıtta tek giriş `admin.navigation` (Navigation ikonu); iki eski giriş `redirectFrom` ile kayıttan kalktı. |
+| 2 | Başlık/açıklama | ÇALIŞIYOR: QDL `PageHeader` (ops kaydı) + son yayın bilgisi (Europe/Istanbul saati + kişi). |
+| 3 | Kaydet | ÇALIŞIYOR: "Yayınla" tüm kirli rolleri tek istekte gönderir; hangi rollerin kirli olduğu çubukta yazar. |
+| 4 | Kaydediliyor / çift tıklama kilidi | ÇALIŞIYOR: DirtyBar `saving`. |
+| 5 | Rol sekmeleri | ÇALIŞIYOR: Admin, Bayi, Müşteri; `?rol=` URL durumu; sekme başına kirli noktası. |
+| 6 | Admin menüsü gruplama | ÇALIŞIYOR: admin menüsünün 10 grubu düzenlenebilir. |
+| 7 | İlk yükleme | ÇALIŞIYOR: sunucuda ön yükleme; düşerse QueryState hata + Tekrar dene. |
+| 8 | Yükleniyor göstergesi | ÇALIŞIYOR: Suspense + form iskeleti; form veri gelmeden açılmaz. |
+| 9 | Yükleme hatası | ÇALIŞIYOR: C2 yükleme kilidi (form yok, `ErrorState` + Tekrar dene); varsayılan asla "kayıtlı ayar" gibi sunulmaz. |
+| 10 | Grup adı düzenleme | ÇALIŞIYOR: TR ve EN ayrı alanlar. |
+| 11 | Varsayılan ad placeholder | ÇALIŞIYOR: alanda yalnız override durur; "Özelleştirildi" rozeti. |
+| 12 | Boşaltınca varsayılana dönme | ÇALIŞIYOR: alt metinde açıklanır + grup başına "varsayılana döndür" düğmesi. |
+| 13 | Uzunluk sınırı | ÇALIŞIYOR: istemcide `maxLength=60`, sunucuda alan mesajlı zod. |
+| 14 | Çok dilli grup adı | ÇALIŞIYOR: `{tr,en}`; önizlemede TR/EN anahtarı. |
+| 15 | Öğe → grup atama | ÇALIŞIYOR: gerçek sırada; taşınan öğe hedef grubun sonuna yerleşir (grup konumu kaymaz). |
+| 16 | Grupsuz seçeneği | ÇALIŞIYOR |
+| 17 | Canlı grup adı seçeneklerde | ÇALIŞIYOR |
+| 18 | Etiket/ikon | ÇALIŞIYOR: kayıttaki ikon + TR/EN etiket + yol. |
+| 19 | Ölü `grouped` hesabı | KALDIRILDI: sayfa yeniden yazıldı; grup görünümü artık gerçek ağaç. |
+| 20 | Başarı bildirimi | ÇALIŞIYOR: toast + ekran okuyucu duyurusu. |
+| 21 | Hata bildirimi | ÇALIŞIYOR: zarf v2, Türkçe mesaj; JSON olmayan gövde güvenle ele alınır. |
+| 22 | Sunucu doğrulaması | ÇALIŞIYOR: öğe, grup ve görünürlük anahtarları kayıtla doğrulanır (varsayılan reddet; 400 VALIDATION + liste). |
+| 23 | Yetki | ÇALIŞIYOR: defineRoute `roles:['ADMIN']` + proxy kapısı. |
+| 24 | Rate limit | ÇALIŞIYOR: `checkRateLimitDb` (Redis öncelikli), read/mutation politikaları. |
+| 25 | Denetim | ÇALIŞIYOR: yazımlarla AYNI transaction'da tek `navigation_studio_publish` satırı (aktör anlık görüntüsüyle). |
+| 26 | Runtime uygulaması | ÇALIŞIYOR: kabuk sunucuda `getShellConfig` ile (önbellekli); yayında `revalidateTag(nav-settings)`. |
+| 27 | Canlı önizleme | ÇALIŞIYOR: kabuğun kendi `buildShellConfig` fonksiyonu taslakla çalışır; gizli ve modülü kapalı öğeler düşer, mobil alt sekmeler görünür, değişen satır vurgulanır. |
+| 28 | Dirty / çıkış uyarısı | ÇALIŞIYOR: DirtyBar (beforeunload, Ctrl/⌘+S). |
+| 29 | Varsayılana sıfırla | ÇALIŞIYOR: rol bazında ve grup adı bazında (taslakta; Yayınla ile kalıcı). |
+| 30 | "Özelleştirildi" / fark | ÇALIŞIYOR: rozetler + "Farkı gör" diyaloğu (son yayına göre insan okunur fark). |
+| 31 | Eşzamanlı düzenleme | ÇALIŞIYOR: C2 korunur; `baseVersions` yoksa 428, uyuşmazlıkta 409 → DirtyBar "güncel hali yükle". |
+| 32 | Arama/filtre | ÇALIŞIYOR: TR/EN etiket, yol, anahtar kelime, grup adı. |
+| 33 | Görünürlük/modül durumu | ÇALIŞIYOR: satırda görünürlük anahtarı; "Modül kapalı → Modüller" salt okunur bağlantı; "Yalnız ekip" rozeti. |
+| 34 | Grup ekleme/silme/ikon/sıra | Grup SIRASI ÇALIŞIYOR (yukarı/aşağı). Grup ekleme/silme/ikon KALDIRILDI: grup kataloğu kayıt kodudur (`NAV_GROUPS`); DB'den grup üretmek kayıt, yönlendirme ve ⌘K bütünlüğünü bozar. |
+| 35 | Sürüm geçmişi / geri alma | ÇALIŞIYOR: Geçmiş çekmecesi (sayfalı; eski sayfaların ve Ayarlar görünürlüğünün kayıtları dahil), "Taslağa yükle" → önizle → yayınla. |
+| 36 | Mobil yerleşim | ÇALIŞIYOR: tek sütun, önizleme içerikten sonra, ≥44px hedefler, satır kontrolleri alt satıra sarar. |
+| 37 | Erişilebilir etiketler | ÇALIŞIYOR: her input, select, switch ve ikon butonunda görünür etiket ya da `aria-label`. |
+| 38 | Azaltılmış hareket | ÇALIŞIYOR: `m` + `layout` ile 200 ms konum geçişi; `useMotionPolicy` ile anlık. |
+
+**Kapanan bulgular (12/12):** 1 (yükleme hatası → C2 kilidi), 2 (çok dilli ad), 3 (üç sayfa → tek stüdyo), 4 (önizleme; taşıma yan etkisi giderildi), 5 (tüm kirli roller + gösterge), 6 (409/428), 7 (zarf v2, Türkçe hata), 8 (kayıt doğrulaması; varsayılana eşit değer saklanmaz), 9 (sunucu önbellekli kabuk), 10 (ölü kod), 11 (etiketler), 12 (QDL v2 görsel dil).
+
+**Kalanlar:** grup oluşturma/silme/ikon (gerekçe yukarıda); segment/plan hedefli menü (veri modeli yok, ayrı ürün kararı). Sürükle-bırak yerine klavyede ve dokunmatikte aynı çalışan yukarı/aşağı + grup seçimi kullanıldı (WCAG 2.5.7 tek işaretçi alternatifi). Not: `/admin/settings` görünürlük ucu (`/api/admin/settings/visibility`, başka yüzey) hâlâ sürüm kontrolü olmadan yazıyor; stüdyo yazımları sürümlü. O yüzey de C2'ye geçmeli.
