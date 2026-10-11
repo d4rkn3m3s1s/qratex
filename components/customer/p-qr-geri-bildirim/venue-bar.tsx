@@ -5,13 +5,16 @@
  * envanter #7), masa/şube, dil düğmesi (global AppLocaleProvider: header/`<html lang>`
  * birlikte değişir — Bulgu 12), adım göstergesi.
  */
+import * as React from 'react';
 import { Languages } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FunnelCopy } from './copy';
 
 export function VenueMark({ name, logoUrl, size = 'md' }: { name: string; logoUrl: string | null; size?: 'md' | 'lg' }) {
   const box = size === 'lg' ? 'h-16 w-16 text-2xl' : 'h-10 w-10 text-base';
-  if (logoUrl) {
+  // Kırık/erişilemeyen logo URL'sinde tarayıcının kırık resim simgesi yerine baş harfe düş.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (logoUrl && failedUrl !== logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- bayi logosu harici/R2 URL'si; next/image alan adı listesine bağlı kalmasın
       <img
@@ -21,6 +24,7 @@ export function VenueMark({ name, logoUrl, size = 'md' }: { name: string; logoUr
         height={size === 'lg' ? 64 : 40}
         className={cn(box, 'shrink-0 rounded-control border border-subtle bg-surface-2 object-cover')}
         decoding="async"
+        onError={() => setFailedUrl(logoUrl)}
       />
     );
   }

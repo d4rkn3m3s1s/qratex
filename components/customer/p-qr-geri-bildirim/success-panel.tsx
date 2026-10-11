@@ -17,7 +17,8 @@ import type { FunnelCopy } from './copy';
 import type { FunnelViewerInfo } from './types';
 import { btnPrimary, btnSecondary } from './button-styles';
 
-export type FunnelOutcome = { kind: 'sent'; reward: FeedbackRewardResult } | { kind: 'queued' };
+/** `offline`: cihaz çevrimdışıydı; değilse sunucu/ağ hatası sonrası kuyruğa alındı (metin farklı — sahte "çevrimdışısın" yok). */
+export type FunnelOutcome = { kind: 'sent'; reward: FeedbackRewardResult } | { kind: 'queued'; offline: boolean };
 
 function withClaimIntent(path: string): string {
   return `${path}${path.includes('?') ? '&' : '?'}claim=1`;
@@ -62,7 +63,7 @@ export function SuccessPanel({
         <h1 ref={headingRef} tabIndex={-1} className="qx-h1 text-fg outline-none">
           {queued ? copy.successQueuedTitle : copy.successTitle}
         </h1>
-        <p className="qx-body text-fg-muted">{queued ? copy.successQueued : copy.successSub(venueName)}</p>
+        <p className="qx-body text-fg-muted">{outcome.kind === 'queued' ? (outcome.offline ? copy.successQueued : copy.successQueuedRetry) : copy.successSub(venueName)}</p>
       </div>
 
       {reward && (reward.status === 'credited' || reward.status === 'capped') && (

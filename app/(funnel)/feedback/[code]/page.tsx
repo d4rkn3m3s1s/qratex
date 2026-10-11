@@ -78,7 +78,16 @@ export default async function FeedbackPage({ params, searchParams }: PageProps) 
   const selfPath = attribution.segment ? `${basePath}?segment=${encodeURIComponent(attribution.segment)}` : basePath;
 
   if (lookup.status !== 'ok') {
-    return <FeedbackStatusScreen status={lookup.status} locale={locale} selfPath={selfPath} />;
+    // DB erişilemezse oturum da doğrulanamaz; ek sorgu yapılmaz.
+    const errViewer = lookup.status === 'unavailable' ? null : await resolveOptionalViewer();
+    return (
+      <FeedbackStatusScreen
+        status={lookup.status}
+        locale={locale}
+        selfPath={selfPath}
+        canScanInApp={errViewer?.role === 'CUSTOMER'}
+      />
+    );
   }
   const venue = lookup.venue;
 

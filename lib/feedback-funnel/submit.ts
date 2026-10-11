@@ -170,7 +170,7 @@ export async function submitFeedback(ref: QrRef, body: SubmitFeedbackBody, ctx: 
           message:
             minted.credited > 0
               ? `Geri bildirimin için ${minted.credited} puan kazandın.`
-              : 'Yorumun işletmeye ulaştı. Bugünkü yorum puanı sınırına ulaştığın için puan eklenmedi.',
+              : 'Yorumun işletmeye ulaştı. Yorum puanı sınırına (günlük ya da haftalık) ulaştığın için puan eklenmedi.',
           type: 'success',
           data: { feedbackId: created.id, pointsEarned: minted.credited, xpEarned: minted.xpCredited, ctaPath: '/customer/me/voices' },
         },

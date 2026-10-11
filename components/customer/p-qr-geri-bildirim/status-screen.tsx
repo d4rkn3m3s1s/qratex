@@ -3,6 +3,10 @@
  * Eski sayfa sunucunun ayrıntılı nedenini atıp "Bir hata oluştu" diyordu ve metinler EN modda
  * da Türkçeydi (envanter #3). Şimdi neden + ne yapılacağı, iki dilde; DB erişilemezse
  * "tekrar dene" (sayfayı yeniden ister).
+ *
+ * "Yeniden tara" (`/customer/scan`) yalnız MÜŞTERİ oturumunda gösterilir: o yol CUSTOMER
+ * ister; anonim ziyaretçi girişe, bayi/personel kendi paneline yönlendiriliyordu (kırık
+ * eylem). Diğerleri telefon kamerasıyla yeniden okutur; yalnız "Ana sayfa" kalır.
  */
 import Link from 'next/link';
 import { AlertTriangle, QrCode, RotateCw } from 'lucide-react';
@@ -14,10 +18,13 @@ export function FeedbackStatusScreen({
   status,
   locale,
   selfPath,
+  canScanInApp = false,
 }: {
   status: Exclude<VenueStatus, 'ok'>;
   locale: FunnelLocale;
   selfPath: string;
+  /** Görüntüleyen müşteri oturumunda mı (uygulama içi Tara erişilebilir). */
+  canScanInApp?: boolean;
 }) {
   const copy = getFunnelCopy(locale);
   const unavailable = status === 'unavailable';
@@ -45,13 +52,13 @@ export function FeedbackStatusScreen({
             <RotateCw aria-hidden className="h-4 w-4" />
             {copy.reload}
           </a>
-        ) : (
+        ) : canScanInApp ? (
           <Link href="/customer/scan" className={btnPrimary}>
             <QrCode aria-hidden className="h-4 w-4" />
             {copy.scanAgain}
           </Link>
-        )}
-        <Link href="/" className={btnSecondary}>
+        ) : null}
+        <Link href="/" className={unavailable || canScanInApp ? btnSecondary : btnPrimary}>
           {copy.goHome}
         </Link>
       </div>

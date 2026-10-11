@@ -88,7 +88,7 @@ export async function claimFeedback(userId: string, token: string, now: Date = n
           message:
             minted.credited > 0
               ? `Hesabına bağladığın geri bildirim için ${minted.credited} puan kazandın.`
-              : 'Yorumun hesabına eklendi. Bugünkü yorum puanı sınırına ulaştığın için puan eklenmedi.',
+              : 'Yorumun hesabına eklendi. Yorum puanı sınırına (günlük ya da haftalık) ulaştığın için puan eklenmedi.',
           type: 'success',
           data: { feedbackId, pointsEarned: minted.credited, xpEarned: minted.xpCredited, ctaPath: '/customer/me/voices' },
         },

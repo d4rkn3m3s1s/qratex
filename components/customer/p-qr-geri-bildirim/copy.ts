@@ -23,7 +23,7 @@ const tr = {
   previewMember: (base: number, detailed: number, threshold: number) =>
     detailed > base ? `Bu yorum +${base} puan · ${threshold}+ karakter yazarsan +${detailed}` : `Bu yorum +${base} puan kazandırır`,
   previewCapLeft: (n: number) => `Bugün yorumlardan kazanabileceğin: ${n} puan`,
-  previewCapReached: 'Bugünkü yorum puanı sınırına ulaştın; yorumun yine de işletmeye ulaşır.',
+  previewCapReached: 'Yorum puanı sınırına ulaştın (günlük ya da haftalık); yorumun yine de işletmeye ulaşır.',
   previewGuest: (base: number) => `Üye olarak gönderirsen +${base} puan kazanırsın.`,
   previewGuestAfter: 'Göndermeden sonra da hesabına bağlayabilirsin.',
   previewInsider: 'Bu işletmenin ekibindesin: yorumun kayda geçer ama puan kazandırmaz ve “işletme içi” olarak işaretlenir.',
@@ -31,13 +31,13 @@ const tr = {
   // Adım 2
   detailsTitle: 'Biraz daha anlatır mısın?',
   detailsOptional: 'Hepsi isteğe bağlı — istersen doğrudan gönder.',
-  tagsLabel: (rating: number) => (rating <= 2 ? 'Ne ters gitti?' : rating === 3 ? 'Neler öne çıktı?' : 'En çok ne hoşuna gitti?'),
+  tagsLabel: (rating: number): string => (rating <= 2 ? 'Ne ters gitti?' : rating === 3 ? 'Neler öne çıktı?' : 'En çok ne hoşuna gitti?'),
   tagsHint: (max: number) => `En fazla ${max} seçim`,
   staffLabel: 'Seni kim ağırladı?',
   staffHint: 'Seçersen yorumun bu kişiyle ilişkilendirilir.',
   staffNone: 'Belirtmek istemiyorum',
   commentLabel: 'Yorumun',
-  commentPlaceholder: (rating: number) =>
+  commentPlaceholder: (rating: number): string =>
     rating <= 2 ? 'Neyi daha iyi yapabilirdik? İşletme bunu doğrudan okuyacak.' : 'Deneyimini birkaç cümleyle anlat…',
   charCount: (n: number, max: number) => `${n} / ${max}`,
   detailProgress: (left: number, bonus: number) => `${left} karakter daha yazarsan +${bonus} puan`,
@@ -75,6 +75,8 @@ const tr = {
   successTitle: 'Teşekkürler!',
   successQueuedTitle: 'Yorumun sırada',
   successQueued: 'Çevrimdışısın. Yorumun bu cihazda saklandı ve bağlantı gelince otomatik gönderilecek.',
+  successQueuedRetry:
+    'Sunucuya şu an ulaşılamadı. Yorumun bu cihazda saklandı; bu sayfa açıkken otomatik yeniden denenir, kapatırsan bir sonraki QR ziyaretinde gönderilir (23 saat içinde).',
   successSub: (venue: string) => `Yorumun ${venue} ekibine ulaştı.`,
   earned: 'Kazandığın',
   points: 'puan',
@@ -82,7 +84,7 @@ const tr = {
   levelLine: (level: number) => `Seviye ${level}`,
   toNextLevel: (xp: number) => `Sonraki seviyeye ${xp} XP`,
   levelUp: (level: number) => `Seviye atladın: Seviye ${level}!`,
-  cappedNote: 'Bugünkü yorum puanı sınırına ulaştın. XP kazanmaya devam ediyorsun; puan sınırı gece yarısı (İstanbul) yenilenir.',
+  cappedNote: 'Yorum puanı sınırına ulaştığın için bu yorumdan puan ve XP eklenmedi; yorumun yine de işletmeye ulaştı. Günlük sınır her gün 03:00’te (TSİ), haftalık sınır pazartesi 03:00’te yenilenir.',
   cappedPartial: (got: number, wanted: number) => `Günlük sınır nedeniyle ${wanted} yerine ${got} puan eklendi.`,
   squadLine: (n: number) => `Klanına +${n} güç`,
   conflictTitle: 'Yorumun kaydedildi',
@@ -148,7 +150,7 @@ const en: FunnelCopy = {
   previewMember: (base, detailed, threshold) =>
     detailed > base ? `This review earns +${base} points · write ${threshold}+ characters for +${detailed}` : `This review earns +${base} points`,
   previewCapLeft: (n) => `You can still earn ${n} points from reviews today`,
-  previewCapReached: 'You reached today’s review points limit; your review still reaches the business.',
+  previewCapReached: 'You reached the review points limit (daily or weekly); your review still reaches the business.',
   previewGuest: (base) => `Send as a member to earn +${base} points.`,
   previewGuestAfter: 'You can also link it to your account after sending.',
   previewInsider: 'You are on this business’s team: your review is recorded but earns no points and is marked “internal”.',
@@ -196,6 +198,8 @@ const en: FunnelCopy = {
   successTitle: 'Thank you!',
   successQueuedTitle: 'Your review is queued',
   successQueued: 'You are offline. Your review is saved on this device and will be sent automatically when you are back online.',
+  successQueuedRetry:
+    'We could not reach the server right now. Your review is saved on this device; it is retried automatically while this page is open, or sent on your next QR visit (within 23 hours).',
   successSub: (venue) => `Your review reached the ${venue} team.`,
   earned: 'You earned',
   points: 'points',
@@ -203,7 +207,7 @@ const en: FunnelCopy = {
   levelLine: (level) => `Level ${level}`,
   toNextLevel: (xp) => `${xp} XP to the next level`,
   levelUp: (level) => `Level up: Level ${level}!`,
-  cappedNote: 'You reached today’s review points limit. You keep earning XP; the points limit resets at midnight (Istanbul).',
+  cappedNote: 'You reached the review points limit, so this review added no points or XP; it still reached the business. The daily limit resets every day at 03:00 (Istanbul), the weekly one on Monday at 03:00.',
   cappedPartial: (got, wanted) => `Because of the daily limit, ${got} of ${wanted} points were added.`,
   squadLine: (n) => `+${n} power to your squad`,
   conflictTitle: 'Your review is recorded',

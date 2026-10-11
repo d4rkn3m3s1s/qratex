@@ -112,8 +112,9 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
       setIdemKey(newIdempotencyKey());
     }
     setHydrated(true);
-    // Tarama olayı: sayfa başına bir kez (sunucu 30 dk tekilleştirir).
-    postScan(venue.code, attribution);
+    // Tarama olayı: sayfa başına bir kez (sunucu 30 dk tekilleştirir). İşletmenin kendi
+    // sahibi/personeli QR'ı önizlerken `qr_scanned` / `scanCount` şişirilmez.
+    if (preview?.mode !== 'insider') postScan(venue.code, attribution);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız ilk yükleme
   }, []);
 
@@ -219,7 +220,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
     clearDraft(venue.code);
     outbox.refreshPending();
     setError(null);
-    setOutcome({ kind: 'queued' });
+    setOutcome({ kind: 'queued', offline: typeof navigator !== 'undefined' && navigator.onLine === false });
     setStep('done');
     announce(copy.successQueuedTitle);
   };
@@ -273,10 +274,18 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
         onToggleLocale={toggleLocale}
       />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-lg flex-1 px-4 pb-40 pt-5 outline-none">
-        <div className="space-y-3" aria-live="polite">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={cn(
+          'mx-auto w-full max-w-lg flex-1 px-4 pt-5 outline-none',
+          // Sabit alt çubuk (hata + düğmeler + KVKK satırı) son alanı örtmesin; bitti adımında çubuk yok.
+          step === 'done' ? 'pb-10' : 'pb-[calc(env(safe-area-inset-bottom)+14rem)]'
+        )}
+      >
+        <div className="space-y-3">
           {outboxNote && (
-            <p role="status" className="flex items-center gap-2 rounded-control border border-success-border bg-success-subtle px-3 py-2 qx-small text-fg">
+            <p className="flex items-center gap-2 rounded-control border border-success-border bg-success-subtle px-3 py-2 qx-small text-fg">
               <Send aria-hidden className="h-4 w-4 shrink-0 text-success" />
               {outboxNote}
             </p>

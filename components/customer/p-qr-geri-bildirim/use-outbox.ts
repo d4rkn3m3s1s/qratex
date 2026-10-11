@@ -4,12 +4,18 @@
  * Çevrimdışı kuyruk boşaltma: sayfa açılınca ve `online` olayında bekleyen yorumları
  * (kendi `Idempotency-Key`'leriyle) gönderir. Geçici hatada (ağ, 5xx, 429) bekler; kalıcı
  * hatada (doğrulama, QR kapalı, çakışma) düşürür — sonsuz deneme yok.
+ *
+ * Çevrimiçiyken kuyruğa alınan yorum (5xx / zaman aşımı sonrası) için `online` olayı hiç
+ * gelmez: bekleyen varken sayfa görünürken periyodik yeniden deneme yapılır (aksi hâlde
+ * "otomatik gönderilecek" vaadi sayfa açıkken karşılanmıyordu).
  */
 import * as React from 'react';
 import { postFeedback } from './api';
 import { addClaim, readOutbox, writeOutbox, type OutboxItem } from './storage';
 
 const RETRYABLE = new Set(['network', 'server', 'rate_limited']);
+
+export const OUTBOX_RETRY_MS = 30_000;
 
 export function useOutbox(onSent: (count: number) => void) {
   const [pending, setPending] = React.useState(0);
@@ -64,6 +70,21 @@ export function useOutbox(onSent: (count: number) => void) {
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
   }, [flush]);
+
+  React.useEffect(() => {
+    if (pending === 0) return;
+    const id = window.setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') void flush();
+    }, OUTBOX_RETRY_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void flush();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [pending, flush]);
 
   return { pending, flush, refreshPending: () => setPending(readOutbox().length) };
 }
