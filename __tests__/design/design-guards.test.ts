@@ -67,6 +67,12 @@ describe('katman ve tipografi kuralları', () => {
     expect(tw).not.toMatch(/safelist/);
   });
 
+  it('liste kademesi bütçeli: `delay: index * N` yerine staggerDelay(index) (O2 — 40 öğede 4 sn bekleme)', () => {
+    // Dekoratif sonsuz döngüler (zeminler, asistanın 3 noktalı yazıyor göstergesi) liste değildir.
+    const allow = ['components/ui/backgrounds/', 'components/landing/LandingBackground.tsx', 'components/chat/chatbot.tsx'];
+    expect(offenders(/delay:\s*(?:i|index|idx)\s*\*\s*\d*\.?\d+/, allow)).toEqual([]);
+  });
+
   it('yıkıcı işlem onayı native confirm() değil ConfirmAction (O3)', () => {
     // Tek istisna: kaydedilmemiş değişiklikte sayfadan ayrılma koruması (senkron yönlendirme kesmesi).
     const allow = ['components/admin/a-kesif-bagis/discovery/discovery-center.tsx'];

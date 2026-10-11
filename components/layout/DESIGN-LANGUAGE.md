@@ -25,14 +25,18 @@ arşivlendi (`docs/archive/`) ve ürünü temsil etmez.
 4. **Sayfa iskeleti:** `PanelPage` + `PageHeader` (`compact` varsayılan, `hero` yalnız panel ana
    sayfası). Eski `DashboardPageHero` / `AdminPremiumHero` / `DashboardPageHeading` kaldırıldı.
 5. **Durumlar:** `QueryState` (yükleme/hata/boş), `EmptyState`, `ErrorState`; yıkıcı işlem `ConfirmAction`
-   (native `confirm()` yok). Panel `loading.tsx` yalnız içerik iskeleti çizer (kabuk layout'ta).
+   (native `confirm()` yok; tek istisna kaydedilmemiş değişiklikle sayfadan ayrılma koruması).
+   Panel `loading.tsx` yalnız içerik iskeleti, panel `error.tsx` yalnız `PanelRouteError` çizer
+   (kabuk ve `<main>` layout'ta).
 6. **Tipografi:** `qx-display|h1|h2|h3|body|small|caption|overline`; bilgi taşıyan metin ≥ 12px
    (`text-[≤9px]` yasak). `font-mono` = JetBrains Mono (kod/kimlik), `font-display` = Space Grotesk (skor).
 7. **Hareket:** `lib/motion` token ve varyantları; ham süre/easing yok; sonsuz döngü yalnız `Ambient`
    içinde ve yalnız `play` kaydında. Uygulama içi "animasyonları azalt" tüm framer + CSS'e ulaşır.
 8. **Ad alanı:** projeye özel CSS yardımcıları `qx-` önekli; Tailwind/eklenti adlarını (`animate-in`,
    `fade-in`, `delay-*`) asla yeniden tanımlama.
-9. **Katmanlar:** `z-base|raised|sticky|header|overlay|modal|popover|toast|skip`; keyfi `z-[N]` yok.
+9. **Katmanlar:** `z-base 0 · raised 10 · sticky 20 · header 30 · overlay 40 · floating 45 · modal 50 ·
+   toast 70 · popover 80 · skip 100`; sayfa üstü katmanda keyfi `z-[N≥10]` yok (bileşen içi yerel istif
+   `z-[1..9]` serbest). Stagger `staggerDelay(i)` ile bütçeli (toplam ≤ 0,6 sn).
 10. **Erişilebilirlik modları** (yüksek kontrast, renk körü, yazı boyutu, hareket azaltma) yalnız rol
     token'larını yeniden tanımlar ve tema paletinden daha özgüldür (tema onları ezemez).
 

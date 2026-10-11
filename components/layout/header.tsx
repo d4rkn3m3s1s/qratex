@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { m as Motion } from 'framer-motion';
+import { staggerDelay } from '@/lib/motion/variants';
 import { Menu, LogIn, ChevronRight, Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -363,9 +364,9 @@ export function Header() {
                   {navigation.map((item, index) => (
                     <Motion.div
                       key={item.href}
-                      initial={{ opacity: 0, x: 20 }}
+                      initial={{ opacity: 0, x: 8 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
+                      transition={{ delay: staggerDelay(index) }}
                     >
                       <Link prefetch={false}
                         href={item.href}
