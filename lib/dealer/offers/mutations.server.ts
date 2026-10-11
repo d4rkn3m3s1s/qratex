@@ -248,7 +248,7 @@ export async function searchPersonalCandidates(dealerId: string, q: string): Pro
   const { stats } = await getDealerCustomerStats(dealerId, { sort: 'recent', limit: CANDIDATE_POOL });
   const ids = stats.map((s) => s.customerId).filter((id) => id !== dealerId);
   if (ids.length === 0) return [];
-  const [users, audience, open] = await Promise.all([
+  const [users, audience, open, staff] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: ids }, role: 'CUSTOMER', anonymizedAt: null },
       select: { id: true, name: true },
@@ -258,8 +258,11 @@ export async function searchPersonalCandidates(dealerId: string, q: string): Pro
       where: { ...personalOfferWhere(dealerId), userId: { in: ids }, status: { in: [...REMEDY_OPEN_STATUSES] } },
       select: { userId: true },
     }),
+    // İşletme içi kişi (personel kaydı, pasif dahil) aday değildir — bkz. sendPersonalOffer.
+    prisma.dealerStaff.findMany({ where: { dealerId, userId: { in: ids } }, select: { userId: true } }),
   ]);
-  const nameById = new Map(users.map((u) => [u.id, u.name?.trim() || null]));
+  const insiders = new Set(staff.map((s) => s.userId));
+  const nameById = new Map(users.filter((u) => !insiders.has(u.id)).map((u) => [u.id, u.name?.trim() || null]));
   const reachable = new Set(audience.appUserIds);
   const openSet = new Set(open.map((o) => o.userId));
   const needle = foldTr(q.trim());
@@ -289,6 +292,14 @@ export async function sendPersonalOffer(params: { dealerId: string; actorId: str
     throw new ApiError('NOT_FOUND', 'Müşteri bulunamadı. Kişiye özel teklif yalnız işletmenizi ziyaret etmiş müşterilere gönderilebilir.');
   }
   const customerId = match.customerId;
+
+  // Puan basma açığı: işletme kendi personeline (müşteri rolündeki personel hesabı) puan türlü
+  // kişisel teklif gönderip kabul ettirerek bütçesinden puan aktarabiliyordu. İşletme içi kişi
+  // tarafsız müşteri değildir (geri bildirim/görev/lig ile aynı kural) → yokmuş gibi 404.
+  const insider = await prisma.dealerStaff.findFirst({ where: { dealerId, userId: customerId }, select: { id: true } });
+  if (insider) {
+    throw new ApiError('NOT_FOUND', 'Müşteri bulunamadı. İşletme personeline kişiye özel teklif gönderilemez.');
+  }
 
   // Ticari ileti: müşteri "Kampanya & Sürprizler" uygulama içi bildirimini kapattıysa gönderilmez.
   // Fail-closed: tercih okunamazsa hata fırlar, teklif açılmaz.

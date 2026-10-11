@@ -59,6 +59,7 @@ const prismaMock = {
   remedyTemplate: { findMany: jest.fn(async () => []) },
   remedyOffer: { findMany: jest.fn(async () => []), groupBy: jest.fn(async () => []), count: jest.fn(async () => 0) },
   auditLog: { create: jest.fn(async () => ({})) },
+  dealerStaff: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
 };
 jest.mock('@/lib/prisma', () => ({ prisma: prismaMock, isPrismaConnectivityError: () => false }));
 
@@ -71,7 +72,7 @@ import {
   resolveFlashWindow,
   utcToIstanbulWall,
 } from '@/lib/dealer/offers/rules';
-import { createFlashOffer, personalRef, sendPersonalOffer, stopFlashOffer } from '@/lib/dealer/offers/mutations.server';
+import { createFlashOffer, personalRef, searchPersonalCandidates, sendPersonalOffer, stopFlashOffer } from '@/lib/dealer/offers/mutations.server';
 
 const AUDIT = { ipAddress: null, userAgent: null };
 const base = { title: 'Kahve molası', body: 'Tüm filtre kahvelerde geçerli.', durationMinutes: 30, startMode: 'now' as const, startAt: null };
@@ -239,6 +240,26 @@ describe('sendPersonalOffer (B5: hedef müşteriye bağlı kişisel teklif)', ()
     await expect(sendPersonalOffer({ dealerId: 'dealer-1', actorId: 'dealer-1', input: foreign, audit: AUDIT })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it('işletme personeli (müşteri rolünde olsa da) kişisel teklif alamaz → 404, teklif açılmaz (puan basma)', async () => {
+    mockStats.mockResolvedValueOnce({ stats: [stat('cust-1')] });
+    prismaMock.dealerStaff.findFirst.mockResolvedValueOnce({ id: 'st1' } as never);
+    await expect(sendPersonalOffer({ dealerId: 'dealer-1', actorId: 'dealer-1', input, audit: AUDIT })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(prismaMock.dealerStaff.findFirst).toHaveBeenLastCalledWith({ where: { dealerId: 'dealer-1', userId: 'cust-1' }, select: { id: true } });
+    expect(mockCreateRemedy).not.toHaveBeenCalled();
+  });
+
+  it('aday listesinde işletme personeli görünmez', async () => {
+    mockStats.mockResolvedValueOnce({ stats: [stat('cust-1'), stat('staff-1')] });
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: 'cust-1', name: 'Ayşe Yılmaz' },
+      { id: 'staff-1', name: 'Mehmet Kaya' },
+    ] as never);
+    mockAudience.mockResolvedValueOnce({ ineligibleCount: 0, appUserIds: ['cust-1', 'staff-1'], pushUserIds: [] });
+    prismaMock.dealerStaff.findMany.mockResolvedValueOnce([{ userId: 'staff-1' }] as never);
+    const out = await searchPersonalCandidates('dealer-1', '');
+    expect(out.map((c) => c.name)).toEqual(['Ayşe Yılmaz']);
   });
 
   it('kampanya bildirimini kapatan müşteri → 409 CUSTOMER_OPTED_OUT', async () => {

@@ -239,7 +239,8 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
       </PageGrid>
 
       <CoverageNote data={data} />
-      <ScanPanel savedEnabled={data.config.enabled} dirty={dirty} />
+      {/* Kayıtlı ayar değişince eski kuru çalıştırma sonucu (ve "N taslağı ekle" düğmesi) düşer. */}
+      <ScanPanel key={savedKey} savedEnabled={data.config.enabled} dirty={dirty} />
 
       <section id="katalog" aria-labelledby="katalog-title" className="scroll-mt-24 space-y-3">
         <div>
@@ -409,6 +410,7 @@ function CoverageNote({ data }: { data: RemedyOverviewDto }) {
       <ul className="qx-small list-disc space-y-1 pl-4 text-fg-muted">
         <li>QR geri bildirimleri kapsanır; puan tetiği AI'dan bağımsızdır (metinsiz 1 yıldız da yakalanır).</li>
         <li>Anonim bırakılan geri bildirimlere teklif gönderilemez, atlanır.</li>
+        <li>İşletme sahibi ya da personelinin yazdığı ya da güvenlik denetiminin şüpheli bulduğu (güven işaretli) yorumlara taslak hazırlanmaz.</li>
         <li>Bir yoruma daha önce teklif açıldıysa (reddettikleriniz dahil) yeniden hazırlanmaz.</li>
         <li>
           Kayıp riski tetiği AI analizi gerektirir{data.aiAnalyze === false ? ' — şu an kapalı' : ''}. Tüketim (kasa) yorumları bu otomasyonun dışındadır; onlar için
@@ -437,7 +439,7 @@ function ScanPanel({ savedEnabled, dirty }: { savedEnabled: boolean; dirty: bool
   return (
     <SectionCard
       title="Geriye dönük tarama"
-      description="Son 14 günün eşik altındaki yorumlarını tarar. Önce dener, sonra onaylarsanız kuyruğa ekler."
+      description="Son 14 günün eşik altındaki (ya da açıksa kayıp riski yüksek) yorumlarını tarar. Önce dener, sonra onaylarsanız kuyruğa ekler."
       icon={<ScanSearch className="h-4 w-4" aria-hidden />}
     >
       <div className="space-y-3">

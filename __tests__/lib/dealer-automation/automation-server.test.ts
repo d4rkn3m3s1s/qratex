@@ -32,6 +32,7 @@ import {
   renderRemedyMessage,
 } from '@/lib/dealer-automation/remedy-config';
 import { ApiError } from '@/lib/http/define-route';
+import { maybeCreateAutoRemedyForFeedback } from '@/lib/remedy-automation-core';
 
 const actor = { dealerId: 'd1', actorId: 'd1' };
 
@@ -146,6 +147,37 @@ describe('geriye dönük tarama', () => {
     expect(r).toMatchObject({ dryRun: true, found: 6, anonymous: 1, alreadyOffered: 1, cooldown: 2, eligible: 2, capRemaining: 1, queued: 1 });
     expect(db.remedyOffer.create).not.toHaveBeenCalled();
     expect(db.settings.upsert).not.toHaveBeenCalled();
+  });
+
+  it('aday sorgusu çekirdek tetiğiyle aynı (puan YA DA açıksa kayıp riski) ve güven işaretlileri dışlar', async () => {
+    db.user.findUnique.mockResolvedValue({
+      dealerRemedyAutomation: { enabled: true, minRating: 2, churnEnabled: true, churnThreshold: 0.8, maxPerRun: 2, maxMonthlyAuto: 10, cooldownDays: 0 },
+    });
+    db.feedback.findMany.mockResolvedValue([]);
+    db.analyticsEvent.count.mockResolvedValue(0);
+    await scanRemedy(actor, true);
+    const where = db.feedback.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ deletedAt: null, trustFlagged: false, qrCode: { dealerId: 'd1' } });
+    expect(where.OR).toEqual([{ rating: { lte: 2 } }, { churnRisk: { gte: 0.8 } }]);
+    expect(where.rating).toBeUndefined();
+  });
+
+  it('çekirdek: güven işaretli yorum (personel/sahip/şüpheli) için taslak üretilmez', async () => {
+    const config = parseRemedyAutomationConfig({ enabled: true, minRating: 2 });
+    db.feedback.findUnique.mockResolvedValue({ trustFlagged: true });
+    const r = await maybeCreateAutoRemedyForFeedback({ feedbackId: 'f1', dealerId: 'd1', userId: 'u1', rating: 1, config });
+    expect(r).toEqual({ created: false, reason: 'not_eligible' });
+    expect(db.feedback.findUnique).toHaveBeenCalledWith({ where: { id: 'f1' }, select: { trustFlagged: true } });
+    expect(db.remedyOffer.create).not.toHaveBeenCalled();
+    expect(db.analyticsEvent.count).not.toHaveBeenCalled();
+  });
+
+  it('kayıp riski tetiği kapalıysa yalnız puan eşiği aranır', async () => {
+    db.user.findUnique.mockResolvedValue({ dealerRemedyAutomation: { enabled: true, minRating: 1, churnEnabled: false } });
+    db.feedback.findMany.mockResolvedValue([]);
+    db.analyticsEvent.count.mockResolvedValue(0);
+    await scanRemedy(actor, true);
+    expect(db.feedback.findMany.mock.calls[0][0].where.OR).toEqual([{ rating: { lte: 1 } }]);
   });
 });
 

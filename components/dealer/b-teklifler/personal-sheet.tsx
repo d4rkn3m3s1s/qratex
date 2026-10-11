@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import { Controller } from 'react-hook-form';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellOff, Check, Search, UserRound } from 'lucide-react';
 import { EntityEditorSheet, Field, TextareaField, useZodForm, errorMessageOf } from '@/components/ds/form';
 import { ChoiceChips } from '@/components/ds/a11y';
@@ -14,6 +14,9 @@ import type { PersonalCandidateDto } from '@/lib/dealer/offers/types';
 import { searchCandidates, sendPersonal } from './api';
 import { useOffersCopy, useOffersLocale } from './context';
 import { formatRelative } from './format';
+
+/** Aday araması önbellek anahtarı; gönderimden sonra temizlenir (açık teklif rozeti tazelensin). */
+const CANDIDATES_KEY = ['dealer', 'offers', 'personal-candidates'] as const;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -46,7 +49,7 @@ function CandidatePicker({
   const debounced = useDebounced(q, 300);
   const searchId = useId();
   const query = useQuery({
-    queryKey: ['dealer', 'offers', 'personal-candidates', debounced],
+    queryKey: [...CANDIDATES_KEY, debounced],
     queryFn: ({ signal }) => searchCandidates(debounced, signal),
     enabled: enabled && !value,
     placeholderData: keepPreviousData,
@@ -172,6 +175,7 @@ export function PersonalSheet({
   onSent: () => void;
 }) {
   const copy = useOffersCopy();
+  const queryClient = useQueryClient();
   const defaults: PersonalOfferInput = {
     ref: '',
     message: '',
@@ -207,7 +211,12 @@ export function PersonalSheet({
       submitLabel={copy.personalForm.submit}
       successToast={copy.personalForm.sent}
       onSubmit={(v) => sendPersonal(v)}
-      onSaved={onSent}
+      onSaved={() => {
+        // 30 sn'lik aday önbelleği az önce teklif alan müşteriyi "açık teklifi var" rozetsiz
+        // ve seçilebilir gösteriyordu (yeniden seçim → 409). Gönderimden sonra yeniden çekilir.
+        queryClient.removeQueries({ queryKey: CANDIDATES_KEY });
+        onSent();
+      }}
     >
       <Controller
         control={form.control}

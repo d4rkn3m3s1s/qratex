@@ -157,8 +157,20 @@ export async function scanRemedy(actor: Actor, dryRun: boolean, now: Date = new 
     throw new ApiError('AUTOMATION_DISABLED', 'Telafi otomasyonu kapalı. Önce açıp kaydedin.', { status: 409 });
   }
   const since = new Date(now.getTime() - SCAN_WINDOW_DAYS * DAY);
+  // Aday kümesi çekirdeğin tetiğiyle (`remedyTrigger`) AYNI: düşük puan YA DA (açıksa) yüksek
+  // kayıp riski — eskiden yalnız puan sorgulanıyor, "kayıp riski yüksekse de hazırla" tetiği
+  // taramada hiç aday üretmiyordu. Güven işaretli yorum (işletme sahibi/personeli ya da güven
+  // motorunun şüpheli bulduğu) telafi adayı değildir: puan türlü telafiyle puana çevrilemez.
+  const trigger: Prisma.FeedbackWhereInput[] = [{ rating: { lte: cfg.minRating } }];
+  if (cfg.churnEnabled) trigger.push({ churnRisk: { gte: cfg.churnThreshold } });
   const rows = await prisma.feedback.findMany({
-    where: { deletedAt: null, createdAt: { gte: since }, rating: { lte: cfg.minRating }, qrCode: { dealerId: actor.dealerId } },
+    where: {
+      deletedAt: null,
+      trustFlagged: false,
+      createdAt: { gte: since },
+      qrCode: { dealerId: actor.dealerId },
+      OR: trigger,
+    },
     orderBy: { createdAt: 'desc' },
     take: SCAN_CANDIDATE_CAP,
     select: { id: true, userId: true, rating: true, churnRisk: true, qrCodeId: true, _count: { select: { remedyOffers: true } } },
@@ -217,6 +229,7 @@ export async function scanRemedy(actor: Actor, dryRun: boolean, now: Date = new 
       config: cfg,
       notify: false,
       trigger: 'scan',
+      trustFlagged: false, // sorgu zaten güven işaretlileri dışladı
     });
     if (res.created && res.offerId) offerIds.push(res.offerId);
     else {

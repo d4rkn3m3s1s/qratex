@@ -62,6 +62,8 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
   /** Tarama kendi bildirimini toplu verir. */
   notify?: boolean;
   trigger?: 'event' | 'scan';
+  /** Çağıran güven işaretini zaten süzdüyse (tarama `trustFlagged: false` sorgular) yeniden okunmaz. */
+  trustFlagged?: boolean;
 }): Promise<{ created: boolean; offerId?: string; reason?: AutoRemedySkipReason }> {
   const { feedbackId, dealerId, userId, rating, churnRisk, qrCodeId } = params;
   if (!userId) return { created: false, reason: 'no_user' };
@@ -80,6 +82,15 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
 
   const trigger = remedyTrigger(cfg, rating, churnRisk);
   if (!trigger) return { created: false, reason: 'not_eligible' };
+
+  // Güven işaretli yorum (işletme sahibi/personeli ya da güven motorunun şüpheli bulduğu) telafi
+  // adayı değildir: puan türlü telafi kabul edilince bayi bütçesinden puan basılır → personelin
+  // kendi işletmesine düşük puan verip puan toplaması kapanır (görev/lig/klan ile aynı kural).
+  const flagged =
+    params.trustFlagged ??
+    (await prisma.feedback.findUnique({ where: { id: feedbackId }, select: { trustFlagged: true } }))?.trustFlagged ??
+    false;
+  if (flagged) return { created: false, reason: 'not_eligible' };
 
   if ((await countMonthlyAutoRemedies(dealerId)) >= cfg.maxMonthlyAuto) return { created: false, reason: 'monthly_limit' };
 
@@ -166,7 +177,7 @@ export async function maybeCreateAutoRemedyForFeedbackId(feedbackId: string): Pr
   try {
     const f = await prisma.feedback.findUnique({
       where: { id: feedbackId },
-      select: { id: true, userId: true, rating: true, churnRisk: true, deletedAt: true, qrCodeId: true, qrCode: { select: { dealerId: true } } },
+      select: { id: true, userId: true, rating: true, churnRisk: true, trustFlagged: true, deletedAt: true, qrCodeId: true, qrCode: { select: { dealerId: true } } },
     });
     if (!f || f.deletedAt || !f.qrCode) return;
     await maybeCreateAutoRemedyForFeedback({
@@ -176,6 +187,7 @@ export async function maybeCreateAutoRemedyForFeedbackId(feedbackId: string): Pr
       rating: f.rating,
       churnRisk: f.churnRisk,
       qrCodeId: f.qrCodeId,
+      trustFlagged: f.trustFlagged,
     });
   } catch (err) {
     console.error('[REMEDY_AUTOMATION] gerçek zamanlı taslak denenemedi:', err);
