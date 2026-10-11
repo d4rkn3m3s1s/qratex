@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import type { BusinessFormValues, DayHours, WeeklyHours } from '@/lib/dealer-settings/contract';
 import { validateWeek } from '@/lib/dealer-settings/hours';
 import { DAY_NAMES } from './format';
+import { useSettingsCopy } from './copy';
 
 const FULL_DAY = { open: '00:00', close: '24:00' };
 
@@ -28,6 +29,9 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
   const week = field.value as WeeklyHours;
   const issues = validateWeek(week);
   const baseId = useId();
+  const copy = useSettingsCopy();
+  const c = copy.hours;
+  const dayName = (i: number) => copy.days[i] ?? DAY_NAMES[i];
 
   const setDay = (index: number, next: DayHours) => {
     field.onChange(week.map((d, i) => (i === index ? next : d)));
@@ -40,19 +44,18 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
 
   return (
     <fieldset className="space-y-2" disabled={disabled} aria-describedby={`${baseId}-help`}>
-      <legend className="qx-body font-semibold text-fg">Çalışma saatleri</legend>
+      <legend className="qx-body font-semibold text-fg">{c.legend}</legend>
       <p id={`${baseId}-help`} className="qx-small text-fg-muted">
-        Keşfet kartında ve mekân sayfanızda “Açık · 18:00&apos;de kapanır” olarak görünür (İstanbul saati). Gece yarısını aşan
-        aralık için kapanışı açılıştan erken yazın (ör. 18:00 – 02:00).
+        {c.help}
       </p>
       <div className="flex flex-wrap gap-2 pt-1">
         <Button type="button" variant="outline" size="sm" onClick={() => copyTo(0, [1, 2, 3, 4])} disabled={disabled}>
           <Copy className="h-4 w-4" aria-hidden />
-          Pazartesiyi hafta içine kopyala
+          {c.copyWeekdays}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={() => copyTo(0, [1, 2, 3, 4, 5, 6])} disabled={disabled}>
           <Copy className="h-4 w-4" aria-hidden />
-          Pazartesiyi tüm günlere kopyala
+          {c.copyAll}
         </Button>
       </div>
       <ul className="divide-y divide-subtle rounded-card border border-subtle">
@@ -72,8 +75,8 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                   aria-describedby={dayIssues.length ? `${switchId}-err` : undefined}
                 />
                 <label htmlFor={switchId} className="qx-body font-medium text-fg">
-                  {DAY_NAMES[i]}
-                  <span className="qx-small block font-normal text-fg-muted">{day.open ? (full ? '24 saat açık' : 'Açık') : 'Kapalı'}</span>
+                  {dayName(i)}
+                  <span className="qx-small block font-normal text-fg-muted">{day.open ? (full ? c.allDay : c.open) : c.closed}</span>
                 </label>
               </div>
               {day.open && (
@@ -82,7 +85,7 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                     day.ranges.map((r, ri) => (
                       <div key={ri} className="flex flex-wrap items-center gap-2">
                         <label className="sr-only" htmlFor={`${switchId}-o${ri}`}>
-                          {DAY_NAMES[i]} {ri + 1}. aralık açılış
+                          {c.rangeOpen(dayName(i), ri + 1)}
                         </label>
                         <input
                           id={`${switchId}-o${ri}`}
@@ -96,7 +99,7 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                         />
                         <span aria-hidden className="text-fg-muted">–</span>
                         <label className="sr-only" htmlFor={`${switchId}-c${ri}`}>
-                          {DAY_NAMES[i]} {ri + 1}. aralık kapanış
+                          {c.rangeClose(dayName(i), ri + 1)}
                         </label>
                         <input
                           id={`${switchId}-c${ri}`}
@@ -110,7 +113,7 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                         />
                         {day.ranges.length > 1 && (
                           <IconButton
-                            aria-label={`${DAY_NAMES[i]} ${ri + 1}. aralığı kaldır`}
+                            aria-label={c.removeRange(dayName(i), ri + 1)}
                             icon={<Trash2 />}
                             variant="ghost"
                             size="sm"
@@ -131,7 +134,7 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                         }}
                       >
                         <Plus className="h-4 w-4" aria-hidden />
-                        Aralık ekle
+                        {c.addRange}
                       </Button>
                     )}
                     <label className="qx-small inline-flex min-h-11 cursor-pointer items-center gap-2 text-fg-muted">
@@ -141,7 +144,7 @@ export function HoursEditor({ control, disabled }: { control: Control<BusinessFo
                         checked={full}
                         onChange={(e) => setDay(i, { open: true, ranges: e.target.checked ? [FULL_DAY] : [{ open: '09:00', close: '18:00' }] })}
                       />
-                      24 saat açık
+                      {c.allDay}
                     </label>
                   </div>
                   {dayIssues.length > 0 && (

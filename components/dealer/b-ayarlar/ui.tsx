@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { errorText } from './api';
+import { useSettingsCopy } from './copy';
 
 /**
  * Anında kaydedilen anahtar satırı (bildirim/AI tercihleri). Satırın tamamı ≥ 44px; etiket
@@ -33,6 +34,7 @@ export function InstantSwitchRow({
   badge?: ReactNode;
 }) {
   const id = useId();
+  const copy = useSettingsCopy();
   const [pending, setPending] = useState<boolean | null>(null);
   const value = pending ?? checked;
 
@@ -41,7 +43,7 @@ export function InstantSwitchRow({
     try {
       await onSave(next);
     } catch (e) {
-      toast.error(errorText(e, 'Ayar kaydedilemedi.'));
+      toast.error(errorText(e, copy.common.saveFailed));
     } finally {
       setPending(null);
     }
@@ -92,6 +94,7 @@ export function KeyValue({ label, children }: { label: ReactNode; children: Reac
 /** Kota/kullanım ölçeri (`role="meter"`). `limit === null` → sınırsız. */
 export function UsageMeter({ label, used, limit }: { label: string; used: number; limit: number | null }) {
   const id = useId();
+  const c = useSettingsCopy().common;
   const pct = limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const tone = limit == null ? 'bg-brand' : pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-brand';
   return (
@@ -101,7 +104,7 @@ export function UsageMeter({ label, used, limit }: { label: string; used: number
           {label}
         </span>
         <span className="qx-small qx-num text-fg-muted">
-          {used.toLocaleString('tr-TR')} / {limit == null ? 'Sınırsız' : limit.toLocaleString('tr-TR')}
+          {used.toLocaleString('tr-TR')} / {limit == null ? c.unlimited : limit.toLocaleString('tr-TR')}
         </span>
       </div>
       {limit != null ? (
@@ -117,11 +120,11 @@ export function UsageMeter({ label, used, limit }: { label: string; used: number
           <div className={cn('h-full rounded-full transition-[width] duration-slow ease-standard', tone)} style={{ width: `${pct}%` }} />
         </div>
       ) : (
-        <p className="qx-caption text-fg-muted">Bu planda sınır yok.</p>
+        <p className="qx-caption text-fg-muted">{c.noLimit}</p>
       )}
       {limit != null && pct >= 80 && (
         <p className={cn('qx-caption', pct >= 100 ? 'text-danger' : 'text-warning')}>
-          {pct >= 100 ? 'Sınıra ulaştınız. Yeni ekleme için planınızı yükseltin.' : 'Sınıra yaklaşıyorsunuz.'}
+          {pct >= 100 ? c.limitReached : c.limitNear}
         </p>
       )}
     </div>

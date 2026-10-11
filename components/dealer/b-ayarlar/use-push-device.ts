@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSettingsCopy } from './copy';
 import { ensureServiceWorkerRegistration } from '@/lib/pwa/service-worker';
 import { SettingsApiError } from './api';
 import {
@@ -36,6 +37,7 @@ export function usePushDevice() {
   const [support, setSupport] = useState<PushSupport>('checking');
   const [endpoint, setEndpoint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const t = useSettingsCopy().errors;
 
   const evaluate = useCallback(async () => {
     // Capacitor (Android/iOS): FCM/APNs jetonu — web-push/VAPID yerine native akış.
@@ -84,15 +86,15 @@ export function usePushDevice() {
           setEndpoint(await registerNativePush());
         } catch (e) {
           await evaluate();
-          if (e instanceof NativePushError && e.code === 'PUSH_DENIED') throw new SettingsApiError(403, 'Bildirim izni verilmedi. Telefon ayarlarından izin verebilirsiniz.', 'PUSH_DENIED', undefined, false);
-          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, 'Cihaz kaydedilemedi.', 'PUSH_ERROR', undefined, true);
+          if (e instanceof NativePushError && e.code === 'PUSH_DENIED') throw new SettingsApiError(403, t.pushDeniedNative, 'PUSH_DENIED', undefined, false);
+          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, t.deviceSaveFailed, 'PUSH_ERROR', undefined, true);
         }
         return;
       }
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         await evaluate();
-        throw new SettingsApiError(403, 'Bildirim izni verilmedi. Tarayıcı ayarlarından izin verebilirsiniz.', 'PUSH_DENIED', undefined, false);
+        throw new SettingsApiError(403, t.pushDeniedWeb, 'PUSH_DENIED', undefined, false);
       }
       await ensureServiceWorkerRegistration();
       const reg = await navigator.serviceWorker.ready;
@@ -110,7 +112,7 @@ export function usePushDevice() {
         await sub.unsubscribe().catch(() => undefined);
         throw new SettingsApiError(
           res.status,
-          res.status === 409 ? 'Bu tarayıcı başka bir hesaba bağlı. O hesapta kapatıp tekrar deneyin.' : 'Cihaz kaydedilemedi.',
+          res.status === 409 ? t.pushOtherAccount : t.deviceSaveFailed,
           'PUSH_ERROR',
           undefined,
           res.status >= 500
@@ -120,7 +122,7 @@ export function usePushDevice() {
     } finally {
       setBusy(false);
     }
-  }, [evaluate]);
+  }, [evaluate, t]);
 
   const disable = useCallback(async () => {
     setBusy(true);
@@ -129,7 +131,7 @@ export function usePushDevice() {
         try {
           await unregisterNativePush();
         } catch (e) {
-          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, 'Cihaz kaydedilemedi.', 'PUSH_ERROR', undefined, true);
+          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, t.deviceSaveFailed, 'PUSH_ERROR', undefined, true);
         }
         setEndpoint(null);
         return;
@@ -144,13 +146,13 @@ export function usePushDevice() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ endpoint: ep }),
         });
-        if (!res.ok) throw new SettingsApiError(res.status, 'Cihaz kaydı kaldırılamadı.', 'PUSH_ERROR', undefined, true);
+        if (!res.ok) throw new SettingsApiError(res.status, t.deviceUnregisterFailed, 'PUSH_ERROR', undefined, true);
       }
       setEndpoint(null);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   return { support, subscribed: !!endpoint, busy, enable, disable };
 }

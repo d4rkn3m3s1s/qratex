@@ -13,8 +13,8 @@ import type { DealerSettingsSnapshot, DealerSettingsTab } from '@/lib/dealer-set
 import type { BillingSummary } from '@/lib/dealer-settings/billing.server';
 import { weekToStored } from '@/lib/dealer-settings/hours';
 import { BILLING_KEY, SETTINGS_KEY, fetchBilling, fetchSettings } from './api';
-import { SUBSCRIPTION_STATUS } from './format';
 import { BusinessTab } from './business-tab';
+import { useSettingsCopy } from './copy';
 
 const AccountTab = dynamic(() => import('./account-tab').then((m) => m.AccountTab), { loading: () => <SkeletonForm /> });
 const NotificationsTab = dynamic(() => import('./notifications-tab').then((m) => m.NotificationsTab), { loading: () => <SkeletonForm /> });
@@ -22,13 +22,13 @@ const SecurityTab = dynamic(() => import('./security-tab').then((m) => m.Securit
 const AiTab = dynamic(() => import('./ai-tab').then((m) => m.AiTab), { loading: () => <SkeletonForm /> });
 const BillingTab = dynamic(() => import('./billing-tab').then((m) => m.BillingTab), { loading: () => <SkeletonForm /> });
 
-const TABS: ReadonlyArray<{ value: DealerSettingsTab; label: string; icon: ReactNode }> = [
-  { value: 'business', label: 'İşletme', icon: <Store /> },
-  { value: 'account', label: 'Hesabım', icon: <UserRound /> },
-  { value: 'notifications', label: 'Bildirimler', icon: <Bell /> },
-  { value: 'security', label: 'Güvenlik', icon: <ShieldCheck /> },
-  { value: 'ai', label: 'AI', icon: <Bot /> },
-  { value: 'billing', label: 'Abonelik', icon: <CreditCard /> },
+const TAB_ICONS: ReadonlyArray<{ value: DealerSettingsTab; icon: ReactNode }> = [
+  { value: 'business', icon: <Store /> },
+  { value: 'account', icon: <UserRound /> },
+  { value: 'notifications', icon: <Bell /> },
+  { value: 'security', icon: <ShieldCheck /> },
+  { value: 'ai', icon: <Bot /> },
+  { value: 'billing', icon: <CreditCard /> },
 ];
 
 /**
@@ -39,6 +39,8 @@ const TABS: ReadonlyArray<{ value: DealerSettingsTab; label: string; icon: React
 export function SettingsScreen() {
   const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: ({ signal }) => fetchSettings(signal) });
   const billing = useQuery({ queryKey: BILLING_KEY, queryFn: () => fetchBilling() });
+  const c = useSettingsCopy().screen;
+  const tabs = useMemo(() => TAB_ICONS.map((t) => ({ ...t, label: c.tabs[t.value as keyof typeof c.tabs] })), [c]);
 
   return (
     <PanelPage
@@ -46,18 +48,18 @@ export function SettingsScreen() {
       width="default"
       header={
         <PageHeader
-          title="Ayarlar"
-          description="İşletme profiliniz, hesabınız, bildirimler, güvenlik, AI ve aboneliğiniz tek yerde."
+          title={c.title}
+          description={c.description}
         />
       }
     >
       <Overview snapshot={settings.data} billing={billing.data} />
-      <SectionTabs tabs={TABS} ariaLabel="Ayar bölümleri" defaultValue="business" touchTarget resetKeys={['status', 'session_id', 'plan']}>
+      <SectionTabs tabs={tabs} ariaLabel={c.tabsAria} defaultValue="business" touchTarget resetKeys={['status', 'session_id', 'plan']}>
         {(tab) =>
           tab === 'billing' ? (
             <BillingTab />
           ) : (
-            <QueryState query={settings} skeleton="form" error={{ title: 'Ayarlar yüklenemedi' }}>
+            <QueryState query={settings} skeleton="form" error={{ title: c.loadFailed }}>
               {(data: DealerSettingsSnapshot) => <TabBody tab={tab as DealerSettingsTab} data={data} />}
             </QueryState>
           )
@@ -89,6 +91,8 @@ function Overview({ snapshot, billing }: { snapshot?: DealerSettingsSnapshot; bi
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const copy = useSettingsCopy();
+  const c = copy.screen;
 
   const go = (tab: DealerSettingsTab) => {
     const q = new URLSearchParams(params.toString());
@@ -109,45 +113,45 @@ function Overview({ snapshot, billing }: { snapshot?: DealerSettingsSnapshot; bi
 
   if (!snapshot) return null;
   const { business, security, ai } = snapshot;
-  const status = billing?.current.status ? SUBSCRIPTION_STATUS[billing.current.status] : null;
+  const status = billing?.current.status ? copy.subscriptionStatus[billing.current.status] : null;
 
   const tiles: Array<{ tab: DealerSettingsTab; title: string; value: ReactNode; meta: ReactNode }> = [
     {
       tab: 'business',
-      title: 'Müşterinin gördüğü',
-      value: business.businessName || 'İşletme adı yok',
+      title: c.customerSees,
+      value: business.businessName || c.noName,
       meta: business.holidayMode ? (
-        <StatusBadge label="Geçici olarak kapalı" tone="warning" size="sm" />
+        <StatusBadge label={c.holiday} tone="warning" size="sm" />
       ) : open?.status === 'open' ? (
-        <StatusBadge label={open.closesAt ? `Açık · ${open.closesAt}'de kapanır` : 'Açık'} tone="success" size="sm" />
+        <StatusBadge label={open.closesAt ? c.openUntil(open.closesAt) : c.open} tone="success" size="sm" />
       ) : open?.status === 'closed' ? (
-        <StatusBadge label="Şu an kapalı" tone="neutral" size="sm" />
+        <StatusBadge label={c.closedNow} tone="neutral" size="sm" />
       ) : now ? (
-        <StatusBadge label="Çalışma saati yok" tone="warning" size="sm" />
+        <StatusBadge label={c.noHours} tone="warning" size="sm" />
       ) : null,
     },
     {
       tab: 'security',
-      title: 'Güvenlik',
-      value: security.twoFactor.enabled ? 'İki adımlı doğrulama açık' : 'İki adımlı doğrulama kapalı',
-      meta: <StatusBadge label={security.twoFactor.enabled ? 'Korunuyor' : 'Önerilir'} tone={security.twoFactor.enabled ? 'success' : 'warning'} size="sm" />,
+      title: c.security,
+      value: security.twoFactor.enabled ? c.twoFaOn : c.twoFaOff,
+      meta: <StatusBadge label={security.twoFactor.enabled ? c.protected : c.recommended} tone={security.twoFactor.enabled ? 'success' : 'warning'} size="sm" />,
     },
     {
       tab: 'ai',
-      title: 'AI motoru',
-      value: !ai.moduleEnabled ? 'Yönetici tarafından kapalı' : ai.settings.isEnabled ? (ai.settings.autoAnalyze ? 'Açık · otomatik analiz' : 'Açık · elle') : 'Kapalı',
-      meta: <StatusBadge label={ai.settings.isEnabled && ai.moduleEnabled ? 'Çalışıyor' : 'Durdu'} tone={ai.settings.isEnabled && ai.moduleEnabled ? 'success' : 'neutral'} size="sm" />,
+      title: c.aiEngine,
+      value: !ai.moduleEnabled ? c.aiAdminOff : ai.settings.isEnabled ? (ai.settings.autoAnalyze ? c.aiOnAuto : c.aiOnManual) : c.aiOff,
+      meta: <StatusBadge label={ai.settings.isEnabled && ai.moduleEnabled ? c.running : c.stopped} tone={ai.settings.isEnabled && ai.moduleEnabled ? 'success' : 'neutral'} size="sm" />,
     },
     {
       tab: 'billing',
-      title: 'Plan',
+      title: c.plan,
       value: billing ? billing.current.planName : '—',
-      meta: status ? <StatusBadge label={status.label} tone={status.tone} size="sm" /> : <StatusBadge label="Ücretsiz kademe" tone="neutral" size="sm" />,
+      meta: status ? <StatusBadge label={status.label} tone={status.tone} size="sm" /> : <StatusBadge label={c.freeTier} tone="neutral" size="sm" />,
     },
   ];
 
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Ayar özeti">
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label={c.overviewAria}>
       {tiles.map((t) => (
         <li key={t.tab} className="min-w-0">
           <button

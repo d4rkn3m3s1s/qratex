@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AiPatch, DealerSettingsSnapshot } from '@/lib/dealer-settings/contract';
 import { SETTINGS_KEY, SettingsApiError, fetchSettings, patchAi } from './api';
+import { useSettingsCopy } from './copy';
 
 /**
  * AI politikası yazımı (AI ve Bildirimler sekmeleri ortak). Güncel sürüm önbellekten okunur;
@@ -11,6 +12,7 @@ import { SETTINGS_KEY, SettingsApiError, fetchSettings, patchAi } from './api';
  */
 export function useAiPatch() {
   const queryClient = useQueryClient();
+  const conflictText = useSettingsCopy().errors.conflict;
   return useCallback(
     async (patch: Omit<AiPatch, 'baseVersion'>) => {
       const snap = queryClient.getQueryData<DealerSettingsSnapshot>(SETTINGS_KEY);
@@ -22,11 +24,11 @@ export function useAiPatch() {
       } catch (e) {
         if (e instanceof SettingsApiError && e.status === 409) {
           await queryClient.fetchQuery({ queryKey: SETTINGS_KEY, queryFn: () => fetchSettings(), staleTime: 0 }).catch(() => undefined);
-          throw new SettingsApiError(409, 'Ayarlar başka bir oturumda değişti. Güncel hâli yüklendi; tekrar deneyin.', e.code, e.details, false);
+          throw new SettingsApiError(409, conflictText, e.code, e.details, false);
         }
         throw e;
       }
     },
-    [queryClient]
+    [queryClient, conflictText]
   );
 }

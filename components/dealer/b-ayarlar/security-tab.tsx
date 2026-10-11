@@ -14,30 +14,33 @@ import { StatusBadge } from '@/components/ds/data';
 import { ConfirmAction, EmptyState, InlineError } from '@/components/states';
 import type { SecurityState } from '@/lib/dealer-settings/contract';
 import { SETTINGS_KEY, callLegacy, errorText, revokeSessions } from './api';
-import { PROVIDER_LABEL, SECURITY_EVENT_LABEL, fmtDate, fmtDateTime, relativeDays } from './format';
+import { PROVIDER_LABEL, fmtDate, fmtDateTime } from './format';
+import { relativeDaysText, useSettingsCopy, type SettingsCopy } from './copy';
 import { KeyValue } from './ui';
 
 export function SecurityTab({ data }: { data: SecurityState }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
+  const copy = useSettingsCopy();
+  const c = copy.security;
 
-  const pwAge = now ? relativeDays(data.lastPasswordChangeAt, now) : null;
+  const pwAge = now ? relativeDaysText(copy, data.lastPasswordChangeAt, now) : null;
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Güvenlik durumu">
+      <SectionCard title={c.status}>
         <dl className="divide-y divide-subtle">
-          <KeyValue label="İki adımlı doğrulama">
-            <StatusBadge label={data.twoFactor.enabled ? 'Açık' : 'Kapalı'} tone={data.twoFactor.enabled ? 'success' : 'warning'} size="sm" />
+          <KeyValue label={c.twoFa}>
+            <StatusBadge label={data.twoFactor.enabled ? c.on : c.off} tone={data.twoFactor.enabled ? 'success' : 'warning'} size="sm" />
           </KeyValue>
-          <KeyValue label="Şifre">
-            {data.hasPassword ? (data.lastPasswordChangeAt ? `Son değişiklik ${pwAge ?? fmtDate(data.lastPasswordChangeAt)}` : 'Tanımlı') : 'Tanımlı değil'}
+          <KeyValue label={c.password}>
+            {data.hasPassword ? (data.lastPasswordChangeAt ? c.lastChange(pwAge ?? fmtDate(data.lastPasswordChangeAt)) : c.set) : c.notSet}
           </KeyValue>
-          <KeyValue label="Bağlı giriş">
-            {data.providers.length ? data.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(', ') : 'Yalnız e-posta ve şifre'}
+          <KeyValue label={c.linked}>
+            {data.providers.length ? data.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(', ') : c.emailOnly}
           </KeyValue>
-          <KeyValue label="Bu oturum">
-            {[data.currentDevice ?? 'Bu tarayıcı', data.sessionStartedAt ? `giriş ${fmtDateTime(data.sessionStartedAt)}` : null].filter(Boolean).join(' · ')}
+          <KeyValue label={c.thisSession}>
+            {[data.currentDevice ?? c.thisBrowser, data.sessionStartedAt ? c.signedIn(fmtDateTime(data.sessionStartedAt)) : null].filter(Boolean).join(' · ')}
           </KeyValue>
         </dl>
       </SectionCard>
@@ -46,14 +49,14 @@ export function SecurityTab({ data }: { data: SecurityState }) {
       <TwoFactorCard state={data.twoFactor} />
       <SessionsCard lastRevokedAt={data.lastSessionsRevokedAt} />
 
-      <SectionCard title="Son güvenlik etkinliği" description="Hesabınızda yapılan son önemli değişiklikler.">
+      <SectionCard title={c.eventsTitle} description={c.eventsHint}>
         {data.events.length === 0 ? (
-          <EmptyState compact title="Henüz kayıt yok" description="Şifre, oturum ve ayar değişiklikleri burada listelenir." headingLevel="p" />
+          <EmptyState compact title={c.eventsEmpty} description={c.eventsEmptyHint} headingLevel="p" />
         ) : (
           <ol className="divide-y divide-subtle">
             {data.events.map((e) => (
               <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
-                <span className="qx-small font-medium text-fg">{SECURITY_EVENT_LABEL[e.action] ?? e.action}</span>
+                <span className="qx-small font-medium text-fg">{copy.securityEvent[e.action] ?? e.action}</span>
                 <span className="qx-caption text-fg-muted">
                   {fmtDateTime(e.at)}
                   {e.device ? ` · ${e.device}` : ''}
@@ -69,13 +72,13 @@ export function SecurityTab({ data }: { data: SecurityState }) {
 
 // ───────────────────────────── Şifre ─────────────────────────────
 
-function strength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
+function strength(pw: string, labels: SettingsCopy['security']['strength']): { score: 0 | 1 | 2 | 3 | 4; label: string } {
   let s = 0;
   if (pw.length >= 8) s++;
   if (pw.length >= 12) s++;
   if (/[A-ZÇĞİÖŞÜ]/.test(pw) && /[a-zçğıöşü]/.test(pw)) s++;
   if (/\d/.test(pw) && /[^A-Za-z0-9ÇĞİÖŞÜçğıöşü]/.test(pw)) s++;
-  const label = ['Çok zayıf', 'Zayıf', 'Orta', 'İyi', 'Güçlü'][s];
+  const label = labels[s] ?? '';
   return { score: s as 0 | 1 | 2 | 3 | 4, label };
 }
 
@@ -88,7 +91,8 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const st = strength(next);
+  const c = useSettingsCopy().security;
+  const st = strength(next, c.strength);
   const mismatch = confirm.length > 0 && confirm !== next;
   const tooShort = next.length > 0 && next.length < 8;
   const canSubmit = (!hasPassword || current.length > 0) && next.length >= 8 && next.length <= 128 && next === confirm && !busy;
@@ -107,10 +111,10 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
       setCurrent('');
       setNext('');
       setConfirm('');
-      toast.success(hasPassword ? 'Şifreniz güncellendi. Diğer cihazlardaki oturumlar kapatıldı.' : 'Şifreniz oluşturuldu.');
+      toast.success(hasPassword ? c.pwUpdated : c.pwCreated);
       await queryClient.invalidateQueries({ queryKey: SETTINGS_KEY });
     } catch (err) {
-      setError(errorText(err, 'Şifre güncellenemedi.'));
+      setError(errorText(err, c.pwFailed));
     } finally {
       setBusy(false);
     }
@@ -120,22 +124,22 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
 
   return (
     <SectionCard
-      title={hasPassword ? 'Şifreyi değiştir' : 'Şifre oluştur'}
+      title={hasPassword ? c.changePw : c.createPw}
       description={
         hasPassword
-          ? 'Değiştirince diğer bütün cihazlardaki oturumlarınız kapanır; bu tarayıcıda oturumunuz sürer.'
-          : 'Google gibi bir sağlayıcıyla giriş yapıyorsunuz. Şifre oluşturursanız e-posta ile de giriş yapabilirsiniz.'
+          ? c.changePwHint
+          : c.createPwHint
       }
     >
       <form onSubmit={submit} className="max-w-md space-y-4" noValidate>
         {hasPassword && (
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-cur`}>Mevcut şifre</Label>
+            <Label htmlFor={`${id}-cur`}>{c.currentPw}</Label>
             <Input id={`${id}-cur`} type={show ? 'text' : 'password'} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-new`}>Yeni şifre</Label>
+          <Label htmlFor={`${id}-new`}>{c.newPw}</Label>
           <div className="relative">
             <Input
               id={`${id}-new`}
@@ -152,7 +156,7 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
               type="button"
               onClick={() => setShow((v) => !v)}
               className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={show ? 'Şifreleri gizle' : 'Şifreleri göster'}
+              aria-label={show ? c.hidePw : c.showPw}
               aria-pressed={show}
             >
               {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
@@ -166,13 +170,13 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
                     <span key={i} className={`h-1.5 flex-1 rounded-full ${i < st.score ? barTone : 'bg-surface-muted'}`} />
                   ))}
                 </div>
-                <p className="qx-caption text-fg-muted">Güç: {st.label}{tooShort ? ' · en az 8 karakter' : ''}</p>
+                <p className="qx-caption text-fg-muted">{c.strengthLine(st.label, tooShort)}</p>
               </>
             )}
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-cfm`}>Yeni şifre (tekrar)</Label>
+          <Label htmlFor={`${id}-cfm`}>{c.confirmPw}</Label>
           <Input
             id={`${id}-cfm`}
             type={show ? 'text' : 'password'}
@@ -185,14 +189,14 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
           />
           {mismatch && (
             <p id={`${id}-mm`} className="qx-caption text-danger">
-              Şifreler eşleşmiyor.
+              {c.mismatch}
             </p>
           )}
         </div>
         {error && <InlineError variant="banner">{error}</InlineError>}
         <Button type="submit" disabled={!canSubmit}>
           <KeyRound className="h-4 w-4" aria-hidden />
-          {busy ? 'Kaydediliyor…' : hasPassword ? 'Şifreyi güncelle' : 'Şifre oluştur'}
+          {busy ? c.saving : hasPassword ? c.updatePw : c.createPw}
         </Button>
       </form>
     </SectionCard>
@@ -203,13 +207,14 @@ function PasswordCard({ hasPassword }: { hasPassword: boolean }) {
 
 function RecoveryCodes({ codes }: { codes: string[] }) {
   const text = codes.join('\n');
+  const c = useSettingsCopy().security;
   return (
     <div className="space-y-3 rounded-card border border-warning-border bg-warning-subtle/40 p-4">
-      <p className="qx-small font-semibold text-fg">Kurtarma kodlarınız — yalnız şimdi gösterilir</p>
-      <p className="qx-caption text-fg-muted">Telefonunuza erişemezseniz bu kodlardan biriyle giriş yapabilirsiniz. Her kod bir kez kullanılır.</p>
+      <p className="qx-small font-semibold text-fg">{c.codesTitle}</p>
+      <p className="qx-caption text-fg-muted">{c.codesHint}</p>
       <ul className="qx-num grid grid-cols-2 gap-1 font-mono text-sm text-fg">
-        {codes.map((c) => (
-          <li key={c}>{c}</li>
+        {codes.map((code) => (
+          <li key={code}>{code}</li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
@@ -220,19 +225,19 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
           onClick={() =>
             void navigator.clipboard
               .writeText(text)
-              .then(() => toast.success('Kodlar kopyalandı.'))
-              .catch(() => toast.error('Kopyalanamadı.'))
+              .then(() => toast.success(c.codesCopied))
+              .catch(() => toast.error(c.copyFailed))
           }
         >
           <Copy className="h-4 w-4" aria-hidden />
-          Kopyala
+          {c.copy}
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => {
-            const url = URL.createObjectURL(new Blob([`Qratex kurtarma kodları\n\n${text}\n`], { type: 'text/plain;charset=utf-8' }));
+            const url = URL.createObjectURL(new Blob([`${c.codesFileHeader}\n\n${text}\n`], { type: 'text/plain;charset=utf-8' }));
             const a = document.createElement('a');
             a.href = url;
             a.download = 'qratex-kurtarma-kodlari.txt';
@@ -241,7 +246,7 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
           }}
         >
           <Download className="h-4 w-4" aria-hidden />
-          İndir
+          {c.download}
         </Button>
       </div>
     </div>
@@ -258,6 +263,8 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [dialog, setDialog] = useState<'disable' | 'regen' | null>(null);
   const [dialogCode, setDialogCode] = useState('');
+  const copy = useSettingsCopy();
+  const c = copy.security;
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: SETTINGS_KEY });
 
@@ -275,7 +282,7 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
       }
       setSetup({ secret: out.secret, qr });
     } catch (e) {
-      setError(errorText(e, 'Kurulum başlatılamadı.'));
+      setError(errorText(e, c.setupFailed));
     } finally {
       setBusy(false);
     }
@@ -284,7 +291,7 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
   const verify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!/^\d{6}$/.test(code)) {
-      setError('6 haneli kodu girin.');
+      setError(c.enter6);
       return;
     }
     setBusy(true);
@@ -294,10 +301,10 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
       setSetup(null);
       setCode('');
       setCodes(out.recoveryCodes ?? null);
-      toast.success('İki adımlı doğrulama açıldı.');
+      toast.success(c.twoFaOn);
       await refresh();
     } catch (err) {
-      setError(errorText(err, 'Kod doğrulanamadı.'));
+      setError(errorText(err, c.verifyFailed));
     } finally {
       setBusy(false);
     }
@@ -305,7 +312,7 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
 
   const runDialog = async () => {
     if (!/^\d{6}$/.test(dialogCode.trim()) && !/^[A-Za-z0-9-]{8,}$/.test(dialogCode.trim())) {
-      setError('Doğrulama kodunu girin.');
+      setError(c.enterCode);
       return;
     }
     setBusy(true);
@@ -313,7 +320,7 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
     try {
       if (dialog === 'disable') {
         await callLegacy('/api/auth/2fa', { method: 'POST', body: JSON.stringify({ action: 'disable', code: dialogCode.trim() }) });
-        toast.success('İki adımlı doğrulama kapatıldı.');
+        toast.success(c.twoFaOff);
         setCodes(null);
       } else {
         const out = await callLegacy<{ recoveryCodes?: string[] }>('/api/auth/2fa', {
@@ -321,13 +328,13 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
           body: JSON.stringify({ action: 'recovery-codes', code: dialogCode.trim() }),
         });
         setCodes(out.recoveryCodes ?? null);
-        toast.success('Yeni kurtarma kodları üretildi.');
+        toast.success(c.newCodes);
       }
       setDialog(null);
       setDialogCode('');
       await refresh();
     } catch (e) {
-      setError(errorText(e, 'İşlem tamamlanamadı.'));
+      setError(errorText(e, copy.common.actionFailed));
     } finally {
       setBusy(false);
     }
@@ -335,24 +342,24 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
 
   return (
     <SectionCard
-      title="İki adımlı doğrulama"
-      description="Girişte şifrenize ek olarak doğrulama uygulamasındaki (Google Authenticator, Authy…) 6 haneli kod istenir."
-      actions={<StatusBadge label={state.enabled ? 'Açık' : 'Kapalı'} tone={state.enabled ? 'success' : 'warning'} size="sm" />}
+      title={c.twoFa}
+      description={c.twoFaHint}
+      actions={<StatusBadge label={state.enabled ? c.on : c.off} tone={state.enabled ? 'success' : 'warning'} size="sm" />}
     >
       <div className="space-y-4">
         {state.enabled ? (
           <>
             <p className="qx-small text-fg-muted">
-              {state.since ? `${fmtDate(state.since)} tarihinden beri açık. ` : ''}Kalan kurtarma kodu: <span className="qx-num font-semibold text-fg">{state.remainingRecoveryCodes}</span>
+              {state.since ? c.since(fmtDate(state.since)) : ''}{c.remaining}<span className="qx-num font-semibold text-fg">{state.remainingRecoveryCodes}</span>
             </p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => { setError(null); setDialog('regen'); }}>
                 <ShieldCheck className="h-4 w-4" aria-hidden />
-                Yeni kurtarma kodları üret
+                {c.regen}
               </Button>
               <Button type="button" variant="ghost" className="text-danger" onClick={() => { setError(null); setDialog('disable'); }}>
                 <ShieldOff className="h-4 w-4" aria-hidden />
-                Kapat
+                {c.disable}
               </Button>
             </div>
           </>
@@ -360,13 +367,13 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
           <form onSubmit={verify} className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]" noValidate>
             {setup.qr ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={setup.qr} alt="Doğrulama uygulamasıyla okutulacak kurulum QR kodu" className="h-44 w-44 rounded-control border border-subtle bg-white p-1" />
+              <img src={setup.qr} alt={c.qrAlt} className="h-44 w-44 rounded-control border border-subtle bg-white p-1" />
             ) : null}
             <div className="min-w-0 space-y-3">
-              <p className="qx-small text-fg-muted">1. Uygulamada “hesap ekle” deyip QR&apos;ı okutun ya da anahtarı elle girin:</p>
+              <p className="qx-small text-fg-muted">{c.step1}</p>
               <code className="qx-num block break-all rounded-control bg-surface-muted px-3 py-2 font-mono text-sm text-fg">{setup.secret}</code>
               <div className="space-y-1.5">
-                <Label htmlFor={`${id}-code`}>2. Uygulamadaki 6 haneli kod</Label>
+                <Label htmlFor={`${id}-code`}>{c.step2}</Label>
                 <Input
                   id={`${id}-code`}
                   inputMode="numeric"
@@ -379,10 +386,10 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={busy || code.length !== 6}>
-                  {busy ? 'Doğrulanıyor…' : 'Doğrula ve aç'}
+                  {busy ? c.verifying : c.verifyEnable}
                 </Button>
                 <Button type="button" variant="ghost" onClick={() => { setSetup(null); setCode(''); }}>
-                  Vazgeç
+                  {copy.common.cancel}
                 </Button>
               </div>
             </div>
@@ -390,7 +397,7 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
         ) : (
           <Button type="button" onClick={() => void start()} disabled={busy}>
             <ShieldCheck className="h-4 w-4" aria-hidden />
-            {busy ? 'Hazırlanıyor…' : 'İki adımlı doğrulamayı aç'}
+            {busy ? c.preparing : c.enable}
           </Button>
         )}
         {error && !dialog && <InlineError variant="banner">{error}</InlineError>}
@@ -400,11 +407,11 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
       <Dialog open={dialog !== null} onOpenChange={(o) => { if (!o) { setDialog(null); setDialogCode(''); setError(null); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{dialog === 'disable' ? 'İki adımlı doğrulama kapatılsın mı?' : 'Yeni kurtarma kodları'}</DialogTitle>
+            <DialogTitle>{dialog === 'disable' ? c.disableTitle : c.regenTitle}</DialogTitle>
             <DialogDescription>
               {dialog === 'disable'
-                ? 'Hesabınız yalnız şifreyle korunur. Onaylamak için uygulamadaki kodu ya da bir kurtarma kodunu girin.'
-                : 'Eski kurtarma kodları geçersiz olur. Onaylamak için uygulamadaki kodu girin.'}
+                ? c.disableBody
+                : c.regenBody}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -414,15 +421,15 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
             }}
             className="space-y-3"
           >
-            <Label htmlFor={`${id}-dlg`}>Doğrulama kodu</Label>
+            <Label htmlFor={`${id}-dlg`}>{c.code}</Label>
             <Input id={`${id}-dlg`} autoComplete="one-time-code" value={dialogCode} onChange={(e) => setDialogCode(e.target.value)} autoFocus />
             {error && <InlineError variant="field">{error}</InlineError>}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setDialog(null)}>
-                Vazgeç
+                {copy.common.cancel}
               </Button>
               <Button type="submit" variant={dialog === 'disable' ? 'destructive' : 'default'} disabled={busy || dialogCode.trim().length < 6}>
-                {busy ? 'Bekleyin…' : dialog === 'disable' ? 'Kapat' : 'Kodları üret'}
+                {busy ? c.wait : dialog === 'disable' ? c.disable : c.generate}
               </Button>
             </DialogFooter>
           </form>
@@ -436,53 +443,54 @@ function TwoFactorCard({ state }: { state: SecurityState['twoFactor'] }) {
 
 function SessionsCard({ lastRevokedAt }: { lastRevokedAt: string | null }) {
   const queryClient = useQueryClient();
+  const c = useSettingsCopy().security;
 
   const run = async (scope: 'others' | 'all') => {
     try {
       const out = await revokeSessions(scope);
       if (scope === 'all' || !out.reissued) {
-        toast.success('Oturumlar kapatıldı. Yeniden giriş yapın.');
+        toast.success(c.allOut);
         await signOut({ callbackUrl: '/auth/login' });
         return;
       }
-      toast.success('Diğer cihazlardaki oturumlar kapatıldı.');
+      toast.success(c.othersOut);
       await queryClient.invalidateQueries({ queryKey: SETTINGS_KEY });
     } catch (e) {
-      toast.error(errorText(e, 'Oturumlar kapatılamadı.'));
+      toast.error(errorText(e, c.revokeFailed));
       throw e;
     }
   };
 
   return (
     <SectionCard
-      title="Oturumlar"
-      description={lastRevokedAt ? `En son ${fmtDateTime(lastRevokedAt)} tarihinde oturumlar kapatıldı.` : 'Kaybolan bir cihaz ya da paylaşılan bilgisayar için oturumları kapatın.'}
+      title={c.sessions}
+      description={lastRevokedAt ? c.lastRevoked(fmtDateTime(lastRevokedAt)) : c.sessionsHint}
     >
       <div className="flex flex-wrap gap-2">
         <ConfirmAction
           trigger={
             <Button type="button" variant="outline">
               <LogOut className="h-4 w-4" aria-hidden />
-              Diğer cihazlardan çık
+              {c.signOutOthers}
             </Button>
           }
-          title="Diğer cihazlardaki oturumlar kapatılsın mı?"
-          description="Bu tarayıcı dışındaki tüm cihazlarda yeniden giriş gerekir."
+          title={c.othersTitle}
+          description={c.othersBody}
           tone="warning"
-          confirmLabel="Diğerlerinden çık"
+          confirmLabel={c.othersConfirm}
           irreversibleNote={false}
           onConfirm={() => run('others')}
         />
         <ConfirmAction
           trigger={
             <Button type="button" variant="ghost" className="text-danger">
-              Her yerden çık
+              {c.signOutAll}
             </Button>
           }
-          title="Tüm oturumlar kapatılsın mı?"
-          description="Bu tarayıcı dahil her yerde oturumunuz kapanır."
+          title={c.allTitle}
+          description={c.allBody}
           tone="danger"
-          confirmLabel="Her yerden çık"
+          confirmLabel={c.signOutAll}
           irreversibleNote={false}
           onConfirm={() => run('all')}
         />

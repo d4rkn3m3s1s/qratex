@@ -25,7 +25,8 @@ import {
   previewPlanChange,
   startCheckout,
 } from './api';
-import { INTERVAL_LABEL, INVOICE_STATUS, SUBSCRIPTION_STATUS, fmtDate, fmtMoneyMinor } from './format';
+import { fmtDate, fmtMoneyMinor } from './format';
+import { useSettingsCopy } from './copy';
 import { UsageMeter } from './ui';
 
 /**
@@ -35,8 +36,9 @@ import { UsageMeter } from './ui';
  */
 export function BillingTab() {
   const summary = useQuery({ queryKey: BILLING_KEY, queryFn: () => fetchBilling() });
+  const c = useSettingsCopy().billing;
   return (
-    <QueryState query={summary} skeleton="cards" error={{ title: 'Abonelik bilgileri yüklenemedi' }}>
+    <QueryState query={summary} skeleton="cards" error={{ title: c.loadFailed }}>
       {(data: BillingSummary) => <BillingBody data={data} />}
     </QueryState>
   );
@@ -51,6 +53,8 @@ function BillingBody({ data }: { data: BillingSummary }) {
   const [changeTo, setChangeTo] = useState<BillingPlan | null>(null);
   const [confirming, setConfirming] = useState(false);
   const highlight = params.get('plan');
+  const copy = useSettingsCopy();
+  const c = copy.billing;
   const highlightRef = useRef<HTMLLIElement>(null);
 
   const details = useQuery({
@@ -72,7 +76,7 @@ function BillingBody({ data }: { data: BillingSummary }) {
   const sessionId = params.get('session_id');
   useEffect(() => {
     if (status === 'cancel') {
-      toast.info('Ödeme iptal edildi; aboneliğinizde değişiklik yok.');
+      toast.info(c.canceled);
       clearParams(['status', 'session_id']);
       return;
     }
@@ -86,18 +90,18 @@ function BillingBody({ data }: { data: BillingSummary }) {
           if (r.state === 'active') {
             await queryClient.invalidateQueries({ queryKey: BILLING_KEY });
             await queryClient.invalidateQueries({ queryKey: BILLING_DETAILS_KEY });
-            toast.success('Aboneliğiniz etkinleştirildi.');
+            toast.success(c.activated);
             break;
           }
           if (r.state === 'expired' || r.state === 'not_found' || r.state === 'unpaid') {
-            toast.error(r.state === 'unpaid' ? 'Ödeme tamamlanmadı.' : 'Ödeme oturumu doğrulanamadı.');
+            toast.error(r.state === 'unpaid' ? c.unpaid : c.sessionInvalid);
             break;
           }
         } catch {
           /* geçici hata: yeniden dene */
         }
         await new Promise((res) => setTimeout(res, 2000));
-        if (i === 9) toast.info('Ödemeniz işleniyor. Birkaç dakika içinde planınız güncellenir.');
+        if (i === 9) toast.info(c.processing);
       }
       if (!cancelled) {
         setConfirming(false);
@@ -119,9 +123,9 @@ function BillingBody({ data }: { data: BillingSummary }) {
     try {
       const out = await openPortal();
       if (out.url) window.location.assign(out.url);
-      else throw new Error('Portal açılamadı.');
+      else throw new Error(c.portalFailed);
     } catch (e) {
-      toast.error(errorText(e, 'Abonelik yönetimi açılamadı.'));
+      toast.error(errorText(e, c.portalFailed));
       setBusy(null);
     }
   };
@@ -131,22 +135,22 @@ function BillingBody({ data }: { data: BillingSummary }) {
     try {
       const out = await startCheckout(plan.id);
       if (out.url) window.location.assign(out.url);
-      else throw new Error('Ödeme sayfası açılamadı.');
+      else throw new Error(c.checkoutPageFailed);
     } catch (e) {
       if (e instanceof SettingsApiError && e.code === 'SUBSCRIPTION_EXISTS') {
         await queryClient.invalidateQueries({ queryKey: BILLING_KEY });
-        toast.info('Zaten bir aboneliğiniz var; “Bu plana geç” ile planınızı değiştirebilirsiniz.');
+        toast.info(c.alreadySubscribed);
       } else {
-        toast.error(errorText(e, 'Ödeme başlatılamadı.'));
+        toast.error(errorText(e, c.checkoutFailed));
       }
       setBusy(null);
     }
   };
 
   const cur = data.current;
-  const st = cur.status ? SUBSCRIPTION_STATUS[cur.status] ?? { label: cur.status, tone: 'neutral' as const } : null;
+  const st = cur.status ? copy.subscriptionStatus[cur.status] ?? { label: cur.status, tone: 'neutral' as const } : null;
   const d = details.data;
-  const periodLabel = d?.cancelAtPeriodEnd || cur.status === 'canceled' ? (cur.status === 'canceled' ? 'Sona erdi' : 'Sona erecek') : 'Yenileme';
+  const periodLabel = d?.cancelAtPeriodEnd || cur.status === 'canceled' ? (cur.status === 'canceled' ? c.ended : c.ending) : c.renewal;
   const anyBusy = busy !== null || confirming;
 
   return (
@@ -156,39 +160,38 @@ function BillingBody({ data }: { data: BillingSummary }) {
           <InlineError variant="banner" tone="info">
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Ödemeniz doğrulanıyor…
+              {c.verifying}
             </span>
           </InlineError>
         )}
       </div>
       {cur.status === 'past_due' && (
         <InlineError variant="banner" tone="danger">
-          <p className="font-medium text-fg">Son ödemeniz alınamadı.</p>
-          <p className="mt-0.5 text-fg-muted">Planınız şimdilik sürüyor; kartınızı güncellemezseniz ücretsiz kademeye düşer.</p>
+          <p className="font-medium text-fg">{c.pastDue}</p>
+          <p className="mt-0.5 text-fg-muted">{c.pastDueHint}</p>
           {cur.hasCustomer && (
             <Button type="button" size="sm" className="mt-2" onClick={() => void portal()} disabled={anyBusy}>
-              Kartı güncelle
+              {c.updateCard}
             </Button>
           )}
         </InlineError>
       )}
       {d?.cancelAtPeriodEnd && cur.status !== 'canceled' && (
         <InlineError variant="banner" tone="warning">
-          Aboneliğiniz {fmtDate(d.cancelAt ?? cur.currentPeriodEnd)} tarihinde sona erecek ve yenilenmeyecek. Devam etmek için “Aboneliği yönet”ten
-          yeniden etkinleştirin.
+          {c.cancelAtEnd(fmtDate(d.cancelAt ?? cur.currentPeriodEnd))}
         </InlineError>
       )}
       {!data.stripeEnabled && (
         <InlineError variant="banner" tone="info">
-          Çevrimiçi ödeme şu an kapalı. Planlar bilgi amaçlı listeleniyor; mevcut aboneliğiniz etkilenmez.
+          {c.stripeOff}
         </InlineError>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <SectionCard
-          title="Mevcut plan"
+          title={c.currentPlan}
           icon={<CreditCard className="h-5 w-5" aria-hidden />}
-          actions={st ? <StatusBadge label={st.label} tone={st.tone} /> : <StatusBadge label="Ücretsiz kademe" tone="neutral" />}
+          actions={st ? <StatusBadge label={st.label} tone={st.tone} /> : <StatusBadge label={c.freeTier} tone="neutral" />}
         >
           <p className="qx-title font-semibold text-fg">{cur.planName}</p>
           {cur.currentPeriodEnd && (
@@ -196,29 +199,29 @@ function BillingBody({ data }: { data: BillingSummary }) {
               {periodLabel}: {fmtDate(cur.currentPeriodEnd)}
             </p>
           )}
-          {d?.trialEnd && cur.status === 'trialing' && <p className="qx-small text-fg-muted">Deneme bitişi: {fmtDate(d.trialEnd)}</p>}
+          {d?.trialEnd && cur.status === 'trialing' && <p className="qx-small text-fg-muted">{c.trialEnd(fmtDate(d.trialEnd))}</p>}
           {cur.hasCustomer && data.stripeEnabled && (
             <div className="mt-4 space-y-2">
               <Button type="button" variant="outline" onClick={() => void portal()} disabled={anyBusy}>
                 <Settings2 className="h-4 w-4" aria-hidden />
-                {busy === 'portal' ? 'Açılıyor…' : 'Aboneliği yönet'}
+                {busy === 'portal' ? c.opening : c.manage}
               </Button>
-              <p className="qx-caption text-fg-muted">Kart, fatura bilgileri ve iptal Stripe&apos;ın güvenli sayfasında yönetilir. İptal ederseniz dönem sonunda ücretsiz kademeye geçersiniz.</p>
+              <p className="qx-caption text-fg-muted">{c.manageHint}</p>
             </div>
           )}
         </SectionCard>
 
-        <SectionCard title="Kullanım" description="Planınızın sınırlarına göre.">
+        <SectionCard title={c.usage} description={c.usageHint}>
           <div className="space-y-5">
-            <UsageMeter label="QR kodları" used={data.usage.qr.used} limit={data.usage.qr.limit} />
-            <UsageMeter label="Şubeler" used={data.usage.branches.used} limit={data.usage.branches.limit} />
+            <UsageMeter label={c.qrCodes} used={data.usage.qr.used} limit={data.usage.qr.limit} />
+            <UsageMeter label={c.branches} used={data.usage.branches.used} limit={data.usage.branches.limit} />
           </div>
         </SectionCard>
       </div>
 
-      <SectionCard title="Planlar" description={cur.hasSubscription ? 'Plan değişikliğinde fark tutarı önceden gösterilir.' : 'Bir plan seçerek Stripe ile güvenli ödeme yapın.'}>
+      <SectionCard title={c.plans} description={cur.hasSubscription ? c.plansChange : c.plansNew}>
         {data.plans.length === 0 ? (
-          <EmptyState compact title="Şu an satışta plan yok" headingLevel="p" />
+          <EmptyState compact title={c.noPlans} headingLevel="p" />
         ) : (
           <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {data.plans.map((plan) => {
@@ -236,22 +239,22 @@ function BillingBody({ data }: { data: BillingSummary }) {
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="qx-body font-semibold text-fg">{plan.name}</h3>
-                    {isCurrent && <StatusBadge label="Şu anki planınız" tone="brand" size="sm" />}
-                    {!isCurrent && plan.isPopular && <StatusBadge label="Popüler" tone="info" size="sm" />}
+                    {isCurrent && <StatusBadge label={c.yourPlan} tone="brand" size="sm" />}
+                    {!isCurrent && plan.isPopular && <StatusBadge label={c.popular} tone="info" size="sm" />}
                   </div>
                   <p className="mt-2">
                     <span className="qx-title qx-num font-semibold text-fg">{fmtMoneyMinor(plan.priceMinor, plan.currency)}</span>{' '}
-                    <span className="qx-small text-fg-muted">{INTERVAL_LABEL[plan.interval] ?? plan.interval}</span>
+                    <span className="qx-small text-fg-muted">{copy.interval[plan.interval] ?? plan.interval}</span>
                   </p>
                   {plan.description && <p className="qx-small mt-2 text-fg-muted">{plan.description}</p>}
                   <ul className="qx-small mt-3 flex-1 space-y-1.5 text-fg">
                     <li className="flex gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                      {plan.maxQRCodes == null ? 'Sınırsız QR kod' : `${plan.maxQRCodes} QR kod`}
+                      {c.qrLimit(plan.maxQRCodes)}
                     </li>
                     <li className="flex gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                      {plan.maxBranches == null ? 'Sınırsız şube' : `${plan.maxBranches} şube`}
+                      {c.branchLimit(plan.maxBranches)}
                     </li>
                     {plan.features.map((f) => (
                       <li key={f} className="flex gap-2">
@@ -311,23 +314,24 @@ function PlanAction({
   onChange: () => void;
 }) {
   const cur = data.current;
-  if (cur.planId === plan.id) return <p className="qx-small text-fg-muted">Bu plandasınız.</p>;
+  const c = useSettingsCopy().billing;
+  if (cur.planId === plan.id) return <p className="qx-small text-fg-muted">{c.onThisPlan}</p>;
   if (!data.stripeEnabled || !plan.payable) {
-    return <p className="qx-small text-fg-muted">Bu plan çevrimiçi satın alınamıyor.</p>;
+    return <p className="qx-small text-fg-muted">{c.notPayable}</p>;
   }
   if (cur.hasSubscription) {
     if (!cur.canChangePlan) {
-      return <p className="qx-small text-fg-muted">Plan değiştirmek için önce bekleyen ödemenizi tamamlayın.</p>;
+      return <p className="qx-small text-fg-muted">{c.payFirst}</p>;
     }
     return (
       <Button type="button" variant="outline" className="w-full" onClick={onChange} disabled={disabled}>
-        Bu plana geç
+        {c.switchTo}
       </Button>
     );
   }
   return (
     <Button type="button" className="w-full" onClick={onSubscribe} disabled={disabled}>
-      {busy === plan.id ? 'Ödeme sayfası açılıyor…' : 'Abone ol'}
+      {busy === plan.id ? c.openingCheckout : c.subscribe}
     </Button>
   );
 }
@@ -343,11 +347,13 @@ function ChangePlanDialog({
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
+  const copy = useSettingsCopy();
+  const c = copy.billing;
   const preview = useQuery({ queryKey: ['dealer', 'billing', 'preview', plan.id], queryFn: () => previewPlanChange(plan.id), staleTime: 0, gcTime: 0, retry: false });
   const apply = useMutation({
     mutationFn: () => applyPlanChange(plan.id, preview.data!.prorationDate),
     onSuccess: async () => {
-      toast.success(`Planınız ${plan.name} olarak değişti.`);
+      toast.success(c.changed(plan.name));
       await onDone();
     },
   });
@@ -359,30 +365,30 @@ function ChangePlanDialog({
     <Dialog open onOpenChange={(o) => !o && !apply.isPending && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{plan.name} planına geç</DialogTitle>
-          <DialogDescription>Değişiklik hemen uygulanır; fark tutarı mevcut kartınızdan tahsil edilir ya da hesabınıza alacak yazılır.</DialogDescription>
+          <DialogTitle>{c.switchTitle(plan.name)}</DialogTitle>
+          <DialogDescription>{c.switchHint}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3" aria-live="polite">
           {preview.isLoading && (
             <p className="qx-small inline-flex items-center gap-2 text-fg-muted">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Fark tutarı hesaplanıyor…
+              {c.calculating}
             </p>
           )}
-          {preview.error && <InlineError variant="banner" onRetry={() => void preview.refetch()}>{errorText(preview.error, 'Önizleme alınamadı.')}</InlineError>}
+          {preview.error && <InlineError variant="banner" onRetry={() => void preview.refetch()}>{errorText(preview.error, c.previewFailed)}</InlineError>}
           {p && (
             <dl className="divide-y divide-subtle rounded-control border border-subtle px-3">
               <div className="flex justify-between gap-3 py-2">
-                <dt className="qx-small text-fg-muted">{p.prorationAmount >= 0 ? 'Şimdi tahsil edilecek' : 'Hesabınıza alacak'}</dt>
+                <dt className="qx-small text-fg-muted">{p.prorationAmount >= 0 ? c.chargeNow : c.credit}</dt>
                 <dd className="qx-small qx-num font-semibold text-fg">{fmtMoneyMinor(Math.abs(p.prorationAmount), p.currency)}</dd>
               </div>
               <div className="flex justify-between gap-3 py-2">
-                <dt className="qx-small text-fg-muted">Sonraki dönem</dt>
+                <dt className="qx-small text-fg-muted">{c.nextPeriod}</dt>
                 <dd className="qx-small qx-num font-semibold text-fg">{fmtMoneyMinor(p.nextPeriodAmount, p.currency)}</dd>
               </div>
               {p.currentPeriodEnd && (
                 <div className="flex justify-between gap-3 py-2">
-                  <dt className="qx-small text-fg-muted">Sonraki yenileme</dt>
+                  <dt className="qx-small text-fg-muted">{c.nextRenewal}</dt>
                   <dd className="qx-small font-semibold text-fg">{fmtDate(p.currentPeriodEnd)}</dd>
                 </div>
               )}
@@ -390,18 +396,18 @@ function ChangePlanDialog({
           )}
           {(overQr || overBranches) && (
             <InlineError variant="banner" tone="warning">
-              {overQr && <p>Şu an {usage.qr.used} QR kodunuz var; bu plan {plan.maxQRCodes} QR&apos;a izin verir. Mevcutlar çalışmaya devam eder, yenisi eklenemez.</p>}
-              {overBranches && <p>Şu an {usage.branches.used} şubeniz var; bu plan {plan.maxBranches} şubeye izin verir.</p>}
+              {overQr && <p>{c.overQr(usage.qr.used, plan.maxQRCodes)}</p>}
+              {overBranches && <p>{c.overBranches(usage.branches.used, plan.maxBranches)}</p>}
             </InlineError>
           )}
-          {apply.error && <InlineError variant="banner">{errorText(apply.error, 'Plan değiştirilemedi.')}</InlineError>}
+          {apply.error && <InlineError variant="banner">{errorText(apply.error, c.changeFailed)}</InlineError>}
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose} disabled={apply.isPending}>
-            Vazgeç
+            {copy.common.cancel}
           </Button>
           <Button type="button" onClick={() => apply.mutate()} disabled={!p || apply.isPending}>
-            {apply.isPending ? 'Uygulanıyor…' : 'Onayla ve geç'}
+            {apply.isPending ? c.applying : c.confirmSwitch}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -410,31 +416,33 @@ function ChangePlanDialog({
 }
 
 function DetailsSection({ query }: { query: ReturnType<typeof useQuery<BillingDetails>> }) {
+  const copy = useSettingsCopy();
+  const c = copy.billing;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-      <SectionCard title="Ödeme yöntemi">
-        <QueryState query={query} skeleton="block" error={{ title: 'Ödeme bilgisi alınamadı' }}>
+      <SectionCard title={c.paymentMethod}>
+        <QueryState query={query} skeleton="block" error={{ title: c.paymentFailed }}>
           {(d: BillingDetails) =>
             d.paymentMethod ? (
               <p className="qx-body text-fg">
                 <span className="font-semibold capitalize">{d.paymentMethod.brand}</span> •••• {d.paymentMethod.last4}
                 <span className="qx-small block text-fg-muted">
-                  Son kullanma {String(d.paymentMethod.expMonth).padStart(2, '0')}/{d.paymentMethod.expYear}
+                  {c.expires(String(d.paymentMethod.expMonth).padStart(2, '0'), d.paymentMethod.expYear)}
                 </span>
               </p>
             ) : (
-              <p className="qx-small text-fg-muted">Kayıtlı kart yok.</p>
+              <p className="qx-small text-fg-muted">{c.noCard}</p>
             )
           }
         </QueryState>
       </SectionCard>
-      <SectionCard title="Faturalar" description="Son 12 fatura.">
+      <SectionCard title={c.invoices} description={c.invoicesHint}>
         <QueryState
           query={query}
           skeleton="list"
-          error={{ title: 'Faturalar alınamadı' }}
+          error={{ title: c.invoicesFailed }}
           isEmpty={(d: BillingDetails) => d.invoices.length === 0}
-          empty={{ title: 'Henüz fatura yok', compact: true, icon: FileText }}
+          empty={{ title: c.noInvoices, compact: true, icon: FileText }}
         >
           {(d: BillingDetails) => (
             <ul className="divide-y divide-subtle">
@@ -443,7 +451,7 @@ function DetailsSection({ query }: { query: ReturnType<typeof useQuery<BillingDe
                   <div className="min-w-0">
                     <p className="qx-small font-medium text-fg">{fmtDate(inv.createdAt)}</p>
                     <p className="qx-caption text-fg-muted">
-                      {inv.number ?? '—'} · {inv.status ? INVOICE_STATUS[inv.status] ?? inv.status : '—'}
+                      {inv.number ?? '—'} · {inv.status ? copy.invoiceStatus[inv.status] ?? inv.status : '—'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -452,8 +460,8 @@ function DetailsSection({ query }: { query: ReturnType<typeof useQuery<BillingDe
                       <Button asChild variant="ghost" size="sm">
                         <a href={(inv.pdfUrl ?? inv.hostedUrl) as string} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="h-4 w-4" aria-hidden />
-                          {inv.pdfUrl ? 'PDF' : 'Görüntüle'}
-                          <span className="sr-only"> ({fmtDate(inv.createdAt)} faturası)</span>
+                          {inv.pdfUrl ? 'PDF' : c.view}
+                          <span className="sr-only">{c.invoiceOf(fmtDate(inv.createdAt))}</span>
                         </a>
                       </Button>
                     )}

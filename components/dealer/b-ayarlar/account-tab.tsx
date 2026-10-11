@@ -19,6 +19,7 @@ import { accountFormSchema, type AccountFormValues, type AccountSettings, type D
 import { SETTINGS_KEY, fetchSettings, patchAccount } from './api';
 import { fmtDate } from './format';
 import { KeyValue } from './ui';
+import { useSettingsCopy } from './copy';
 
 function toForm(a: AccountSettings): AccountFormValues {
   return { name: a.name, phone: a.phone, image: a.image, preferredLanguage: a.preferredLanguage };
@@ -28,6 +29,7 @@ export function AccountTab({ data }: { data: AccountSettings }) {
   const queryClient = useQueryClient();
   const { update } = useSession();
   const { setLocale } = useAppLocale();
+  const c = useSettingsCopy().account;
   const form = useZodForm(accountFormSchema, { defaultValues: toForm(data) });
   const baseRef = useRef<AccountFormValues>(toForm(data));
   const versionRef = useRef(data.version);
@@ -65,7 +67,7 @@ export function AccountTab({ data }: { data: AccountSettings }) {
     // Oturum başlığı (ad/avatar) ve panel dili anında güncellenir (B6).
     await update({ name: res.name, image: res.image, preferredLanguage: res.preferredLanguage }).catch(() => undefined);
     if (changes.preferredLanguage) setLocale(res.preferredLanguage);
-    toast.success('Hesap bilgileri kaydedildi.');
+    toast.success(c.saved);
     return values;
   };
 
@@ -73,15 +75,15 @@ export function AccountTab({ data }: { data: AccountSettings }) {
     <div className="space-y-6 pb-24">
       <Form form={form} onSubmit={onSubmit} resetOnSuccess={(_r, submitted) => submitted} className="space-y-6">
         <FormRootError />
-        <SectionCard title="Kişisel bilgiler" description="Panelde ve ekip içinde görünen hesabınız. İşletme bilgileri “İşletme” sekmesinde.">
+        <SectionCard title={c.personal} description={c.personalHint}>
           <div className="grid gap-6 md:grid-cols-[auto_minmax(0,1fr)]">
             <AvatarField control={form.control} name={data.name} />
             <div className="min-w-0 space-y-4">
-              <TextField control={form.control} name="name" label="Ad soyad" required maxLength={80} autoComplete="name" />
+              <TextField control={form.control} name="name" label={c.name} required maxLength={80} autoComplete="name" />
               <TextField
                 control={form.control}
                 name="phone"
-                label="Telefon"
+                label={c.phone}
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
@@ -91,40 +93,40 @@ export function AccountTab({ data }: { data: AccountSettings }) {
                 emptyAsNull
               />
               <dl className="divide-y divide-subtle rounded-control border border-subtle px-3">
-                <KeyValue label="E-posta">
+                <KeyValue label={c.email}>
                   <span className="inline-flex items-center gap-1.5 break-all">
                     <Mail className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-hidden />
                     {data.email}
                   </span>
                 </KeyValue>
-                <KeyValue label="Üyelik başlangıcı">{fmtDate(data.memberSince)}</KeyValue>
+                <KeyValue label={c.memberSince}>{fmtDate(data.memberSince)}</KeyValue>
               </dl>
             </div>
           </div>
         </SectionCard>
-        <SectionCard title="Panel dili" description="Menüler ve e-postalar bu dilde gelir. Değişiklik kaydedince hemen uygulanır.">
+        <SectionCard title={c.language} description={c.languageHint}>
           <SelectField
             control={form.control}
             name="preferredLanguage"
-            label="Dil"
+            label={c.languageLabel}
             options={[
               { value: 'tr', label: 'Türkçe' },
               { value: 'en', label: 'English' },
             ]}
           />
         </SectionCard>
-        <DirtyBar onReloadLatest={reloadLatest} bottomOffset="var(--qx-tabbar-h, 0px)" message="Hesap bilgilerinde kaydedilmemiş değişiklikler var" />
+        <DirtyBar onReloadLatest={reloadLatest} bottomOffset="var(--qx-tabbar-h, 0px)" message={c.dirty} />
       </Form>
 
-      <SectionCard title="Erişilebilirlik" description="Bu cihazda hemen uygulanır (cihaz bazlı tercih).">
+      <SectionCard title={c.a11y} description={c.a11yHint}>
         <AccessibilityToggles />
       </SectionCard>
 
-      <SectionCard title="Verileriniz" description="KVKK kapsamında hesabınıza ait verilerin bir kopyasını JSON dosyası olarak indirebilirsiniz.">
+      <SectionCard title={c.data} description={c.dataHint}>
         <Button asChild variant="outline">
           <a href="/api/user/data-export" download>
             <Download className="h-4 w-4" aria-hidden />
-            Verilerimi indir
+            {c.download}
           </a>
         </Button>
       </SectionCard>
@@ -138,6 +140,8 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
   const { field } = useController({ control, name: 'image' });
   const current = field.value ?? null;
   const [open, setOpen] = useState(false);
+  const copy = useSettingsCopy();
+  const c = copy.account;
   const [category, setCategory] = useState(() => CATEGORIES.find((c) => current && c.items.includes(current))?.category ?? CATEGORIES[0].category);
   const [selected, setSelected] = useState<string | null>(current);
   const initial = (name || '?').trim().charAt(0).toLocaleUpperCase('tr-TR');
@@ -153,7 +157,7 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
           setOpen(true);
         }}
         className="group relative h-24 w-24 overflow-hidden rounded-full border border-subtle bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Avatarı değiştir"
+        aria-label={c.changeAvatar}
       >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -172,29 +176,29 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
       </button>
       <div className="flex flex-wrap justify-center gap-1">
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)}>
-          Değiştir
+          {c.change}
         </Button>
         {current && (
           <Button type="button" variant="ghost" size="sm" onClick={() => field.onChange(null)}>
-            Kaldır
+            {c.remove}
           </Button>
         )}
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Avatar seçin</DialogTitle>
-            <DialogDescription>Seçiminiz forma işlenir; “Kaydet” ile kalıcı olur.</DialogDescription>
+            <DialogTitle>{c.pickAvatar}</DialogTitle>
+            <DialogDescription>{c.pickAvatarHint}</DialogDescription>
           </DialogHeader>
           <ChoiceChips
-            aria-label="Avatar kategorisi"
+            aria-label={c.avatarCategory}
             options={CATEGORIES.map((c) => ({ value: c.category, label: c.category }))}
             value={category}
             onChange={(v) => v && setCategory(v)}
             size="sm"
             scroll
           />
-          <div role="radiogroup" aria-label={`${category} avatarları`} className="grid max-h-72 grid-cols-4 gap-3 overflow-y-auto p-1 sm:grid-cols-5">
+          <div role="radiogroup" aria-label={c.avatarsOf(category)} className="grid max-h-72 grid-cols-4 gap-3 overflow-y-auto p-1 sm:grid-cols-5">
             {items.map((item, i) => {
               const isSel = selected === item;
               return (
@@ -203,7 +207,7 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
                   type="button"
                   role="radio"
                   aria-checked={isSel}
-                  aria-label={`${category} avatarı ${i + 1}`}
+                  aria-label={c.avatarN(category, i + 1)}
                   onClick={() => setSelected(item)}
                   className={cn(
                     'relative aspect-square min-h-11 overflow-hidden rounded-full border-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -223,7 +227,7 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Vazgeç
+              {copy.common.cancel}
             </Button>
             <Button
               type="button"
@@ -232,7 +236,7 @@ function AvatarField({ control, name }: { control: Control<AccountFormValues>; n
                 setOpen(false);
               }}
             >
-              Seç
+              {c.select}
             </Button>
           </DialogFooter>
         </DialogContent>

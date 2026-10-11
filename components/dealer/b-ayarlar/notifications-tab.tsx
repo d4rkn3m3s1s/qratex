@@ -14,6 +14,7 @@ import { fmtDateTime } from './format';
 import { InstantSwitchRow } from './ui';
 import { useAiPatch } from './use-ai-patch';
 import { usePushDevice } from './use-push-device';
+import { useSettingsCopy } from './copy';
 
 /**
  * Bildirimler — YALNIZ gerçekten uygulanan tercihler (denetim B3: eski 5 anahtar hiçbir yere
@@ -25,28 +26,29 @@ import { usePushDevice } from './use-push-device';
  */
 export function NotificationsTab({ ai, pushDevices }: { ai: AiSection; pushDevices: PushDevice[] }) {
   const patch = useAiPatch();
+  const c = useSettingsCopy().notifications;
   const s = ai.settings;
   const aiOff = !s.isEnabled || !ai.moduleEnabled;
 
   return (
     <div className="space-y-6">
       <SectionCard
-        title="AI uyarıları"
-        description="Bir yorum analiz edildiğinde bu durumlar tespit edilirse bildirim zilinize düşer."
-        actions={<StatusBadge label="Uygulama içi" tone="neutral" size="sm" />}
+        title={c.aiTitle}
+        description={c.aiHint}
+        actions={<StatusBadge label={c.inApp} tone="neutral" size="sm" />}
       >
         {aiOff && (
           <InlineError variant="banner" tone="info" className="mb-2">
             {ai.moduleEnabled
-              ? 'AI motoru kapalı olduğu için yorumlar analiz edilmiyor; bu uyarılar şu an üretilmez. Tercihleriniz korunur.'
-              : 'AI özellikleri yönetici tarafından kapatıldı; bu uyarılar şu an üretilmez.'}
+              ? c.aiEngineOff
+              : c.aiAdminOff}
           </InlineError>
         )}
         <div className="divide-y divide-subtle">
           <InstantSwitchRow
             icon={<AlertOctagon />}
-            label="Toksik / hakaret içeren yorum"
-            description="Küfür, hakaret ya da tehdit içeren yorumlar."
+            label={c.toxic}
+            description={c.toxicHint}
             checked={s.alertOnToxic}
             muted={aiOff}
             disabled={!ai.moduleEnabled}
@@ -54,8 +56,8 @@ export function NotificationsTab({ ai, pushDevices }: { ai: AiSection; pushDevic
           />
           <InstantSwitchRow
             icon={<Flame />}
-            label="Acil durum"
-            description="Hijyen, güvenlik ya da hemen müdahale gerektiren şikâyetler."
+            label={c.urgent}
+            description={c.urgentHint}
             checked={s.alertOnUrgent}
             muted={aiOff}
             disabled={!ai.moduleEnabled}
@@ -63,8 +65,8 @@ export function NotificationsTab({ ai, pushDevices }: { ai: AiSection; pushDevic
           />
           <InstantSwitchRow
             icon={<UserMinus />}
-            label="Kayıp riski yüksek müşteri"
-            description="Bir daha gelmeyeceğini ima eden yorumlar."
+            label={c.churn}
+            description={c.churnHint}
             checked={s.alertOnChurnRisk}
             muted={aiOff}
             disabled={!ai.moduleEnabled}
@@ -73,11 +75,11 @@ export function NotificationsTab({ ai, pushDevices }: { ai: AiSection; pushDevic
         </div>
       </SectionCard>
 
-      <SectionCard title="E-posta" actions={<StatusBadge label="E-posta" tone="neutral" size="sm" />}>
+      <SectionCard title={c.email} actions={<StatusBadge label={c.email} tone="neutral" size="sm" />}>
         <InstantSwitchRow
           icon={<Mail />}
-          label="Haftalık özet e-postası"
-          description="Her pazartesi geçen haftanın yorum sayısı, puan eğilimi ve öne çıkan konular. Kapatsanız da özet panelde görünür."
+          label={c.weekly}
+          description={c.weeklyHint}
           checked={s.weeklyReportEnabled}
           disabled={!ai.moduleEnabled}
           onSave={(v) => patch({ weeklyReportEnabled: v })}
@@ -92,6 +94,8 @@ export function NotificationsTab({ ai, pushDevices }: { ai: AiSection; pushDevic
 function PushCard({ devices }: { devices: PushDevice[] }) {
   const queryClient = useQueryClient();
   const push = usePushDevice();
+  const copy = useSettingsCopy();
+  const c = copy.notifications;
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: SETTINGS_KEY });
 
@@ -99,14 +103,14 @@ function PushCard({ devices }: { devices: PushDevice[] }) {
     try {
       if (push.subscribed) {
         await push.disable();
-        toast.success('Bu cihazda anlık bildirimler kapatıldı.');
+        toast.success(c.pushOff);
       } else {
         await push.enable();
-        toast.success('Bu cihazda anlık bildirimler açıldı.');
+        toast.success(c.pushOn);
       }
       await refresh();
     } catch (e) {
-      toast.error(errorText(e, 'İşlem tamamlanamadı.'));
+      toast.error(errorText(e, copy.common.actionFailed));
     }
   };
 
@@ -116,25 +120,25 @@ function PushCard({ devices }: { devices: PushDevice[] }) {
       queryClient.setQueryData<DealerSettingsSnapshot>(SETTINGS_KEY, (old) =>
         old ? { ...old, pushDevices: old.pushDevices.filter((d) => d.id !== id) } : old
       );
-      toast.success('Cihaz kaldırıldı.');
+      toast.success(c.deviceRemoved);
     } catch (e) {
-      toast.error(errorText(e, 'Cihaz kaldırılamadı.'));
+      toast.error(errorText(e, c.deviceRemoveFailed));
     }
   };
 
   const supportNote =
     push.support === 'unsupported'
-      ? 'Bu tarayıcı anlık bildirimleri desteklemiyor. iPhone’da Qratex’i ana ekrana ekleyip oradan açın.'
+      ? c.unsupported
       : push.support === 'unconfigured'
-        ? 'Anlık bildirim bu ortamda yapılandırılmamış.'
+        ? c.unconfigured
         : push.support === 'denied'
-          ? 'Bildirim izni bu tarayıcıda engellenmiş. Adres çubuğundaki site ayarlarından izin verin.'
+          ? c.denied
           : null;
 
   return (
     <SectionCard
-      title="Anlık bildirimler"
-      description="Masa çağrıları ve vaka radarı uyarıları, uygulama kapalıyken de telefonunuza/bilgisayarınıza gelir."
+      title={c.pushTitle}
+      description={c.pushHint}
       actions={<StatusBadge label="Push" tone="neutral" size="sm" />}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -143,34 +147,34 @@ function PushCard({ devices }: { devices: PushDevice[] }) {
             <BellRing className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <p className="qx-body font-medium text-fg">Bu cihaz</p>
+            <p className="qx-body font-medium text-fg">{c.thisDevice}</p>
             <p className="qx-small text-fg-muted" aria-live="polite">
-              {push.support === 'checking' ? 'Denetleniyor…' : push.subscribed ? 'Anlık bildirim açık' : 'Anlık bildirim kapalı'}
+              {push.support === 'checking' ? c.checking : push.subscribed ? c.pushIsOn : c.pushIsOff}
             </p>
           </div>
         </div>
         <Button type="button" variant={push.subscribed ? 'outline' : 'default'} onClick={() => void toggle()} disabled={push.support !== 'ready' || push.busy}>
-          {push.busy ? 'Bekleyin…' : push.subscribed ? 'Bu cihazda kapat' : 'Bu cihazda aç'}
+          {push.busy ? c.wait : push.subscribed ? c.disableHere : c.enableHere}
         </Button>
       </div>
       {supportNote && <p className="qx-small mt-3 text-fg-muted">{supportNote}</p>}
 
-      <h3 className="qx-small mt-6 font-semibold text-fg">Kayıtlı cihazlar</h3>
+      <h3 className="qx-small mt-6 font-semibold text-fg">{c.devices}</h3>
       {devices.length === 0 ? (
-        <EmptyState compact icon={Smartphone} title="Kayıtlı cihaz yok" description="Bu cihazda açtığınızda burada listelenir." headingLevel="p" />
+        <EmptyState compact icon={Smartphone} title={c.noDevices} description={c.noDevicesHint} headingLevel="p" />
       ) : (
         <ul className="mt-2 divide-y divide-subtle rounded-card border border-subtle">
           {devices.map((d) => (
             <li key={d.id} className="flex items-center gap-3 px-3 py-2">
               <Smartphone className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
               <div className="min-w-0 flex-1">
-                <p className="qx-small truncate font-medium text-fg">{d.label || 'Bilinmeyen cihaz'}</p>
+                <p className="qx-small truncate font-medium text-fg">{d.label || c.unknownDevice}</p>
                 <p className="qx-caption text-fg-muted">
-                  Eklendi {fmtDateTime(d.createdAt)}
-                  {d.lastUsedAt ? ` · son kullanım ${fmtDateTime(d.lastUsedAt)}` : ''}
+                  {c.added(fmtDateTime(d.createdAt))}
+                  {d.lastUsedAt ? c.lastUsed(fmtDateTime(d.lastUsedAt)) : ''}
                 </p>
               </div>
-              <IconButton aria-label={`${d.label || 'Cihazı'} kaldır`} icon={<Trash2 />} variant="ghost" size="sm" onClick={() => void remove(d.id)} />
+              <IconButton aria-label={c.removeDevice(d.label)} icon={<Trash2 />} variant="ghost" size="sm" onClick={() => void remove(d.id)} />
             </li>
           ))}
         </ul>
