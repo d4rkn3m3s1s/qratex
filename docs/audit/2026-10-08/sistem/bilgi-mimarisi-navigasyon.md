@@ -607,3 +607,251 @@ Sayılar §4.2-4.4 tablolarından türetildi. Kesinleşmeleri için önce PostHo
 - Kırık iç link sayısı 0 olur; link taraması CI'a eklenir.
 - Panel açılışında menü için istemcide 0 istek yapılır.
 - Müşteri "İşletmeye git" tıklamalarının %100'ü doğru işletmeye iner.
+
+---
+
+## Uygulama sonrası durum
+
+**Yeniden denetim tarihi:** 2026-10-11 · **Dal:** `feat/platform-overhaul`
+
+**Yöntem:** Her bulgu şimdiki koda karşı yeniden ölçüldü:
+- kayıt dökümü,
+- canlı ve emekli koçanı ayrımıyla sayfa envanteri,
+- iç bağlantı taraması,
+- yönlendirmelerin etkin olup olmadığı.
+
+Bu ölçümler betikle yapıldı; her şüpheli nokta ilgili dosya okunarak teyit edildi.
+
+**Temel alınan altyapı (iki dalgadan):**
+- `fc16832f`: tek navigasyon kaydı, sunucuda çözülen kabuk, mobil alt sekme ve ⌘K paleti.
+- `2e6d708e`: Navigasyon Stüdyosu.
+- Yüzey ajanlarının birleştirmeleri ve emekli koçanları.
+
+Bu turun düzeltmeleri `197cbc51` ve `4d32ce1c` commit'lerinde.
+
+### Önce / sonra (ölçülen)
+
+| Ölçüt | 2026-10-08 | Şimdi |
+|---|---|---|
+| Menü tanımının elle tutulan kopyası | 7 liste | 1 kayıt (`lib/navigation/registry.ts`); sidebar, alt sekme, ⌘K, görünürlük kataloğu, yönlendirmeler ve **Qra site haritası** buradan türetilir |
+| Admin menüsü | 68 düz öğe, 0 grup | 40 birincil öğe, 10 grup, ayrıca palet |
+| Bayi menüsü | 32 öğe | 22 birincil + 3 alt öğe, 9 blok |
+| Müşteri menüsü | 28 öğe | 6 birincil + 15 alt öğe; mobil alt sekme (Ana Sayfa · Keşfet · TARA · Oyna · Cüzdan) |
+| Panel sayfaları, canlı / emekli koçanı | 73 / 43 / 58 canlı | admin 45/43 · bayi 29/30 · müşteri 23/44 · personel 1/1 |
+| Kayıtta olmayan (yetim) sayfa | 14 (8'i tam yetim) | 0 (test zorunlu) |
+| 404 veren iç bağlantı | 2 + 25 `/auth/signin` | 0 (CI'da tarama) |
+| Emekli koçanına inen yeni kod bağlantısı | — | 0 (bu turda 41'i düzeltildi; CI'da tarama) |
+| Panel açılışında menü için istemci isteği | 3 istek, 5 önbelleksiz sorgu | 0 (RSC'de tek sorgu, 5 dk önbellek, etiketle tazeleme) |
+| `verify:menu` | Kırık, CI'da yok | 5 suite / 74 test; CI `lint` işinde zorunlu |
+
+### Bulgu bulgu
+
+**B1 — Admin menüsü 68 düz öğe, grup yok: KAPANDI**
+- `NAV_GROUPS`, admin için 10 alan tanımlıyor: Genel Bakış, Müşteriler ve Bayiler, Ekonomi ve Oyun, Kampanyalar, Yapay Zekâ, Güven ve Uyum, Platform, İçerik ve Görünüm, Ekip ve İletişim, Sistem.
+- `SidebarGroupRole` admin'i kapsıyor; Stüdyo admin gruplarını yönetiyor.
+- Bu turda ⌘K'ya "Son kullanılanlar" eklendi (`components/dashboard/header.tsx`):
+  - rol başına son 5 sayfa;
+  - yalnız sorgu boşken görünür (`idleOnly`);
+  - tarayıcıda tutulur, okuma/yazma try/catch içinde.
+- Test: `navigation-shell` → "admin… 10 alan grup olarak gelir".
+
+**B2 — 7 ayrı liste, katalog kopuk, koruma testi kırık: KAPANDI**
+
+Kayıt tek kaynak; `MENU_CATALOG_BY_ROLE` kayıttan türetiliyor (iki yönlü test). Bu turda:
+1. **Qra bilgi tabanı kayıttan türetiliyor.** Eski 19 yolun 14'ü emekli URL'ydi. Qra, "Çerçeve Dükkanı", "Sürpriz Kutularım", "Kupon Kullan" gibi artık var olmayan sekmeleri öneriyordu. Şimdi menü yolunu ("Cüzdan › Ödüller") ve `QRA_PURPOSE[id]` amaç metnini kullanıyor. İki yönlü test: `__tests__/lib/qra-knowledge-base.test.ts`.
+2. **`verify:menu` 5 suite'e genişletildi** ve `.github/workflows/ci.yml` içinde zorunlu oldu.
+3. **Bir dalga regresyonu yakalandı.** "Dosya sistemi ↔ kayıt" testi, kayıtta olmayan `/admin/account-security` sayfasını buldu. Sayfa kayda `child` olarak eklendi; palette "Hesap güvenliği" adıyla çıkıyor.
+4. **`lib/module-controls.ts` içindeki 28 `detailHref` emekli URL gösteriyordu.** Hepsi kanonik yollara çevrildi; bağlantı taraması bunu koruyor.
+5. **`docs/admin-menu-visibility.md` güncellendi.** Yeni menü öğesi için 4 dosyanın elle güncellenmesini isteyen liste kaldırıldı; yerine kayıt akışı yazıldı.
+
+**B3 — 14 menü dışı sayfa (8 yetim): KAPANDI**
+
+Yetimler bağlandı:
+
+| Eski sayfa | Yeni yeri |
+|---|---|
+| Lounge | Cüzdan › Kartım (statü) |
+| Favoriler | Keşfet › Kaydettiklerim |
+| Experiences | Mekân detayı |
+| Ask-analytics + ai-chat | `/dealer/assistant` |
+| Weekly-brief | Bugün › Haftalık |
+| Action-items | Gelen Kutusu › Bana atananlar |
+| Konsey alt sayfaları, klan savaşları, AI üslupları | İlgili sayfada sekme |
+| Hub sayfaları | Emekli |
+
+- "Panel dizinindeki her page.tsx kayıtta" testi 4 rolde de geçiyor.
+- Bu turda iki **dalga regresyonu** kapandı: personel menüsündeki "Saha bildirimi" ve admin menüsündeki "Girişimler" emekli koçanına iniyordu. Her tıklama bir yönlendirme turu yapıyor, öğe de hiç "aktif" görünmüyordu.
+  - İkisi `deprecated` yapıldı; anahtar kelimeleri üst sayfaya taşındı.
+  - Yeni test: "menü/palet rotası emekli koçanı değil".
+
+**B4a — 404 veren iç bağlantılar: KAPANDI**
+- `/dealer/ai-learning` ve `/admin/squads/battles/${id}` bağlantıları artık yok. Klan savaşı detayı `?battle=` ile açılan çekmecede.
+- Kodun tamamında 404 veren panel/auth bağlantısı: **0**.
+- `__tests__/architecture/nav-links.test.ts`, `app`/`components`/`lib` altındaki her tırnaklı ya da şablon yolu sayfa envanterine karşı çözüyor.
+
+**B4b — `/auth/error`, `/auth/verify`, `/auth/signin`: KAPANDI**
+- Üç sayfa da var.
+- `/auth/signin`, `callbackUrl`'i güvenli hâle getirip `/auth/login`'e yönlendiriyor.
+- Dalgalarla eklenen 8 sayfa hâlâ `/auth/signin`'e gönderiyordu (çift tur); hepsi `/auth/login`'e çevrildi.
+
+**B4c — Global arama yanlış yere iniyor: KAPANDI (bu tur)**
+
+Kök neden üç parçalıydı:
+- hedefler sabit "liste + `?search=`" biçimindeydi;
+- müşteri hedefleri `search` değil `q` parametresini okuyordu;
+- admin ürün sonucu geri bildirim listesine, admin QR sonucu ise proxy'nin admin'e kapattığı `/dealer/qr-codes`'a gidiyordu.
+
+Yeni `lib/navigation/search-targets.ts` her sonucu kendi kaydına indiriyor:
+
+| Sonuç | İniş yeri |
+|---|---|
+| Kullanıcı | Kullanıcı 360 (`/admin/users/[id]`) |
+| Geri bildirim (admin / bayi) | Gelen kutusu detay çekmecesi (`?id=qr:<id>` / `qr-<id>`) |
+| Geri bildirim (müşteri) | Seslerim (`?id=fb-<id>`) |
+| QR (admin) | Bayinin sağlık çekmecesi (`?dealer=`) |
+| Ürün ve QR (bayi) | Bayinin katalog ve QR araması (`?q=`) |
+| Ürün (müşteri) | Müşterinin o ürünü içeren ziyaretleri (`?tab=visits&q=`) |
+
+- Rolün yüzeyi olmayan sonuç türü hiç sorgulanmıyor (ör. admin için ürün).
+- Müşteri ürün araması yalnız müşterinin kendi tükettiği ürünleri döndürüyor. Önceden tüm platform kataloğu dönüyor, sonuç da boş bir listeye iniyordu.
+- Test: `navigation-search-targets` (hedef canlı bir sayfa, koçan değil).
+
+**B4d — "İşletmeye git" boşa düşüyor: KAPANDI**
+- `/customer/places/[dealerId]` mekân detayı var.
+- Ana sayfa, Ayın İşletmesi, öneriler, Seslerim, Tara, Yılım ve paylaşım kartları doğrudan buraya bağlanıyor.
+- Eski `?focus=` ve `?dealerId=` adreslerini koçan mekân detayına çeviriyor.
+
+**B5 — Aynı işi yapan sayfa kümeleri (K1–K11): KAPANDI**
+
+Kümeler sekmeli tek yüzeylerde birleşti:
+- Müşteri: Ben › İlerleme / Rozetler / Yılım / Seslerim; Cüzdan; Keşfet.
+- Bayi: Bugün, Gelen Kutusu, Müşteriler, Analitik, Asistan, Otomasyon.
+- Admin: Güven, KVKK, AI, Ekonomi, Kampanya Takvimi, Entegrasyonlar, Navigasyon.
+
+K1 metrik tutarlılığı sağlandı: İlerleme, Yılım ve Seslerim sunucuları Feedback ile ConsumptionReview'ı birlikte okuyor. 95 eski URL'nin tamamında sayfa dosyası artık bir emekli koçanı.
+
+Bu turda bir **kök hata** bulundu ve düzeltildi:
+- `next.config` kenar yönlendirmesi "koçansa etkinleştir" kuralıyla çalışıyordu ve 22 eski URL'de koçanı eziyordu. Bu yüzden sekme ve parametre eşlemesi kayboluyordu:
+
+  | Eski URL | Gitmesi gereken | Gittiği yer |
+  |---|---|---|
+  | `/customer/favorites` | Kaydettiklerim | Yakınımda |
+  | `/customer/campaigns` | Fırsatlar | Yakınımda |
+  | `/dealer/weekly-brief` | Haftalık sekmesi | Sekmesiz sayfa |
+  | `?dealerId=` | Mekân detayı | Liste |
+
+- Ayrıca koçan sezgisi TypeScript jeneriğini (`Promise<Record<…>>`) JSX sanıyordu; bu yüzden 73 koçanı "canlı sayfa" sayıyordu.
+- **Yeni kural:** kenar yönlendirmesi yalnız eski dosya **silinmişse** devreye girer. Koçan varsa eşlemeyi koçan yapar.
+- Test: "yönlendirme kaynağı ve emekli rota sayfaları yalnız emekli koçanı". Birleştirilen bir yüzeyin canlı kopyası kalırsa test düşer.
+
+**B6 — `/admin/features` etkisiz: KAPANDI**
+- FeatureFlag artık modül kapısının kademeli açılış kuralı olarak kullanılıyor (`lib/admin-flags/rollout.server.ts` → `assertModuleEnabled`).
+- `/admin/modules` ve `/admin/ab-testing`, "Özellik ve Deney" ekranında birleşti.
+- `tech/add` emekli; `?type=` parametresi webhook ya da anahtar diyaloğunu açıyor.
+
+**B7 — `SidebarContent` her render'da yeniden kuruluyor: KAPANDI**
+- `SidebarContent` artık modül düzeyinde bir bileşen (`components/dashboard/sidebar.tsx`).
+- Bu turda öneri tamamlandı: derin bir sayfaya doğrudan gelindiğinde etkin öğe `scrollIntoView({ block: 'nearest' })` ile görünür alana alınıyor.
+
+**B8 — Menü istemcide 3 istekle çözülüyor: KAPANDI**
+- Menü RSC'de `getShellConfig(role)` ile çözülüyor:
+  - tek `findMany`;
+  - `unstable_cache`, 300 sn;
+  - `NAV_SETTINGS_TAG` ve modül kapısı etiketiyle tazeleme;
+  - DB hatasında varsayılan menü.
+- İstemcide yalnız bayi gelen kutusu sayaç rozeti kaldı.
+- Bu turda artık çağıranı olmayan üç eski okuma ucu (`/api/settings/{sidebar-order,sidebar-groups,visibility}`) 410 ile emekli edildi.
+
+**B9 — Gruplama ve adlandırma: KAPANDI**
+- Bayi menüsü 9 iş bloğunda: Bugün · Gelen Kutusu · Müşteriler · Pazarlama · Analitik · AI Asistan · İşletme · Otomasyon · Ayarlar.
+- Tüketimler İşletme'ye; radar ve churn Müşteriler'e taşındı.
+- "insights" adının üç anlamda kullanılması bitti: `/admin/insights` → Analitik › Sektörler; bayide `analytics/insights`; müşteride ai-insights → Seslerim.
+- Her rotada TR/EN etiket ve anahtar kelimeler var.
+- `/dealer/team` URL'si bilinçli olarak korundu: etiketi "Ekip", İşletme bloğunda duruyor ve farklı bir rolün panelinde.
+
+**B10 — Erişilebilirlik: KAPANDI**
+- Daraltılmış menüde `aria-label` ve Tooltip var.
+- Etkin öğede `aria-current="page"`, grup ve alt listelerde `aria-expanded` var.
+- Çıkış düğmesinin etiketi var.
+- Bu turda ikon tekilliği test edildi ve bir çakışma giderildi (müşteride Klan ile Ekip aynı `Users2` ikonunu kullanıyordu).
+- Test: "menü öğelerinin ikonları tekil" (4 rol).
+
+**B11 — Görünürlük ile erişim aynı değil: KAPANDI (bu tur)**
+- Kabuk yapılandırması artık bir `gate` taşıyor:
+  - rolün kayıttaki tüm desenleri açık ya da kapalı olarak işaretli;
+  - yola en özgül eşleşen desen karar veriyor. Örneğin "Genel analitik" gizliyken, kendi anahtarı açık olan `/dealer/analytics/heatmap` açık kalıyor.
+- Müşteri ve bayi kabuğu `<RouteGate>` ile sarıldı. Kapalı bir bölüm URL'den açılınca yarım çalışan ekran (API 403) yerine "Bu bölüm şu anda kullanılamıyor" durumu ve ana sayfa düğmesi gösteriliyor.
+- Ana sayfa ve Ayarlar hiçbir ayarla kapatılamaz; hesap, abonelik ve KVKK erişimi her zaman açık kalır.
+- Veri güvenliği API modül kapısında kalıyor; bu katman yalnız kullanıcıya tutarlı bir sonuç göstermek için var.
+- Test: `navigation-shell` → "sayfa kapısı (B11)".
+
+**B12 — Diğer bulgular: hepsi KAPANDI**
+1. **Önek çakışması:** `matchActiveHref` en uzun öneki seçiyor; kök yalnız tam eşleşmede aktif (test var).
+2. **Grup etiketi i18n'i eziyor:** Override `{tr,en}` biçiminde; eski düz metin de okunuyor (test var).
+3. **Sıra/grup etkileşimi, klavye desteği yok:** Navigasyon Stüdyosu gerçek menü ağacını gösteriyor ve kabuğun kendi çözücüsüyle canlı önizleme yapıyor. Yukarı/aşağı düğmeleri ve grup seçimi klavyeyle çalışıyor; sürüm kilidi var.
+4. **Proxy'de `/staff` ölü kodu:** Proxy artık `/staff` yolunu eşliyor; ölü kök yönlendirmesi kaldırıldı (`0ca4bb3e`).
+5. **Müşteride mobil birincil eylem yok:** Alt sekme çubuğunun ortasında TARA var; ⌘K'da "QR okut" kısayolu var.
+6. **Bayi onboarding'i hep görünür:** `/dealer/onboarding` emekli; kurulum kartı Bugün sayfasında.
+7. **Statik doküman sayfaları menüde:** Tasarım dili, erişilebilirlik ve temalar "Tasarım Sistemi"nde birleşti.
+
+**B13 — Komut paleti: KAPANDI**
+- Palette üç bölüm var:
+  - Kısayollar;
+  - Sayfalar: kayıttan gelir; rol, görünürlük ve ekip süzgeçlerinden geçer; Türkçe aksandan bağımsız eşleşir;
+  - Veriler.
+- Bu turda "Son kullanılanlar" eklendi ve veri sonuçları artık kendi kaydına iniyor (bkz. B4c).
+
+**Faz 5.3 — Navigasyon kaynağı ölçümü: KAPANDI (bu tur)**
+- Yeni PostHog olayı: `nav_click` (`lib/navigation/track.ts`).
+- Kaynaklar: sidebar, alt sekme, palet, son kullanılanlar, kısayol. Sidebar ve alt sekme tıklamaları `NavClickTracker` ile, yüzey bileşenlerine dokunmadan, yakalama aşamasında ölçülüyor.
+- Olay rızaya bağlı; sorgu dizesi gönderilmiyor.
+
+### Bu turda bulunan dalga regresyonları (hepsi kapandı)
+
+1. **Kenar yönlendirmesi koçanı eziyordu.** 22 eski URL sekmesiz ya da bağlamsız bir hedefe iniyordu; koçan sezgisi de yanlıştı (bkz. B5).
+2. **Menüde emekli koçanına inen öğeler vardı:** personel "Saha bildirimi" ve admin "Girişimler".
+3. **`/admin/account-security` kayıtta yoktu;** bu yüzden `verify:menu` kırıktı.
+4. **41 kod bağlantısı emekli koçanına gidiyordu** (her tıklamada ek bir tur):
+   - 15 tüketim / geri bildirim / telafi derin bağlantısı (yeni `lib/navigation/deep-links.ts` ile düzeltildi);
+   - 28 modül `detailHref`;
+   - bayi churn bildirimindeki `ctaPath`;
+   - segment kararı bildirimi;
+   - keşif modül kapısı anahtarı.
+5. **Qra yanlış yönlendiriyordu:** 14 emekli yol ve artık olmayan sekme adları öneriyordu.
+6. **Global aramanın müşteri hedefleri parametreyi okumuyordu** (`search` gönderiliyor, `q` bekleniyordu).
+7. **Çağıranı olmayan üç navigasyon ayarı okuma ucu açık duruyordu.**
+
+### Kalan maddeler (sahibi bu boyutun dışında)
+
+- **Bayi segment kampanya önerisi akışı sahipsiz.**
+  - `POST /api/dealer/innovation/segment-proposals` ve `/[id]/send` uçlarını çağıran bir bayi ekranı yok.
+  - Admin'deki Segmentler › Öneriler kuyruğu yalnız eski kayıtları onaylayabiliyor.
+  - Onay bildirimi Teklifler sayfasına iniyor. Oradaki "taşındı" notu "Pazarlama › Kampanyalar" diyor, ama Kampanyalar bu taslakları göstermiyor.
+  - Ürün kararı gerekiyor: akışı Kampanyalar'a bağlamak ya da emekliye ayırmak. Sahibi: bayi pazarlama yüzeyi.
+- **Çağıranı olmayan eski müşteri uçları.**
+  - Uçlar: `/api/customer/{analytics,stats,spending-overview,my-year,ai-insights,trends}` ve `/api/customer/redeem-coupon`.
+  - Hiçbiri UI'dan çağrılmıyor. Kupon artık sürpriz kutuyla dağıtılıyor ve kasada gösteriliyor (`lib/admin-coupons/contract.ts`).
+  - Navigasyonu etkilemiyorlar; emekliye ayırma kararı API yüzeyinin sahibinde (mimari-api).
+- **Kenar yönlendirmesi şu an hiçbir eşlemede etkin değil.**
+  - 95 eski URL'nin hepsinde koçan dosyası var, bu yüzden eski bağlantılar bir RSC turuyla yönlendiriliyor.
+  - Bu bilinçli bir tercih: sekme ve parametre eşlemesi korunuyor.
+  - Eski bağlantı trafiği bittiğinde koçanlar silinebilir; o zaman kenar 308'i kendiliğinden devreye girer. Trafiğin bittiğine karar vermek için PostHog `$pageview` verisi gerekiyor.
+- **Bilinçli olarak yapılmayan küçük işler:**
+  - `/dealer/team` → `/dealer/staff` URL değişikliği;
+  - kullanıcı başına sabitlenmiş menü favorileri. "Son kullanılanlar" ve palet bu ihtiyacı karşılıyor.
+
+### Yeni puan: **9.5 / 10**
+
+**Neden yükseldi:**
+- Raporun 13 bulgusunun tamamı ve geçiş planının beş fazı kapandı.
+- Menü, alt sekme, palet, görünürlük kataloğu, yönlendirmeler ve Qra tek kayıttan türetiliyor.
+- Menü sunucuda çözülüyor; görünürlük kararı sayfa düzeyinde de uygulanıyor.
+- Kırılmaların geri gelmesini engelleyen korkuluklar CI'da:
+  - kayıt ↔ dosya sistemi ve yetim sayfa;
+  - 404 veren ya da emekli koçanına inen iç bağlantı;
+  - birleştirilen bir yüzeyin canlı kopyası;
+  - ikon tekilliği;
+  - Qra ↔ kayıt;
+  - arama iniş adresleri.
+
+**Neden 10 değil:** Yarım puan, bu boyutun yetkisi dışında kalan iki sahipsiz akış için düşüldü: bayi segment önerisi akışı ve çağıranı olmayan eski müşteri uçları. İkisi de navigasyondan erişilemiyor; ürün ya da API kararı bekliyor.
