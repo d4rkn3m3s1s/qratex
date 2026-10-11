@@ -43,6 +43,9 @@ const LIMITS = {
 } as const;
 
 export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Draft; base: string; focusPath: string; onFocusPath: (p: string) => void }) {
+  const fz = useSeoCopy().fx;
+  const uy = useSeoCopy().ui2;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [mounted, setMounted] = useState(false);
@@ -70,7 +73,7 @@ export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Dra
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-sm text-fg-muted">
-          <span>Sayfa</span>
+          <span>{uy.sayfa}</span>
           <select
             value={focusPath}
             onChange={(e) => onFocusPath(e.target.value)}
@@ -79,7 +82,7 @@ export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Dra
             {SEO_ROUTES.map((r) => <option key={r.path} value={r.path}>{r.label}</option>)}
           </select>
         </label>
-        <div role="radiogroup" aria-label="Cihaz" className="inline-flex rounded-control border border-border p-0.5">
+        <div role="radiogroup" aria-label={ux.cihaz} className="inline-flex rounded-control border border-border p-0.5">
           {(['desktop', 'mobile'] as const).map((d) => (
             <button
               key={d}
@@ -90,50 +93,50 @@ export function SeoPreview({ draft, base, focusPath, onFocusPath }: { draft: Dra
               className={cn('inline-flex min-h-10 items-center gap-1.5 rounded-chip px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', device === d ? 'bg-surface-3 text-fg' : 'text-fg-muted')}
             >
               {d === 'desktop' ? <Monitor className="h-4 w-4" aria-hidden /> : <Smartphone className="h-4 w-4" aria-hidden />}
-              {d === 'desktop' ? 'Masaüstü' : 'Mobil'}
+              {d === 'desktop' ? ux.masaustu : 'Mobil'}
             </button>
           ))}
         </div>
       </div>
 
-      <figure className={cn('rounded-card border border-border bg-surface-1 p-4', device === 'mobile' && 'max-w-[360px]')} aria-label="Google sonuç önizlemesi">
+      <figure className={cn('rounded-card border border-border bg-surface-1 p-4', device === 'mobile' && 'max-w-[360px]')} aria-label={ux.googleSonucOnizlemesi}>
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-3 text-xs font-semibold text-fg" aria-hidden>
             {(g.siteName || 'S').slice(0, 1)}
           </span>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm text-fg">{g.siteName || 'Site adı'}</p>
+            <p className="truncate text-sm text-fg">{g.siteName || ux.siteAdi}</p>
             <p className="truncate text-xs text-fg-muted">{crumbs}</p>
           </div>
         </div>
-        <p className={cn('mt-2 text-info', device === 'desktop' ? 'text-xl leading-7' : 'text-lg leading-6')}>{shownTitle || 'Başlık'}</p>
-        <p className="mt-1 text-sm leading-5 text-fg-muted">{shownDesc || (isHome ? 'Açıklama yok' : 'Açıklama sayfanın kendi metninden gelir.')}</p>
+        <p className={cn('mt-2 text-info', device === 'desktop' ? 'text-xl leading-7' : 'text-lg leading-6')}>{shownTitle || ux.baslik}</p>
+        <p className="mt-1 text-sm leading-5 text-fg-muted">{shownDesc || (isHome ? ux.aciklamaYok : ux.aciklamaSayfaninKendiMetninden)}</p>
         {!g.robotsIndex ? <p className="mt-2 text-xs font-medium text-danger">{sx.noindexOn}</p> : null}
         <figcaption className="sr-only">{sx.serpCaption}</figcaption>
       </figure>
 
-      <figure className="overflow-hidden rounded-card border border-border bg-surface-1" aria-label="Sosyal paylaşım kartı önizlemesi">
+      <figure className="overflow-hidden rounded-card border border-border bg-surface-1" aria-label={ux.sosyalPaylasimKartiOnizlemesi}>
         <div className="aspect-[1.91/1] w-full bg-surface-3">
           {isHome ? (
             // Ana sayfada dosya tabanlı dinamik görsel (app/opengraph-image.tsx) ayardaki görseli ezer.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src="/opengraph-image" alt="Yayındaki ana sayfa paylaşım görseli" className="h-full w-full object-cover" loading="lazy" />
+            <img src="/opengraph-image" alt={ux.yayindakiAnaSayfaPaylasim} className="h-full w-full object-cover" loading="lazy" />
           ) : ogSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={ogSrc} alt="Paylaşım görseli" className="h-full w-full object-cover" loading="lazy" />
+            <img src={ogSrc} alt={ux.paylasimGorseli} className="h-full w-full object-cover" loading="lazy" />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-fg-muted">{sx.noImage}</div>
           )}
         </div>
         <div className="space-y-0.5 border-t border-border p-3">
           <p className="text-xs uppercase text-fg-subtle">{host}</p>
-          <p className="line-clamp-1 font-semibold text-fg">{title || 'Başlık'}</p>
+          <p className="line-clamp-1 font-semibold text-fg">{title || ux.baslik}</p>
           <p className="line-clamp-2 text-sm text-fg-muted">{desc}</p>
         </div>
         <figcaption className="border-t border-border px-3 py-2 text-xs text-fg-muted">
           {isHome
-            ? 'Ana sayfa: başlık ve açıklamanızdan otomatik üretilen görsel kullanılır (kayıtlı değerlerle).'
-            : `Diğer sayfalar "OG görsel" alanındaki görseli kullanır${g.twitterCard === 'summary' ? '; X\'te küçük kart' : ''}.`}
+            ? ux.anaSayfaBaslikVe
+            : fz.otherPagesOg(g.twitterCard === 'summary')}
         </figcaption>
       </figure>
     </div>

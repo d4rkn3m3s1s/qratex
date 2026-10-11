@@ -16,7 +16,9 @@ import { cmsPublicPath, type CmsListQuery, type CmsPageList, type CmsPageSummary
 import { cn } from '@/lib/utils';
 import { deletePage, errorText, fetchPages, pageKeys, publishPage } from './api';
 import { relTime } from './format';
-import { useSeoCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { useDsLocale } from '@/components/ds/a11y/copy';
+import { SEO_DICT, useSeoCopy } from './copy';
 
 const STATUS_TABS: Array<{ value: CmsListQuery['status']; label: string }> = [
   { value: 'all', label: 'Tümü' },
@@ -29,6 +31,10 @@ const STATUS_TABS: Array<{ value: CmsListQuery['status']; label: string }> = [
  * Yayın hattı gerçek: "Yayında" sayfa `/sayfa/<slug>` adresinde açılır ve sitemap'e girer.
  */
 export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList | null; initialQuery: CmsListQuery }) {
+  const fz = useSeoCopy().fx;
+  const L = useSourceT(SEO_DICT);
+  const uy = useSeoCopy().ui2;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const url = useUrlState();
   const qc = useQueryClient();
@@ -67,15 +73,15 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
       register="ops"
       header={
         <PageHeader
-          eyebrow="İçerik"
-          title="İçerik sayfaları"
-          description="Sitede /sayfa/… adresinde yayınlanan bilgi sayfaları (hakkımızda, iletişim, duyuru vb.). Yayındaki sayfa birkaç saniye içinde canlıya yansır ve sitemap'e eklenir. Yasal metinler sistemden üretilir, burada düzenlenmez."
+          eyebrow={ux.icerik}
+          title={ux.icerikSayfalari}
+          description={ux.sitedeSayfaAdresindeYayinlanan}
           icon={<FileText />}
           meta={
             counts ? (
-              <div className="flex flex-wrap gap-2 text-sm" aria-label="Sayfa sayıları">
-                <StatusBadge label={`${counts.published} yayında`} tone="success" />
-                <StatusBadge label={`${counts.draft} taslak`} tone="neutral" />
+              <div className="flex flex-wrap gap-2 text-sm" aria-label={ux.sayfaSayilari}>
+                <StatusBadge label={fz.publishedCount(counts.published)} tone="success" />
+                <StatusBadge label={fz.draftCount(counts.draft)} tone="neutral" />
               </div>
             ) : null
           }
@@ -95,7 +101,7 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
       }
       toolbar={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div role="tablist" aria-label="Duruma göre filtrele" className="inline-flex rounded-control border border-border bg-surface-1 p-1">
+          <div role="tablist" aria-label={ux.durumaGoreFiltrele} className="inline-flex rounded-control border border-border bg-surface-1 p-1">
             {STATUS_TABS.map((t) => {
               const active = query.status === t.value;
               const n = t.value === 'all' ? counts?.all : t.value === 'published' ? counts?.published : counts?.draft;
@@ -111,7 +117,7 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
                     active ? 'bg-surface-3 text-fg' : 'text-fg-muted hover:text-fg'
                   )}
                 >
-                  {t.label}
+                  {L(t.label)}
                   {n != null ? <span className="ml-1.5 tabular-nums text-fg-subtle">{n}</span> : null}
                 </button>
               );
@@ -121,7 +127,7 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
             <label className="relative block sm:w-72">
               <span className="sr-only">{sx.searchSr}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Başlık veya adreste ara" className="min-h-11 pl-9 sm:min-h-10" type="search" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={ux.baslikVeyaAdresteAra} className="min-h-11 pl-9 sm:min-h-10" type="search" />
             </label>
             <label className="flex items-center gap-2 text-sm text-fg-muted">
               <span>{sx.sort}</span>
@@ -149,21 +155,21 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
           query.q || query.status !== 'all'
             ? {
                 variant: 'filtered',
-                title: query.q ? `"${query.q}" için sonuç yok` : 'Bu durumda sayfa yok',
-                description: 'Filtreyi değiştirin ya da aramayı temizleyin.',
+                title: query.q ? fz.noResultsFor(query.q) : fz.noPagesInStatus,
+                description: ux.filtreyiDegistirinYaDa,
                 action: (
                   <Button variant="outline" onClick={() => url.set({ q: null, durum: null, sayfa: null })}>
-                    Filtreleri temizle
+                    {uy.filtreleriTemizle}
                   </Button>
                 ),
               }
             : {
-                title: 'Henüz içerik sayfası yok',
-                description: 'Hakkımızda, iletişim ya da duyuru gibi bir sayfa oluşturun. Taslak olarak başlar; hazır olduğunda yayına alırsınız.',
+                title: ux.henuzIcerikSayfasiYok,
+                description: ux.hakkimizdaIletisimYaDa,
                 action: (
                   <Button asChild>
                     <Link href="/admin/pages/yeni">
-                      <Plus className="h-4 w-4" aria-hidden /> İlk sayfayı oluştur
+                      <Plus className="h-4 w-4" aria-hidden /> {ux.ilkSayfayiOlustur}
                     </Link>
                   </Button>
                 ),
@@ -180,13 +186,13 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
               ))}
             </ul>
             {totalPages > 1 ? (
-              <nav aria-label="Sayfalama" className="flex items-center justify-between gap-3 text-sm text-fg-muted">
+              <nav aria-label={ux.sayfalama} className="flex items-center justify-between gap-3 text-sm text-fg-muted">
                 <span className="tabular-nums">
                   {data.total} sayfadan {(data.page - 1) * data.pageSize + 1}–{Math.min(data.total, data.page * data.pageSize)}
                 </span>
                 <div className="flex gap-2">
                   <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={page <= 1} onClick={() => url.set({ sayfa: page - 1 > 1 ? String(page - 1) : null })}>
-                    <ChevronLeft className="h-4 w-4" aria-hidden /> Önceki
+                    <ChevronLeft className="h-4 w-4" aria-hidden /> {ux.onceki}
                   </Button>
                   <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={page >= totalPages} onClick={() => url.set({ sayfa: String(page + 1) })}>
                     Sonraki <ChevronRight className="h-4 w-4" aria-hidden />
@@ -202,11 +208,14 @@ export function PagesConsole({ initial, initialQuery }: { initial: CmsPageList |
 }
 
 function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => unknown }) {
+  const locTag = (useDsLocale() === 'en' ? 'en-US' : 'tr-TR');
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const publish = useMutation({
     mutationFn: () => publishPage(page.id, !page.isPublished, page.updatedAt),
     onSuccess: (r) => {
-      toast.success(r.page.isPublished ? `Yayına alındı: ${cmsPublicPath(r.page.slug)}` : 'Yayından kaldırıldı; adres artık 404 döner.');
+      toast.success(r.page.isPublished ? fz.publishedAt(cmsPublicPath(r.page.slug)) : ux.yayindanKaldirildiAdresArtik);
       void onChanged();
     },
     onError: (e) => toast.error(errorText(e)),
@@ -221,19 +230,19 @@ function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => u
           >
             {page.title}
           </Link>
-          <StatusBadge size="sm" label={page.isPublished ? 'Yayında' : 'Taslak'} tone={page.isPublished ? 'success' : 'neutral'} />
-          {page.noindex ? <StatusBadge size="sm" label="Aramada gizli" tone="info" icon={EyeOff} /> : null}
+          <StatusBadge size="sm" label={page.isPublished ? ux.yayinda : 'Taslak'} tone={page.isPublished ? 'success' : 'neutral'} />
+          {page.noindex ? <StatusBadge size="sm" label={ux.aramadaGizli} tone="info" icon={EyeOff} /> : null}
         </div>
         <p className="mt-0.5 font-mono text-xs text-fg-subtle">{cmsPublicPath(page.slug)}</p>
         {page.excerpt ? <p className="mt-1.5 line-clamp-2 text-sm text-fg-muted">{page.excerpt}</p> : <p className="mt-1.5 text-sm italic text-fg-subtle">{sx.emptyBody}</p>}
         <p className="mt-1.5 text-xs text-fg-subtle">
-          {relTime(page.updatedAt)} güncellendi{page.lastEditor ? ` · ${page.lastEditor}` : ''} · {page.length.toLocaleString('tr-TR')} karakter
+          {fz.rowMeta(relTime(page.updatedAt))}{page.lastEditor ? ` · ${page.lastEditor}` : ''} · {fz.chars(page.length.toLocaleString(locTag))}
         </p>
       </div>
       <div className="flex flex-wrap gap-2 sm:justify-end">
         <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
           <Link href={`/admin/pages/${page.id}`}>
-            <PenLine className="h-4 w-4" aria-hidden /> Düzenle
+            <PenLine className="h-4 w-4" aria-hidden /> {ux.duzenle}
           </Link>
         </Button>
         {page.isPublished ? (
@@ -246,14 +255,14 @@ function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => u
         {page.isPublished ? (
           <ConfirmAction
             tone="warning"
-            title="Yayından kaldırılsın mı?"
-            description={`${cmsPublicPath(page.slug)} adresi 404 dönecek ve sitemap'ten çıkacak. İçerik taslak olarak kalır.`}
-            confirmLabel="Yayından kaldır"
+            title={ux.yayindanKaldirilsinMi}
+            description={fz.unpublishDesc(cmsPublicPath(page.slug))}
+            confirmLabel={ux.yayindanKaldir}
             irreversibleNote={false}
             onConfirm={() => publish.mutateAsync()}
             trigger={
               <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-9" disabled={publish.isPending}>
-                <EyeOff className="h-4 w-4" aria-hidden /> Yayından kaldır
+                <EyeOff className="h-4 w-4" aria-hidden /> {ux.yayindanKaldir}
               </Button>
             }
           />
@@ -264,24 +273,24 @@ function PageRow({ page, onChanged }: { page: CmsPageSummary; onChanged: () => u
               size="sm"
               className="min-h-11 sm:min-h-9"
               disabled={publish.isPending || page.length < 20}
-              title={page.length < 20 ? 'İçerik en az 20 karakter olmalı' : undefined}
+              title={page.length < 20 ? ux.icerikEnAz20 : undefined}
               onClick={() => publish.mutate()}
             >
-              <Globe className="h-4 w-4" aria-hidden /> Yayına al
+              <Globe className="h-4 w-4" aria-hidden /> {ux.yayinaAl}
             </Button>
             <ConfirmAction
               tone="danger"
-              title="Taslak silinsin mi?"
-              description="Taslak listeden kalıcı olarak kaldırılır. Son içerik denetim kaydında saklanır."
+              title={ux.taslakSilinsinMi}
+              description={ux.taslakListedenKaliciOlarak}
               confirmPhrase={page.slug}
-              confirmLabel="Sil"
+              confirmLabel={ux.sil}
               onConfirm={async () => {
                 await deletePage(page.id, page.updatedAt);
                 toast.success('Taslak silindi.');
                 await onChanged();
               }}
               trigger={
-                <Button variant="ghost" size="sm" className="min-h-11 text-danger sm:min-h-9" aria-label={`${page.title} taslağını sil`}>
+                <Button variant="ghost" size="sm" className="min-h-11 text-danger sm:min-h-9" aria-label={fz.deleteDraft(page.title)}>
                   <Trash2 className="h-4 w-4" aria-hidden /> Sil
                 </Button>
               }

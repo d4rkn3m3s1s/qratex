@@ -51,7 +51,8 @@ import { ChipInput, OverrideRows, PathListEditor, SitemapRows, TextRow } from '.
 import { SeoPreview } from './seo-preview';
 import { SeoHistorySheet } from './seo-history';
 import { sameAsSaved, toDraft, validateDraft, type Draft, type DraftGlobal } from './seo-draft';
-import { useSeoCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { SEO_DICT, useSeoCopy } from './copy';
 
 const TABS: Array<{ value: SeoTab; label: string }> = [
   { value: 'genel', label: 'Genel' },
@@ -61,7 +62,6 @@ const TABS: Array<{ value: SeoTab; label: string }> = [
   { value: 'sayfalar', label: 'Sayfalar' },
 ];
 
-const DANGER_PHRASE = 'onaylıyorum';
 
 /**
  * SEO Motoru (/admin/seo) — arama görünürlüğü kontrol merkezi. ops kaydı; 3B yok.
@@ -84,6 +84,9 @@ export function SeoConsole({ initial, envSiteUrl }: { initial: SeoBundle | null;
 }
 
 function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSiteUrl: string; refetch: () => Promise<SeoBundle | null> }) {
+  const fz = useSeoCopy().fx;
+  const L = useSourceT(SEO_DICT);
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const qc = useQueryClient();
   const url = useUrlState();
@@ -119,7 +122,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
     mutationFn: (v: { payload: SeoPayload; confirm: boolean }) => saveSeo(v.payload, saved.updatedAt, v.confirm),
     onSuccess: (r) => {
       adopt(r.state);
-      toast.success('SEO ayarları kaydedildi ve yayına yansıdı.');
+      toast.success(ux.seoAyarlariKaydedildiVe);
     },
     onError: (e, v) => {
       if (isStatus(e, 409)) setConflict(true);
@@ -144,7 +147,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
     if (!validation.ok) {
       const first = Object.keys(validation.errors)[0];
       const t = tabForPath(first.startsWith('override.') ? 'pageOverrides' : first.startsWith('sitemap.') ? 'extraSitemapUrls' : first);
-      toast.error(`${Object.keys(validation.errors).length} alanda hata var. Kaydetmeden önce düzeltin.`);
+      toast.error(fz.fieldErrors(Object.keys(validation.errors).length));
       setTab(t);
       return;
     }
@@ -158,7 +161,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
     const latest = await refetch();
     if (latest) {
       adopt(latest.state);
-      toast.message('Güncel sürüm yüklendi. Değişikliklerinizi yeniden uygulayın.');
+      toast.message(ux.guncelSurumYuklendiDegisikliklerinizi2);
     }
   };
 
@@ -167,7 +170,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
       const r = await restoreSeo(entry.id, saved.updatedAt, confirm);
       adopt(r.state);
       setHistoryOpen(false);
-      toast.success(`${fmtAbs(entry.createdAt)} tarihli sürüm geri yüklendi.`);
+      toast.success(fz.restored(fmtAbs(entry.createdAt)));
     } catch (e) {
       if (isStatus(e, 428)) {
         const flags = ((e as SurfaceApiError).details as { flags?: DangerFlag[] } | undefined)?.flags ?? [];
@@ -194,14 +197,14 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
       width="wide"
       header={
         <PageHeader
-          eyebrow="Büyüme"
-          title="SEO Motoru"
-          description="Sitenin arama motorlarında ve paylaşımlarda nasıl görüneceği: meta etiketleri, sosyal kartlar, yapısal veri, robots.txt, sitemap ve sayfa bazlı ezmeler. Kaydedilen değişiklik anında yayına yansır."
+          eyebrow={ux.buyume}
+          title={ux.seoMotoru}
+          description={ux.siteninAramaMotorlarindaVe}
           icon={<Search />}
           actions={
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" aria-hidden /> Geçmiş
+                <History className="h-4 w-4" aria-hidden /> {ux.gecmis}
               </Button>
               <ImportExport saved={saved.payload} onApply={(p) => { setDraft(toDraft(p)); setSubmitted(true); }} />
               <Button asChild variant="ghost" className="min-h-11 sm:min-h-10">
@@ -214,7 +217,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
         />
       }
       aside={<SeoPreview draft={draft} base={base} focusPath={focusPath} onFocusPath={setFocusPath} />}
-      asideLabel="Canlı önizleme"
+      asideLabel={ux.canliOnizleme}
       asideWidth="lg"
       asideSticky
       asideOnMobile="after"
@@ -223,47 +226,47 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
         <StatusStrip saved={saved} health={health} onHistory={() => setHistoryOpen(true)} />
         {saved.repairedKeys.length ? (
           <div className={cn('rounded-card border p-3 text-sm', TONE_CALLOUT.warning)} role="status">
-            Kayıtlı ayarlarda geçersiz alanlar vardı ({saved.repairedKeys.join(', ')}); güvenli varsayılan gösteriliyor. Kaydederek kalıcı hale getirin.
+            {fz.repaired(saved.repairedKeys.join(', '))}
           </div>
         ) : null}
 
         <HealthPanel report={health} running={healthRun.isPending} dirty={dirty} onRun={() => healthRun.mutate()} onFix={(c) => c.fix && focusField(c.fix.field, c.fix.tab)} />
 
         <SectionTabs
-          tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: submitted && errorCount(t.value) ? errorCount(t.value) : undefined }))}
+          tabs={TABS.map((t) => ({ value: t.value, label: L(t.label), count: submitted && errorCount(t.value) ? errorCount(t.value) : undefined }))}
           value={tab}
           onValueChange={setTab}
-          ariaLabel="SEO ayar bölümleri"
+          ariaLabel={ux.seoAyarBolumleri}
           touchTarget
         >
           {(active) => (
             <div className="space-y-5 pt-4">
               {active === 'genel' ? (
                 <>
-                  <TextRow name="defaultTitle" label="Varsayılan başlık" required value={g.defaultTitle} onChange={(v) => setG({ defaultTitle: v })} error={errors.defaultTitle} meter={{ min: 10, max: 60 }} description="Ana sayfanın <title> etiketi ve kendi başlığı olmayan sayfaların varsayılanı." />
-                  <TextRow name="defaultDescription" label="Varsayılan meta açıklama" required multiline value={g.defaultDescription} onChange={(v) => setG({ defaultDescription: v })} error={errors.defaultDescription} meter={{ min: 70, max: 160 }} />
+                  <TextRow name="defaultTitle" label={ux.varsayilanBaslik} required value={g.defaultTitle} onChange={(v) => setG({ defaultTitle: v })} error={errors.defaultTitle} meter={{ min: 10, max: 60 }} description={ux.anaSayfaninTitleEtiketi} />
+                  <TextRow name="defaultDescription" label={ux.varsayilanMetaAciklama} required multiline value={g.defaultDescription} onChange={(v) => setG({ defaultDescription: v })} error={errors.defaultDescription} meter={{ min: 70, max: 160 }} />
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <TextRow name="siteName" label="Site adı" required value={g.siteName} onChange={(v) => setG({ siteName: v })} error={errors.siteName} description="Başlık şablonu (… | Site adı) ve tüm panellerin uygulama adı olarak da kullanılır." />
-                    <TextRow name="locale" label="Dil/bölge" required value={g.locale} onChange={(v) => setG({ locale: v })} error={errors.locale} description="xx_XX biçimi (ör. tr_TR). Open Graph locale olarak yayınlanır." />
+                    <TextRow name="siteName" label={ux.siteAdi} required value={g.siteName} onChange={(v) => setG({ siteName: v })} error={errors.siteName} description={ux.baslikSablonuSiteAdi} />
+                    <TextRow name="locale" label={ux.dilBolge} required value={g.locale} onChange={(v) => setG({ locale: v })} error={errors.locale} description={ux.xxXxBicimiOr} />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <TextRow name="siteUrl" type="url" label="Site URL" required value={g.siteUrl} onChange={(v) => setG({ siteUrl: v })} error={errors.siteUrl} description="Zorunlu. Boş ya da geçersiz adres kaydedilemez (siteyi korur)." />
-                    <TextRow name="canonicalBase" type="url" label="Canonical tabanı" value={g.canonicalBase} onChange={(v) => setG({ canonicalBase: v })} error={errors.canonicalBase} description="Boşsa Site URL kullanılır. Sondaki / otomatik kaldırılır." />
+                    <TextRow name="siteUrl" type="url" label={ux.siteUrl} required value={g.siteUrl} onChange={(v) => setG({ siteUrl: v })} error={errors.siteUrl} description={ux.zorunluBosYaDa} />
+                    <TextRow name="canonicalBase" type="url" label={ux.canonicalTabani} value={g.canonicalBase} onChange={(v) => setG({ canonicalBase: v })} error={errors.canonicalBase} description={ux.bossaSiteUrlKullanilir} />
                   </div>
-                  <ChipInput name="keywords" label="Anahtar kelimeler" value={g.keywords} onChange={(v) => setG({ keywords: v })} error={errors.keywords} description="meta keywords etiketine yazılır. Google sıralamada bu etiketi kullanmaz; yalnız bazı küçük arama motorları okur." />
+                  <ChipInput name="keywords" label={ux.anahtarKelimeler} value={g.keywords} onChange={(v) => setG({ keywords: v })} error={errors.keywords} description={ux.metaKeywordsEtiketineYazilir} />
                 </>
               ) : null}
 
               {active === 'sosyal' ? (
                 <>
-                  <TextRow name="ogImageUrl" label="OG görsel" value={g.ogImageUrl} onChange={(v) => setG({ ogImageUrl: v })} error={errors.ogImageUrl} description="https:// adres ya da / ile başlayan yol. Ana sayfa hariç tüm sayfaların paylaşım görseli; ana sayfa başlığınızdan üretilen dinamik görseli kullanır." />
+                  <TextRow name="ogImageUrl" label={ux.ogGorsel} value={g.ogImageUrl} onChange={(v) => setG({ ogImageUrl: v })} error={errors.ogImageUrl} description={ux.httpsAdresYaDa} />
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <TextRow name="ogImageWidth" label="Genişlik (px)" inputMode="numeric" value={g.ogImageWidth} onChange={(v) => setG({ ogImageWidth: v.replace(/[^\d]/g, '') })} error={errors.ogImageWidth} />
-                    <TextRow name="ogImageHeight" label="Yükseklik (px)" inputMode="numeric" value={g.ogImageHeight} onChange={(v) => setG({ ogImageHeight: v.replace(/[^\d]/g, '') })} error={errors.ogImageHeight} description="Önerilen 1200×630 (1,91:1)." />
+                    <TextRow name="ogImageWidth" label={ux.genislikPx} inputMode="numeric" value={g.ogImageWidth} onChange={(v) => setG({ ogImageWidth: v.replace(/[^\d]/g, '') })} error={errors.ogImageWidth} />
+                    <TextRow name="ogImageHeight" label={ux.yukseklikPx} inputMode="numeric" value={g.ogImageHeight} onChange={(v) => setG({ ogImageHeight: v.replace(/[^\d]/g, '') })} error={errors.ogImageHeight} description={ux.onerilen12006301} />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <TextRow name="twitterHandle" label="X (Twitter) kullanıcı adı" value={g.twitterHandle} onChange={(v) => setG({ twitterHandle: v })} error={errors.twitterHandle} placeholder="@qratex" />
-                    <Field id="seo-twitterCard" label="X kart tipi" error={errors.twitterCard}>
+                    <TextRow name="twitterHandle" label={ux.xTwitterKullaniciAdi} value={g.twitterHandle} onChange={(v) => setG({ twitterHandle: v })} error={errors.twitterHandle} placeholder="@qratex" />
+                    <Field id="seo-twitterCard" label={ux.xKartTipi} error={errors.twitterCard}>
                       {(c) => (
                         <select {...c} value={g.twitterCard} onChange={(e) => setG({ twitterCard: e.target.value as DraftGlobal['twitterCard'] })} className="min-h-11 w-full rounded-control border border-border bg-surface-1 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-10">
                           <option value="summary_large_image">{sx.cardLarge}</option>
@@ -278,12 +281,12 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
 
               {active === 'yapisal' ? (
                 <>
-                  <TextRow name="organizationName" label="Kuruluş adı" required value={g.organizationName} onChange={(v) => setG({ organizationName: v })} error={errors.organizationName} />
-                  <TextRow name="organizationDescription" label="Kuruluş açıklaması" multiline value={g.organizationDescription} onChange={(v) => setG({ organizationDescription: v })} error={errors.organizationDescription} />
-                  <TextRow name="websiteDescription" label="Web sitesi açıklaması" multiline value={g.websiteDescription} onChange={(v) => setG({ websiteDescription: v })} error={errors.websiteDescription} />
+                  <TextRow name="organizationName" label={ux.kurulusAdi} required value={g.organizationName} onChange={(v) => setG({ organizationName: v })} error={errors.organizationName} />
+                  <TextRow name="organizationDescription" label={ux.kurulusAciklamasi} multiline value={g.organizationDescription} onChange={(v) => setG({ organizationDescription: v })} error={errors.organizationDescription} />
+                  <TextRow name="websiteDescription" label={ux.webSitesiAciklamasi} multiline value={g.websiteDescription} onChange={(v) => setG({ websiteDescription: v })} error={errors.websiteDescription} />
                   <div>
                     <p className="mb-1 text-sm font-medium text-fg">{sx.jsonLd}</p>
-                    <pre className="max-h-72 overflow-auto rounded-control border border-border bg-surface-2 p-3 text-xs text-fg" tabIndex={0} aria-label="JSON-LD önizlemesi">
+                    <pre className="max-h-72 overflow-auto rounded-control border border-border bg-surface-2 p-3 text-xs text-fg" tabIndex={0} aria-label={ux.jsonLdOnizlemesi}>
                       {JSON.stringify(
                         {
                           '@context': 'https://schema.org',
@@ -305,20 +308,20 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
                 <>
                   {saved.demoSite ? (
                     <p className={cn('rounded-card border p-3 text-sm', TONE_CALLOUT.info)}>
-                      Bu ortam demo sitesi (NEXT_PUBLIC_DEMO_SITE): robots.txt aşağıdaki ayarlardan bağımsız olarak tüm siteyi engeller.
+                      {ux.buOrtamDemoSitesi}
                     </p>
                   ) : null}
-                  <DangerSwitch id="seo-robotsIndex" label="Arama motorları siteyi indeksleyebilir" description="Kapatmak tüm siteye noindex ekler ve sayfalar Google'dan düşer." checked={g.robotsIndex} onChange={(v) => setG({ robotsIndex: v })} />
-                  <DangerSwitch id="seo-robotsFollow" label="Bağlantılar izlenebilir (follow)" description="Kapatmak nofollow ekler: arama motorları site içi bağlantıları takip etmez." checked={g.robotsFollow} onChange={(v) => setG({ robotsFollow: v })} />
+                  <DangerSwitch id="seo-robotsIndex" label={ux.aramaMotorlariSiteyiIndeksleyebilir} description={ux.kapatmakTumSiteyeNoindex} checked={g.robotsIndex} onChange={(v) => setG({ robotsIndex: v })} />
+                  <DangerSwitch id="seo-robotsFollow" label={ux.baglantilarIzlenebilirFollow} description={ux.kapatmakNofollowEklerArama} checked={g.robotsFollow} onChange={(v) => setG({ robotsFollow: v })} />
                   <PathListEditor value={g.robotsDisallow} onChange={(v) => setG({ robotsDisallow: v })} error={errors.robotsDisallow ?? Object.entries(errors).find(([k]) => k.startsWith('robotsDisallow'))?.[1]} />
-                  {g.robotsDisallow.length === 0 ? <p className="text-xs text-fg-muted">Liste boş: varsayılan {DEFAULT_DISALLOW.join(', ')} engellenir.</p> : null}
+                  {g.robotsDisallow.length === 0 ? <p className="text-xs text-fg-muted">{fz.emptyDisallow(DEFAULT_DISALLOW.join(', '))}</p> : null}
                   <div>
                     <p className="mb-1 text-sm font-medium text-fg">{sx.robotsTxt}</p>
-                    <pre className="overflow-auto rounded-control border border-border bg-surface-2 p-3 font-mono text-xs text-fg" tabIndex={0} aria-label="robots.txt önizlemesi">
+                    <pre className="overflow-auto rounded-control border border-border bg-surface-2 p-3 font-mono text-xs text-fg" tabIndex={0} aria-label={ux.robotsTxtOnizlemesi}>
                       {renderRobotsTxt({ ...saved.payload.global, ...(validation.ok ? validation.data.global : {}), robotsDisallow: g.robotsDisallow.filter((x) => x.trim()), sitemapEnabled: g.sitemapEnabled }, { demo: saved.demoSite, base })}
                     </pre>
                   </div>
-                  <DangerSwitch id="seo-sitemapEnabled" label="Sitemap yayında" description="Kapatmak /sitemap.xml'i boşaltır ve robots.txt'den sitemap satırını kaldırır." checked={g.sitemapEnabled} onChange={(v) => setG({ sitemapEnabled: v })} />
+                  <DangerSwitch id="seo-sitemapEnabled" label={ux.sitemapYayinda} description={ux.kapatmakSitemapXmlI} checked={g.sitemapEnabled} onChange={(v) => setG({ sitemapEnabled: v })} />
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-fg">Ek sitemap adresleri</p>
                     <p className="text-xs text-fg-muted">{sx.sitemapAuto}</p>
@@ -330,7 +333,7 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
               {active === 'sayfalar' ? (
                 <>
                   <p className="text-sm text-fg-muted">
-                    Yalnız aşağıdaki sayfalar ezmeyi okur. Boş bırakılan alan sayfanın kendi değerini kullanır; bir satıra odaklanınca önizleme o sayfaya geçer. İçerik sayfalarının (/sayfa/…) SEO alanları kendi editöründedir.
+                    {ux.yalnizAsagidakiSayfalarEzmeyi}
                   </p>
                   <OverrideRows rows={draft.pageOverrides} onChange={(rows) => setDraft((d) => ({ ...d, pageOverrides: rows }))} errors={errors} onFocusRow={setFocusPath} />
                 </>
@@ -355,12 +358,12 @@ function SeoEditor({ bundle, envSiteUrl, refetch }: { bundle: SeoBundle; envSite
         open={!!danger}
         onOpenChange={(o) => { if (!o) setDanger(null); }}
         tone="danger"
-        title="Arama görünürlüğünü düşüren değişiklik"
-        description="Bu değişiklik kaydedilirse:"
+        title={ux.aramaGorunurlugunuDusurenDegisiklik}
+        description={ux.buDegisiklikKaydedilirse}
         impact={{ items: (danger?.flags ?? []).map((f) => ({ label: '•', value: f.message, emphasis: true })) }}
-        confirmPhrase={DANGER_PHRASE}
-        confirmLabel="Anladım, kaydet"
-        irreversibleNote="Geri almak mümkün ama arama motorlarının siteyi yeniden taraması günler sürebilir."
+        confirmPhrase={fz.dangerPhrase}
+        confirmLabel={ux.anladimKaydet}
+        irreversibleNote={ux.geriAlmakMumkunAma}
         onConfirm={async () => {
           const run = danger?.run;
           setDanger(null);
@@ -384,6 +387,8 @@ function DangerSwitch({ id, label, description, checked, onChange }: { id: strin
 }
 
 function StatusStrip({ saved, health, onHistory }: { saved: SeoState; health: HealthReport | null; onHistory: () => void }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const g = saved.payload.global;
   const indexable = g.robotsIndex && !g.robotsDisallow.some((p) => p.trim() === '/') && !saved.demoSite;
@@ -393,18 +398,18 @@ function StatusStrip({ saved, health, onHistory }: { saved: SeoState; health: He
         <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.indexing}</p>
         <p className="mt-1 flex items-center gap-1.5 font-semibold text-fg">
           {indexable ? <Globe className="h-4 w-4 text-success" aria-hidden /> : <ShieldAlert className="h-4 w-4 text-danger" aria-hidden />}
-          {indexable ? 'Yayında · indekslenebilir' : saved.demoSite ? 'Demo ortamı · engelli' : 'Arama motorlarına kapalı'}
+          {indexable ? ux.yayindaIndekslenebilir : saved.demoSite ? ux.demoOrtamiEngelli : ux.aramaMotorlarinaKapali}
         </p>
       </div>
       <div className="rounded-card border border-border bg-surface-1 p-3">
         <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.healthScore}</p>
-        <p className="mt-1 font-semibold text-fg">{health ? <ScoreText score={health.score} /> : 'Henüz kontrol edilmedi'}</p>
+        <p className="mt-1 font-semibold text-fg">{health ? <ScoreText score={health.score} /> : ux.henuzKontrolEdilmedi}</p>
         {health ? <p className="text-xs text-fg-subtle">{relTime(health.checkedAt)}{health.checkedBy ? ` · ${health.checkedBy}` : ''}</p> : null}
       </div>
       <button type="button" onClick={onHistory} className="rounded-card border border-border bg-surface-1 p-3 text-left hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
         <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{sx.lastChange}</p>
-        <p className="mt-1 font-semibold text-fg">{saved.lastChange ? relTime(saved.lastChange.at) : 'Hiç kaydedilmedi (varsayılanlar)'}</p>
-        {saved.lastChange?.actor ? <p className="text-xs text-fg-subtle">{saved.lastChange.actor} · geçmişi gör</p> : null}
+        <p className="mt-1 font-semibold text-fg">{saved.lastChange ? relTime(saved.lastChange.at) : ux.hicKaydedilmediVarsayilanlar}</p>
+        {saved.lastChange?.actor ? <p className="text-xs text-fg-subtle">{saved.lastChange.actor} · {fz.seeHistory}</p> : null}
       </button>
     </div>
   );
@@ -423,6 +428,9 @@ const SEV_LABEL: Record<HealthCheck['severity'], string> = { critical: 'Kritik',
 const SEV_TONE = { critical: 'danger', warning: 'warning', info: 'info' } as const;
 
 function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthReport | null; running: boolean; dirty: boolean; onRun: () => void; onFix: (c: HealthCheck) => void }) {
+  const fz = useSeoCopy().fx;
+  const L = useSourceT(SEO_DICT);
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const [onlyFailed, setOnlyFailed] = useState(true);
   const reduced = useReducedMotionPref();
@@ -437,20 +445,20 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
         <div>
           <h2 id="seo-health-title" className="font-semibold text-fg">{sx.healthCheck}</h2>
           <p className="text-xs text-fg-muted">
-            {report ? `${report.passedCount} geçti · ${report.failedCount} sorun · ${fmtAbs(report.checkedAt)}` : 'Kayıtlı ayarları ve canlı robots.txt / sitemap.xml çıktısını denetler.'}
-            {dirty ? ' Kaydedilmemiş değişiklikler denetlenmez.' : ''}
+            {report ? fz.healthSummary(report.passedCount, report.failedCount, fmtAbs(report.checkedAt)) : ux.kayitliAyarlariVeCanli}
+            {dirty ? ux.kaydedilmemisDegisikliklerDenetlenmez : ''}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {report ? (
             <label className="flex items-center gap-2 text-sm text-fg-muted">
-              <Switch checked={onlyFailed} onCheckedChange={setOnlyFailed} aria-label="Yalnız sorunları göster" />
-              Yalnız sorunlar
+              <Switch checked={onlyFailed} onCheckedChange={setOnlyFailed} aria-label={ux.yalnizSorunlariGoster} />
+              {ux.yalnizSorunlar}
             </label>
           ) : null}
           <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={onRun} disabled={running}>
             {running ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
-            {running ? 'Kontrol ediliyor…' : 'Kontrolleri çalıştır'}
+            {running ? 'Kontrol ediliyor…' : ux.kontrolleriCalistir}
           </Button>
         </div>
       </div>
@@ -461,11 +469,11 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
               <Motion.li key={c.key} initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
                 <div className="flex min-w-0 items-start gap-2">
                   {!c.tested ? (
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" aria-label="Test edilmedi" />
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" aria-label={ux.testEdilmedi} />
                   ) : c.passed ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label="Geçti" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label={ux.gecti} />
                   ) : (
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-label="Sorun" />
+                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-label={ux.sorun} />
                   )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-fg">{c.label}</p>
@@ -473,10 +481,10 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusBadge size="sm" label={c.tested ? SEV_LABEL[c.severity] : 'Test edilmedi'} tone={c.tested ? SEV_TONE[c.severity] : 'neutral'} />
+                  <StatusBadge size="sm" label={c.tested ? L(SEV_LABEL[c.severity]) : fz.notTested} tone={c.tested ? SEV_TONE[c.severity] : 'neutral'} />
                   {!c.passed && c.fix ? (
                     <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-8" onClick={() => onFix(c)}>
-                      <Wrench className="h-3.5 w-3.5" aria-hidden /> Düzelt
+                      <Wrench className="h-3.5 w-3.5" aria-hidden /> {ux.duzelt}
                     </Button>
                   ) : null}
                 </div>
@@ -492,12 +500,13 @@ function HealthPanel({ report, running, dirty, onRun, onFix }: { report: HealthR
 }
 
 function ExternalTools({ base, kind }: { base: string; kind: 'social' | 'rich' }) {
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const u = encodeURIComponent(base);
   const links =
     kind === 'rich'
-      ? [{ href: `https://search.google.com/test/rich-results?url=${u}`, label: 'Google Zengin Sonuçlar Testi' }, { href: `https://validator.schema.org/#url=${u}`, label: 'Schema.org doğrulayıcı' }]
-      : [{ href: `https://developers.facebook.com/tools/debug/?q=${u}`, label: 'Facebook Paylaşım Hata Ayıklayıcı' }, { href: `https://www.linkedin.com/post-inspector/inspect/${u}`, label: 'LinkedIn Post Inspector' }];
+      ? [{ href: `https://search.google.com/test/rich-results?url=${u}`, label: ux.googleZenginSonuclarTesti }, { href: `https://validator.schema.org/#url=${u}`, label: ux.schemaOrgDogrulayici }]
+      : [{ href: `https://developers.facebook.com/tools/debug/?q=${u}`, label: ux.facebookPaylasimHataAyiklayici }, { href: `https://www.linkedin.com/post-inspector/inspect/${u}`, label: ux.linkedinPostInspector }];
   return (
     <div className="flex flex-wrap gap-2">
       {links.map((l) => (
@@ -513,6 +522,7 @@ function ExternalTools({ base, kind }: { base: string; kind: 'social' | 'rich' }
 
 /** Kayıtlı ayarları dışa aktarır; içe aktarma şemayla doğrulanır, fark önizlenir, yalnız TASLAĞA uygulanır. */
 function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoPayload) => void }) {
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ payload: SeoPayload | null; errors: Array<{ path: string; message: string }> } | null>(null);
@@ -527,7 +537,7 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 200_000) {
-      toast.error('Dosya çok büyük (en fazla 200 KB).');
+      toast.error(ux.dosyaCokBuyukEn);
       return;
     }
     try {
@@ -535,7 +545,7 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
       const r = parseSeoPayload({ global: raw.global, pageOverrides: raw.pageOverrides ?? [] });
       setPending(r.ok ? { payload: r.data, errors: [] } : { payload: null, errors: r.errors });
     } catch {
-      setPending({ payload: null, errors: [{ path: 'dosya', message: 'Geçerli bir JSON dosyası değil.' }] });
+      setPending({ payload: null, errors: [{ path: 'dosya', message: ux.gecerliBirJsonDosyasi }] });
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -544,10 +554,10 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
   return (
     <>
       <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={exportJson}>
-        <Download className="h-4 w-4" aria-hidden /> Dışa aktar
+        <Download className="h-4 w-4" aria-hidden /> {ux.disaAktar}
       </Button>
       <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => fileRef.current?.click()}>
-        <Upload className="h-4 w-4" aria-hidden /> İçe aktar
+        <Upload className="h-4 w-4" aria-hidden /> {ux.iceAktar}
       </Button>
       <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void onFile(e.target.files?.[0])} />
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
@@ -555,7 +565,7 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><FileJson className="h-5 w-5" aria-hidden /> {sx.importPreview}</DialogTitle>
             <DialogDescription>
-              {pending?.payload ? 'Değişiklikler taslağa uygulanır; kaydedene kadar yayına çıkmaz.' : 'Dosya doğrulamadan geçemedi; hiçbir şey uygulanmadı.'}
+              {pending?.payload ? ux.degisikliklerTaslagaUygulanirKaydedene : ux.dosyaDogrulamadanGecemediHicbir}
             </DialogDescription>
           </DialogHeader>
           {pending?.errors.length ? (
@@ -577,8 +587,8 @@ function ImportExport({ saved, onApply }: { saved: SeoPayload; onApply: (p: SeoP
           <DialogFooter>
             <Button variant="outline" onClick={() => setPending(null)}>{sx.cancel}</Button>
             {pending?.payload && changes.length ? (
-              <Button onClick={() => { onApply(pending.payload as SeoPayload); setPending(null); toast.message('Taslağa uygulandı. Kontrol edip kaydedin.'); }}>
-                Taslağa uygula
+              <Button onClick={() => { onApply(pending.payload as SeoPayload); setPending(null); toast.message(ux.taslagaUygulandiKontrolEdip); }}>
+                {ux.taslagaUygula}
               </Button>
             ) : null}
           </DialogFooter>

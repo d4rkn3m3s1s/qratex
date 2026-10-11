@@ -80,19 +80,21 @@ export function PageEditor({ id, initial }: { id: string | null; initial: CmsPag
 }
 
 function EditorHeader({ page }: { page: CmsPageDetail | null }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   return (
     <PageHeader
-      eyebrow="İçerik sayfaları"
-      title={page ? page.title : 'Yeni sayfa'}
-      back={{ href: '/admin/pages', label: 'Sayfalara dön' }}
+      eyebrow={ux.icerikSayfalari}
+      title={page ? page.title : fz.newPage}
+      back={{ href: '/admin/pages', label: ux.sayfalaraDon }}
       icon={<FileText />}
       description={
         page
-          ? `${cmsPublicPath(page.slug)} · ${relTime(page.updatedAt)} güncellendi`
-          : 'Taslak olarak başlar. Hazır olduğunda "Yayında" anahtarını açıp kaydedin.'
+          ? fz.updatedLine(cmsPublicPath(page.slug), relTime(page.updatedAt))
+          : ux.taslakOlarakBaslarHazir
       }
-      meta={page ? <StatusBadge label={page.isPublished ? 'Yayında' : 'Taslak'} tone={page.isPublished ? 'success' : 'neutral'} /> : null}
+      meta={page ? <StatusBadge label={page.isPublished ? ux.yayinda : fz.draft} tone={page.isPublished ? 'success' : 'neutral'} /> : null}
       actions={
         page?.isPublished ? (
           <Button asChild variant="outline" className="min-h-11 sm:min-h-10">
@@ -115,6 +117,9 @@ function EditorBody({
   onSaved: (p: CmsPageDetail) => void;
   reload: () => Promise<CmsPageDetail | null>;
 }) {
+  const fz = useSeoCopy().fx;
+  const uy = useSeoCopy().ui2;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const form = useZodForm(cmsPageFormSchema, { defaultValues: page ? toForm(page) : EMPTY });
   const [version, setVersion] = useState(page?.updatedAt ?? null);
@@ -139,11 +144,11 @@ function EditorBody({
       const r = await updatePage(page.id, v, version);
       setVersion(r.page.updatedAt);
       onSaved(r.page);
-      toast.success(r.changed.length ? (r.page.isPublished ? 'Kaydedildi ve yayına yansıdı.' : 'Taslak kaydedildi.') : 'Değişiklik yoktu.');
+      toast.success(r.changed.length ? (r.page.isPublished ? ux.kaydedildiVeYayinaYansidi : 'Taslak kaydedildi.') : ux.degisiklikYoktu);
       return r.page;
     }
     const r = await createPage(v);
-    toast.success(r.page.isPublished ? `Oluşturuldu ve yayında: ${cmsPublicPath(r.page.slug)}` : 'Taslak oluşturuldu.');
+    toast.success(r.page.isPublished ? fz.createdLive(cmsPublicPath(r.page.slug)) : ux.taslakOlusturuldu);
     onSaved(r.page);
     return r.page;
   };
@@ -153,7 +158,7 @@ function EditorBody({
     if (latest) {
       setVersion(latest.updatedAt);
       form.reset(toForm(latest));
-      toast.message('Güncel sürüm yüklendi. Değişikliklerinizi tekrar uygulayın.');
+      toast.message(ux.guncelSurumYuklendiDegisikliklerinizi);
     }
   };
 
@@ -163,10 +168,10 @@ function EditorBody({
     <Form form={form} onSubmit={save} resetOnSuccess={(saved) => toForm(saved as CmsPageDetail)} className="pb-28">
       {page?.legacyFormat ? (
         <p className="mb-4 rounded-control border border-info-border bg-info-subtle p-3 text-sm text-fg">
-          Bu sayfa eski biçimde saklanıyor; ilk kayıtta yeni sürümlü biçime dönüştürülecek. İçerik değişmez.
+          {ux.buSayfaEskiBicimde}
         </p>
       ) : null}
-      <div className="mb-4 inline-flex rounded-control border border-border bg-surface-1 p-1 lg:hidden" role="tablist" aria-label="Görünüm">
+      <div className="mb-4 inline-flex rounded-control border border-border bg-surface-1 p-1 lg:hidden" role="tablist" aria-label={ux.gorunum}>
         {(['edit', 'preview'] as const).map((k) => (
           <button
             key={k}
@@ -176,20 +181,20 @@ function EditorBody({
             onClick={() => setView(k)}
             className={cn('min-h-10 rounded-chip px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', view === k ? 'bg-surface-3 text-fg' : 'text-fg-muted')}
           >
-            {k === 'edit' ? 'Düzenle' : 'Önizleme'}
+            {k === 'edit' ? ux.duzenle : ux.onizleme}
           </button>
         ))}
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section aria-label="Sayfa içeriği" className={cn('space-y-5', view === 'preview' && 'hidden lg:block')}>
+        <section aria-label={ux.sayfaIcerigi} className={cn('space-y-5', view === 'preview' && 'hidden lg:block')}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField control={form.control} name="title" label="Başlık" required maxLength={180} />
+            <TextField control={form.control} name="title" label={ux.baslik} required maxLength={180} />
             <TextField
               control={form.control}
               name="slug"
-              label="Adres"
+              label={ux.adres}
               required
-              description={`Yayın adresi: ${cmsPublicPath(values.slug || 'adres')}`}
+              description={fz.publicAt(cmsPublicPath(values.slug || fz.addressFallback))}
               startAdornment={<span className="text-fg-subtle">/sayfa/</span>}
               inputProps={{ onKeyDown: () => setSlugTouched(true), autoCapitalize: 'none', spellCheck: false }}
             />
@@ -197,40 +202,40 @@ function EditorBody({
           <TextareaField
             control={form.control}
             name="body"
-            label="İçerik"
+            label={ux.icerik}
             rows={16}
             autoResize
             maxLength={100_000}
             showCount="always"
-            description="Biçim: ## Başlık, ### Alt başlık, - madde, 1. numaralı, > alıntı, **kalın**, *italik*, [bağlantı](https://…). Boş satır yeni paragraf açar."
+            description={ux.bicimBaslikAltBaslik}
           />
           <fieldset className="space-y-4 rounded-card border border-border p-4">
-            <legend className="px-1 text-sm font-semibold text-fg">Arama motoru</legend>
-            <TextField control={form.control} name="seoTitle" label="SEO başlığı" optional maxLength={70} description="Boşsa sayfa başlığı kullanılır. 60 karakter civarı idealdir." />
-            <TextareaField control={form.control} name="description" label="Meta açıklama" optional rows={3} maxLength={170} showCount="always" description="Boşsa içeriğin ilk cümlelerinden üretilir." />
-            <SwitchField control={form.control} name="noindex" label="Arama motorlarından gizle" description="Sayfa açık kalır ama noindex olur ve sitemap'e girmez." variant="card" />
+            <legend className="px-1 text-sm font-semibold text-fg">{uy.aramaMotoru}</legend>
+            <TextField control={form.control} name="seoTitle" label={ux.seoBasligi} optional maxLength={70} description={ux.bossaSayfaBasligiKullanilir} />
+            <TextareaField control={form.control} name="description" label={ux.metaAciklama} optional rows={3} maxLength={170} showCount="always" description={ux.bossaIceriginIlkCumlelerinden} />
+            <SwitchField control={form.control} name="noindex" label={ux.aramaMotorlarindanGizle} description={ux.sayfaAcikKalirAma} variant="card" />
           </fieldset>
           <SwitchField
             control={form.control}
             name="isPublished"
-            label="Yayında"
-            description={`Açıkken sayfa ${cmsPublicPath(values.slug || 'adres')} adresinde herkese açık olur ve sitemap'e eklenir.`}
+            label={ux.yayinda}
+            description={fz.liveDesc(cmsPublicPath(values.slug || fz.addressFallback))}
             variant="card"
           />
           <FormRootError />
         </section>
 
-        <section aria-label="Canlı önizleme" className={cn('space-y-4 lg:sticky lg:top-20 lg:self-start', view === 'edit' && 'hidden lg:block')}>
+        <section aria-label={ux.canliOnizleme} className={cn('space-y-4 lg:sticky lg:top-20 lg:self-start', view === 'edit' && 'hidden lg:block')}>
           <div className="rounded-card border border-border bg-surface-1 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{sx.googleView}</p>
             <p className="mt-2 truncate text-xs text-fg-muted">qratex.com › sayfa › {values.slug || 'adres'}</p>
-            <p className="truncate text-lg leading-6 text-info">{values.seoTitle || values.title || 'Sayfa başlığı'}</p>
-            <p className="line-clamp-2 text-sm text-fg-muted">{desc || 'Açıklama içerikten üretilecek.'}</p>
+            <p className="truncate text-lg leading-6 text-info">{values.seoTitle || values.title || ux.sayfaBasligi}</p>
+            <p className="line-clamp-2 text-sm text-fg-muted">{desc || ux.aciklamaIceriktenUretilecek}</p>
             {values.noindex ? <p className="mt-2 text-xs text-warning">{sx.noindexWarn}</p> : null}
           </div>
           <div className="max-h-[70vh] overflow-auto rounded-card border border-border bg-background p-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fg-subtle">{sx.pagePreview}</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-fg">{values.title || 'Başlık'}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-fg">{values.title || ux.baslik}</h1>
             {values.body?.trim() ? <CmsContent body={values.body} className="mt-4" /> : <p className="mt-4 text-sm italic text-fg-subtle">{sx.bodyPlaceholder}</p>}
           </div>
           {page ? <HistoryPanel pageId={page.id} onLoad={(v) => {
@@ -238,16 +243,17 @@ function EditorBody({
             form.setValue('slug', v.slug, { shouldDirty: true });
             form.setValue('body', v.body, { shouldDirty: true });
             setView('edit');
-            toast.message('Sürüm editöre yüklendi. Kaydedince geçerli olur.');
+            toast.message(ux.surumEditoreYuklendiKaydedince);
           }} /> : null}
         </section>
       </div>
-      <DirtyBar onReloadLatest={reloadLatest} saveLabel={page ? 'Kaydet' : 'Oluştur'} />
+      <DirtyBar onReloadLatest={reloadLatest} saveLabel={page ? 'Kaydet' : ux.olustur} />
     </Form>
   );
 }
 
 function HistoryPanel({ pageId, onLoad }: { pageId: string; onLoad: (v: { title: string; slug: string; body: string }) => void }) {
+  const ux = useSeoCopy().ui;
   const [open, setOpen] = useState(false);
   const history = useQuery({
     queryKey: pageKeys.history(pageId),
@@ -258,10 +264,10 @@ function HistoryPanel({ pageId, onLoad }: { pageId: string; onLoad: (v: { title:
   return (
     <details className="rounded-card border border-border bg-surface-1" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <History className="h-4 w-4" aria-hidden /> Sürüm geçmişi
+        <History className="h-4 w-4" aria-hidden /> {ux.surumGecmisi}
       </summary>
       <div className="border-t border-border p-3">
-        <QueryState query={history} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: 'Kayıt yok', description: 'Bu sayfada henüz kayıtlı değişiklik yok.', compact: true }}>
+        <QueryState query={history} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: ux.kayitYok, description: ux.buSayfadaHenuzKayitli, compact: true }}>
           {() => (
             <ol className="space-y-2">
               {items.map((h) => (
@@ -272,7 +278,7 @@ function HistoryPanel({ pageId, onLoad }: { pageId: string; onLoad: (v: { title:
                   </div>
                   {h.version ? (
                     <Button type="button" size="sm" variant="ghost" className="min-h-11 shrink-0 sm:min-h-9" onClick={() => onLoad(h.version!)}>
-                      <RotateCcw className="h-4 w-4" aria-hidden /> Editöre yükle
+                      <RotateCcw className="h-4 w-4" aria-hidden /> {ux.editoreYukle}
                     </Button>
                   ) : null}
                 </li>

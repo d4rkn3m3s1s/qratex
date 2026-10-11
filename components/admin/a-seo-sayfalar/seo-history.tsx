@@ -26,6 +26,8 @@ export function SeoHistorySheet({
   dirty: boolean;
   onRestore: (entry: SeoHistoryEntry) => Promise<unknown>;
 }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const history = useInfiniteQuery({
     queryKey: seoKeys.history(),
@@ -40,7 +42,7 @@ export function SeoHistorySheet({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" aria-hidden /> Sürüm geçmişi
+            <History className="h-5 w-5" aria-hidden /> {ux.surumGecmisi}
           </SheetTitle>
           <SheetDescription>{sx.historyDesc}</SheetDescription>
         </SheetHeader>
@@ -49,7 +51,7 @@ export function SeoHistorySheet({
             query={{ ...history, data: history.data ? entries : undefined }}
             skeleton="list"
             isEmpty={(d) => d.length === 0}
-            empty={{ title: 'Henüz kayıt yok', description: 'SEO ayarları ilk kez kaydedildiğinde geçmiş burada başlar.', compact: true }}
+            empty={{ title: ux.henuzKayitYok, description: ux.seoAyarlariIlkKez, compact: true }}
           >
             {() => (
               <ol className="space-y-3">
@@ -66,18 +68,18 @@ export function SeoHistorySheet({
                       {e.canRestore && i > 0 ? (
                         <ConfirmAction
                           tone="warning"
-                          title="Bu sürüm geri yüklensin mi?"
-                          description={`${fmtAbs(e.createdAt)} tarihli sürüm yayına alınır. Mevcut ayarlar geçmişte kalır, istenirse tekrar geri yüklenebilir.`}
+                          title={ux.buSurumGeriYuklensin}
+                          description={fz.restoreDesc(fmtAbs(e.createdAt))}
                           impact={{
-                            items: [{ label: 'Değişen alan', value: `${e.changes.length}` }],
-                            warning: dirty ? 'Kaydedilmemiş düzenlemeleriniz kaybolacak.' : undefined,
+                            items: [{ label: ux.degisenAlan, value: `${e.changes.length}` }],
+                            warning: dirty ? ux.kaydedilmemisDuzenlemelerinizKaybolacak : undefined,
                           }}
                           irreversibleNote={false}
-                          confirmLabel="Geri yükle"
+                          confirmLabel={ux.geriYukle}
                           onConfirm={() => onRestore(e)}
                           trigger={
                             <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9">
-                              <RotateCcw className="h-4 w-4" aria-hidden /> Bu sürümü geri yükle
+                              <RotateCcw className="h-4 w-4" aria-hidden /> {ux.buSurumuGeriYukle}
                             </Button>
                           }
                         />
@@ -112,7 +114,7 @@ export function SeoHistorySheet({
           </QueryState>
           {history.hasNextPage ? (
             <Button variant="outline" className="mt-3 min-h-11 w-full" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>
-              Daha eski sürümler
+              {ux.dahaEskiSurumler}
             </Button>
           ) : null}
         </div>

@@ -13,11 +13,12 @@ import { useSeoCopy } from './copy';
 
 /** Uzunluk göstergesi: ideal aralık yeşil, dışı uyarı (renk + metin). */
 export function LengthMeter({ length, min, max }: { length: number; min: number; max: number }) {
+  const ux = useSeoCopy().ui;
   const ok = length >= min && length <= max;
   return (
     <span className={cn('tabular-nums text-xs', ok ? 'text-success' : 'text-warning')}>
       {length} karakter · ideal {min}–{max}
-      {ok ? '' : length < min ? ' (kısa)' : ' (uzun)'}
+      {ok ? '' : length < min ? ux.kisa : ' (uzun)'}
     </span>
   );
 }
@@ -67,6 +68,8 @@ export function TextRow(props: {
 
 /** Anahtar kelime çipleri: Enter/virgül ekler, × siler; çok kelimeli ifade yazılabilir (bulgu 3). */
 export function ChipInput({ name, label, value, onChange, error, description }: { name: string; label: string; value: string[]; onChange: (v: string[]) => void; error?: string; description?: ReactNode }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const [text, setText] = useState('');
   const add = (raw: string) => {
     const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -89,7 +92,7 @@ export function ChipInput({ name, label, value, onChange, error, description }: 
                     type="button"
                     onClick={() => onChange(value.filter((x) => x !== k))}
                     className="hit-area inline-flex h-7 w-7 items-center justify-center rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    aria-label={`${k} kaldır`}
+                    aria-label={fz.removeKeyword(k)}
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />
                   </button>
@@ -114,7 +117,7 @@ export function ChipInput({ name, label, value, onChange, error, description }: 
               }
             }}
             onBlur={() => add(text)}
-            placeholder="Yazıp Enter'a basın (ör. QR kod)"
+            placeholder={ux.yazipEnterABasin}
             className="min-h-10 w-full bg-transparent px-1 text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
           />
         </div>
@@ -125,10 +128,12 @@ export function ChipInput({ name, label, value, onChange, error, description }: 
 
 /** Satır bazlı yol listesi (robots disallow): her yol ayrı girdi — Enter yeni satır açar (bulgu 3). */
 export function PathListEditor({ value, onChange, error }: { value: string[]; onChange: (v: string[]) => void; error?: string }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const base = useId();
   const [focusIdx, setFocusIdx] = useState<number | null>(null);
   return (
-    <Field id="seo-robotsDisallow" kind="fieldset" label="Engellenen yollar (Disallow)" error={error} description="Arama motorlarının taramayacağı yollar. Liste boşsa varsayılan panel yolları engellenir.">
+    <Field id="seo-robotsDisallow" kind="fieldset" label={ux.engellenenYollarDisallow} error={error} description={ux.aramaMotorlarininTaramayacagiYollar}>
       <div className="space-y-2">
         {value.map((p, i) => (
           <div key={`${base}-${i}`} className="flex items-center gap-2">
@@ -150,7 +155,7 @@ export function PathListEditor({ value, onChange, error }: { value: string[]; on
                 }
               }}
             />
-            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={`${p || 'Boş'} yolunu kaldır`} onClick={() => onChange(value.filter((_, j) => j !== i))}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={fz.removePath(p || fz.empty)} onClick={() => onChange(value.filter((_, j) => j !== i))}>
               <Trash2 className="h-4 w-4" aria-hidden />
             </Button>
           </div>
@@ -167,6 +172,8 @@ const selectCls =
   'min-h-11 w-full rounded-control border border-border bg-surface-1 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-10';
 
 export function SitemapRows({ rows, onChange, errors }: { rows: DraftSitemap[]; onChange: (r: DraftSitemap[]) => void; errors: Record<string, string> }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const set = (key: string, patch: Partial<DraftSitemap>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   return (
@@ -176,13 +183,13 @@ export function SitemapRows({ rows, onChange, errors }: { rows: DraftSitemap[]; 
         return (
           <fieldset key={r.key} className="grid gap-3 rounded-control border border-border p-3 sm:grid-cols-[minmax(0,2fr)_6rem_9rem_10rem_auto] sm:items-end">
             <legend className="sr-only">{`Ek adres ${i + 1}`}</legend>
-            <Field id={`seo-sm-${r.key}-url`} label="Adres" error={err('url')}>
+            <Field id={`seo-sm-${r.key}-url`} label={ux.adres} error={err('url')}>
               {(c) => <Input {...c} className="min-h-11 font-mono sm:min-h-10" value={r.url} placeholder="/kampanya veya https://…" onChange={(e) => set(r.key, { url: e.target.value })} />}
             </Field>
-            <Field id={`seo-sm-${r.key}-priority`} label="Öncelik" error={err('priority')}>
+            <Field id={`seo-sm-${r.key}-priority`} label={ux.oncelik} error={err('priority')}>
               {(c) => <Input {...c} inputMode="decimal" className="min-h-11 sm:min-h-10" value={r.priority} placeholder="0,5" onChange={(e) => set(r.key, { priority: e.target.value })} />}
             </Field>
-            <Field id={`seo-sm-${r.key}-freq`} label="Sıklık" error={err('changeFrequency')}>
+            <Field id={`seo-sm-${r.key}-freq`} label={ux.siklik} error={err('changeFrequency')}>
               {(c) => (
                 <select {...c} className={selectCls} value={r.changeFrequency} onChange={(e) => set(r.key, { changeFrequency: e.target.value })}>
                   <option value="">{sx.monthlyDefault}</option>
@@ -190,10 +197,10 @@ export function SitemapRows({ rows, onChange, errors }: { rows: DraftSitemap[]; 
                 </select>
               )}
             </Field>
-            <Field id={`seo-sm-${r.key}-lastmod`} label="Son değişiklik" error={err('lastModified')}>
+            <Field id={`seo-sm-${r.key}-lastmod`} label={ux.sonDegisiklik} error={err('lastModified')}>
               {(c) => <Input {...c} type="date" className="min-h-11 sm:min-h-10" value={r.lastModified} onChange={(e) => set(r.key, { lastModified: e.target.value })} />}
             </Field>
-            <Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`${r.url || 'Boş'} adresini kaldır`} onClick={() => onChange(rows.filter((x) => x.key !== r.key))}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={fz.removeUrl(r.url || fz.empty)} onClick={() => onChange(rows.filter((x) => x.key !== r.key))}>
               <Trash2 className="h-4 w-4" aria-hidden />
             </Button>
           </fieldset>
@@ -217,6 +224,8 @@ export function OverrideRows({
   errors: Record<string, string>;
   onFocusRow: (path: string) => void;
 }) {
+  const fz = useSeoCopy().fx;
+  const ux = useSeoCopy().ui;
   const sx = useSeoCopy();
   const used = new Set(rows.map((r) => r.path));
   const free = SEO_ROUTES.filter((r) => !used.has(r.path));
@@ -225,7 +234,7 @@ export function OverrideRows({
     <div className="space-y-3">
       {rows.length === 0 ? (
         <p className="rounded-control border border-dashed border-border p-4 text-sm text-fg-muted">
-          Ezme yok: tüm sayfalar kendi varsayılan başlık ve açıklamasını kullanıyor.
+          {ux.ezmeYokTumSayfalar}
         </p>
       ) : null}
       {rows.map((r) => {
@@ -235,7 +244,7 @@ export function OverrideRows({
           <fieldset key={r.key} className="space-y-3 rounded-control border border-border p-3" onFocus={() => r.path && onFocusRow(r.path)}>
             <legend className="px-1 text-sm font-medium text-fg">{label}</legend>
             <div className="grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-end">
-              <Field id={`seo-ov-${r.key}-path`} label="Sayfa" error={err('path')}>
+              <Field id={`seo-ov-${r.key}-path`} label={ux.sayfa} error={err('path')}>
                 {(c) => (
                   <select {...c} className={selectCls} value={r.path} onChange={(e) => set(r.key, { path: e.target.value as DraftOverride['path'] })}>
                     <option value="">{sx.choose}</option>
@@ -245,18 +254,18 @@ export function OverrideRows({
                   </select>
                 )}
               </Field>
-              <Field id={`seo-ov-${r.key}-title`} label="Başlık" error={err('title')} labelAside={r.title ? <LengthMeter length={r.title.trim().length} min={10} max={60} /> : undefined}>
-                {(c) => <Input {...c} className="min-h-11 sm:min-h-10" value={r.title} placeholder="Boş: sayfanın kendi başlığı" onChange={(e) => set(r.key, { title: e.target.value })} />}
+              <Field id={`seo-ov-${r.key}-title`} label={ux.baslik} error={err('title')} labelAside={r.title ? <LengthMeter length={r.title.trim().length} min={10} max={60} /> : undefined}>
+                {(c) => <Input {...c} className="min-h-11 sm:min-h-10" value={r.title} placeholder={ux.bosSayfaninKendiBasligi} onChange={(e) => set(r.key, { title: e.target.value })} />}
               </Field>
-              <Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`${label} ezmesini kaldır`} onClick={() => onChange(rows.filter((x) => x.key !== r.key))}>
+              <Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={fz.removeOverride(label)} onClick={() => onChange(rows.filter((x) => x.key !== r.key))}>
                 <Trash2 className="h-4 w-4" aria-hidden />
               </Button>
             </div>
-            <Field id={`seo-ov-${r.key}-description`} label="Açıklama" error={err('description')} labelAside={r.description ? <LengthMeter length={r.description.trim().length} min={70} max={160} /> : undefined}>
-              {(c) => <Textarea {...c} rows={2} value={r.description} placeholder="Boş: sayfanın kendi açıklaması" onChange={(e) => set(r.key, { description: e.target.value })} />}
+            <Field id={`seo-ov-${r.key}-description`} label={ux.aciklama} error={err('description')} labelAside={r.description ? <LengthMeter length={r.description.trim().length} min={70} max={160} /> : undefined}>
+              {(c) => <Textarea {...c} rows={2} value={r.description} placeholder={ux.bosSayfaninKendiAciklamasi} onChange={(e) => set(r.key, { description: e.target.value })} />}
             </Field>
-            <Field id={`seo-ov-${r.key}-canonical`} label="Canonical adres" error={err('canonical')} optional>
-              {(c) => <Input {...c} type="url" className="min-h-11 sm:min-h-10" value={r.canonical} placeholder="Boş: sayfanın kendi adresi" onChange={(e) => set(r.key, { canonical: e.target.value })} />}
+            <Field id={`seo-ov-${r.key}-canonical`} label={ux.canonicalAdres} error={err('canonical')} optional>
+              {(c) => <Input {...c} type="url" className="min-h-11 sm:min-h-10" value={r.canonical} placeholder={ux.bosSayfaninKendiAdresi} onChange={(e) => set(r.key, { canonical: e.target.value })} />}
             </Field>
           </fieldset>
         );
