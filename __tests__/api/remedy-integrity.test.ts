@@ -65,6 +65,8 @@ jest.mock('@/lib/prisma', () => {
     },
     remedyTimelineEvent: { create: (...a: unknown[]) => m.timelineCreate(...a) },
     notification: { create: (...a: unknown[]) => m.notificationCreate(...a) },
+    // İşletme içi (sahip/personel) alıcı kontrolü (isDealerInsider): müşteri personel değil.
+    dealerStaff: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   return {
     isPrismaConnectivityError: () => false,
@@ -89,6 +91,7 @@ jest.mock('@/lib/prisma', () => {
         findMany: (...a: unknown[]) => m.flashFindMany(...a),
       },
       qRCode: { findUnique: jest.fn().mockResolvedValue(null) },
+      dealerStaff: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
     },
   };
 });

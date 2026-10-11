@@ -103,7 +103,9 @@ export const GET = defineRoute(
 export const PATCH = defineRoute(
   {
     name: 'customer.remedy.accept',
-    roles: ['CUSTOMER', 'ADMIN'],
+    // Puan basabilen kabul yalnız müşteriye (mimari-api B1/B2: puan basan uçlar ['CUSTOMER']).
+    // Yönetici görüntüleyebilir (GET) ama teklif sahibi olmadığı için kabul edemez.
+    roles: ['CUSTOMER'],
     rateLimit: 'mutation',
     params: paramsSchema,
     schema: z.unknown(),

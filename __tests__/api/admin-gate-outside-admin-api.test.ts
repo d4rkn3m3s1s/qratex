@@ -26,7 +26,7 @@ jest.mock('next-auth', () => ({
 }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 jest.mock('@/lib/module-gate', () => ({ assertModuleEnabled: jest.fn(async () => null) }));
-jest.mock('@/lib/request-metadata', () => ({ getAuditRequestMeta: () => ({}) }));
+jest.mock('@/lib/request-metadata', () => ({ getAuditRequestMeta: () => ({}), getClientIp: () => null, getUserAgent: () => null }));
 jest.mock('@/lib/capture-api-error', () => ({ captureApiError: jest.fn() }));
 const mockInvalidate = jest.fn(async () => undefined);
 jest.mock('@/lib/auth/session-state', () => ({ invalidateSessionState: (id: string) => mockInvalidate(id) }));
@@ -44,8 +44,8 @@ const userUpdate = jest.fn();
 const userFindUnique = jest.fn();
 const userFindMany = jest.fn();
 const userUpdateMany = jest.fn();
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
+jest.mock('@/lib/prisma', () => {
+  const prisma = {
     quest: {
       create: (...a: unknown[]) => writes.questCreate(...a),
       update: (...a: unknown[]) => writes.questUpdate(...a),
@@ -68,8 +68,17 @@ jest.mock('@/lib/prisma', () => ({
       count: jest.fn(async () => 2),
     },
     auditLog: { create: jest.fn(async () => ({})) },
-  },
-  isPrismaConnectivityError: () => false,
+  };
+  // Etkileşimli işlem aynı sahte istemciyi `tx` olarak verir; dizi biçimi Promise.all.
+  (prisma as Record<string, unknown>).$transaction = async (arg: unknown) =>
+    typeof arg === 'function' ? (arg as (tx: unknown) => unknown)(prisma) : Promise.all(arg as unknown[]);
+  return { prisma, isPrismaConnectivityError: () => false };
+});
+// Oran sınırı sayacı bu testin konusu değil (gerçek sayaç DB'ye gider): her zaman izinli.
+jest.mock('@/lib/rate-limit', () => ({
+  ...jest.requireActual('@/lib/rate-limit'),
+  checkRateLimitDb: jest.fn(async () => ({ ok: true, remaining: 99 })),
+  checkAdminRateLimit: jest.fn(async () => ({ ok: true, remaining: 99 })),
 }));
 
 const gateDenied = () => ({

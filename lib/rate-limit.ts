@@ -8,6 +8,7 @@
  * fonksiyonları kullanır (aşağıda *Db varyantları).
  */
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/request-metadata';
 
 // Giriş kilidi: 5 başarısız deneme = 15 dk blok (DB/Redis sayaçlı `*Db` varyantları).
 const LOCKOUT_MS = 15 * 60 * 1000;
@@ -186,10 +187,12 @@ const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_FEEDBACK_PER_QR_PER_WINDOW = 5;
 const MAX_SCAN_PER_IP_PER_MINUTE = 60; // QR scan abuse protection
 
+/**
+ * Oran sınırı kimliği (IP). Tek kaynak `getClientIp` (mimari-api B15): denetim kaydındaki IP ile
+ * oran sınırı kovası aynı istek için aynı değeri alır (eskiden başlık sırası farklıydı).
+ */
 export function getClientIdentifier(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0].trim() : null;
-  return ip || request.headers.get('x-real-ip') || 'unknown';
+  return getClientIp(request) || 'unknown';
 }
 
 // NOT (mimari-api B7): Bellek içi `checkRateLimit` / `getLoginLockout` / `recordFailedLoginAttempt` /

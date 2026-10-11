@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
@@ -106,8 +107,7 @@ export async function POST(
             customerId,
             assignedBy: session.user.id,
           },
-          ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-          userAgent: request.headers.get('user-agent') || null,
+          ...getAuditRequestMeta(request),
         },
       });
 
