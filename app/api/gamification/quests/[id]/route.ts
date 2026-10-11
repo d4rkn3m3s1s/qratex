@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { updateQuestSchema } from '@/lib/validations';
 
 // GET /api/gamification/quests/[id]
 
@@ -57,7 +58,17 @@ export async function PATCH(
     const { session } = auth;
 
     const { id } = await params;
-    const body = await request.json();
+    // admin_quests Bulgu 8: doğrulamasız tam üzerine yazma kaldırıldı. Yalnız GÖNDERİLEN alanlar
+    // (zod ile) güncellenir; eksik `expiresAt`/`isActive` artık silinmez/aktifleşmez.
+    // Yönetim paneli /api/admin/quests uçlarını kullanır; bu uç geriye uyumluluk içindir.
+    const parsed = updateQuestSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.issues[0]?.message || 'Görev bilgileri geçersiz', code: 'VALIDATION_ERROR' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const body = parsed.data;
 
     const oldQuest = await prisma.quest.findUnique({ where: { id } });
     if (!oldQuest) {
@@ -68,16 +79,16 @@ export async function PATCH(
     const quest = await prisma.quest.update({
       where: { id },
       data: {
-        name: body.name,
-        description: body.description,
-        icon: body.icon,
-        type: body.type,
-        requirement: body.requirement,
-        reward: body.reward,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-        isActive: body.isActive ?? true,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.icon !== undefined ? { icon: body.icon } : {}),
+        ...(body.type !== undefined ? { type: body.type } : {}),
+        ...(body.requirement !== undefined ? { requirement: body.requirement as object } : {}),
+        ...(body.reward !== undefined ? { reward: body.reward as object } : {}),
+        ...(body.expiresAt !== undefined ? { expiresAt: body.expiresAt } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         // Yeniden aktifleştirilen görev arşivden çıkar (aksi hâlde claim/ilerleme onu yok sayar).
-        ...((body.isActive ?? true) ? { archivedAt: null } : {}),
+        ...(body.isActive === true ? { archivedAt: null } : {}),
       },
     });
 

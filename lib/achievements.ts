@@ -2,10 +2,10 @@ import { prisma } from './prisma';
 import { rewardQuestOnce } from './quests/reward';
 
 /**
- * Seed specific special achievements if they don't exist
+ * Sistem başarım görevleri (sabit kimlikli; lib/quests/reward.ts ACHIEVEMENT_QUEST_IDS ile aynı).
+ * /admin/quests "Eksik başarımları ekle" yalnız EKSİK olanları bu listeden oluşturur.
  */
-export async function seedAchievements() {
-  const achievements = [
+export const ACHIEVEMENT_DEFINITIONS = [
     {
       id: 'quest-color-wizard',
       name: 'Renk Sihirbazı',
@@ -42,19 +42,17 @@ export async function seedAchievements() {
       requirement: { count: 3 },
       reward: { points: 25, xp: 50 },
     },
-  ];
+] as const;
 
-  for (const ach of achievements) {
+/**
+ * Eksik başarım görevlerini oluşturur. Var olan kayıt GÜNCELLENMEZ (`update: {}`): yöneticinin
+ * ad/açıklama/ödül düzenlemeleri tekrar tohumlamada ezilmez (admin_quests Bulgu 8).
+ */
+export async function seedAchievements() {
+  for (const ach of ACHIEVEMENT_DEFINITIONS) {
     await prisma.quest.upsert({
       where: { id: ach.id },
-      update: {
-        name: ach.name,
-        description: ach.description,
-        icon: ach.icon,
-        type: ach.type,
-        requirement: ach.requirement,
-        reward: ach.reward,
-      },
+      update: {},
       create: {
         id: ach.id,
         name: ach.name,

@@ -19,7 +19,7 @@ const FILES = [
   'app/admin/pricing/page.tsx',
   'app/admin/quests/page.tsx',
   'app/admin/rewards/page.tsx',
-  'app/admin/quests/quest-form.tsx',
+  'components/admin/a-gorevler/quest-editor.tsx',
   'app/admin/rewards/reward-form.tsx',
 ];
 
