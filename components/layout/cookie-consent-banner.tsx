@@ -65,7 +65,7 @@ export function CookieConsentBanner() {
             aria-labelledby="cookie-consent-title"
             aria-describedby="cookie-consent-desc"
             className={cn(
-              'fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-4xl rounded-2xl border border-border bg-card/95 p-4 shadow-xl backdrop-blur-xl supports-[backdrop-filter]:bg-card/90 sm:p-5',
+              'pointer-events-auto fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-4xl rounded-2xl border border-border bg-card/95 p-4 shadow-xl backdrop-blur-xl supports-[backdrop-filter]:bg-card/90 sm:p-5',
               floatingZTw.cookieConsent
             )}
           >
