@@ -239,3 +239,19 @@ Yöntem: iddiaların her biri kod yeniden okunarak çürütülmeye çalışıld�
 - Not: istemci-taraflı oyunlarda tam önleme ancak sunucu-taraflı yeniden oynatma (tohum + girdi kaydı ile deterministik simülasyon) ile mümkün; bu raporun "Veri / API değişiklikleri" bölümündeki `seed` + `inputs` önerisi doğru yön. Kısa vadede: oyun puanlarına günlük toplam cap (`lib/points-caps` deseni) ve velocity dedektörünün oyun kategorisinde fail-closed çalışması.
 
 **Özet:** 4 iddianın 4'ü de doğrulandı. #3'ün "GET ve POST farklı sıra hesaplayabilir" alt iddiası canlıda doğrulanmadı (belirsiz); keyfî eşitlik dağıtımı ise koddan kesin.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota: `/customer/games/data-snake` artık dinamik `app/customer/games/[game]` (GameHost) üzerinden v2 bileşenle açılır; gölgeleyen statik `app/customer/games/data-snake/page.tsx` ve eski `components/customer/games/data-snake-game.tsx` silindi (aynı kimlik, README adım 6).
+
+- **Seviyeler + bot duvarları:** 5 seviye × 6 paket (= `maxScore` 30). Seviye 2'den itibaren tohumlu bot duvarları, 4'ten itibaren devriye botları; engeller yılanın önüne/yakınına konmaz ve ızgarayı bölmez (bağlantılılık denetimi). Hız seviyeyle artar. (`components/customer/games/data-snake/sim.ts`)
+- **B1 kapandı:** ödül eşiği gerçek — sunucu doğrulanmış skor ≥ eşik ise ödüllendirir; ölmek ödülü silmez. HUD/öğretici/özet metni `config.rewardThreshold`'tan (admin override, B4'ün oyun içi kısmı) ve dürüst: "eşikten sonra çarpsan da skorun sayılır".
+- **B5 kapandı:** deterministik replay doğrulayıcısı (`lib/games/validators/data-snake.ts`): tohum + girdi kaydı sunucuda yeniden oynatılır; skor sunucunun. Sahte gövde, başka tohumun kaydı, 180° dönüş, bitmemiş oyun → `proof_invalid`/`proof_missing`; hızlandırılmış betik → `implausible`; şişirilmiş beyan → `score_mismatch` (jest: `__tests__/lib/data-snake.test.ts`, 15 test).
+- **B6 kapandı:** D-pad `pointer: coarse` ile (tablet dahil), `onPointerDown`, `aria-label`'lı 56 px düğmeler; oyun alanı `role="application"` + açıklama, `aria-live` duyurular (geri sayım, eşik, seviye, ölüm nedeni, sonuç); klavye yazma alanlarında yutulmaz (motor).
+- **B8 kapandı (oyun içi):** ses/titreşim/sarsıntı/konfeti/parçacık/nabız `fx` politikası üzerinden (azaltılmış harekette kapalı; ses ayrı tercih — kabuk).
+- **B9 kapandı:** 3-2-1 geri sayım (simülasyonun parçası, deterministik), donmuş ölüm karesi (çarpma hücresi X + halka), ölüm nedeni sonuçta doğru metinle; sekme gizlenince/Esc'te duraklatma; ölüm sesi tek kez.
+- **#46 HiDPI**, **#49 kişisel rekor** (cihaz başına), **#50 sonuç ekranı** (skor, yıldız, rekor kıyası, seviye, paylaş), **Pratik/Sıralı** mod, ilk oynayış öğreticisi, Okabe–Ito paleti + şekil ayrımı.
+
+Kalan (sahiplik dışı, kabuk/oturum/liderlik katmanı): B2 (deneme yaşam döngüsü), B3 (liderlik/turnuva eşitlik bozucu), B7 (turnuva kartı), B10 (başarım taraması), B11'in sayfa/başlık maddeleri — `lib/game-session.ts` / GameHost / liderlik sahiplerinde.
