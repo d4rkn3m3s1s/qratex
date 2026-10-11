@@ -247,3 +247,79 @@ Her iddia çağıran/çağrılan kod okunarak çürütülmeye çalışıldı. Ko
 - Modül kapısı yok: `assertModuleEnabled('quests')` çağrılmıyor. Ayrıca `weekly-card` ucu da modül kapısı uygulamıyor (`app/api/customer/weekly-card/route.ts:13-22`). Bu yüzden quests modülü kapalıyken bile playbook görevi müşteri panosunda görünür. Bu, iddiayı somut bir kullanıcı etkisine dönüştürüyor.
 - Şema atlaması: Değerler sabit üretildiği için girdi enjeksiyonu riski yok. Ancak `createQuestSchema.name` sınırı 50 karakter (`lib/validations.ts:164`). "Playbook: Sessiz memnunlar (yüksek tüketim, düşük ses)" yaklaşık 56 karakter olduğundan, normal yolun reddedeceği bir ad yazılıyor (apply yalnızca 120'ye kırpıyor, `route.ts:67`). Etki kozmetik ve düşük.
 - Not: Uç `requireAuth(['ADMIN'])` ile korunuyor (`route.ts:22`). Yetkisiz erişim riski yok. Bulgu izlenebilirlik ve tutarlılık eksiği. "Güvenlik açığı" değil, orta önemde bir yönetişim sorunu.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı (birleştir):** `/admin/playbooks` artık `permanentRedirect` ile `/admin/dealers-health?tab=playbooks` adresine gidiyor; sorgu parametreleri korunuyor. Eski `?dealerId=X` bağlantısı `?dealer=X` olarak o bayinin çekmecesini açıyor. Kütüphane, Bayi Sağlığı sayfasının ikinci sekmesi oldu. Uygulama akışı paylaşılan bir diyalog (`components/admin/a-bayi-sagligi/ui/apply-dialog.tsx`); hem kütüphaneden hem bayi çekmecesindeki kanıtlı öneriden açılıyor.
+
+**Veri:** `lib/growth-playbooks.ts` şemasına geriye uyumlu, eklemeli alanlar geldi:
+- `category`
+- `segment`: çalıştırılabilir hedef kitle; kampanya merkezinin segment anahtarı
+- `customerTitle` / `customerMessage`: müşteri dilinde, `{{isletme}}` değişkenli metin
+
+`buildPlaybookDrafts` artık yalnız müşteri metninden taslak üretiyor; görev taslağı kaldırıldı. Metrik adları Türkçeleştirildi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | Hedef rota sunucu bileşeninde `requireAuth` |
+| 2 | GET liste yetkisi | ÇALIŞIYOR | `defineRoute` (ADMIN, hız sınırı) |
+| 3 | POST apply yetkisi | ÇALIŞIYOR | `defineRoute` (ADMIN, zod, `mutation` hız sınırı, `Idempotency-Key`) |
+| 4 | Hero | ÇALIŞIYOR | Bayi Sağlığı başlığı ve sekmeler |
+| 5–7 | Segmentler / A/B / Görevler kısayolları | KALDIRILDI | Bağlam taşımıyorlardı; gezinme navigasyon katmanının işi |
+| 8 | Liste yükleme | ÇALIŞIYOR | react-query + `QueryState` |
+| 9 | Yükleniyor | ÇALIŞIYOR | Kart iskeleti |
+| 10 | Boş liste | ÇALIŞIYOR | `QueryState` boş durumu |
+| 11 | Hata + tekrar dene | ÇALIŞIYOR | Türkçe zarf mesajı |
+| 12 | Kart başlığı | ÇALIŞIYOR | |
+| 13 | Teknik id rozeti | KALDIRILDI | Yerine kategori rozeti (Elde tutma / İlk deneyim / Müşterinin sesi) |
+| 14 | Özet | ÇALIŞIYOR | |
+| 15 | Segment ipucu (sözde kod) | KALDIRILDI | Yerine çalıştırılabilir `segment`. Uygulama önizlemesi kampanya merkezinin çözücüsüyle canlı kitle ve izinli kişi sayısını gösteriyor |
+| 16 | Tetikleyiciler | ÇALIŞIYOR | Rehber metni. Ayrıca "şu an önerilen bayi" sayısı ve en riskli 5 bayi gerçek sinyallerden geliyor |
+| 17 | Bayi aksiyonları | ÇALIŞIYOR | Yalnız bayiye rehber; müşteri metnine girmez |
+| 18 | Müşteri fikirleri | ÇALIŞIYOR | |
+| 19 | İzlenecek metrikler | ÇALIŞIYOR | Türkçe gösterge adları "İzlenecek göstergeler" başlığıyla rehber olarak duruyor. Gerçek benimseme sayıları (uygulandı / açık taslak / gönderildi / ulaşılan kişi) ayrıca gösteriliyor |
+| 20 | Taslak oluştur butonu | ÇALIŞIYOR | Eşleşen bayi satırında ve çekmecedeki her öneride "Playbook uygula" |
+| 21 | Dialog başlığı | ÇALIŞIYOR | "Playbook uygula: <ad>" ve bayi adı |
+| 22 | Bayi seçici (60 sınırı) | KALDIRILDI | Yerine bağlamlı uygulama (çekmece ya da eşleşme listesi). Her bayiye Bayiler sekmesindeki sunucu tarafı aramayla ulaşılıyor |
+| 23 | Global görev checkbox'ı | KALDIRILDI | Görevi canlı açıyordu ve görev tamamlanamıyordu (Bulgu 1) |
+| 24 | Vazgeç | ÇALIŞIYOR | |
+| 25 | Oluştur | ÇALIŞIYOR | Tek `Idempotency-Key`. Aynı bayide aynı playbook için açık taslak varsa 409 |
+| 26 | Kampanya taslağı | ÇALIŞIYOR | Müşteri dilinde metin, doğru segment |
+| 27 | Global görev üretimi | KALDIRILDI | |
+| 28 | Başarı bildirimi | ÇALIŞIYOR | Taslak adını içeren toast ve ekran okuyucu duyurusu. Liste ve çekmece yenileniyor |
+| 29 | Hata bildirimi | ÇALIŞIYOR | Diyalog içinde Türkçe metin; "[object Object]" yok |
+| 30 | Dialog state sıfırlama | ÇALIŞIYOR | Her açılışta yeni önizleme ve yeni idempotency anahtarı. Görev tiki yok |
+| 31 | Önizleme | ÇALIŞIYOR | `dryRun`: metin, kitle sayısı, mevcut taslak, modül durumu |
+| 32 | Audit log | ÇALIŞIYOR | `playbook.apply` (playbookId, dealerId, segment, aktör, IP/UA) |
+| 33 | Bayiye bildirim | ÇALIŞIYOR | Uygulama içi `Notification` ("Yeni kampanya taslağı hazır"), aynı transaction'da |
+| 34 | Uygulama geçmişi / benimseme | ÇALIŞIYOR | Kütüphanede playbook başına uygulandı / açık taslak / gönderildi / ulaşılan kişi / uygulanan bayi sayısı. Çekmecede bayi başına playbook geçmişi |
+| 35 | Playbook CRUD / sürümleme | KALAN | **ŞEMA İSTEĞİ** (`GrowthPlaybook` modeli). Şimdilik tek kaynak statik dizi |
+| 36 | Arama / filtre | KALDIRILDI | 3 kayıt için gereksiz; kategori rozeti var |
+| 37 | GET `?id=` ölü uç | KALDIRILDI | |
+| 38 | dealers-health → playbook bağlamı | ÇALIŞIYOR | Aynı sayfa: kanıtlı öneriden bayi önceden seçili diyalog açılıyor |
+| 39 | Ortak kaynak | ÇALIŞIYOR | Haftalık özet ve bu yüzey aynı `GROWTH_PLAYBOOKS`'u kullanıyor. Raporda anılan `app/api/dealer/morning-briefing` artık depoda yok |
+| 40 | i18n | ÇALIŞIYOR | Arayüz TR/EN, playbook içerikleri Türkçe |
+| 41 | Mobil | ÇALIŞIYOR | Tek sütun kartlar. Diyalog `max-h-[90dvh]` ile kaydırılabilir. Dokunma hedefi ≥44px |
+| 42 | Klavye / form erişilebilirliği | ÇALIŞIYOR | CSM formunda `Label htmlFor` ve `ChoiceChips` (radiogroup). Odak Radix diyaloğunda |
+
+### Kapanan bulgular (10 bulgudan 9'u tam, 1'i kısmi)
+1. Global "taslak" görev canlı açılıyordu → **kapandı**. Görev üretimi tamamen kaldırıldı; testte `quest.create` çağrılmadığı doğrulanıyor.
+2. Müşteri bildirimine iç talimat ve "churn" sızıyordu → **kapandı**. Şema iki kitleli oldu. Testle doğrulanıyor: müşteri metninde id, "churn" ve bayi aksiyonları geçmiyor. Bayi taslağı kampanya merkezinde düzenleyebiliyor.
+3. Ters segment → **kapandı**. Eşleme `silent_happy`→`loyal` (bayiye özel tüketim kuralı), `first_week_dropoff`→`new`, `low_nps_churn`→`risk`. Segment artık id'den değil tanımdan geliyor. Önizleme gerçek kitle sayısını gösteriyor.
+4. Audit log ve modül kapısı → **kapandı**. `playbook.apply` denetim kaydı yazılıyor. Bayide kampanyalar kapalıysa 403 `MODULE_DISABLED` dönüyor.
+5. İdempotensi / state sızıntısı / atomiklik → **kapandı**. 409, `Idempotency-Key` ve `$transaction` kullanılıyor.
+6. Sessiz hatalar ve `[object Object]` → **kapandı**.
+7. Bayi seçimi ölçeklenmiyordu → **kapandı**. Yerine bağlamlı uygulama ve sunucu tarafı arama.
+8. İçerik sabit kodlu ve kopyalanmış → **kısmi**. Kaynak tek; id'ye göre `if` zinciri kaldırıldı. DB modeli şema isteği olarak bekliyor.
+9. Ham alan adları ve TR/EN karışımı → **kapandı**.
+10. Erişilebilirlik → **kapandı**.
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `GrowthPlaybook` modeli (CRUD, sürüm, durum). Şu an içerik değişikliği deploy gerektiriyor.
+- Etki ölçümü ("gönderim sonrası 7 günlük tekrar ziyaret farkı") yok. Kampanya alıcı listesi, kampanya merkezinin `AuditLog` anlık görüntüsünde tutuluyor. Önce/sonra kıyası kampanya merkezinin performans modülüyle ortak yazılmalı.
+- Otomasyon ("tetikleyici gerçekleşince otomatik taslak") yok. Bilinçli bir tercih: her taslak insan onayından geçiyor.
+- `give_feedback` görev türünün ilerletici olmaması sistem genelinde bir sorun (seed/bootstrap). Bu yüzeyden görev üretimi kaldırıldığı için buradan tetiklenmiyor.

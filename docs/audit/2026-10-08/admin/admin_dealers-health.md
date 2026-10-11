@@ -206,3 +206,95 @@ Her iddia çürütülmeye çalışıldı; kod baştan okundu (`app/api/admin/dea
 - Motor B: `lib/tenant-health.ts:84-92` (taban 100; 7g/7g kullanım trendi, negatif trendi, aksiyon tamamlama). Dashboard "risk altında" sayımı `<70` (`admin-dashboard-client.tsx:102`, `:316`); churn-playbook `CHURN_HEALTH_THRESHOLD` varsayılan `50` ile otomatik `CSMTask` + tüm adminlere bildirim üretir (`churn-playbook/route.ts:12, 18, 34-58`).
 - Somut senaryo: haftalık geri bildirimi 10'dan 4'e düşen (−30) ve son 7 gün negatif oranı 20 puandan fazla artan (−25) bayi → Motor B = 45 → dashboard'da "risk altında", churn-playbook CSM görevi + "⚠️ Churn Riski" bildirimi üretir. Aynı bayinin 30 günlük ort. puanı 4.0 ve yanıt oranı %80 ise Motor A = 72 + 7 + 6,6 ≈ **86** → bu sayfada yeşil rozetle listenin altında. Operatör bildirimden gelip bu sayfaya baktığında bayiyi sağlıklı görür.
 - Kritik/yüksek bir güvenlik hatası değil; ancak ürün düzeyinde gerçek ve ölçülebilir bir tutarsızlık. Tek skor motoru + tek eşik sabiti (ör. `lib/dealer-health/score.ts` + `DEALER_HEALTH_BANDS`) önerisi (yukarıdaki "Çakışmalar" bölümü) geçerli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/dealers-health` (sekmeler: *Bayiler* · *Playbook kütüphanesi*). `/admin/playbooks` kalıcı olarak `/admin/dealers-health?tab=playbooks` adresine yönlenir. Eski `?dealerId=` bağlantısı ilgili bayinin çekmecesini açar (`?dealer=`).
+
+**Mimari:** Sayfa sunucu bileşeni oldu (`app/admin/dealers-health/page.tsx`): yetki `requireAuth(['ADMIN'])` ile kontrol edilir, ilk liste sayfası sunucuda hesaplanır. İstemci adası `components/admin/a-bayi-sagligi/ui/*` altında. Saf skor modeli `components/admin/a-bayi-sagligi/domain.ts` dosyasında, sunucu mantığı `…/server/{signals,list,detail,csm,playbooks,schemas}.ts` dosyalarında. Bütün uçlar `defineRoute` ile yazıldı (rol, zod, hız sınırı, merkezi hata, `Idempotency-Key`):
+- `GET /api/admin/dealers-health?window&q&band&flag&sort&page&size&fresh`
+- `GET /api/admin/dealers-health/export` (CSV; dışa aktarma denetim kaydına yazılır)
+- `GET /api/admin/dealers-health/[dealerId]?window` (çekmece)
+- `POST /api/admin/dealers-health/[dealerId]/csm-tasks` · `PATCH /api/admin/dealers-health/csm-tasks/[taskId]`
+- `GET /api/admin/playbooks` · `POST /api/admin/playbooks/apply` (`dryRun`)
+
+**Skor (tek motor, şeffaf):** Skor dört bileşenden oluşur:
+- Kalite (30): Bayes yumuşatılmış ortalama (m=5, μ=platform ortalaması).
+- Yanıt (20): `(yanıt+1)/(n+2)`.
+- Aktivite (25): ziyaret + yorum, önceki eşit döneme oranla. Hiç etkinlik yoksa 0.
+- Operasyon (25): önem ağırlıklı açık olaylar ve telafi kuyruğu. 48 saati aşan telafi ek ceza alır.
+
+Fraud cezası ayrıca düşülür: `flagged` −15, `shadow_ban` −30. Verisi olmayan bileşen sıfır puan almaz, hesaptan çıkarılır. Skor, uygulanabilir bileşenlerden alınan puanın tavana oranıdır. Bantlar tek sabitte tanımlı: `HEALTH_BANDS` (<40 kritik, <60 riskli, <75 izlenmeli). Her satır şunları taşır: bileşen puanları, en büyük kayıp, güven (n<5 → düşük), sessiz bayrağı, önceki döneme göre fark ve bağlamlı öneriler.
+
+**Bağlamlı öneriler:** Öneriler yalnız gerçek sinyallerden çıkar ve kanıt sayılarıyla gösterilir.
+
+Playbook önerileri:
+- `low_nps_churn`: ≥3 yorum ve yumuşatılmış ortalama <3,6, ya da 1–2 puanlı yorumların payı ≥%30.
+- `first_week_dropoff`: ≥5 yeni müşterinin %25'inden azı ikinci kez gelmiş.
+- `silent_happy`: ≥10 ziyaret ve yorum/ziyaret oranı <%10.
+
+Aksiyon önerileri: sessiz bayiyle görüşme, telafi kuyruğunu eritme, ağır olayları kapatma, fraud incelemesi.
+
+"Playbook uygula" diyaloğu önce sunucudan bir önizleme alır: müşteri metni, hedef kitle sayısı ve izinli ulaşılabilir kişi, mevcut açık taslak, modül durumu. Onaylanınca tek transaction içinde kampanya taslağı oluşur, bayiye bildirim gider ve `playbook.apply` denetim kaydı yazılır. Her öneriden önceden doldurulmuş bir CSM görevi de açılabilir.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | proxy kapısı + sunucu bileşeninde `requireAuth(['ADMIN'])` |
+| 2 | API erişimi | ÇALIŞIYOR | `defineRoute` → `requireAuth`. Yönetici kapısı artık API katmanında da var (`ADMIN_GATE_REQUIRED`) |
+| 3 | Hero | ÇALIŞIYOR | QDL `PageHeader` (ops, kompakt), TR/EN |
+| 4 | Yenile | ÇALIŞIYOR | "Yeniden hesapla" önbelleği atlar (`fresh=1`). Son hesaplama zamanı İstanbul saatiyle gösterilir ve duyurulur |
+| 5 | İlk yükleme | ÇALIŞIYOR | Sunucuda önceden hesaplanır. İstemcide react-query iptal sinyali kullanılır |
+| 6 | Yükleniyor | ÇALIŞIYOR | `QueryState`/`DataTable` iskeleti. Yenilemede eski satırlar korunur (`keepPreviousData`) |
+| 7 | Hata | ÇALIŞIYOR | Zarf v2 Türkçe mesaj, "Tekrar dene", `role="alert"`. JSON olmayan yanıt da Türkçe mesaja düşer |
+| 8 | Boş durum | ÇALIŞIYOR | "Henüz bayi yok" ile süzgeç sonucu boş durumu ("Süzgeçleri temizle") ayrı |
+| 9 | Bayi başlığı | ÇALIŞIYOR | Sıra: businessName → name → e-posta |
+| 10 | Bayi ID | ÇALIŞIYOR | Yalnız çekmecede, kopyalanabilir, eş aralıklı |
+| 11 | Skor rozeti | ÇALIŞIYOR | Tek bant sabiti. İkon + metin + sayı; yalnız renge dayanmaz |
+| 12 | "Playbook" linki | ÇALIŞIYOR | Bağlamsız link kaldırıldı. Yerine kanıtlı öneri ve önizlemeli uygula diyaloğu geldi |
+| 13 | Skor çubuğu | ÇALIŞIYOR | Bileşen başına `role="meter"` + `aria-valuenow`, renk riske göre. Paylaşılan `Progress` artık kullanılmıyor |
+| 14 | Geri bildirim sayısı | ÇALIŞIYOR | QR geri bildirimi ile tüketim yorumu birleşik |
+| 15 | Ortalama puan | ÇALIŞIYOR | Ham ve Bayes yumuşatılmış değer, düşük güven rozeti |
+| 16 | Yanıt oranı | ÇALIŞIYOR | Yorum yoksa `null` ("—") ve skora girmez; %100 sayılmaz |
+| 17 | Açık olay | ÇALIŞIYOR | Önem ağırlıklı. Kritik/yüksek olay tabloda vurgulanır, çekmecede listelenir |
+| 18 | Telafi kuyruğu | ÇALIŞIYOR | En eski bekleme süresi gösterilir. 48 saati aşan ek ceza alır |
+| 19 | Fraud durumu | ÇALIŞIYOR | Türkçe rozet (Temiz / İşaretli / Gölge yasak) |
+| 20 | Skor hesaplama | ÇALIŞIYOR | Saf `computeHealth`, 22 birim testi |
+| 21 | Varsayılan sıralama | ÇALIŞIYOR | Tüm bayiler içinde en kötü üstte |
+| 22 | 200 bayi limiti | ÇALIŞIYOR | Limit kaldırıldı. Sunucu tarafında sayfalama, `total` dönüyor, sayfa boyutu 10/20/50/100 |
+| 23 | `periodDays` | ÇALIŞIYOR | Dönem seçici (7/30/90 gün, URL'de) |
+| 24 | Arama / filtre | ÇALIŞIYOR | Türkçe katlamalı arama + bant + 8 durum bayrağı (sessiz, 10+ düşen, olay, telafi, fraud, düşük güven, açık CSM, playbook önerilen) |
+| 25 | Kolon sıralama | ÇALIŞIYOR | 8 sütun, URL'de |
+| 26 | Özet KPI şeridi | ÇALIŞIYOR | 4 bant kutusu (tıklayınca süzer) + ortalama skor ve dönem farkı + sessiz bayi ve öneri sayısı |
+| 27 | Bileşen dökümü | ÇALIŞIYOR | Tabloda mini yığılmış çubuk ve "en büyük kayıp". Çekmecede tam döküm ve formül |
+| 28 | Trend | ÇALIŞIYOR | Önceki döneme göre skor farkı. Çekmecede 12 haftalık etkinlik ve puan çizgisi (İstanbul haftası). Günlük skor anlık görüntüsü olmadığı için skor sparkline'ı yok (ŞEMA İSTEĞİ) |
+| 29 | Bayi detayına geçiş | ÇALIŞIYOR | `?dealer=` derin bağlantılı çekmece: düşük yorumlar, olaylar, telafi, CSM, playbook geçmişi |
+| 30 | CSM görevleri | ÇALIŞIYOR | Listeleme, oluşturma (öneriden önceden dolu), başlat / çöz / yeniden aç / üstlen. İyimser kilit + denetim kaydı |
+| 31 | CSV | ÇALIŞIYOR | Geçerli süzgeç ve sıralamayla. BOM'lu, formül enjeksiyonuna karşı korumalı, denetimli |
+| 32 | i18n | ÇALIŞIYOR | Arayüz TR/EN (`useDsLocale`). Playbook içerik metinleri Türkçe kalır |
+| 33 | Mobil | ÇALIŞIYOR | `DataTable` md altında kart görünümüne geçer. Çekmece alttan açılır. Dokunma hedefi ≥44px |
+| 34 | Azaltılmış hareket | ÇALIŞIYOR | Yalnız CSS geçişleri ve `motion-reduce`; sonsuz döngü yok |
+| 35 | Önbellek | ÇALIŞIYOR | Ağır sinyaller Redis'te 120 sn tutulur. CSM sayıları canlı okunur |
+
+### Kapanan bulgular (11 bulgudan 10'u tam, 1'i kısmi)
+1. Sessiz bayi sağlıklı görünüyordu → **kapandı**. Etkinliği olmayan bayi 50 puanla "Riskli" bandına düşer ve "Sessiz" rozeti alır. Testle sabitlendi.
+2. İki skor motoru ve üç eşik → **kısmi**. Bu yüzey ve playbook önerileri artık tek motor ve tek `HEALTH_BANDS` sabitiyle çalışıyor. Dashboard'daki "Tenant health" kartı ve `churn-playbook` cron'u (`lib/tenant-health.ts`) başka yüzeylerin sahipliğinde olduğu için değiştirilmedi. Bu ikisinin `components/admin/a-bayi-sagligi/server/list.ts` içindeki `loadAllRows` ve `HEALTH_BANDS`'e bağlanması gerekiyor.
+3. 200 sınırı → **kapandı**. Tüm bayiler tek geçişte işleniyor, sayfalama sunucuda.
+4. Küçük örneklem ve kanal kapsamı → **kapandı**. Bayes yumuşatma, iki kanal, olay önemi ve telafi yaşı hesaba katılıyor.
+5. Admin kapısı API'de yoktu → **kapandı**. Kapı sistem genelinde `requireAuth` içinde; bu yüzeyin uçları `defineRoute` ile yazıldı.
+6. Bağlamsız tek aksiyon → **kapandı**. Önizlemeli playbook uygulama ve CSM görevi aynı çekmeceden yapılıyor.
+7. Yükleme / hata / boş durumları → **kapandı**.
+8. Erişilebilirlik → **kapandı**. Bileşen başına `meter`, canlı bölge, metinli bant. Paylaşılan `Progress` bu sayfada kullanılmadığı için ona dokunulmadı.
+9. Performans → **kapandı**. `IN` listesi yerine `JOIN … GROUP BY`; Redis önbelleği; sunucuda ön hesaplama.
+10. i18n → **kapandı** (yalnız arayüz; playbook içerikleri Türkçe).
+11. Görsel hiyerarşi → **kapandı**. Kart listesi yerine yoğun tablo; skor tek hücrede; cuid yalnız çekmecede.
+
+### Kalanlar
+- Dashboard "Tenant health" kartı ve `churn-playbook` hâlâ eski `lib/tenant-health.ts` formülünü kullanıyor (sahiplik dışı; bkz. Bulgu 2).
+- **ŞEMA İSTEĞİ:** `DealerHealthSnapshot(dealerId, day, score, components Json)` tablosu ve onu dolduran gece cron'u. Bu olmadan skor zaman serisi (sparkline) ve "son 7 günde 15 puan düştü" uyarısı yapılamaz. Şimdilik eğilim, önceki eşit döneme göre fark ve haftalık etkinlik/puan serisiyle gösteriliyor.
+- "Bayi kritik banda düşünce bildir" abonelik kuralı yok. Anlık görüntü tablosu olmadan bant geçişi güvenilir biçimde saptanamıyor.
+- Toplu seçim ve toplu playbook uygulama yok. Bilinçli bir tercih: her bayi için önizleme ve onay isteniyor. Ayrıca çok bayide segment sayımı pahalı.
+- Admin tarafında bayi kapsamlı bir olay/telafi yönetim sayfası yok. Bu yüzden çekmecede bu kayıtlar salt okunur listeleniyor.

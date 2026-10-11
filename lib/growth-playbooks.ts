@@ -1,6 +1,10 @@
 /**
  * Admin: segment + deney için hazır playbook şablonları (statik kütüphane).
- * İleride DB’ye taşınabilir; şimdilik hızlı operasyon rehberi.
+ *
+ * İki kitleli şema (denetim Bulgu 2): `dealerActions`/`summary` BAYİYE iç rehberdir;
+ * müşteriye giden metin YALNIZ `customerTitle`/`customerMessage`'dan üretilir.
+ * Hedef kitle `segment` alanındadır (kampanya merkezinin segment anahtarı; denetim Bulgu 3 —
+ * id'ye göre `if` zinciri kaldırıldı). Kaynak tek: /admin/dealers-health, weekly digest.
  */
 
 export interface GrowthPlaybook {
@@ -12,6 +16,14 @@ export interface GrowthPlaybook {
   dealerActions: string[];
   customerIdeas: string[];
   metricsToWatch: string[];
+  /** Kütüphane kategorisi (kullanıcıya etiketiyle gösterilir). */
+  category: 'retention' | 'onboarding' | 'voice';
+  /** Kampanya hedef kitlesi — `components/dealer/b-kampanyalar/domain` CAMPAIGN_SEGMENT_KEYS. */
+  segment: 'risk' | 'new' | 'loyal';
+  /** Müşteriye giden başlık; `{{isletme}}` işletme adıyla değişir. */
+  customerTitle: string;
+  /** Müşteriye giden mesaj; iç talimat/segment dili İÇERMEZ. */
+  customerMessage: string;
 }
 
 export const GROWTH_PLAYBOOKS: GrowthPlaybook[] = [
@@ -30,7 +42,12 @@ export const GROWTH_PLAYBOOKS: GrowthPlaybook[] = [
       'Haftalık “geri bildirim + ziyaret” mini görevi (3 adım)',
       'Sürpriz kutu şansını düşük NPS kohortuna bağlama (admin onayı ile)',
     ],
-    metricsToWatch: ['dealerRepliedAt SLA', 'remedy acceptance', '7 günlük tekrar ziyaret'],
+    metricsToWatch: ['Yanıt süresi', 'Telafi kabul oranı', '7 günlük tekrar ziyaret'],
+    category: 'retention',
+    segment: 'risk',
+    customerTitle: 'Görüşünüz bizim için önemli — {{isletme}}',
+    customerMessage:
+      'Son ziyaretinizde beklentinizi karşılayamadıysak üzgünüz. Geri bildiriminizi dikkate aldık ve sizi yeniden ağırlamak isteriz. Bir sonraki ziyaretinizde bizi tekrar değerlendirmeyi unutmayın.',
   },
   {
     id: 'first_week_dropoff',
@@ -45,7 +62,12 @@ export const GROWTH_PLAYBOOKS: GrowthPlaybook[] = [
     customerIdeas: [
       '“İlk hafta görev kartı” — 3 basit görev (tarama, yorum, paylaşım)',
     ],
-    metricsToWatch: ['D1/D7 retention', 'ilk consumption süresi'],
+    metricsToWatch: ['1. ve 7. gün geri dönüş', 'İkinci ziyarete kadar geçen süre'],
+    category: 'onboarding',
+    segment: 'new',
+    customerTitle: 'Sizi yeniden görmek isteriz — {{isletme}}',
+    customerMessage:
+      'İlk ziyaretiniz için teşekkürler! Bir sonraki gelişinizde kartınızı okutmayı unutmayın; puanlarınız birikmeye devam etsin.',
   },
   {
     id: 'silent_happy',
@@ -60,7 +82,12 @@ export const GROWTH_PLAYBOOKS: GrowthPlaybook[] = [
     customerIdeas: [
       'Tek tıkla “hızlı emoji” geri bildirimi + küçük puan',
     ],
-    metricsToWatch: ['feedback / consumption oranı', 'NPS örneklem boyutu'],
+    metricsToWatch: ['Geri bildirim / ziyaret oranı', 'Değerlendirme sayısı'],
+    category: 'voice',
+    segment: 'loyal',
+    customerTitle: 'Fikriniz bizim için değerli — {{isletme}}',
+    customerMessage:
+      'Bizi tercih ettiğiniz için teşekkürler. Deneyiminizi bir dakikada puanlarsanız neyi iyi yaptığımızı öğrenir, daha da iyisini sunarız.',
   },
 ];
 
@@ -71,44 +98,29 @@ export function getPlaybookById(id: string): GrowthPlaybook | undefined {
 export type PlaybookDraftCampaign = {
   title: string;
   message: string;
-  targetSegment: 'risk' | 'vip' | 'loyal' | 'active' | 'all';
+  targetSegment: GrowthPlaybook['segment'];
   channel: 'notification';
   status: 'draft';
 };
 
-export type PlaybookDraftQuest = {
-  name: string;
-  description: string;
-  icon: string;
-  type: 'weekly';
-  requirement: { type: string; count: number };
-  reward: { points: number; xp: number };
-  isActive: boolean;
-};
+function fillBusiness(template: string, label: string): string {
+  return template.replace(/\{\{\s*isletme\s*\}\}/g, label);
+}
 
-export function buildPlaybookDrafts(
-  pb: GrowthPlaybook,
-  opts?: { dealerLabel?: string }
-): { campaign: PlaybookDraftCampaign; quest: PlaybookDraftQuest } {
-  const label = opts?.dealerLabel?.trim() || 'İşletmeniz';
-  const campaign: PlaybookDraftCampaign = {
-    title: `${pb.title} — ${label}`,
-    message: `${pb.summary}\n\n${pb.dealerActions.slice(0, 2).join('\n• ')}\n\nPlaybook: ${pb.id}`,
-    targetSegment:
-      pb.id === 'low_nps_churn' ? 'risk' : pb.id === 'silent_happy' ? 'loyal' : pb.id === 'first_week_dropoff' ? 'active' : 'all',
-    channel: 'notification',
-    status: 'draft',
+/**
+ * Playbook → MÜŞTERİYE gidecek kampanya taslağı. Bayi rehberi ve playbook kimliği metne
+ * yazılmaz (kimlik yalnız `Campaign.playbookSourceId`'de). Global görev üretimi kaldırıldı
+ * (denetim Bulgu 1: "taslak" diye canlı ve tamamlanamaz global görev açıyordu).
+ */
+export function buildPlaybookDrafts(pb: GrowthPlaybook, opts?: { dealerLabel?: string }): { campaign: PlaybookDraftCampaign } {
+  const label = opts?.dealerLabel?.trim() || 'İşletmemiz';
+  return {
+    campaign: {
+      title: fillBusiness(pb.customerTitle, label).slice(0, 200),
+      message: fillBusiness(pb.customerMessage, label),
+      targetSegment: pb.segment,
+      channel: 'notification',
+      status: 'draft',
+    },
   };
-
-  const quest: PlaybookDraftQuest = {
-    name: `Playbook: ${pb.title}`,
-    description: pb.customerIdeas[0] || pb.summary,
-    icon: '🎯',
-    type: 'weekly',
-    requirement: { type: 'give_feedback', count: pb.id === 'first_week_dropoff' ? 2 : 3 },
-    reward: { points: 120, xp: 60 },
-    isActive: true,
-  };
-
-  return { campaign, quest };
 }
