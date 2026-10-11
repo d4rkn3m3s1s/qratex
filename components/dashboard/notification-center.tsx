@@ -22,6 +22,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { tr, enUS } from 'date-fns/locale';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { claimNotificationToast, markNotificationsSeen } from '@/lib/notification-toast-dedupe';
+import { api, apiErrorMessage } from '@/lib/api-client';
 
 // ─── Types ──────────────────────────────────────────────────
 export interface Notification {
@@ -172,59 +173,54 @@ export function NotificationCenter() {
     }, [session?.user?.id, fetchNotifications]);
 
     // ── Actions ───
+    // mimari-api B9: tipli istemci (lib/api-client) — HTTP hatası (429/5xx) artık başarı sayılmaz.
+    // Eskiden `fetch` 4xx/5xx'te fırlatmadığı için yerel durum "okundu/silindi" olarak güncelleniyor
+    // ve "tümü okundu" başarı bildirimi gösteriliyordu; sunucuda hiçbir şey değişmemişti.
     const markAsRead = async (id: string) => {
         try {
-            await fetch('/api/notifications', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notificationId: id }),
-            });
+            await api.patch('/api/notifications', { notificationId: id });
             setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
             setUnreadCount((c) => Math.max(0, c - 1));
-        } catch { /* silent */ }
+        } catch {
+            /* sessiz: tekil "okundu" arka plan işlemi; bir sonraki tazelemede gerçek durum gelir */
+        }
     };
 
     const markAllAsRead = async () => {
         try {
-            await fetch('/api/notifications', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ markAllRead: true }),
-            });
+            await api.patch('/api/notifications', { markAllRead: true });
             setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
             setUnreadCount(0);
             toast.success(t('notificationCenter.markAllToast'));
-        } catch { /* silent */ }
+        } catch (err) {
+            toast.error(apiErrorMessage(err, t('common.error')));
+        }
     };
 
     const deleteNotification = async (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
         try {
-            await fetch(`/api/notifications?id=${id}`, { method: 'DELETE' });
+            await api.delete('/api/notifications', undefined, { query: { id } });
             const n = notifications.find((x) => x.id === id);
             setNotifications((prev) => prev.filter((x) => x.id !== id));
             if (n && !n.isRead) setUnreadCount((c) => Math.max(0, c - 1));
-        } catch { /* silent */ }
+        } catch (err) {
+            toast.error(apiErrorMessage(err, t('common.error')));
+        }
     };
 
     const claimBirthdayBonus = async () => {
         if (birthdayClaiming) return;
         setBirthdayClaiming(true);
         try {
-            const res = await fetch('/api/birthday', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'claim' }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : t('common.error'));
+            await api.post('/api/birthday', { action: 'claim' });
             toast.success(t('notificationCenter.birthdayClaimSuccessToast'));
             if (selected?.id) await markAsRead(selected.id);
             setDetailOpen(false);
             setSelected(null);
             await fetchNotifications();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : t('common.error'));
+            toast.error(apiErrorMessage(err, t('common.error')));
         } finally {
             setBirthdayClaiming(false);
         }
@@ -235,18 +231,12 @@ export function NotificationCenter() {
         if (birthdayClaiming) return;
         setBirthdayClaiming(true);
         try {
-            const res = await fetch('/api/birthday', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'claim' }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : t('common.error'));
+            await api.post('/api/birthday', { action: 'claim' });
             toast.success(t('notificationCenter.birthdayClaimSuccessToast'));
             await markAsRead(n.id);
             await fetchNotifications();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : t('common.error'));
+            toast.error(apiErrorMessage(err, t('common.error')));
         } finally {
             setBirthdayClaiming(false);
         }
