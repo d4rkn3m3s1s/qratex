@@ -42,7 +42,7 @@ function offenders(re: RegExp, allow: readonly string[] = [], onlyTsx = true): s
 describe('kaldırılan eski tasarım katmanları geri gelmez', () => {
   it('eski başlık/kahraman, panel yüzeyi, HyperText, rakip tema kancası içe aktarılmaz (Y6, O5, Y1)', () => {
     const re =
-      /from ['"]@\/(components\/admin\/admin-premium-hero|components\/layout\/dashboard-page-hero|components\/dashboard\/page-header|lib\/panel-surface|lib\/panel-hero-gradients|components\/ui\/hyper-text|hooks\/use-theme-colors|components\/dashboard\/stats-card)['"]/;
+      /from ['"]@\/(components\/admin\/admin-premium-hero|components\/layout\/dashboard-page-hero|components\/dashboard\/page-header|components\/dashboard\/page-heading|components\/team\/team-board|components\/ui\/empty-state|lib\/panel-surface|lib\/panel-hero-gradients|components\/ui\/hyper-text|hooks\/use-theme-colors|components\/dashboard\/stats-card)['"]/;
     expect(offenders(re)).toEqual([]);
   });
 
@@ -62,9 +62,7 @@ describe('kaldırılan eski tasarım katmanları geri gelmez', () => {
 
 describe('katman ve tipografi kuralları', () => {
   it('sayfa üstü katmanda keyfi z-[N≥10] yok — z-overlay/floating/modal/toast/popover/skip (D3)', () => {
-    // Paralel düzenlenen iki dosya geçici istisna (yalnız bu ikisi; liste büyümez).
-    const allow = ['components/chat/chatbot.tsx', 'components/customer/character-reveal.tsx'];
-    expect(offenders(/\bz-\[(?:[1-9]\d+)\]/, allow)).toEqual([]);
+    expect(offenders(/\bz-\[(?:[1-9]\d+)\]/)).toEqual([]);
     const tw = fs.readFileSync(path.join(ROOT, 'tailwind.config.ts'), 'utf8');
     expect(tw).not.toMatch(/safelist/);
   });
@@ -86,9 +84,9 @@ describe('uyum (drift) cırcırı', () => {
   });
 
   it('ham palet ve < 12px metin toplamı eşiği aşmaz (yalnız aşağı çekilir)', () => {
-    // 2026-10-11 ölçümü (components/ altı; kalanın yarısı ölü eski ekip panosu team-board.tsx + 10
-    // bağımlısı). Sabit hex cırcıra dahil DEĞİL: oyun/canvas/3B sahneler hex'i meşru kullanır.
-    const MAX = { palette: 380, tinyText: 208 };
+    // 2026-10-11 ölçümü (yalnız components/ altında: oyun, kimlik çerçeveleri, asistan). Sabit hex
+    // cırcıra dahil DEĞİL: oyun/canvas/3B sahneler ve e-posta/OG görselleri hex'i meşru kullanır.
+    const MAX = { palette: 121, tinyText: 120 };
     expect(report.totals.palette).toBeLessThanOrEqual(MAX.palette);
     expect(report.totals.tinyText).toBeLessThanOrEqual(MAX.tinyText);
   });

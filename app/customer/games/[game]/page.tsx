@@ -6,7 +6,7 @@ import { Gamepad2 } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { GAMES_HUB_PATH, resolveGameRoute } from '@/lib/games/registry';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { PageHeader } from '@/components/ds/page';
 import { EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { GameHost } from './game-host';
@@ -98,7 +98,8 @@ export default async function GamePage({ params, searchParams }: PageProps) {
 
   return (
     <div className="space-y-6 pb-10">
-      <DashboardPageHeading title={`${title} ${emoji}`} description={description} />
+      {/* Tek h1 her ekranda (eski DashboardPageHeading mobilde gizliydi → mobilde başlıksız sayfa). */}
+      <PageHeader title={`${title} ${emoji}`} description={description} back={{ href: GAMES_HUB_PATH, label: 'Oyun Merkezi' }} />
       {eff && !eff.enabled ? (
         <EmptyState
           variant="permission"

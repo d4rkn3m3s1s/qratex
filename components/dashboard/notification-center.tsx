@@ -48,17 +48,17 @@ const NOTIFICATION_ICONS: Record<string, typeof Info> = {
 };
 
 const NOTIFICATION_COLORS: Record<string, string> = {
-    info: 'text-blue-500',
-    success: 'text-green-500',
-    warning: 'text-amber-500',
-    error: 'text-red-500',
+    info: 'text-info',
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-danger',
 };
 
 const NOTIFICATION_BG: Record<string, string> = {
-    info: 'bg-blue-500/10',
-    success: 'bg-green-500/10',
-    warning: 'bg-amber-500/10',
-    error: 'bg-red-500/10',
+    info: 'bg-info-subtle',
+    success: 'bg-success-subtle',
+    warning: 'bg-warning-subtle',
+    error: 'bg-danger-subtle',
 };
 
 const getIcon = (type: string) => {
@@ -66,11 +66,11 @@ const getIcon = (type: string) => {
     return NOTIFICATION_ICONS[type] || Info;
 };
 const getColor = (type: string) => {
-    if (type === 'BIRTHDAY_CLAIM') return 'text-pink-500';
+    if (type === 'BIRTHDAY_CLAIM') return 'text-category-8';
     return NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info;
 };
 const getBg = (type: string) => {
-    if (type === 'BIRTHDAY_CLAIM') return 'bg-pink-500/10';
+    if (type === 'BIRTHDAY_CLAIM') return 'bg-category-8/10';
     return NOTIFICATION_BG[type] || NOTIFICATION_BG.info;
 };
 
@@ -317,7 +317,7 @@ export function NotificationCenter() {
                                 key={unreadCount}
                                 initial={{ scale: 0.5 }}
                                 animate={{ scale: 1 }}
-                                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-sm"
+                                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-danger text-danger-fg text-[10px] rounded-full flex items-center justify-center font-bold shadow-sm"
                             >
                                 {unreadCount > 99 ? '99+' : unreadCount}
                             </Motion.span>
@@ -359,7 +359,7 @@ export function NotificationCenter() {
                                 >
                                     {tab === 'all' ? t('notificationCenter.tabAll') : t('notificationCenter.tabUnread')}
                                     {tab === 'unread' && unreadCount > 0 && (
-                                        <span className="ml-1.5 text-[10px] tabular-nums bg-red-500/15 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full">
+                                        <span className="ml-1.5 text-[10px] tabular-nums bg-danger-subtle text-danger px-1.5 py-0.5 rounded-full">
                                             {unreadCount}
                                         </span>
                                     )}
@@ -546,7 +546,7 @@ export function NotificationCenter() {
                                         typeof selected.data?.remedyOfferId === 'string' ? (
                                         <Button
                                             size="sm"
-                                            className="bg-amber-500 hover:bg-amber-600"
+                                            className="bg-warning text-warning-fg hover:bg-warning/90"
                                             onClick={() => {
                                                 setDetailOpen(false);
                                                 router.push(remedyOfferHref(String(selected.data?.remedyOfferId ?? '')));

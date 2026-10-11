@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-10-11T14:00:33.903Z",
+  "generatedAt": "2026-10-11T14:04:49.122Z",
   "totals": {
-    "files": 1255,
-    "clean": 1150,
-    "hex": 471,
-    "palette": 380,
-    "tinyText": 208
+    "files": 1238,
+    "clean": 1146,
+    "hex": 458,
+    "palette": 121,
+    "tinyText": 120
   },
   "areas": [
     {
@@ -50,41 +50,20 @@
     },
     {
       "area": "components",
-      "hex": 457,
-      "palette": 373,
-      "tinyText": 207,
-      "files": 907,
-      "clean": 805
+      "hex": 444,
+      "palette": 114,
+      "tinyText": 119,
+      "files": 890,
+      "clean": 801
     }
   ],
   "top": [
-    {
-      "file": "components/team/team-board.tsx",
-      "hex": 4,
-      "palette": 117,
-      "tinyText": 32,
-      "total": 153
-    },
     {
       "file": "components/ui/backgrounds/winter.tsx",
       "hex": 51,
       "palette": 0,
       "tinyText": 0,
       "total": 51
-    },
-    {
-      "file": "components/team/task-detail-sheet.tsx",
-      "hex": 0,
-      "palette": 28,
-      "tinyText": 17,
-      "total": 45
-    },
-    {
-      "file": "components/team/team-performance.tsx",
-      "hex": 0,
-      "palette": 26,
-      "tinyText": 18,
-      "total": 44
     },
     {
       "file": "components/ui/backgrounds/ice-kingdom.tsx",
@@ -143,13 +122,6 @@
       "total": 27
     },
     {
-      "file": "components/admin/admin-progress-stat-card.tsx",
-      "hex": 0,
-      "palette": 23,
-      "tinyText": 3,
-      "total": 26
-    },
-    {
       "file": "components/customer/games/frost-catcher/frost-catcher-game.tsx",
       "hex": 21,
       "palette": 0,
@@ -162,13 +134,6 @@
       "palette": 0,
       "tinyText": 0,
       "total": 22
-    },
-    {
-      "file": "components/dashboard/notification-center.tsx",
-      "hex": 0,
-      "palette": 16,
-      "tinyText": 4,
-      "total": 20
     },
     {
       "file": "components/customer/games/daily-word/daily-word-game.tsx",
@@ -199,13 +164,6 @@
       "total": 17
     },
     {
-      "file": "components/team/team-files.tsx",
-      "hex": 0,
-      "palette": 12,
-      "tinyText": 4,
-      "total": 16
-    },
-    {
       "file": "app/admin-gate/page.tsx",
       "hex": 7,
       "palette": 7,
@@ -220,18 +178,60 @@
       "total": 15
     },
     {
-      "file": "components/team/team-activity.tsx",
-      "hex": 0,
-      "palette": 12,
-      "tinyText": 2,
-      "total": 14
-    },
-    {
       "file": "components/customer/games/fake-hunter/fake-hunter-game.tsx",
       "hex": 6,
       "palette": 1,
       "tinyText": 5,
       "total": 12
+    },
+    {
+      "file": "components/customer/m-cuzdan-kart/card-face.tsx",
+      "hex": 1,
+      "palette": 9,
+      "tinyText": 2,
+      "total": 12
+    },
+    {
+      "file": "components/public/p-deneyim-anket/og.tsx",
+      "hex": 11,
+      "palette": 0,
+      "tinyText": 0,
+      "total": 11
+    },
+    {
+      "file": "components/customer/games/fake-hunter/cards.tsx",
+      "hex": 5,
+      "palette": 0,
+      "tinyText": 5,
+      "total": 10
+    },
+    {
+      "file": "components/customer/games/game-tournament.tsx",
+      "hex": 0,
+      "palette": 8,
+      "tinyText": 2,
+      "total": 10
+    },
+    {
+      "file": "components/admin/a-oyunlar/game-sheet.tsx",
+      "hex": 1,
+      "palette": 0,
+      "tinyText": 8,
+      "total": 9
+    },
+    {
+      "file": "components/admin/a-ayarlar-kapi/gate-settings.tsx",
+      "hex": 3,
+      "palette": 4,
+      "tinyText": 1,
+      "total": 8
+    },
+    {
+      "file": "components/dealer/b-voc-duvari/wall-display.tsx",
+      "hex": 1,
+      "palette": 7,
+      "tinyText": 0,
+      "total": 8
     }
   ]
 }

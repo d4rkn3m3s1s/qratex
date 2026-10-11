@@ -288,7 +288,7 @@ export function Chatbot() {
             transition={fabSpring}
             className={cn(
               floatingZTw.assistant,
-              'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[45] flex flex-col items-end gap-2 sm:bottom-8 sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-10 md:right-10'
+              'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-floating flex flex-col items-end gap-2 sm:bottom-8 sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-10 md:right-10'
             )}
           >
             <Motion.button
@@ -421,7 +421,7 @@ export function Chatbot() {
         {isOpen && (
           <Motion.div
             key="qra-open-layer"
-            className="pointer-events-none fixed inset-0 z-[44]"
+            className="pointer-events-none fixed inset-0 z-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

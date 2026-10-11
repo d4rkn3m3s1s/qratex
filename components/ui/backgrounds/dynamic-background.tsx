@@ -3,6 +3,7 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
+import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
 
 export type BackgroundVariant =
   | 'original'
@@ -94,6 +95,10 @@ export function DynamicBackground({
   const [isLoading, setIsLoading] = useState(() => Boolean(fetchFromApi && !propVariant));
   // Aktif dönemsel konseptin arka plan efekti (site geneli arka planı geçici olarak ezer).
   const [seasonalVariant, setSeasonalVariant] = useState<BackgroundVariant | null>(null);
+  // Hareket politikası (OS prefers-reduced-motion VEYA uygulama "Animasyonları azalt"): dekoratif
+  // zeminlerin hepsi sonsuz döngü (framer `repeat: Infinity` / canvas rAF) — azaltılmış harekette
+  // hiç yüklenmez ve çizilmez (tasarım raporu Y4; MotionConfig opaklık/blur döngülerini durdurmuyordu).
+  const reduceMotion = useReducedMotionPref();
 
   useEffect(() => {
     if (propVariant || !fetchFromApi) return;
@@ -142,6 +147,7 @@ export function DynamicBackground({
 
   const active = seasonalVariant ?? variant;
   const plain = <div className={className}>{children}</div>;
+  if (reduceMotion) return plain;
   if (active === 'grid' || active === 'dots') {
     return (
       <Suspense fallback={plain}>

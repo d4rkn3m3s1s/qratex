@@ -352,7 +352,7 @@ export function CharacterReveal({
           // olduğunda üst kısmı ERİŞİLEMEZ kılar (bilinen flexbox+scroll tuzağı).
           // Çözüm: dış kap sadece kaydırır; ortalama içteki `min-h-full flex` sarmalında,
           // çocukta `my-auto` ile yapılır → kısa içerik ortalanır, uzun içerik üstten kesilmez.
-          className="fixed inset-0 z-[60] overflow-y-auto backdrop-blur-xl"
+          className="fixed inset-0 z-toast overflow-y-auto backdrop-blur-xl"
           style={{
             // Kategori rengi + rarity ışığı birlikte katmanlanan koyu radyal overlay.
             background: `radial-gradient(120% 120% at 50% 30%, ${hexToRgba(theme.glow, revealed ? 0.2 : 0.1)} 0%, transparent 45%), radial-gradient(120% 120% at 50% 35%, ${hexToRgba(accent, 0.22)} 0%, rgba(6,8,18,0.9) 55%, rgba(2,4,10,0.96) 100%)`,
