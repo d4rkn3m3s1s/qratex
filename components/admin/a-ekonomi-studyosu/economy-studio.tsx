@@ -100,7 +100,11 @@ export function EconomyStudio({ initialTab, initial }: { initialTab: EconomyTab;
   });
 
   const sp = useSearchParams();
-  const active: EconomyTab = sp ? parseEconomyTab(sp.get('tab')) : initialTab;
+  const urlTab: EconomyTab = sp ? parseEconomyTab(sp.get('tab')) : initialTab;
+  // Sekme tıklanınca kaydet çubuğu da URL turunu beklemeden değişsin (SectionTabs iyimser).
+  const [pickedTab, setPickedTab] = React.useState<EconomyTab | null>(null);
+  React.useEffect(() => setPickedTab(null), [urlTab]);
+  const active: EconomyTab = pickedTab ?? urlTab;
 
   const matrixErrors = React.useMemo(() => (matrix.draft ? zodMessages(pointsMatrixSchema.safeParse(matrix.draft)) : []), [matrix.draft]);
   const multErrors = React.useMemo(() => (multipliers.draft ? zodMessages(multipliersSchema.safeParse(multipliers.draft)) : []), [multipliers.draft]);
@@ -135,6 +139,7 @@ export function EconomyStudio({ initialTab, initial }: { initialTab: EconomyTab;
       <SectionTabs
         ariaLabel="Ekonomi Stüdyosu bölümleri"
         defaultValue="matrix"
+        onValueChange={(v) => setPickedTab(parseEconomyTab(v))}
         tabs={[
           { value: 'matrix', label: dot(matrix.dirty, 'Puan matrisi'), icon: <Disc3 /> },
           { value: 'multipliers', label: dot(multipliers.dirty, 'Çarpan ve tavanlar'), icon: <Gauge /> },

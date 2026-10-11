@@ -316,7 +316,8 @@ function toRows(pos: GroupRow[], neg: GroupRow[]): FlowSourceRow[] {
   for (const g of pos) {
     rows.push({
       source: g.source,
-      label: sourceLabel(g.source),
+      // Düzeltme/transfer iki yönde de aynı türdür → aynı kaynak iki satır olur; yönü etikette göster.
+      label: classifySource(g.source, 1) === 'mint' ? sourceLabel(g.source) : `${sourceLabel(g.source)} (+)`,
       kind: classifySource(g.source, 1),
       points: g._sum.delta ?? 0,
       count: g._count._all,
@@ -327,7 +328,7 @@ function toRows(pos: GroupRow[], neg: GroupRow[]): FlowSourceRow[] {
     const kind = classifySource(g.source, -1);
     rows.push({
       source: g.source,
-      label: sourceLabel(g.source),
+      label: kind === 'sink' ? sourceLabel(g.source) : `${sourceLabel(g.source)} (−)`,
       kind,
       points: Math.abs(g._sum.delta ?? 0),
       count: g._count._all,

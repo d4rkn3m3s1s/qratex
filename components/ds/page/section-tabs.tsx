@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '@/lib/utils';
 import { usePageCopy } from './copy';
@@ -124,9 +124,17 @@ function SectionTabsUrl({
 }: SectionTabsProps & { defaultValue: string }) {
   const url = useUrlState();
   const { set } = url;
-  const value = resolveValue(rest.tabs, url.get(paramKey), defaultValue);
+  const urlValue = resolveValue(rest.tabs, url.get(paramKey), defaultValue);
+  // İyimser seçim: router.replace bir RSC turunu bekler (yavaş sunucuda saniyeler sürer ve
+  // sekme "tıklanmıyor" gibi görünür). Sekme tıklandığı an değişir; URL yetişince bırakılır.
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  useEffect(() => {
+    setOptimistic(null);
+  }, [urlValue]);
+  const value = optimistic ?? urlValue;
   const onValueChange = useCallback(
     (next: string) => {
+      setOptimistic(next);
       set({ [paramKey]: next === defaultValue ? null : next }, { resetKeys });
       notify?.(next);
     },

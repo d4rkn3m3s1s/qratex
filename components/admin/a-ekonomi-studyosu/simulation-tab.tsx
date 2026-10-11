@@ -148,10 +148,10 @@ export default function SimulationTab({
                     </tr>
                   </thead>
                   <tbody>
-                    {f.bySource.map((r) => {
+                    {f.bySource.map((r, i) => {
                       const denom = r.kind === 'sink' ? f.spent : f.minted;
                       return (
-                        <tr key={`${r.kind}-${r.source}`} className="qx-small border-b border-subtle last:border-0">
+                        <tr key={`${r.kind}-${r.source}-${i}`} className="qx-small border-b border-subtle last:border-0">
                           <th scope="row" className="px-4 py-2.5 font-medium">{r.label}</th>
                           <td className={cn('px-4 py-2.5', r.kind === 'sink' ? 'text-success' : r.kind === 'mint' ? 'text-fg' : 'text-fg-muted')}>{KIND_LABEL[r.kind]}</td>
                           <td className="qx-num px-4 py-2.5 text-right">{fmtInt(r.count)}</td>
