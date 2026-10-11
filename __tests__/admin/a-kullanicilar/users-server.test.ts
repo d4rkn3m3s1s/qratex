@@ -23,6 +23,7 @@ const notifications: Row[] = [];
 let reward: Row | null = null;
 const userBadges = new Map<string, Row>();
 const staffUpdates: Row[] = [];
+const userRewardCreates: Row[] = [];
 
 function matchUser(u: Row, where: Row): boolean {
   for (const [k, v] of Object.entries(where)) {
@@ -94,8 +95,12 @@ const tx = {
       reward.stock = Number(reward.stock) - 1;
       return { count: 1 };
     }),
+    update: jest.fn(async ({ data }: { data: Row }) => {
+      if (reward) Object.assign(reward, data);
+      return { ...reward };
+    }),
   },
-  userReward: { create: jest.fn(async () => ({ id: 'ur1' })) },
+  userReward: { create: jest.fn(async ({ data }: { data: Row }) => (userRewardCreates.push(data), { id: 'ur1' })) },
   userBadge: {
     findUnique: jest.fn(async ({ where }: { where: { userId_badgeId: { userId: string; badgeId: string } } }) =>
       userBadges.get(`${where.userId_badgeId.userId}:${where.userId_badgeId.badgeId}`) ?? null
@@ -256,6 +261,30 @@ describe('ödül ve rozet', () => {
     expect(audits.filter((a) => a.action === 'grant_reward')).toHaveLength(1);
     // Kod bildirim gövdesine yazılmaz.
     expect(JSON.stringify(notifications)).not.toMatch(/GIFT-/);
+  });
+
+  it('kod havuzlu partner kuponu: hediye havuzdan sıradaki kodu alır; boş havuz 409; kendine hediye yok', async () => {
+    userRewardCreates.length = 0;
+    reward = {
+      id: 'r2',
+      name: 'Partner',
+      type: 'coupon',
+      stock: 2,
+      isActive: true,
+      archivedAt: null,
+      metadata: { codePoolEnabled: true, codePool: ['PARTNER-1', 'PARTNER-2'] },
+    };
+    await grantReward(ctx('admin1'), 'c1', { rewardId: 'r2' });
+    expect(userRewardCreates[0]).toMatchObject({ code: 'PARTNER-1' });
+    expect((reward.metadata as Row).codePool).toEqual(['PARTNER-2']);
+    expect(reward.stock).toBe(1);
+
+    // Stok var ama havuz boş (senkron dışı): sahte GIFT- kodu üretilmez.
+    reward = { ...reward, stock: 1, metadata: { codePoolEnabled: true, codePool: [] } };
+    await expect(grantReward(ctx('admin1'), 'c1', { rewardId: 'r2' })).rejects.toThrow('kod havuzu');
+    expect(userRewardCreates).toHaveLength(1);
+
+    await expect(grantReward(ctx('admin1'), 'admin1', { rewardId: 'r2' })).rejects.toThrow('Kendinize');
   });
 
   it('rozet geri alma: vitrindeki karakter rozeti temizlenir ve denetime yazılır', async () => {

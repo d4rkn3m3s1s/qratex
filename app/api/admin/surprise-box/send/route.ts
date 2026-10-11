@@ -200,13 +200,21 @@ export async function POST(req: NextRequest) {
     type TxResult =
       | { kind: 'sent'; count: number }
       | { kind: 'duplicate'; count: number }
-      | { kind: 'over_budget'; remaining: number };
+      | { kind: 'over_budget'; remaining: number }
+      | { kind: 'foreign_campaign' };
 
     const result: TxResult = await prisma.$transaction(async (tx) => {
       // Aynı gönderen için gönderimler sıraya girer: bütçe okuması + yazım yarışsız.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`surprise-box-send:${senderId}`}))`;
 
       if (input.requestId) {
+        // Kampanya kimliği istemciden gelir: başka bir yöneticinin kampanyasıyla çakışırsa
+        // kutular o kampanyaya karışır (liste/geri çekme ikisini birlikte etkiler) → reddet.
+        const foreign = await tx.userSurpriseBox.findFirst({
+          where: { dayKey: null, sentByUserId: { not: senderId }, metadata: { path: ['campaignId'], equals: campaignId } },
+          select: { id: true },
+        });
+        if (foreign) return { kind: 'foreign_campaign' };
         const existing = await tx.userSurpriseBox.count({
           where: { sentByUserId: senderId, metadata: { path: ['campaignId'], equals: campaignId } },
         });
@@ -274,6 +282,13 @@ export async function POST(req: NextRequest) {
 
       return { kind: 'sent', count: created.count };
     });
+
+    if (result.kind === 'foreign_campaign') {
+      return json(
+        { success: false, code: 'CAMPAIGN_ID_CONFLICT', error: 'Bu kampanya kimliği başka bir yöneticiye ait. Formu yenileyip tekrar gönderin.' },
+        409
+      );
+    }
 
     if (result.kind === 'over_budget') {
       return json(

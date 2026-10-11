@@ -23,7 +23,8 @@ export function BadgesTab({ user: u, onChanged }: { user: User360; onChanged: ()
   return (
     <div className="space-y-6">
       <EarnedBadges userId={u.identity.id} locked={locked} onChanged={onChanged} />
-      <Rewards userId={u.identity.id} locked={locked} onChanged={onChanged} />
+      {/* Kendine ödül hediyesi sunucuda reddedilir (puan düzeltmesindeki kural); düğme de gösterilmez. */}
+      <Rewards userId={u.identity.id} locked={locked || u.isSelf} onChanged={onChanged} />
     </div>
   );
 }

@@ -18,6 +18,7 @@ const tx = {
   $queryRaw: jest.fn(async () => []),
   userSurpriseBox: {
     count: jest.fn(async () => 0),
+    findFirst: jest.fn(async (): Promise<{ id: string } | null> => null),
     aggregate: jest.fn(async () => ({ _sum: { points: 0 } })),
     createMany: jest.fn(async ({ data }: { data: unknown[] }) => ({ count: data.length })),
   },
@@ -146,5 +147,21 @@ describe('iki adımlı onay + audit', () => {
     expect(r.body.data.duplicate).toBe(true);
     expect(tx.userSurpriseBox.createMany).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('başka yöneticinin kampanya kimliğiyle gönderim 409; kutular o kampanyaya karışmaz', async () => {
+    tx.userSurpriseBox.findFirst.mockResolvedValueOnce({ id: 'box-of-admin2' });
+    const r = await send({
+      title: 'Hediye',
+      points: 300,
+      email: 'ayse@ornek.com',
+      confirm: { recipientCount: 1, totalPoints: 300 },
+      requestId: 'camp_12345678',
+    });
+    expect(r.status).toBe(409);
+    expect(r.body.code).toBe('CAMPAIGN_ID_CONFLICT');
+    expect(tx.userSurpriseBox.createMany).not.toHaveBeenCalled();
+    const where = (tx.userSurpriseBox.findFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
+    expect(where.sentByUserId).toEqual({ not: 'admin1' });
   });
 });

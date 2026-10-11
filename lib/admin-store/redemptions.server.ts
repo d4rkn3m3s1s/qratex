@@ -54,10 +54,21 @@ type Row = {
 
 /**
  * Talebin ödendiği defter satırı: aynı tx'te yazılan `source='reward'`, aynı kullanıcı ve ödül,
- * zamanı talebe en yakın borç. Bulunamazsa (admin hediyesi) 0.
+ * zamanı talebe en yakın borç. Bulunamazsa 0.
+ *
+ * Admin hediyesi (`grant_reward` denetim kaydı olan talep) HİÇ ödenmemiştir → eşleştirmeye
+ * katılmaz. Aksi hâlde aynı kullanıcı aynı ödülü hediyeden ±60 sn içinde satın aldıysa hediye
+ * satırı o borcu "ödeme" sanıyor, hediyenin iptali karşılığı olmayan puan basıyordu.
  */
 async function paidFor(rows: Row[], db: Prisma.TransactionClient | typeof prisma = prisma): Promise<Map<string, number>> {
   const out = new Map<string, number>();
+  if (rows.length === 0) return out;
+  const gifts = await db.auditLog.findMany({
+    where: { action: 'grant_reward', entity: 'user_reward', entityId: { in: rows.map((r) => r.id) } },
+    select: { entityId: true },
+  });
+  const giftIds = new Set(gifts.map((g) => g.entityId).filter((x): x is string => !!x));
+  rows = rows.filter((r) => !giftIds.has(r.id));
   if (rows.length === 0) return out;
   const min = new Date(Math.min(...rows.map((r) => r.redeemedAt.getTime())) - 60_000);
   const max = new Date(Math.max(...rows.map((r) => r.redeemedAt.getTime())) + 5_000);

@@ -20,6 +20,7 @@ import { invalidateSessionState } from '@/lib/auth/session-state';
 import { auditEntry, type AuditActor } from '@/lib/data-safety/audit';
 import { previewUserErasure } from '@/lib/data-safety/user-erasure';
 import { anonymizeUser } from '@/lib/gdpr-core';
+import { takePoolCode } from '@/lib/admin-store/code-pool';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import {
   REASON_CODE_LABELS,
@@ -404,6 +405,9 @@ export function generateGiftCode(): string {
 export async function grantReward(ctx: ActionCtx, userId: string, input: { rewardId: string; note?: string }) {
   const target = await loadTarget(userId);
   assertNotAnonymized(target);
+  // Puan düzeltmesindeki "kendi bakiyesine dokunamaz" kuralının ödül karşılığı: yönetici
+  // kendine (puan karşılığı olan) ödül hediye edemez.
+  if (target.id === ctx.actor.id) throw new ApiError('FORBIDDEN', 'Kendinize ödül hediye edemezsiniz.');
   const out = await prisma.$transaction(async (tx) => {
     const reward = await tx.reward.findUnique({
       where: { id: input.rewardId },
@@ -419,7 +423,11 @@ export async function grantReward(ctx: ActionCtx, userId: string, input: { rewar
       });
       if (w.count !== 1) throw new ApiError('CONFLICT', 'Ödülün stoğu tükendi.', { status: 409 });
     }
-    const code = reward.type === 'coupon' ? generateGiftCode() : null;
+    // Partner kod havuzu açıksa kod havuzdan gelir (satır yukarıdaki koşullu yazımla kilitli):
+    // aksi hâlde partnerin tanımadığı sahte GIFT- kodu verilir ve stok havuzdan kopardı.
+    const pooled = await takePoolCode(tx, reward.id);
+    if (pooled.exhausted) throw new ApiError('CONFLICT', 'Ödülün kod havuzu boş; önce kod ekleyin.', { status: 409 });
+    const code = pooled.code ?? (reward.type === 'coupon' ? generateGiftCode() : null);
     const ur = await tx.userReward.create({
       data: { userId, rewardId: reward.id, code },
       select: { id: true },

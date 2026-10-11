@@ -255,6 +255,22 @@ describe('talep iptali + iade (B12)', () => {
     expect(mockMint).not.toHaveBeenCalled();
     expect(db.reward.update).not.toHaveBeenCalled();
   });
+
+  it('admin hediyesi, aynı ödülün yakın zamanlı satın alma borcunu "ödeme" sanıp puan basmaz', async () => {
+    db.userReward.findUnique.mockResolvedValue(ur);
+    db.userReward.updateMany.mockResolvedValue({ count: 1 });
+    // Aynı kullanıcı aynı ödülü hediyeden 50 ms önce kendi puanıyla almış (başka talep satırı).
+    db.pointsLedger.findMany.mockImplementation(async (args: { where: { source?: string } }) =>
+      args.where.source === 'reward' ? [{ id: 'l1', userId: 'u1', sourceId: 'r1', delta: -500, createdAt: new Date(T0.getTime() - 50) }] : []
+    );
+    db.auditLog.findMany.mockImplementation(async (args: { where: { action?: string } }) =>
+      args.where.action === 'grant_reward' ? [{ entityId: 'ur1' }] : []
+    );
+    db.reward.findUnique.mockResolvedValue({ stock: 3, metadata: null });
+    await redemptionAction('ur1', { action: 'cancel', reason: 'Yanlış hediye' }, ACTOR, null);
+    expect(mockMint).not.toHaveBeenCalled();
+    expect(db.auditLog.create.mock.calls[0][0].data.newData).toMatchObject({ paidPoints: 0, refundedPoints: 0 });
+  });
 });
 
 describe('kozmetik', () => {
