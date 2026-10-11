@@ -14,23 +14,27 @@ export const GAMIFICATION_SETTINGS_TAG = 'gamification-settings';
 export interface GamificationMultipliers {
   xpMultiplier: number;
   pointMultiplier: number;
-  dailyXpCap: number;
 }
 
-const DEFAULTS: GamificationMultipliers = { xpMultiplier: 1, pointMultiplier: 1, dailyXpCap: 5000 };
+/**
+ * `GamificationSettings.dailyXpCap` bilerek OKUNMAZ: hiçbir yolda uygulanmıyordu (write-only
+ * ayar) ve Ekonomi Stüdyosu'ndan da kaldırıldı. XP üst sınırı puan tavanlarından gelir —
+ * tekrarlanabilir kaynaklarda (geri bildirim, oyun, bayi pasif, telafi) XP puanla AYNI oranda
+ * kısılır (lib/economy/mint.ts adım 3); tavansız kaynaklar tek seferliktir (rozet, görev, davet).
+ */
+const DEFAULTS: GamificationMultipliers = { xpMultiplier: 1, pointMultiplier: 1 };
 
 export const getGamificationMultipliers = unstable_cache(
   async (): Promise<GamificationMultipliers> => {
     try {
       const row = await prisma.gamificationSettings.findFirst({
-        select: { xpMultiplier: true, pointMultiplier: true, dailyXpCap: true },
+        select: { xpMultiplier: true, pointMultiplier: true },
         orderBy: { updatedAt: 'desc' },
       });
       if (!row) return DEFAULTS;
       return {
         xpMultiplier: row.xpMultiplier > 0 ? row.xpMultiplier : 1,
         pointMultiplier: row.pointMultiplier > 0 ? row.pointMultiplier : 1,
-        dailyXpCap: row.dailyXpCap > 0 ? row.dailyXpCap : DEFAULTS.dailyXpCap,
       };
     } catch {
       return DEFAULTS;
