@@ -96,6 +96,8 @@ export function TeamWorkspace(props: TeamWorkspaceProps) {
 }
 
 function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamWorkspaceProps) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const url = useUrlState();
@@ -239,7 +241,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             <SelectItem value="priority">{tx.byPriority}</SelectItem>
             <SelectItem value="due">{tx.byDue}</SelectItem>
             <SelectItem value="updated">{tx.byUpdated}</SelectItem>
-            <SelectItem value="created">En yeni</SelectItem>
+            <SelectItem value="created">{tv.enYeni}</SelectItem>
             <SelectItem value="title">{tx.byTitle}</SelectItem>
             <SelectItem value="spent">{tx.bySpent}</SelectItem>
           </SelectContent>
@@ -251,7 +253,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Gruplama yok</SelectItem>
+            <SelectItem value="none">{tv.gruplamaYok}</SelectItem>
             <SelectItem value="status">{tx.byStatus}</SelectItem>
             <SelectItem value="assignee">{tx.byAssignee}</SelectItem>
             <SelectItem value="priority">{tx.byPriority}</SelectItem>
@@ -276,7 +278,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Yapay zekâ</DropdownMenuLabel>
+        <DropdownMenuLabel>{tf.aiGroup}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => setDialog('ask')}>
           <Bot className="mr-2 h-4 w-4" aria-hidden /> AI'ya sor
         </DropdownMenuItem>
@@ -317,7 +319,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
             disabled={items.length === 0}
             onSelect={() => {
               downloadCsv(`ekip-gorevleri-${tab === 'archive' ? 'arsiv' : weekKey}.csv`, tasksToCsv(items, departments));
-              toast.success(`${items.length} görev dışa aktarıldı`);
+              toast.success(tf.exported(items.length));
             }}
           >
             <Download className="mr-2 h-4 w-4" aria-hidden /> {tu.gorunenGorevleriCsvIndir}
@@ -408,7 +410,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
                     action:
                       filters.activeCount > 0 ? (
                         <Button variant="outline" onClick={filters.clear}>
-                          Filtreleri temizle
+                          {tv.filtreleriTemizle}
                         </Button>
                       ) : can.createTask && tab !== 'archive' ? (
                         <Button onClick={() => setDialog('new')}>{tx.newTask}</Button>
@@ -422,7 +424,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
                       )}
                       {tab !== 'archive' && (tasks.data?.carriedCount ?? 0) > 0 && (
                         <p className="qx-caption text-fg-muted">
-                          {tasks.data!.carriedCount} açık görev önceki haftalardan devretti (kartta “Devreden” rozetiyle).
+                          {tf.carried(tasks.data!.carriedCount)}
                         </p>
                       )}
                       {tab === 'board' && (
@@ -488,7 +490,7 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
           confirmLabel={tu.gorevleriUret}
           onConfirm={async () => {
             const r = await teamFetch<{ total: number }>(`${API}/autotask`, { method: 'POST', json: { weekKey } });
-            toast.success(r.total > 0 ? `${r.total} görev üretildi` : tu.yeniKaynakBulunamadi);
+            toast.success(r.total > 0 ? tf.generated(r.total) : tu.yeniKaynakBulunamadi);
             invalidateTasks(qc);
             setDialog(null);
           }}

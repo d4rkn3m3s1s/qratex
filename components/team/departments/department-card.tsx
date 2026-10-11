@@ -51,6 +51,7 @@ export function DepartmentCard({
   manage: boolean;
   onShowMembers: () => void;
 }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
@@ -84,7 +85,7 @@ export function DepartmentCard({
         {manage && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <IconButton aria-label={`${dept.name} için işlemler`} icon={<MoreHorizontal />} size="sm" />
+              <IconButton aria-label={tf.actionsFor(dept.name)} icon={<MoreHorizontal />} size="sm" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onSelect={() => setEditOpen(true)}>
@@ -116,7 +117,7 @@ export function DepartmentCard({
           <span className="qx-num font-semibold text-fg">{dept.openTaskCount}</span> {tu.acikGorev}
         </span>
         {leads.length > 0 ? (
-          <span>Yönetici: {leads.map((l) => displayName(l)).join(', ')}</span>
+          <span>{tf.managersList(leads.map((l) => displayName(l)).join(', '))}</span>
         ) : (
           dept.isActive && <span className="text-warning">{tx.noManager}</span>
         )}
@@ -142,6 +143,7 @@ export function DepartmentCard({
 }
 
 function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose: () => void; onSaved: () => void }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [name, setName] = useState(dept.name);
@@ -179,7 +181,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
           }}
         >
           <label className="qx-small block space-y-1">
-            <span className="font-medium text-fg">Ad</span>
+            <span className="font-medium text-fg">{tv.ad}</span>
             <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} required />
           </label>
           <label className="qx-small block space-y-1">
@@ -205,7 +207,7 @@ function EditDialog({ dept, onClose, onSaved }: { dept: TeamDepartment; onClose:
               {tu.vazgec}
             </Button>
             <Button type="submit" disabled={busy || name.trim().length < 2}>
-              Kaydet
+              {tv.kaydet}
             </Button>
           </DialogFooter>
         </form>

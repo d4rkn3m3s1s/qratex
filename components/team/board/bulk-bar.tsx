@@ -24,6 +24,8 @@ type Result = { affected: number; skipped: Array<{ id: string; title: string; re
  * arşiv görünümünde ve tipli onayla (denetim Bulgu 41: onaysız 200 göreve kadar siliyordu).
  */
 export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveView: boolean; onDone: () => void }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
@@ -38,7 +40,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
       const res = await teamFetch<Result>(`${API}/tasks/bulk`, { method: 'POST', json: { ids, action } });
       const skipped = res.skipped.filter((s) => s.title);
       if (skipped.length > 0) {
-        toast.warning(`${res.affected} görev güncellendi, ${skipped.length} atlandı`, {
+        toast.warning(tf.bulkUpdatedSkipped(res.affected, skipped.length), {
           description: skipped
             .slice(0, 4)
             .map((s) => `• ${s.title}: ${s.reason}`)
@@ -46,7 +48,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
           duration: 9000,
         });
       } else {
-        toast.success(`${res.affected} görev güncellendi`);
+        toast.success(tf.bulkUpdated(res.affected));
       }
       invalidateTasks(qc);
       onDone();
@@ -62,11 +64,11 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
   return (
     <div
       role="toolbar"
-      aria-label={`${ids.length} görev seçili — toplu işlemler`}
+      aria-label={tf.bulkToolbar(ids.length)}
       className="sticky bottom-3 z-sticky flex flex-wrap items-center gap-2 rounded-card border border-strong bg-surface-1 p-2 qx-elevation-2"
     >
       <span className="qx-small qx-num px-1 font-semibold text-fg" aria-live="polite">
-        {ids.length} seçili
+        {tf.selectedCount(ids.length)}
       </span>
       {!archiveView ? (
         <>
@@ -138,7 +140,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
               >
                 <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="etiket" aria-label={tu.eklenecekEtiket} maxLength={40} />
                 <Button type="submit" size="sm" disabled={!tag.trim() || busy}>
-                  Ekle
+                  {tv.ekle}
                 </Button>
               </form>
             </PopoverContent>
@@ -163,7 +165,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
       <ConfirmAction
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`${ids.length} görev kalıcı olarak silinsin mi?`}
+        title={tf.bulkDeleteTitle(ids.length)}
         description={tu.yorumlarAltGorevlerDosyalar}
         impact={[{ label: tu.silinecekGorev, value: ids.length, emphasis: true }]}
         confirmPhrase="sil"

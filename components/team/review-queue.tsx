@@ -21,6 +21,7 @@ import { useTeamCopy } from './copy';
  * + sağda kanıtla birlikte detay; klavye: J/K gez, A onayla, R revizyon iste.
  */
 export function ReviewQueue() {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { openTask, weekKey } = useWorkspace();
   const q = useTasks({ view: 'review' });
@@ -58,8 +59,8 @@ export function ReviewQueue() {
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <div className="space-y-2">
             <p className="qx-caption text-fg-muted">
-              {items.length} görev onay bekliyor · <kbd className="rounded border border-subtle px-1">J</kbd>/<kbd className="rounded border border-subtle px-1">K</kbd> gez,{' '}
-              <kbd className="rounded border border-subtle px-1">A</kbd> onayla, <kbd className="rounded border border-subtle px-1">R</kbd> revizyon
+              {tf.reviewWaiting(items.length)} <kbd className="rounded border border-subtle px-1">J</kbd>/<kbd className="rounded border border-subtle px-1">K</kbd> {tf.kbNav}{' '}
+              <kbd className="rounded border border-subtle px-1">A</kbd> {tf.kbApprove} <kbd className="rounded border border-subtle px-1">R</kbd> {tf.kbRevise}
             </p>
             <ul className="space-y-2" aria-label={tu.onayKuyrugu}>
               {items.map((t) => {
@@ -118,7 +119,7 @@ export function ReviewQueue() {
             open={!!rejecting}
             onOpenChange={(o) => !o && setRejecting(null)}
             title={tu.revizyonIste}
-            description={rejecting ? `"${rejecting.title}" görevi düzeltme için geri döner.` : undefined}
+            description={rejecting ? tf.sendBackGeneric(rejecting.title) : undefined}
             label={tu.neDuzeltilmeli}
             quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
             confirmLabel={tu.revizyonaGonder}

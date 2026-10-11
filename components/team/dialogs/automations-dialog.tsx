@@ -36,19 +36,6 @@ type Rule = {
   lastError: string | null;
 };
 
-const TRIGGERS: Record<string, string> = {
-  status_changed: 'Durum değişince',
-  assigned: 'Birine atanınca',
-  created: 'Görev oluşunca',
-  overdue: 'Bitiş günü geçince',
-};
-const ACTIONS: Record<string, string> = {
-  notify: 'Yöneticilere bildir',
-  add_tag: 'Etiket ekle',
-  set_priority: 'Öncelik ata',
-  assign: 'Kişiye ata',
-  set_status: 'Durum değiştir',
-};
 const SET_STATUS_TARGETS = ['todo', 'in_progress', 'review'] as const;
 
 const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '', actionType: 'notify', actionValue: '', department: '' };
@@ -59,6 +46,8 @@ const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '
  * görevi "Bitti"ye geçiremez — onay yöneticidedir. Son 30 günün çalışma/hata sayısı görünür.
  */
 export default function AutomationsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
@@ -127,7 +116,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__any">Herhangi bir duruma</SelectItem>
+          <SelectItem value="__any">{tv.herhangiBirDuruma}</SelectItem>
           {TASK_STATUSES.map((s) => (
             <SelectItem key={s} value={s}>
               {STATUS_META[s].label}
@@ -141,7 +130,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__any">Herhangi birine</SelectItem>
+          <SelectItem value="__any">{tv.herhangiBirine}</SelectItem>
           {team.map((m) => (
             <SelectItem key={m.id} value={m.id}>
               {displayName(m)}
@@ -213,24 +202,24 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
             <ul className="space-y-2">
               {d.items.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-start gap-3 rounded-card border border-subtle p-3">
-                  <Switch checked={r.enabled} onCheckedChange={(v) => void toggle(r, v)} aria-label={`${r.name} kuralı ${r.enabled ? 'açık' : 'kapalı'}`} className="mt-0.5" />
+                  <Switch checked={r.enabled} onCheckedChange={(v) => void toggle(r, v)} aria-label={tf.ruleToggle(r.name, r.enabled)} className="mt-0.5" />
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="qx-small font-semibold text-fg">{r.name}</p>
                     <p className="qx-caption text-fg-muted">
-                      {TRIGGERS[r.triggerType] ?? r.triggerType}
-                      {r.triggerValue ? ` (${valueLabel(r.triggerType, r.triggerValue)})` : ''} → {ACTIONS[r.actionType] ?? r.actionType}
+                      {tf.triggers[r.triggerType] ?? r.triggerType}
+                      {r.triggerValue ? ` (${valueLabel(r.triggerType, r.triggerValue)})` : ''} → {tf.actions[r.actionType] ?? r.actionType}
                       {r.actionValue ? ` (${valueLabel(r.actionType, r.actionValue)})` : ''}
-                      {r.department ? ` · ${departments.find((x) => x.slug === r.department)?.name ?? 'kaldırılmış departman'}` : ''}
+                      {r.department ? ` · ${departments.find((x) => x.slug === r.department)?.name ?? tf.removedDept}` : ''}
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusBadge label={`30 günde ${r.runs30d} çalışma`} tone="neutral" icon={null} size="sm" />
+                      <StatusBadge label={tf.runs30d(r.runs30d)} tone="neutral" icon={null} size="sm" />
                       {r.errors30d > 0 && <StatusBadge label={`${r.errors30d} hata`} tone="danger" size="sm" title={r.lastError ?? undefined} />}
                       {r.lastRunAt && <span className="qx-caption text-fg-muted">son: {relativeTeamTime(r.lastRunAt)}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1">
                     <IconButton
-                      aria-label={`${r.name} kuralını düzenle`}
+                      aria-label={tf.editRule(r.name)}
                       icon={<Pencil />}
                       size="sm"
                       onClick={() =>
@@ -245,7 +234,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
                         })
                       }
                     />
-                    <IconButton aria-label={`${r.name} kuralını sil`} icon={<Trash2 />} size="sm" onClick={() => setDeleting(r)} />
+                    <IconButton aria-label={tf.deleteRule(r.name)} icon={<Trash2 />} size="sm" onClick={() => setDeleting(r)} />
                   </div>
                 </li>
               ))}
@@ -268,7 +257,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(TRIGGERS).map(([k, v]) => (
+                {Object.entries(tf.triggers).map(([k, v]) => (
                   <SelectItem key={k} value={k}>
                     {v}
                   </SelectItem>
@@ -281,7 +270,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ACTIONS).map(([k, v]) => (
+                {Object.entries(tf.actions).map(([k, v]) => (
                   <SelectItem key={k} value={k}>
                     {v}
                   </SelectItem>

@@ -49,10 +49,11 @@ export function PhaseBadge({ phase, size = 'sm' }: { phase: string; size?: 'sm' 
 }
 
 export function DueBadge({ dueAt, done, size = 'sm' }: { dueAt: string | null; done: boolean; size?: 'sm' | 'md' }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const info = dueInfo(dueAt, done);
   if (!info) return null;
-  return <StatusBadge label={info.label} tone={info.tone} icon={Clock3} size={size} srPrefix={tu.bitis} title={`Bitiş günü: ${info.day}`} />;
+  return <StatusBadge label={info.label} tone={info.tone} icon={Clock3} size={size} srPrefix={tu.bitis} title={tf.dueDay(info.day)} />;
 }
 
 export function MemberAvatar({
@@ -104,6 +105,7 @@ export function TagChips({
   onPick?: (tag: string) => void;
   max?: number;
 }) {
+  const tf = useTeamCopy().fx;
   const tags = parseTags(csv);
   if (tags.length === 0) return null;
   const shown = tags.slice(0, max);
@@ -128,7 +130,7 @@ export function TagChips({
               onPick(t);
             }}
             className={cn(cls, 'hit-area hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
-            aria-label={`#${t} etiketine göre filtrele`}
+            aria-label={tf.filterByTag(t)}
           >
             {inner}
           </button>

@@ -29,6 +29,7 @@ import { useTeamCopy } from '../copy';
  * Y7/Bulgu 14: kopyala/arşivle/sil yalnız hover ile görünüyordu, masaüstünde klavye taşıması yoktu).
  */
 export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequired?: (id: string) => void }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { teamViewer, can, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired, weekKey });
@@ -42,7 +43,7 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton aria-label={`${task.title} için işlemler`} icon={<MoreHorizontal />} size="sm" data-row-click-ignore onClick={(e) => e.stopPropagation()} />
+          <IconButton aria-label={tf.actionsFor(task.title)} icon={<MoreHorizontal />} size="sm" data-row-click-ignore onClick={(e) => e.stopPropagation()} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuLabel className="truncate">{task.title}</DropdownMenuLabel>
@@ -103,7 +104,7 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
         open={rejectOpen}
         onOpenChange={setRejectOpen}
         title={tu.revizyonIste}
-        description={`"${task.title}" görevi düzeltme için üyeye geri döner.`}
+        description={tf.sendBackDescMember(task.title)}
         label={tu.neDuzeltilmeli}
         quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
         confirmLabel={tu.revizyonaGonder}

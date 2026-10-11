@@ -29,6 +29,7 @@ export function KanbanView({
   onToggleSelect: (id: string) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { teamViewer, openTask, weekKey } = useWorkspace();
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
@@ -93,7 +94,7 @@ export function KanbanView({
                 <Icon className="h-4 w-4 text-fg-muted" aria-hidden />
                 {STATUS_META[col].label}
               </h3>
-              <span className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted" aria-label={`${items.length} görev`}>
+              <span className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted" aria-label={tf.taskCount(items.length)}>
                 {items.length}
               </span>
             </header>

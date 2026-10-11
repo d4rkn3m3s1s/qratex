@@ -41,6 +41,7 @@ const TYPES = [
  * (eski sınır 300 kayıttı). Dosya görevin içine götürür.
  */
 export function FilesView() {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { openTask } = useWorkspace();
   const [text, setText] = useState('');
@@ -65,7 +66,7 @@ export function FilesView() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
           <Input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={tu.dosyaYaDaGorev} aria-label={tu.dosyaAra} className="h-11 pl-9" />
         </div>
-        <ChoiceChips aria-label={tu.dosyaTuru} options={TYPES.map((t) => ({ value: t.value, label: t.label }))} value={type} onChange={(v) => setType(v ?? 'all')} size="sm" scroll />
+        <ChoiceChips aria-label={tu.dosyaTuru} options={TYPES.map((t) => ({ value: t.value, label: tf.fileTypes[t.value] ?? t.label }))} value={type} onChange={(v) => setType(v ?? 'all')} size="sm" scroll />
         {stats && (
           <span className="qx-caption qx-num text-fg-muted sm:ml-auto">
             {stats.count} dosya · {formatBytes(stats.totalSize)}
@@ -85,7 +86,7 @@ export function FilesView() {
                 const image = f.mime.startsWith('image/');
                 return (
                   <li key={f.id} className="flex gap-3 rounded-card border border-subtle bg-surface-1 p-2">
-                    <a href={f.path} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${f.filename} dosyasını aç`}>
+                    <a href={f.path} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={tf.openFile(f.filename)}>
                       {image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={f.path} alt="" loading="lazy" className="h-14 w-14 rounded-control object-cover" />

@@ -41,6 +41,7 @@ function Row({ label, children, htmlFor }: { label: string; children: React.Reac
  * durum ve süre kaydı kendi görevinde açıktır.
  */
 export function TaskProperties({ data }: { data: TaskDetailPayload }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
@@ -153,7 +154,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
         ) : task.department ? (
           <DeptChip slug={task.department} departments={departments} />
         ) : (
-          <span className="qx-small text-fg-muted">Genel</span>
+          <span className="qx-small text-fg-muted">{tv.genel}</span>
         )}
       </Row>
       <Row label={tu.bitis} htmlFor={edit ? ids.due : undefined}>
@@ -171,7 +172,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
         ) : task.dueAt ? (
           <DueBadge dueAt={task.dueAt} done={task.status === 'done'} size="md" />
         ) : (
-          <span className="qx-small text-fg-muted">Yok</span>
+          <span className="qx-small text-fg-muted">{tv.yok}</span>
         )}
       </Row>
       <Row label={tu.hafta}>
@@ -246,9 +247,9 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">Tekrarlanmaz</SelectItem>
-              <SelectItem value="weekly">Her hafta</SelectItem>
-              <SelectItem value="monthly">Her ay</SelectItem>
+              <SelectItem value="__none">{tv.tekrarlanmaz}</SelectItem>
+              <SelectItem value="weekly">{tv.herHafta}</SelectItem>
+              <SelectItem value="monthly">{tv.herAy}</SelectItem>
             </SelectContent>
           </Select>
         ) : (
@@ -278,7 +279,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
         ) : task.tags ? (
           <TagChips csv={task.tags} pool={tags} max={8} />
         ) : (
-          <span className="qx-small text-fg-muted">Yok</span>
+          <span className="qx-small text-fg-muted">{tv.yok}</span>
         )}
       </Row>
       <Row label={tu.bagimlilik}>
@@ -299,6 +300,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
 }
 
 function DependencyField({ data, editable }: { data: TaskDetailPayload; editable: boolean }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task } = data;
@@ -327,7 +329,7 @@ function DependencyField({ data, editable }: { data: TaskDetailPayload; editable
           <TaskStatusBadge status={task.blockedBy.status} />
         </span>
       ) : (
-        <span className="qx-small text-fg-muted">Yok</span>
+        <span className="qx-small text-fg-muted">{tv.yok}</span>
       )}
       {editable && task.blockedBy && (
         <IconButton aria-label={tu.bagimliligiKaldir} icon={<X />} size="sm" onClick={() => void actions.update(task.id, { blockedById: null }, tu.bagimlilikKaldirildi)} />

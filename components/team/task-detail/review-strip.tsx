@@ -18,6 +18,7 @@ import { useTeamCopy } from '../copy';
  * gösterilir ("1 not · 0 dosya").
  */
 export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, proof, can } = data;
@@ -46,7 +47,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
   if (task.status === 'review') {
     tone = 'info';
     title = `Onay bekliyor${task.submittedForReviewAt ? ` · ${relativeTeamTime(task.submittedForReviewAt)}` : ''}`;
-    body = <span className="qx-small">Kanıt: {proofText}</span>;
+    body = <span className="qx-small">{tf.proof} {proofText}</span>;
     if (can.approve && !archived) {
       actionsNode = (
         <>
@@ -69,7 +70,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
     tone = 'success';
     icon = <CheckCircle2 className="h-4 w-4" aria-hidden />;
     title = task.approvedAt
-      ? `Onaylandı · ${task.approvedBy?.name ?? 'Sistem (bitiş gününden sonra otomatik)'} · ${formatTeamDateTime(task.approvedAt)}`
+      ? tf.approvedLine(task.approvedBy?.name ?? tf.approvedBySystem, formatTeamDateTime(task.approvedAt))
       : tu.tamamlandi;
     body = task.reviewNote ? <span className="qx-small">Not: {task.reviewNote}</span> : null;
     if (can.approve && !archived) {
@@ -88,7 +89,7 @@ export function ReviewStrip({ data }: { data: TaskDetailPayload }) {
       body = <span className="qx-small whitespace-pre-wrap">{task.reviewNote}</span>;
     } else if (can.move) {
       title = task.status === 'todo' ? tu.henuzBaslanmadi : 'Devam ediyor';
-      body = <span className="qx-small">Onaya göndermek için kanıt gerekir: {proofText}</span>;
+      body = <span className="qx-small">{tf.proofNeeded} {proofText}</span>;
     }
     if (can.move && !archived) {
       actionsNode = (

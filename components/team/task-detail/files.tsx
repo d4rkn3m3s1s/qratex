@@ -36,6 +36,7 @@ export async function uploadTaskFile(taskId: string, file: File, onProgress: (p:
 
 /** Görev dosyaları — yükleme (tıkla/sürükle, ilerleme), önizleme, silme (onaylı). */
 export function TaskFiles({ data }: { data: TaskDetailPayload }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { task, can } = data;
   const qc = useQueryClient();
@@ -96,9 +97,9 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
             <Upload className="h-4 w-4" aria-hidden /> {tu.dosyaSec}
           </Button>
           <p className="qx-caption mt-1.5 text-fg-muted">
-            ya da buraya sürükle · görsel, PDF, video, Office, metin, arşiv · en fazla {TEAM_ATTACHMENT_MAX_LABEL}
+            {tf.dropHint(TEAM_ATTACHMENT_MAX_LABEL)}
           </p>
-          {pct !== null && <Progress value={pct} className="mt-2 h-1.5" aria-label={`Yükleniyor %${pct}`} />}
+          {pct !== null && <Progress value={pct} className="mt-2 h-1.5" aria-label={tf.uploadingPct(pct)} />}
         </div>
       )}
       {task.attachments.length > 0 && (
@@ -130,7 +131,7 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
                   </span>
                 </a>
                 {a.canDelete && !task.archivedAt && (
-                  <IconButton aria-label={`${a.filename} dosyasını sil`} icon={<Trash2 />} size="sm" onClick={() => setDeleting({ id: a.id, filename: a.filename })} />
+                  <IconButton aria-label={tf.deleteFile(a.filename)} icon={<Trash2 />} size="sm" onClick={() => setDeleting({ id: a.id, filename: a.filename })} />
                 )}
               </li>
             );
@@ -141,7 +142,7 @@ export function TaskFiles({ data }: { data: TaskDetailPayload }) {
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={tu.dosyaSilinsinMi}
-        description={deleting ? `"${deleting.filename}" görevden ve depodan kaldırılır.` : undefined}
+        description={deleting ? tf.fileRemovedDesc(deleting.filename) : undefined}
         confirmLabel={tu.sil}
         onConfirm={async () => {
           if (!deleting) return;

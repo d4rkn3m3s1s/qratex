@@ -34,6 +34,7 @@ export function TeamDepartments(props: { basePath: '/admin/ekip' | '/customer/ek
 }
 
 function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: ClientViewer; initialMeta: TeamMeta | undefined }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const meta = useTeamMeta(initialMeta);
@@ -116,7 +117,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
                 metric={{ value: active.length }}
                 icon={<Building2 />}
                 size="compact"
-                hint={withoutManager.length ? `${withoutManager.length} departmanın yöneticisi yok` : undefined}
+                hint={withoutManager.length ? tf.deptsWithoutManager(withoutManager.length) : undefined}
               />
             </MetricGrid>
             {meta.data?.membersTruncated && <InlineError variant="banner" tone="warning">{tx.first500Members}</InlineError>}

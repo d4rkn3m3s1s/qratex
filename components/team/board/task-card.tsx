@@ -34,6 +34,7 @@ type Props = {
  * Onaya gönder, yönetici için Onayla / Revizyon iste.
  */
 export const TaskCard = memo(function TaskCard({ task, selectable, selected, onToggleSelect, draggable, onDragStart, onPickTag, compact }: Props) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { teamViewer, can, departments, tags, openTask, weekKey } = useWorkspace();
@@ -103,7 +104,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
       <div className="flex items-start gap-2">
         {selectable && (
           <span className="pt-0.5" data-row-click-ignore onClick={(e) => e.stopPropagation()}>
-            <SelectionCheckbox checked={!!selected} onCheckedChange={() => onToggleSelect?.(task.id)} aria-label={`${task.title} seç`} />
+            <SelectionCheckbox checked={!!selected} onCheckedChange={() => onToggleSelect?.(task.id)} aria-label={tf.selectItem(task.title)} />
           </span>
         )}
         <div className="min-w-0 flex-1">
@@ -197,7 +198,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
         open={rejectOpen}
         onOpenChange={setRejectOpen}
         title={tu.revizyonIste}
-        description={`"${task.title}" görevi düzeltme için ${displayName(task.assignedTo, 'üyeye')} geri döner.`}
+        description={tf.sendBackDesc(task.title, displayName(task.assignedTo, tf.toMember))}
         label={tu.neDuzeltilmeli}
         quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
         confirmLabel={tu.revizyonaGonder}

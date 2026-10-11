@@ -27,8 +27,9 @@ export function SummaryStrip({
   onOpenReview?: () => void;
   showReview: boolean;
 }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
-  if (error && !summary) return <InlineError variant="banner">Özet yüklenemedi: {errorMessage(error)}</InlineError>;
+  if (error && !summary) return <InlineError variant="banner">{tf.summaryFailed} {errorMessage(error)}</InlineError>;
   const w = summary?.week;
   const trend = summary?.trend ?? [];
   const label = summary ? (summary.isCurrentWeek ? 'Bu hafta' : weekKeyLabel(summary.weekKey)) : 'Hafta';
@@ -37,7 +38,7 @@ export function SummaryStrip({
     : undefined;
 
   return (
-    <section aria-label={`${label} özeti`} className="space-y-2">
+    <section aria-label={tf.summaryOf(label)} className="space-y-2">
       <MetricGrid cols={4}>
         <MetricTile
           label={`${label} · tamamlanma`}
@@ -47,7 +48,7 @@ export function SummaryStrip({
           tone="success"
           size="compact"
           sparklineLabel={trendText}
-          hint={w ? `${w.done}/${w.total} görev bitti${w.carried ? ` · ${w.carried} devreden` : ''}` : undefined}
+          hint={w ? tf.weekDone(w.done, w.total, w.carried) : undefined}
         />
         <MetricTile
           label={tu.devamEden}
@@ -55,7 +56,7 @@ export function SummaryStrip({
           loading={loading}
           icon={<CircleDashed />}
           size="compact"
-          hint={w ? `${w.todo} başlanmadı · ${w.inProgress} devam` : undefined}
+          hint={w ? tf.weekTodo(w.todo, w.inProgress) : undefined}
         />
         {showReview ? (
           <button type="button" onClick={onOpenReview} className="rounded-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -79,16 +80,16 @@ export function SummaryStrip({
           icon={<AlertTriangle />}
           tone={w && w.overdue > 0 ? 'danger' : 'neutral'}
           size="compact"
-          hint={w && (w.spentMin || w.estimateMin) ? `Süre: ${formatMinutes(w.spentMin)} / ${formatMinutes(w.estimateMin)} tahmin` : undefined}
+          hint={w && (w.spentMin || w.estimateMin) ? tf.weekTime(formatMinutes(w.spentMin), formatMinutes(w.estimateMin)) : undefined}
         />
       </MetricGrid>
       {trend.length > 1 && (
         <div className="flex items-center gap-3 rounded-card border border-subtle bg-surface-1 px-3 py-2">
           <span className="qx-caption flex shrink-0 items-center gap-1 text-fg-muted">
-            <RefreshCcw className="h-3 w-3" aria-hidden /> {trend.length} haftalık tempo
+            <RefreshCcw className="h-3 w-3" aria-hidden /> {tf.tempo(trend.length)}
           </span>
           <div className="h-8 min-w-0 flex-1">
-            <Sparkline data={trend.map((t) => t.done)} tone="brand" height={32} area zeroBased showLast label={`Son ${trend.length} haftada biten görev: ${trend.map((t) => t.done).join(', ')}`} />
+            <Sparkline data={trend.map((t) => t.done)} tone="brand" height={32} area zeroBased showLast label={tf.tempoLabel(trend.length, trend.map((t) => t.done).join(', '))} />
           </div>
           <span className="qx-caption qx-num shrink-0 text-fg-muted">
             <ListTodo className="mr-1 inline h-3 w-3" aria-hidden />

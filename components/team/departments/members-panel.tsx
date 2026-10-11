@@ -37,6 +37,7 @@ export function MembersPanel({
   deptFilter: string;
   onDeptFilter: (v: string) => void;
 }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
@@ -130,12 +131,12 @@ export function MembersPanel({
                       {i === 0 && m.departmentSlugs.length > 1 && <Star className="h-3 w-3 text-warning" aria-label={tu.birincilDepartman} />}
                       {deptName(s)}
                       {canDept && i !== 0 && (
-                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${deptName(s)} departmanını birincil yap`} onClick={() => void put({ id: m.id, primaryDepartment: s }, tu.birincilDepartmanGuncellendi)}>
+                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={tf.makePrimary(deptName(s))} onClick={() => void put({ id: m.id, primaryDepartment: s }, tu.birincilDepartmanGuncellendi)}>
                           <Star className="h-3 w-3" aria-hidden />
                         </button>
                       )}
                       {canDept && (
-                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={`${displayName(m)} kişisini ${deptName(s)} departmanından çıkar`} onClick={() => void put({ id: m.id, removeDepartment: s }, tu.departmandanCikarildi)}>
+                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={tf.removeFromDept(displayName(m), deptName(s))} onClick={() => void put({ id: m.id, removeDepartment: s }, tu.departmandanCikarildi)}>
                           <X className="h-3 w-3" aria-hidden />
                         </button>
                       )}
@@ -144,7 +145,7 @@ export function MembersPanel({
                   {canDept && (
                     <Popover>
                       <PopoverTrigger asChild>
-                        <IconButton aria-label={`${displayName(m)} kişisine departman ekle`} icon={<Plus />} size="sm" variant="outline" />
+                        <IconButton aria-label={tf.addDeptTo(displayName(m))} icon={<Plus />} size="sm" variant="outline" />
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-1" align="start">
                         <ul className="max-h-64 overflow-y-auto">
@@ -155,7 +156,7 @@ export function MembersPanel({
                                 <button
                                   type="button"
                                   className="qx-small flex min-h-10 w-full items-center gap-2 rounded-control px-2 text-left hover:bg-surface-2"
-                                  onClick={() => void put({ id: m.id, addDepartment: d.slug }, `${d.name} departmanına eklendi`)}
+                                  onClick={() => void put({ id: m.id, addDepartment: d.slug }, tf.addedToDept(d.name))}
                                 >
                                   <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} /> {d.name}
                                 </button>
@@ -169,7 +170,7 @@ export function MembersPanel({
                 <div className="flex items-center gap-2">
                   {canRole ? (
                     <Select value={m.teamRole ?? 'uye'} onValueChange={(v) => void put({ id: m.id, teamRole: v }, tu.rolGuncellendi)}>
-                      <SelectTrigger className="h-10 w-32" aria-label={`${displayName(m)} ekip rolü`}>
+                      <SelectTrigger className="h-10 w-32" aria-label={tf.teamRoleOf(displayName(m))}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -180,7 +181,7 @@ export function MembersPanel({
                   ) : (
                     <StatusBadge label={m.teamRole === 'yonetici' ? tu.yonetici : tu.uye2} tone={m.teamRole === 'yonetici' ? 'brand' : 'neutral'} icon={null} size="md" />
                   )}
-                  {canRemove && <IconButton aria-label={`${displayName(m)} kişisini ekipten çıkar`} icon={<UserMinus />} size="sm" onClick={() => setRemoving(m)} />}
+                  {canRemove && <IconButton aria-label={tf.removeFromTeam(displayName(m))} icon={<UserMinus />} size="sm" onClick={() => setRemoving(m)} />}
                 </div>
               </li>
             );
@@ -191,7 +192,7 @@ export function MembersPanel({
       <ConfirmAction
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={removing ? `${displayName(removing)} ekipten çıkarılsın mı?` : ''}
+        title={removing ? tf.removeFromTeamTitle(displayName(removing)) : ''}
         description={tu.gorevleriSilinmezAtamalarYerinde}
         tone="warning"
         confirmLabel={tu.ekiptenCikar}

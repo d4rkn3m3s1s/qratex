@@ -42,6 +42,7 @@ type Template = {
  * denetim kaydı ve atama bildirimi alır.
  */
 export default function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, members, departments } = useWorkspace();
@@ -121,7 +122,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{tx.templates}</DialogTitle>
-          <DialogDescription>Görev {weekKeyLabel(weekKey)} haftasına eklenir.</DialogDescription>
+          <DialogDescription>{tf.addedToWeek(weekKeyLabel(weekKey))}</DialogDescription>
         </DialogHeader>
         <SectionTabs
           value={tab}
@@ -151,7 +152,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                       <div className="flex flex-wrap items-center gap-1.5">
                         <PriorityBadge priority={p.priority} />
                         <span className="qx-caption text-fg-muted">
-                          {p.checklist.length} alt görev · {formatMinutes(p.estimateMin)}
+                          {tf.subtaskCount(p.checklist.length)} · {formatMinutes(p.estimateMin)}
                         </span>
                       </div>
                       <Button size="sm" className="mt-auto h-9" disabled={!!busyKey} onClick={() => void apply({ presetKey: p.key }, p.key)}>
@@ -177,14 +178,14 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                           <div className="min-w-0 flex-1">
                             <p className="qx-small font-semibold text-fg">{t.name}</p>
                             <p className="qx-caption truncate text-fg-muted">
-                              {t.title} · {(t.checklist ?? '').split('\n').filter(Boolean).length} alt görev
-                              {t.department ? ` · ${departments.find((x) => x.slug === t.department)?.name ?? 'kaldırılmış departman'}` : ''}
+                              {t.title} · {tf.subtaskCount((t.checklist ?? '').split('\n').filter(Boolean).length)}
+                              {t.department ? ` · ${departments.find((x) => x.slug === t.department)?.name ?? tf.removedDept}` : ''}
                             </p>
                           </div>
                           <Button size="sm" className="h-9" disabled={!!busyKey} onClick={() => void apply({ templateId: t.id }, t.id)}>
                             {busyKey === t.id ? tu.olusturuluyor : 'Uygula'}
                           </Button>
-                          <IconButton aria-label={`${t.name} şablonunu sil`} icon={<Trash2 />} size="sm" onClick={() => setDeleting(t)} />
+                          <IconButton aria-label={tf.deleteTemplate(t.name)} icon={<Trash2 />} size="sm" onClick={() => setDeleting(t)} />
                         </li>
                       ))}
                     </ul>

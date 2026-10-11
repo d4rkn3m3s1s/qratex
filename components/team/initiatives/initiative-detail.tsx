@@ -46,13 +46,14 @@ export function InitiativeTitle({ id }: { id: string }) {
 
 /** Girişim detayı: düzenleme (yönetici), kilometre taşları, karar notları, değişiklik geçmişi. */
 export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const q = useInitiative(id);
   return (
     <QueryState
       query={q}
       skeleton="detail"
-      error={{ title: tu.girisimAcilamadi, description: tu.silinmisOlabilir, action: <Button variant="outline" onClick={onClose}>Kapat</Button> }}
+      error={{ title: tu.girisimAcilamadi, description: tu.silinmisOlabilir, action: <Button variant="outline" onClick={onClose}>{tv.kapat}</Button> }}
     >
       {(d) => <Body d={d} />}
     </QueryState>
@@ -60,6 +61,8 @@ export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => v
 }
 
 function Body({ d }: { d: Detail }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can, members, departments } = useWorkspace();
@@ -138,14 +141,14 @@ function Body({ d }: { d: Detail }) {
           )}
         </div>
         <div className="space-y-1">
-          <span className="qx-caption text-fg-muted">Sorumlu</span>
+          <span className="qx-caption text-fg-muted">{tv.sorumlu}</span>
           {edit ? (
             <Select value={item.owner?.id ?? '__none'} onValueChange={(v) => void patch({ ownerId: v === '__none' ? null : v })}>
               <SelectTrigger className="h-9" aria-label={tu.sorumlu}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Sorumlu yok</SelectItem>
+                <SelectItem value="__none">{tv.sorumluYok}</SelectItem>
                 {members
                   .filter((m) => m.inTeam || m.isAdmin)
                   .map((m) => (
@@ -163,7 +166,7 @@ function Body({ d }: { d: Detail }) {
         </div>
         <div className="space-y-1">
           <label htmlFor={`target-${item.id}`} className="qx-caption text-fg-muted">
-            Hedef tarih
+            {tv.hedefTarih}
           </label>
           {edit ? (
             <Input id={`target-${item.id}`} type="date" className="h-9" value={item.targetDay ?? ''} onChange={(e) => void patch({ targetDate: e.target.value || null })} />
@@ -179,7 +182,7 @@ function Body({ d }: { d: Detail }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Genel</SelectItem>
+                <SelectItem value="__none">{tv.genel}</SelectItem>
                 {departments
                   .filter((x) => x.isActive)
                   .map((x) => (
@@ -193,7 +196,7 @@ function Body({ d }: { d: Detail }) {
             <p className="qx-small text-fg">{departments.find((x) => x.slug === item.department)?.name ?? 'Genel'}</p>
           )}
         </div>
-        {item.shippedAt && <p className="qx-caption text-success sm:col-span-2">Yayına çıktı: {relativeTeamTime(item.shippedAt)}</p>}
+        {item.shippedAt && <p className="qx-caption text-success sm:col-span-2">{tf.shipped} {relativeTeamTime(item.shippedAt)}</p>}
       </section>
 
       <section aria-label={tu.aciklama} className="space-y-2">
@@ -215,12 +218,12 @@ function Body({ d }: { d: Detail }) {
 
       <section aria-labelledby={`ms-${item.id}`} className="space-y-2">
         <h3 id={`ms-${item.id}`} className="qx-small font-semibold text-fg">
-          Kilometre taşları{' '}
+          {tf.milestonesTitle}{' '}
           <span className="qx-num font-normal text-fg-muted">
             {item.milestones.done}/{item.milestones.total}
           </span>
         </h3>
-        {item.milestones.total > 0 && <Progress value={item.milestones.pct ?? 0} className="h-1.5" aria-label={`İlerleme %${item.milestones.pct ?? 0}`} />}
+        {item.milestones.total > 0 && <Progress value={item.milestones.pct ?? 0} className="h-1.5" aria-label={tf.progressPct(item.milestones.pct ?? 0)} />}
         <ul className="space-y-1">
           {d.milestones.map((m) => (
             <li key={m.id} className="flex items-center gap-2 rounded-control px-1 py-1 hover:bg-surface-2">
@@ -228,7 +231,7 @@ function Body({ d }: { d: Detail }) {
               <label htmlFor={`m-${m.id}`} className={cn('qx-small flex-1', m.done ? 'text-fg-muted line-through' : 'text-fg')}>
                 {m.text}
               </label>
-              {edit && <IconButton aria-label={`"${m.text}" kilometre taşını sil`} icon={<Trash2 />} size="sm" onClick={() => void op({ op: 'delete_milestone', itemId: m.id })} />}
+              {edit && <IconButton aria-label={tf.deleteMilestone(m.text)} icon={<Trash2 />} size="sm" onClick={() => void op({ op: 'delete_milestone', itemId: m.id })} />}
             </li>
           ))}
         </ul>
@@ -253,7 +256,7 @@ function Body({ d }: { d: Detail }) {
 
       <section aria-labelledby={`nt-${item.id}`} className="space-y-2">
         <h3 id={`nt-${item.id}`} className="qx-small font-semibold text-fg">
-          Karar notları <span className="qx-num font-normal text-fg-muted">{d.notes.length}</span>
+          {tf.decisionNotes} <span className="qx-num font-normal text-fg-muted">{d.notes.length}</span>
         </h3>
         <form
           className="space-y-2"
@@ -267,7 +270,7 @@ function Body({ d }: { d: Detail }) {
         >
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={tu.kararRiskYaDa} aria-label={tu.not} maxLength={4000} />
           <Button type="submit" size="sm" className="h-9" disabled={busy || !note.trim()}>
-            Not ekle
+            {tv.notEkle}
           </Button>
         </form>
         <ul className="space-y-3">
@@ -287,7 +290,7 @@ function Body({ d }: { d: Detail }) {
       </section>
 
       <details className="rounded-card border border-subtle">
-        <summary className="qx-small flex min-h-11 cursor-pointer items-center px-3 font-semibold text-fg">Değişiklik geçmişi ({d.history.length})</summary>
+        <summary className="qx-small flex min-h-11 cursor-pointer items-center px-3 font-semibold text-fg">{tf.changeHistoryN(d.history.length)}</summary>
         <div className="border-t border-subtle px-3 py-2">
           <Timeline dense groupByDay ariaLabel={tu.girisimGecmisi} events={d.history.map((h) => ({ id: h.id, at: h.createdAt, title: h.detail ?? '', actor: h.actorName }))} />
         </div>

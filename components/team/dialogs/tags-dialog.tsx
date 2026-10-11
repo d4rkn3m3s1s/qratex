@@ -20,6 +20,8 @@ import { useTeamCopy } from '../copy';
  * (denetim SAHTE #16). Silme hatası görünür.
  */
 export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const qc = useQueryClient();
@@ -34,7 +36,7 @@ export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Etiket havuzu</DialogTitle>
+          <DialogTitle>{tv.etiketHavuzu}</DialogTitle>
           <DialogDescription>{tx.tagsDesc}</DialogDescription>
         </DialogHeader>
         <form
@@ -82,7 +84,7 @@ export default function TagsDialog({ open, onOpenChange }: { open: boolean; onOp
                   <span aria-hidden className="h-3 w-3 rounded-full" style={{ backgroundColor: t.color }} />
                   <span className="qx-small flex-1 text-fg">#{t.label}</span>
                   <IconButton
-                    aria-label={`#${t.label} etiketini havuzdan kaldır`}
+                    aria-label={tf.removeTag(t.label)}
                     icon={<Trash2 />}
                     size="sm"
                     onClick={async () => {

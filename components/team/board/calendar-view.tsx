@@ -11,7 +11,6 @@ import { STATUS_ICON, PriorityBadge, MemberAvatar } from '../shared';
 import type { TaskDto } from '../lib/types';
 import { useTeamCopy } from '../copy';
 
-const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 /**
  * Takvim — haftanın 7 günü İstanbul takvimine göre (denetim Bulgu 70: "bugün" UTC idi).
@@ -19,6 +18,7 @@ const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
  * panelindeki tarih alanıyla klavyeyle de yapılır.
  */
 export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, can, openTask } = useWorkspace();
@@ -85,7 +85,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
           return (
             <section
               key={d}
-              aria-label={`${DAY_NAMES[i]} ${shortDayLabel(d)}${isToday ? ', bugün' : ''}`}
+              aria-label={tf.dayAria(tf.dayNames[i] ?? '', shortDayLabel(d), isToday)}
               className={cn(
                 'flex min-h-[8rem] flex-col rounded-card border p-2',
                 isToday ? 'border-brand bg-brand-subtle/40' : 'border-subtle bg-surface-2/60',
@@ -102,12 +102,12 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
                 const id = dragId;
                 setDragId(null);
                 setOverDay(null);
-                if (id) void actions.update(id, { dueDate: d }, `Bitiş tarihi ${shortDayLabel(d)} yapıldı`);
+                if (id) void actions.update(id, { dueDate: d }, tf.dueSetTo(shortDayLabel(d)));
               }}
             >
               <header className="mb-1.5 flex items-baseline justify-between px-0.5">
                 <span className={cn('qx-small font-semibold', isToday ? 'text-brand' : 'text-fg')}>
-                  {DAY_NAMES[i]} <span className="qx-num font-normal text-fg-muted">{shortDayLabel(d)}</span>
+                  {tf.dayNames[i]} <span className="qx-num font-normal text-fg-muted">{shortDayLabel(d)}</span>
                 </span>
                 {isToday && <span className="qx-caption text-brand">{tx.today}</span>}
               </header>
@@ -130,7 +130,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
           )}
           {byDay.outside.length > 0 && (
             <section aria-label={tu.buHaftaDisindaBitenler} className="rounded-card border border-dashed border-subtle p-2">
-              <h3 className="qx-small mb-1.5 px-0.5 font-semibold text-fg-muted">Bitişi bu hafta dışında ({byDay.outside.length})</h3>
+              <h3 className="qx-small mb-1.5 px-0.5 font-semibold text-fg-muted">{tf.dueOutsideWeek(byDay.outside.length)}</h3>
               <ul className="grid gap-1.5 sm:grid-cols-2">
                 {byDay.outside.map(renderItem)}
               </ul>

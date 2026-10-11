@@ -38,6 +38,7 @@ const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: fal
  * yönetici düzenler. Aşama değişikliği menüden (klavye) ya da masaüstünde sürükleyerek.
  */
 export function InitiativesView() {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can, departments } = useWorkspace();
@@ -88,12 +89,12 @@ export function InitiativesView() {
           {can.manageInitiatives && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <IconButton aria-label={`${i.title} için işlemler`} icon={<MoreHorizontal />} size="sm" />
+                <IconButton aria-label={tf.actionsFor(i.title)} icon={<MoreHorizontal />} size="sm" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel>{tx.moveToStage}</DropdownMenuLabel>
                 {INITIATIVE_PHASES.filter((p) => p !== i.phase).map((p) => (
-                  <DropdownMenuItem key={p} onSelect={() => void patch(i, { phase: p }, `Aşama: ${PHASE_META[p].label}`)}>
+                  <DropdownMenuItem key={p} onSelect={() => void patch(i, { phase: p }, tf.stageSet(PHASE_META[p].label))}>
                     {PHASE_META[p].label}
                   </DropdownMenuItem>
                 ))}
@@ -114,7 +115,7 @@ export function InitiativesView() {
                 {i.milestones.done}/{i.milestones.total}
               </span>
             </div>
-            <Progress value={i.milestones.pct ?? 0} className="h-1.5" aria-label={`İlerleme %${i.milestones.pct ?? 0}`} />
+            <Progress value={i.milestones.pct ?? 0} className="h-1.5" aria-label={tf.progressPct(i.milestones.pct ?? 0)} />
           </div>
         ) : (
           <p className="qx-caption text-fg-subtle">{tx.noMilestones}</p>
@@ -186,7 +187,7 @@ export function InitiativesView() {
                       const item = items.find((x) => x.id === dragId);
                       setDragId(null);
                       setOver(null);
-                      if (item && item.phase !== p) void patch(item, { phase: p }, `Aşama: ${PHASE_META[p].label}`);
+                      if (item && item.phase !== p) void patch(item, { phase: p }, tf.stageSet(PHASE_META[p].label));
                     }}
                   >
                     <header className="px-1.5 pb-2 pt-1">
@@ -206,7 +207,7 @@ export function InitiativesView() {
             </div>
             {dropped.length > 0 && (
               <details className="rounded-card border border-subtle">
-                <summary className="qx-small flex min-h-11 cursor-pointer items-center px-3 font-semibold text-fg-muted">Vazgeçilenler ({dropped.length})</summary>
+                <summary className="qx-small flex min-h-11 cursor-pointer items-center px-3 font-semibold text-fg-muted">{tf.dropped(dropped.length)}</summary>
                 <ul className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-4">{dropped.map(card)}</ul>
               </details>
             )}

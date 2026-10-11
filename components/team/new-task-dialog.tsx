@@ -40,6 +40,8 @@ const EMPTY = {
  * (denetim #83). "Bana ata" ADMIN'in ekip rolü olmasa da çalışır (denetim #76).
  */
 export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { departments, members, tags, viewer, weekKey, currentWeekKey, can } = useWorkspace();
@@ -89,7 +91,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           json: { op, title: form.title, description: form.description },
         });
         setForm((f) => ({ ...f, department: r.department ?? f.department, assignedToId: r.assignedToId ?? f.assignedToId }));
-        toast(r.reason ? `AI önerisi: ${r.reason}` : tu.aiOnerisiUygulandi);
+        toast(r.reason ? tf.aiSuggestion(r.reason) : tu.aiOnerisiUygulandi);
       } else {
         const r = await teamFetch<{ items: string[] }>(`${API}/ai`, { method: 'POST', json: { op, title: form.title, description: form.description } });
         if (r.items.length === 0) toast(tu.aiAltGorevOnermedi);
@@ -142,7 +144,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{tx.newTask}</DialogTitle>
-          <DialogDescription>{weekKeyLabel(week)} haftasına eklenir. Atanan kişiye e-posta ve bildirim gider.</DialogDescription>
+          <DialogDescription>{tf.newTaskWeekDesc(weekKeyLabel(week))}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -153,7 +155,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
         >
           <div className="space-y-1.5">
             <label htmlFor={ids.title} className="qx-small font-medium text-fg">
-              Başlık <span className="text-danger">*</span>
+              {tf.title} <span className="text-danger">*</span>
             </label>
             <Input id={ids.title} value={form.title} onChange={(e) => set('title', e.target.value)} maxLength={200} autoFocus required />
           </div>
@@ -177,7 +179,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <span className="qx-small font-medium text-fg">Atanan</span>
+              <span className="qx-small font-medium text-fg">{tv.atanan}</span>
               <div className="flex gap-2">
                 <Select value={form.assignedToId || '__none'} onValueChange={(v) => set('assignedToId', v === '__none' ? '' : v)}>
                   <SelectTrigger className="h-10" aria-label={tu.atananKisi}>
@@ -199,7 +201,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
               </div>
             </div>
             <div className="space-y-1.5">
-              <span className="qx-small font-medium text-fg">Departman</span>
+              <span className="qx-small font-medium text-fg">{tv.departman}</span>
               <Select value={form.department || '__none'} onValueChange={(v) => set('department', v === '__none' ? '' : v)}>
                 <SelectTrigger className="h-10" aria-label={tu.departman}>
                   <SelectValue />
@@ -223,7 +225,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
               <Input id={ids.due} type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} className="h-10" />
             </div>
             <div className="space-y-1.5">
-              <span className="qx-small font-medium text-fg">Hafta</span>
+              <span className="qx-small font-medium text-fg">{tv.hafta}</span>
               <Select value={week} onValueChange={setWeek}>
                 <SelectTrigger className="h-10" aria-label={tu.hafta}>
                   <SelectValue />
@@ -251,13 +253,13 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
               />
             </div>
             <div className="space-y-1.5">
-              <span className="qx-small font-medium text-fg">Tekrar</span>
+              <span className="qx-small font-medium text-fg">{tv.tekrar}</span>
               <Select value={form.recurrence || '__none'} onValueChange={(v) => set('recurrence', v === '__none' ? '' : v)}>
                 <SelectTrigger className="h-10" aria-label={tu.tekrar}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Tekrarlanmaz</SelectItem>
+                  <SelectItem value="__none">{tv.tekrarlanmaz}</SelectItem>
                   <SelectItem value="weekly">{tx.weekly}</SelectItem>
                   <SelectItem value="monthly">{tx.monthly}</SelectItem>
                 </SelectContent>
@@ -266,7 +268,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
           </div>
           <div className="space-y-1.5">
             <label htmlFor={ids.tags} className="qx-small font-medium text-fg">
-              Etiketler
+              {tv.etiketler}
             </label>
             <Input id={ids.tags} list={`${ids.tags}-pool`} value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder={tu.virgulleAyirTasarimAcil} />
             <datalist id={`${ids.tags}-pool`}>
@@ -323,7 +325,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                 {checklist.map((c, i) => (
                   <li key={`${c}-${i}`} className="qx-small flex items-center gap-2">
                     <span className="min-w-0 flex-1 break-words">{c}</span>
-                    <IconButton aria-label={`"${c}" alt görevini çıkar`} icon={<X />} size="sm" onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))} />
+                    <IconButton aria-label={tf.removeSubtask(c)} icon={<X />} size="sm" onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))} />
                   </li>
                 ))}
               </ul>

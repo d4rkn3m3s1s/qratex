@@ -8,6 +8,7 @@ import { useTeamCopy } from './copy';
 
 /** Hafta seçici — ok düğmeleri etiketli (denetim #3), "Bu hafta"ya dönüş, seçili hafta duyurulur. */
 export function WeekNav({ weekKey, currentWeekKey, onChange }: { weekKey: string; currentWeekKey: string; onChange: (w: string) => void }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const isCurrent = weekKey === currentWeekKey;
   return (
@@ -21,7 +22,7 @@ export function WeekNav({ weekKey, currentWeekKey, onChange }: { weekKey: string
       <IconButton aria-label={tu.sonrakiHafta} icon={<ChevronRight />} size="sm" variant="outline" onClick={() => onChange(shiftWeekKey(weekKey, 1))} />
       {!isCurrent && (
         <Button variant="ghost" size="sm" className="h-10" onClick={() => onChange(currentWeekKey)}>
-          Bu hafta
+          {tv.buHafta}
         </Button>
       )}
     </div>

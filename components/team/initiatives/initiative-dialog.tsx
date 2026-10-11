@@ -18,6 +18,7 @@ import { useTeamCopy } from '../copy';
 
 /** Yeni girişim (yönetici). Kilometre taşları satır satır; ilerleme bunlardan hesaplanır. */
 export default function InitiativeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { members, departments } = useWorkspace();
@@ -90,7 +91,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Sorumlu yok</SelectItem>
+                <SelectItem value="__none">{tv.sorumluYok}</SelectItem>
                 {members
                   .filter((m) => m.inTeam || m.isAdmin)
                   .map((m) => (
@@ -106,7 +107,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Genel</SelectItem>
+                <SelectItem value="__none">{tv.genel}</SelectItem>
                 {departments
                   .filter((d) => d.isActive)
                   .map((d) => (

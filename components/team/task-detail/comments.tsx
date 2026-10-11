@@ -50,6 +50,8 @@ function renderText(text: string, handles: Set<string>) {
  * yalnız bu göreve yüklenmiş ekin kimliğiyle bağlanır (serbest URL enjeksiyonu kapandı).
  */
 export function TaskComments({ data }: { data: TaskDetailPayload }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task } = data;
@@ -160,7 +162,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
               <Textarea value={editing.text} onChange={(e) => setEditing({ id: c.id, text: e.target.value })} rows={3} aria-label={tu.yorumuDuzenle} autoFocus />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-9">
-                  Kaydet
+                  {tv.kaydet}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => setEditing(null)}>
                   {tu.vazgec}
@@ -182,7 +184,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
                 type="button"
                 onClick={() => void react(c, x.e)}
                 aria-pressed={x.mine}
-                aria-label={`${x.e} tepkisi, ${x.n} kişi${x.mine ? ', sen dahil' : ''}`}
+                aria-label={tf.reactionAria(x.e, x.n, x.mine)}
                 className={cn('qx-caption inline-flex h-7 items-center gap-1 rounded-chip border px-1.5', x.mine ? 'border-brand bg-brand-subtle' : 'border-subtle bg-surface-1')}
               >
                 {x.e} <span className="qx-num">{x.n}</span>
@@ -240,7 +242,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
       >
         {replyTo && (
           <p className="qx-caption flex items-center gap-1 text-fg-muted">
-            <CornerDownRight className="h-3 w-3" aria-hidden /> {displayName(replyTo.author, 'yorum')} kişisine yanıt
+            <CornerDownRight className="h-3 w-3" aria-hidden /> {tf.replyTo(displayName(replyTo.author, tf.comment))}
             <IconButton aria-label={tu.yanitiIptalEt} icon={<X />} size="sm" onClick={() => setReplyTo(null)} />
           </p>
         )}

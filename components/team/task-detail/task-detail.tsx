@@ -52,6 +52,8 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
@@ -120,7 +122,7 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
                   if (await actions.update(task.id, { description: desc.trim() || null })) setEditingDesc(false);
                 }}
               >
-                Kaydet
+                {tv.kaydet}
               </Button>
               <Button
                 size="sm"
@@ -159,7 +161,7 @@ function TaskDetailBody({ data }: { data: TaskDetailPayload }) {
 
       <details className="group rounded-card border border-subtle">
         <summary className="qx-small flex min-h-11 cursor-pointer items-center justify-between px-3 font-semibold text-fg">
-          Geçmiş <span className="qx-caption qx-num font-normal text-fg-muted">{task.activities.length}</span>
+          {tf.history} <span className="qx-caption qx-num font-normal text-fg-muted">{task.activities.length}</span>
         </summary>
         <div className="border-t border-subtle px-3 py-2">
           <Timeline

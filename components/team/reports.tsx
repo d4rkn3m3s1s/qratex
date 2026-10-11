@@ -41,6 +41,7 @@ export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
 
 /** Kişi başı iş yükü — panodaki (filtreli) görevlerden; durum dağılımı yalnız renge dayanmaz. */
 function PeopleView({ tasks }: { tasks: TaskDto[] }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { openTask } = useWorkspace();
@@ -86,7 +87,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
               <div className="min-w-0 flex-1">
                 <p className="qx-small truncate font-semibold text-fg">{displayName(r.user)}</p>
                 <p className="qx-caption text-fg-muted">
-                  {r.items.length} görev · {formatMinutes(r.spent)} / {formatMinutes(r.estimate)} tahmin
+                  {tf.peopleRow(r.items.length, formatMinutes(r.spent), formatMinutes(r.estimate))}
                   {r.overdue ? ` · ${r.overdue} geciken` : ''}
                 </p>
               </div>
@@ -142,6 +143,7 @@ type PerfRow = {
 
 /** Performans — seçili haftada biten son N hafta, departman kapsamlı (denetim #73). */
 function PerformanceView() {
+  const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { weekKey, departments } = useWorkspace();
@@ -209,11 +211,11 @@ function PerformanceView() {
                   <tr className="qx-caption text-fg-muted">
                     <th scope="col" className="px-3 py-2 font-semibold">{tx.person}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.tasks}</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Biten</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tv.biten}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.onTime}</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Geciken</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tv.geciken}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">{tx.avgTime}</th>
-                    <th scope="col" className="px-3 py-2 text-right font-semibold">Onay bekleme</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">{tv.onayBekleme}</th>
                     <th scope="col" className="px-3 py-2 text-right font-semibold">Harcanan / tahmin</th>
                   </tr>
                 </thead>
@@ -270,6 +272,8 @@ const GROUPS = [
 
 /** Akış — kişi ve tür filtresi, "daha fazla yükle" (denetim #72). Odakta yenilenir. */
 function ActivityView() {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { members, openTask } = useWorkspace();
   const [actor, setActor] = useState('all');
@@ -286,7 +290,7 @@ function ActivityView() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Herkes</SelectItem>
+            <SelectItem value="all">{tv.herkes}</SelectItem>
             {members.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {displayName(m)}
@@ -301,7 +305,7 @@ function ActivityView() {
           <SelectContent>
             {GROUPS.map((g) => (
               <SelectItem key={g.value} value={g.value}>
-                {g.label}
+                {tf.activityGroups[g.value] ?? g.label}
               </SelectItem>
             ))}
           </SelectContent>

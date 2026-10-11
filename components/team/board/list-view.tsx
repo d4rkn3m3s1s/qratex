@@ -37,6 +37,8 @@ export function ListView({
   onToggleAll: (ids: string[], on: boolean) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { departments, tags, openTask } = useWorkspace();
@@ -58,7 +60,7 @@ export function ListView({
         order = t.assignedTo ? 0 : 1;
       } else if (groupBy === 'priority') {
         key = t.priority;
-        label = isTaskPriority(t.priority) ? `${PRIORITY_META[t.priority].label} öncelik` : t.priority;
+        label = isTaskPriority(t.priority) ? tf.priorityLabel(PRIORITY_META[t.priority].label) : t.priority;
         order = -priorityRank(t.priority);
       } else if (groupBy === 'department') {
         key = t.department ?? 'none';
@@ -89,9 +91,9 @@ export function ListView({
           )}
         </span>
         <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colTask}</span>
-        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Durum</span>
+        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tv.durum}</span>
         <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colPriority}</span>
-        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">Atanan</span>
+        <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tv.atanan}</span>
         <span className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{tx.colDue}</span>
         <span className="sr-only">{tx.colActions}</span>
       </div>
@@ -117,12 +119,12 @@ export function ListView({
                   onClick={() => openTask(t.id)}
                 >
                   <span className="hidden w-[1.125rem] md:block" data-row-click-ignore onClick={(e) => e.stopPropagation()}>
-                    {selectMode && <SelectionCheckbox checked={selected.has(t.id)} onCheckedChange={() => onToggleSelect(t.id)} aria-label={`${t.title} seç`} />}
+                    {selectMode && <SelectionCheckbox checked={selected.has(t.id)} onCheckedChange={() => onToggleSelect(t.id)} aria-label={tf.selectItem(t.title)} />}
                   </span>
                   <div className="flex min-w-0 items-start gap-2 pr-10 md:pr-0">
                     {selectMode && (
                       <span className="pt-0.5 md:hidden" data-row-click-ignore onClick={(e) => e.stopPropagation()}>
-                        <SelectionCheckbox checked={selected.has(t.id)} onCheckedChange={() => onToggleSelect(t.id)} aria-label={`${t.title} seç`} />
+                        <SelectionCheckbox checked={selected.has(t.id)} onCheckedChange={() => onToggleSelect(t.id)} aria-label={tf.selectItem(t.title)} />
                       </span>
                     )}
                     <div className="min-w-0 flex-1">

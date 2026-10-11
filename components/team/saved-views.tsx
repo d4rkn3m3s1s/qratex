@@ -22,6 +22,8 @@ export const VIEW_KEYS = ['tab', 'department', 'status', 'priority', 'assignedTo
  * URL'yi değiştirir → görünüm bağlantıyla paylaşılabilir (#34).
  */
 export function SavedViews({ current, onApply }: { current: Record<string, string>; onApply: (config: Record<string, string>) => void }) {
+  const tv = useTeamCopy().ui2;
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { can } = useWorkspace();
@@ -86,7 +88,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
                   <span className="truncate">{v.name}</span>
                   {!v.mine && v.ownerName && <span className="qx-caption truncate text-fg-muted">· {v.ownerName}</span>}
                 </button>
-                {v.mine && <IconButton aria-label={`${v.name} görünümünü sil`} icon={<Trash2 />} size="sm" onClick={() => void remove(v.id)} />}
+                {v.mine && <IconButton aria-label={tf.deleteView(v.name)} icon={<Trash2 />} size="sm" onClick={() => void remove(v.id)} />}
               </li>
             ))}
           </ul>
@@ -108,7 +110,7 @@ export function SavedViews({ current, onApply }: { current: Record<string, strin
             </label>
           )}
           <Button type="submit" size="sm" className="h-9 w-full" disabled={busy || !name.trim()}>
-            Kaydet
+            {tv.kaydet}
           </Button>
         </form>
       </PopoverContent>

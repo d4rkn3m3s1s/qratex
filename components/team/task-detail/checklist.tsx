@@ -24,6 +24,7 @@ import { useTeamCopy } from '../copy';
  * (denetim #66: N paralel istek aynı sıra numarasını üretiyordu).
  */
 export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
+  const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const { task, can } = data;
@@ -58,7 +59,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
         toast(tu.aiBuGorevIcin);
         return;
       }
-      if (await act({ op: 'add_checklist_many', items: res.items })) toast.success(`${res.items.length} alt görev eklendi`);
+      if (await act({ op: 'add_checklist_many', items: res.items })) toast.success(tf.subtasksAdded(res.items.length));
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -72,7 +73,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
     <section aria-labelledby={`cl-${task.id}`} className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h3 id={`cl-${task.id}`} className="qx-small font-semibold text-fg">
-          Alt görevler{' '}
+          {tf.subtasksTitle}{' '}
           {total > 0 && (
             <span className="qx-num font-normal text-fg-muted">
               {done}/{total}
@@ -85,7 +86,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
           </Button>
         )}
       </div>
-      {total > 0 && <Progress value={pct} aria-label={`Alt görev ilerlemesi %${pct}`} className="h-1.5" />}
+      {total > 0 && <Progress value={pct} aria-label={tf.subtaskProgress(pct)} className="h-1.5" />}
       <ul className="space-y-1">
         {task.checklist.map((c) => (
           <li key={c.id} className="flex items-center gap-2 rounded-control px-1 py-1 hover:bg-surface-2">
@@ -105,7 +106,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
                 value={c.assignedTo?.id ?? '__none'}
                 onValueChange={(v) => void act({ op: 'update_checklist', itemId: c.id, assignedToId: v === '__none' ? null : v })}
               >
-                <SelectTrigger className="h-8 w-32 shrink-0" aria-label={`"${c.text}" alt görevini ata`}>
+                <SelectTrigger className="h-8 w-32 shrink-0" aria-label={tf.assignSubtask(c.text)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -123,7 +124,7 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
               <span className="qx-caption shrink-0 text-fg-muted">{displayName(c.assignedTo)}</span>
             ) : null}
             {editable && (
-              <IconButton aria-label={`"${c.text}" alt görevini sil`} icon={<Trash2 />} size="sm" variant="ghost" onClick={() => void act({ op: 'delete_checklist', itemId: c.id })} />
+              <IconButton aria-label={tf.deleteSubtask(c.text)} icon={<Trash2 />} size="sm" variant="ghost" onClick={() => void act({ op: 'delete_checklist', itemId: c.id })} />
             )}
           </li>
         ))}
