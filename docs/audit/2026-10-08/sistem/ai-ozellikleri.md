@@ -544,3 +544,82 @@ Gerçekte model eğitimi yok. "Öğrenme", LLM'in ürettiği bir profil metninin
 - Kiracı başına günlük maliyet görünür olmalı.
 - Kota tükenmesi kaynaklı hata oranı < %1 olmalı.
 - UI'da LLM'in ürettiği sayı kalmamalı.
+
+---
+
+## Uygulama sonrası durum (2026-10-11, Dalga 3 sonu)
+
+Her bulgu `feat/platform-overhaul` üzerindeki **şimdiki** koda karşı yeniden denetlendi. Bu turun commit'leri:
+
+- `7ba1e003`: emekli uçlar, tek yeniden deneme + devre kesici, çıktı şeması, enjeksiyon etiketleme, PII maskesi, doğrulanmış QRA geçmişi.
+- `dad2289e`: karakter rozeti promptları, ölü "derin öğrenme" i18n ad alanı, şema istekleri.
+- `a83965dc`: analiz ve etkileşimli AI için ayrı bütçe havuzları.
+- `d6f0d19a`: asistanda yanılabilirlik notu.
+- `9d09b716`: embedding özellik çıkarımı sınırlayıcılı ve maskeli.
+- QRA kayıt/aktarım bildirimi: bu raporla aynı commit.
+
+Önceki dalgalar: `cb495451` + `f4a94c88` (P0-32/33/34), `53374b08` (İçgörüler), `2cf5f024` (AI Asistan), `acc96ac1` (AI Operasyon Merkezi), `3c74ac93` (Prompt ve Model Stüdyosu), `57da90ea` (AI Kalite), `a3dcbcad` (Ajan Konseyi), `69d65b18` (bayi ayarları), `8c8a0c89` (Gelen Kutusu), `9a43dce6` (Bugün).
+
+### Bulgu bazında
+
+| # | Durum | Kanıt (şimdiki kod) |
+|---|---|---|
+| **K1** STAFF ile kiracılar arası sızıntı | **KAPANDI** | Sızıntının olduğu `/api/ai/detailed` ve `/api/ai/analyze` hiçbir ekrandan çağrılmıyordu. İkisi de artık her rol için **410** döner; okuma, yazma ve LLM çağrısı yok. Yaşayan AI uçlarının tamamı `defineRoute` + rol listesi + kiracı kapsamıyla çalışıyor (`resolveDealerScope` / `resolveAiScope`): bayi asistanı, içgörüler, gelen kutusu taslağı, anlamsal arama, ayarlar. Rol × kapsam matrisi `__tests__/tenant/tenant-scope-matrix.test.ts` içinde (emekli uçlar her rolde 410 ve yan etkisiz). Tarama: AI'a ulaşan 37 route'un hepsinde rol listesi ve oran sınırı var; rolsüz `requireAuth()` kalmadı. |
+| **K2** `action=analyze` IDOR | **KAPANDI** | Uç emekli (410). Analiz yalnız ortak hattan yazılıyor: `runFeedbackAnalyzePipeline` metni DB'den okur ve `aiProcessedAt IS NULL` koşuluyla atomik yazar. |
+| **K3** Kalıcı prompt enjeksiyonu / kiracı kirlenmesi | **KAPANDI** | Temel sohbet promptu kodda sabit ve sürümlü (`CHAT_SYSTEM_PROMPT_BASE`, `chat-base.v2`). Öğrenilenler yalnız onay damgalı ve tavanlı `<ogrenilmis_ek_baglam>` bloğu olarak ekleniyor (`buildLearnedSystemContext`). Sistem öğrenmesi anonim toplulaştırmayla çalışıyor (`MIN_DEALERS_PER_THEME = 3`, `groupBy`, sınırlı `take`) ve admin diff/onay akışından geçiyor (`/admin/ai/studio`). Bu turda Stüdyo'nun "kullanıldığı yer" etiketleri gerçeğe çekildi: platform notları yalnız yönetici asistanına (askAI) ulaşıyor, bayi yüzeylerine taşınmıyor. |
+| **Y1** İdempotent olmayan otomatik yanıt / retry döngüsü | **KAPANDI** (ürün kararı notuyla) | `aiAttempts` atomik kira ile alınıyor (`MAX_AI_ATTEMPTS = 3`). Bayi politikası her kayıtta taze okunuyor ve fail-closed (`shouldAnalyzeFeedback`). Uyarılar `notifyDealerOnce` ile tekil (advisory lock + dedupeKey). Otomatik yanıt `dealerReply IS NULL` koşullu `updateMany` ile yazılıyor; retry kuyruğu `aiAttempts asc` sıralı. Bu turda: sağlayıcı devresi açıkken cron denemesi hak yakmıyor (`isAiCircuitOpen`); enjeksiyon şüpheli yorumda AI yanıt metni üretilmiyor, şablon kullanılıyor. Not: AI üsluplu otomatik yanıt, bayinin açıkça kurduğu kurala bağlı ve moderasyondan geçiyor (`moderateAutoReply`). "Varsayılan taslak" ürün kararı olarak açık. |
+| **Y2** Uydurma KPI'lar | **KAPANDI** | Yeni `/dealer/analytics/insights` metrikleri SQL'den hesaplıyor; LLM yalnız kaynak kimlikli anlatı yazıyor ve olgularda geçmeyen sayı içeren cümle atılıyor (`lib/dealer-insights/narrative.ts`). Bu turda NPS/CSAT/CES/korelasyon/`predictedRating` isteyen `generateInsightReport` promptu ve onu çağıran uç **silindi**. Kod tabanında LLM'e sayı uyduran yol kalmadı. |
+| **Y3** Parçalı maliyet/kota, devre kesici yok | **KAPANDI** (bir kalemle) | Her LLM yolu tek giriş noktasından geçiyor: `guardAiCall` (kiracı/aktör/platform dakikalık + günlük tavan, QRA için kademe başına günlük tavan, kapsamsız çağrılar için platform tavanı). Başarısız çağrılar da `AIUsageLog`'a yazılıyor. Bu turda eklenenler: **devre kesici** (`lib/ai-provider-resilience.ts`: 60 sn içinde 5 sağlayıcı arızası olursa devre 60 sn açılır; durum Redis'te paylaşılır), **ayrı havuzlar** (etkileşimli görevler bayi tavanının %60'ını kullanır, kalan pay analiz hattına ayrılır: `dealerDailyLimitFor`), aktör kapsamlı karakter rozeti ve öneri başlığı. Kalan: bayi tavanı hâlâ `AIUsageLog` toplamıyla denetleniyor (check-then-act). Yarışı dakikalık limit sınırlıyor; atomik Redis token kovası yapılmadı. |
+| **Y4** Sayfa açılışında LLM | **KAPANDI** | İçgörüler, Bugün ve AI Operasyon GET'leri LLM çağırmıyor; üretim yalnız POST/"yenile" ile ve soğuma süreli. `nearby` AI önerisi kalktı. Aksiyon listesi GET'indeki LLM tetikleyicisi kalktı (`lib/action-items-ai.ts` silindi). `customer/ai-recommendations` 410. Konsey sunucu otoriter adım modeliyle POST ile çalışıyor. Geriye kalan tek GET + LLM yolu `customer/recommendations?explain=1`: hiçbir ekran bu parametreyi göndermiyor; yol kullanıcı başına saatte 10 ile sınırlı ve aktör kapsamlı. |
+| **Y5** KVKK | **KAPANDI** | Gizlilik politikasında "Yapay zekâ ve otomatik değerlendirmeler" bölümü ve Groq (ABD) aktarımı yer alıyor. `QraChatLog` 180 gün sonra otomatik siliniyor (`lib/pii-registry.ts` → `db-cleanup`). Müşteriye churn/aciliyet gösteren AI içgörüleri emekli; yerine `/customer/me/voices`. Bu turda **PII maskesi** eklendi: sağlayıcıya giden her güvenilmeyen metin (`wrapUntrusted`, `sanitizeContextLine`) ve QRA mesajları `maskPii`'den geçiyor (e-posta, telefon, TC, IBAN, kart). Altın set testi var. QRA penceresinin hızlı başlangıç alanına "Sohbetler hizmet kalitesi için kaydedilir (180 gün) ve yapay zekâ sağlayıcısında işlenir; kişisel bilgi yazma" notu ve gizlilik politikasının yapay zekâ bölümüne bağlantı eklendi (TR/EN). Emekli müşteri sohbetinin yazdığı eski `AIConversation` satırlarının temizliği canlı veri işlemi gerektiriyor (SCHEMA-REQUESTS). |
+| **Y6** Dağınık sağlayıcı katmanı | **KAPANDI** | Tüm istemcilerde timeout var (15/20/8 sn, akışta 45 sn). Üç ayrı `withRetry` **tek politikaya** indirildi: `withAiRetry` yalnız 429'u yeniden dener, `Retry-After`'a uyar, toplam bekleme bütçesi 6 sn (eskiden en kötü durumda ~2 dk). **Çıktı şeması** `lib/ai-analysis-normalize.ts` ile doğrulanıyor: sözlük zorlaması, [0,1] sıkıştırma, geçerli 0 korunur, geçersiz alan yazılmaz, diziler tavanlı. Bellek içi kullanım kaydı silindi; yerine kalıcı `AIUsageLog` + AI Operasyon Merkezi. Model seçimi görev sınıfına göre yapılıyor (`volume / dealerLearning / systemLearning` + araç çağrısı modeli). |
+| **O1** Yüzeysel enjeksiyon savunması | **KAPANDI** | TR + EN kalıplar, sınırlayıcı + kaçış engeli ve `UNTRUSTED_DATA_RULE` var. Bu turda: analiz **reddetmiyor, etiketliyor** (`injectionSuspect`). QRA'da istemcinin gönderdiği asistan turu yalnız aktörün kayıtlı gerçek yanıtıyla birebir eşleşirse modele gidiyor (`verifyAssistantTurns`, `__tests__/api/qra-chat-history.test.ts`). Karakter rozeti ve embedding özellik çıkarımı artık sınırlayıcılı. Otomatik yanıt çıkış filtresi (`moderateAutoReply`) yerinde. |
+| **O2** Persona / zayıf grounding | **KAPANDI** | Bayi tarafında tek "verine sor" yüzeyi var: `/dealer/assistant`. Araç çağrılı çalışıyor, sorgular kiracı kapsamlı, dayanak kartları ve `[K#]` kaynakları gösteriliyor. Eski dört sohbet yüzeyi emekli. Müşteriye işletme danışmanı gibi konuşan `customer/ai-chat` 410. |
+| **O3** Gösteriş ayar anahtarları | **KAPANDI** (bir kalemle) | `/dealer/settings` AI sekmesi yalnız tüketilen anahtarları gösteriyor. `alertOn*` hattı koşullandırıyor; `customPrompt` en fazla 1000 karakter ve enjeksiyon denetiminden geçiyor. Kalan: ekransız eski `PATCH /api/dealer/ai-settings` hâlâ etkisiz anahtarları (sentimentEnabled vb.) kabul ediyor. Güvenlik boyutu bu ucu sertleştirdi; uç o boyutun testlerine bağlı olduğu için emekliye ayrılmadı. |
+| **O4** Semantik arama | **KISMEN** (kod tarafı kapandı) | Bu turda silinmiş yorumlar aday olmaktan çıktı (`feedback: { deletedAt: null }`). Sağlayıcı düştüğünde yerel vektörle saklanan kayıtlar artık bulunuyor (yerel kova). JS'te cosine ve kova başına 1.000 vektör tavanı duruyor; `pgvector` + HNSW şema isteği SCHEMA-REQUESTS'te. |
+| **O5** Çift analiz hattı / fire-and-forget | **KAPANDI** | `/api/feedbacks` satır içi kopya yerine ortak hattı kullanıyor (`lib/feedback-ai-dispatch.ts`, `after()`). Tüketim yorumu analizi `after()` içinde; sonuç alanlarına (duygu, churn) ve analitik olayına (tema, niyet) yazılıyor. |
+| **O6** Agent Council | **KAPANDI** | Oturumlar kalıcı, veri paketi var, sentez yapılandırılmış. Regex ile kazanan seçimi ve formül skorları kaldırıldı; LLM yoksa açık hata dönüyor. "Grok" yalnız iç anahtar, görünen ad "Kaptan". |
+| **O7** "Derin öğrenme / Cortex" pazarlaması | **KAPANDI** | Kodda ve mesaj paketlerinde "derin öğrenme", "makine öğrenmesi" ve "Cortex" kalmadı. Bu turda ölü `dealerAiInsights` ad alanı, kaynak dosyaları ve uydurma kimlikli içgörü promptu silindi. AI çıktıları etiketli: İçgörülerde "Sayıları sistem hesapladı; AI yalnız anlatır", Asistan'da "AI yanılabilir; dayanak kartını kontrol et", haftalık raporda "AI yorumu". |
+| **D1** Digest e-postasında escape | **KAPANDI** | `escapeEmailText` + `white-space:pre-wrap` (`lib/weekly-digest-core.ts`). |
+| **D2** Sınırsız sohbet kaydı / eski varsayılan | **KISMEN** | Asistan sohbetinde 200 mesaj tavanı ve iyimser kilit var. `AIConversationMessage` tablosu ve `QraChatLog.model` varsayılanı şema isteği (SCHEMA-REQUESTS). |
+| **D3** Test/değerlendirme yok | **KAPANDI** | AI testleri artık politika/hat, prompt yönetişimi, atomik otomatik yanıt, kalite tezgâhı, konsey, asistan, stüdyo ve ai-ops'u kapsıyor. Bu turda eklenenler: **Türkçe altın set** (`__tests__/fixtures/ai-golden-set.tr.ts`: enjeksiyon yanlış pozitif/negatif, PII, kayıtlı bozuk LLM çıktıları, yerel sınıflandırıcı doğruluk eşiği), devre kesici/yeniden deneme, bütçe havuzları, QRA geçmişi. Prompt sürümü her analiz çıktısında yazılı (`aiVersion = 2.0/analysis.v3`). İnsan etiketleri AI Kalite tezgâhında haftalık doğruluk olarak ölçülüyor. |
+| **D4** Küçük tutarsızlıklar | **KAPANDI** | Öneri başlığı aktör kapsamlı; başarısızlıkta `null` dönüyor (uydurma yer tutucu metin kalktı). `ai/learning` STAFF ve `record_correction` yolları uçla birlikte emekli (410). |
+
+### Bu turda bulunan dalga regresyonları (hepsi kapatıldı)
+
+1. **Dolanılabilir ayar yazımı.** Emekli edilmemiş `/api/ai/analyze?action=update_settings` gövdeyi şemasız yazıyordu. Böylece yeni ayarlar ekranının `customPrompt` kuralı (en fazla 1000 karakter + enjeksiyon denetimi) bu uçtan dolanılabiliyordu. Uç artık 410.
+2. **Bütçesiz ve politikasız toplu analiz.** `bulk_analyze`, `analyzeBulk`'a `dealerId` geçmiyordu; bayinin AI ana anahtarı ve kiracı tavanı atlanıyordu. Uç 410, `analyzeBulk` silindi.
+3. **Sahipsiz LLM yüzeyleri.** Müşteri AI sohbeti ve "5 kişisel AI önerisi" ekranları emekliye ayrılmıştı ama uçları canlıydı; oturum açmış her müşteri ücretsiz LLM kullanabiliyordu. Uçlar 410.
+4. **Ölü ve timeout'suz istemci.** `lib/action-items-ai.ts` (SDK varsayılanı 10 dk) çağıransız kalmıştı. Silindi.
+5. **Ham müşteri metni.** Karakter rozeti sınıflandırması ve embedding özellik çıkarımı yorumu sınırlayıcısız ve maskesiz gönderiyordu. İkisi de sarmalandı.
+6. **Yanlış etiketli Stüdyo notları.** Notların "Bayi içgörü raporu" ve "Müşteri AI sohbeti"nde kullanıldığı söyleniyordu; gerçekte yalnız yönetici asistanına ulaşıyorlardı. Etiketler düzeltildi.
+7. **Öneri başlığında yer tutucu.** Route "uydurma başlık gösterilmez" derken yardımcı fonksiyon başarısızlıkta "Zevkine göre N öneri hazırladık" metni üretiyordu. Artık `null` dönüyor.
+
+### Önce / sonra
+
+| Ölçüt | Denetimde | Şimdi |
+|---|---|---|
+| Ekransız, LLM'e erişen API ucu | 6 (analyze, detailed, learning, customer ai-chat, ai-recommendations, ai-proactive) | 0 (hepsi 410 ya da silindi) |
+| Yeniden deneme politikası | 3 farklı, en kötü ~2 dk | 1; yalnız 429, en fazla 6 sn bekleme + devre kesici |
+| LLM çıktısı şema doğrulaması | yok (`\|\| 0.5`, aralık dışı skor) | `normalizeAnalysisPayload` + altın set |
+| Enjeksiyonlu yorum | analiz düşer, sonsuz retry | analiz yapılır, `injectionSuspect` etiketi, AI yanıtı yok |
+| Sağlayıcıya giden PII | ham | e-posta/telefon/TC/IBAN/kart maskeli |
+| Analiz ↔ sohbet bütçesi | tek havuz | etkileşimli %60, analize ayrılmış %40 |
+| `lib/ai-engine.ts` | 1.579 satır | 1.025 satır |
+
+### Kalan maddeler
+
+1. **pgvector + HNSW** (O4), **`AIConversationMessage`** (D2) ve `QraChatLog.model` varsayılanı: şema isteği (`SCHEMA-REQUESTS.md` → ai-ozellikleri).
+2. **Atomik kiracı token kovası** (Y3): bugünkü `AIUsageLog` toplamı check-then-act; yarışı dakikalık limit sınırlıyor.
+3. **Eski `PATCH /api/dealer/ai-settings`** (O3): ekransız ve etkisiz anahtarları kabul ediyor. Güvenlik boyutunun testleriyle birlikte emekliye ayrılmalı.
+4. **Otomatik yanıt varsayılanı** (Y1): "AI yanıtı önce taslak" bir ürün kararı. Bugün bayinin açıkça kurduğu kural + moderasyon ile çalışıyor.
+5. **Emekli müşteri sohbetinin eski `AIConversation` satırları**: canlı veri temizliği gerekiyor (SCHEMA-REQUESTS).
+
+### Yeni puan: **9 / 10** (önce 3.5)
+
+Gerekçe: Kritik üç bulgunun (kiracılar arası sızıntı, IDOR, kalıcı prompt enjeksiyonu) hem kök nedeni (kapsam yardımcısı, sabit temel prompt, onaylı öğrenme) hem de yaşayan kalıntıları (ekransız eski uçlar) kapandı. Bütün LLM yolları tek koruma girişinden, tek yeniden deneme politikasından ve paylaşılan devre kesiciden geçiyor. Çıktı şemayla doğrulanıyor, sayıları kod hesaplıyor, girdi sınırlayıcılı ve kişisel veri maskeli. Çevrimdışı altın set var.
+
+10 olmamasının nedenleri:
+- Anlamsal aramanın ölçeklenmesi ve sohbet kaydının normalize edilmesi şema değişikliğine bağlı.
+- Kiracı bütçesi atomik değil (yarışı dakikalık limit sınırlıyor).
+- Ekransız eski `PATCH /api/dealer/ai-settings` etkisiz anahtarları hâlâ kabul ediyor.

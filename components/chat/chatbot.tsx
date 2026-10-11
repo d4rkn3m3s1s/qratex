@@ -78,6 +78,8 @@ const CHAT_COPY = {
     hintBefore: 'Aşağıdan seç veya yaz; masaüstünde ',
     hintSend: ' gönderir, ',
     hintNewline: ' satır kırar.',
+    privacyNotice: 'Sohbetler hizmet kalitesi için kaydedilir (180 gün) ve yapay zekâ sağlayıcısında işlenir; kişisel bilgi yazma. ',
+    privacyLink: 'Ayrıntılar',
     placeholder: 'Merhaba… veya sorunu yaz',
     inputLabel: 'QRA’ya mesaj',
     send: 'Gönder',
@@ -111,6 +113,8 @@ const CHAT_COPY = {
     hintBefore: 'Pick one below or type; on desktop ',
     hintSend: ' sends, ',
     hintNewline: ' adds a new line.',
+    privacyNotice: 'Chats are stored for quality (180 days) and processed by an AI provider; do not share personal details. ',
+    privacyLink: 'Details',
     placeholder: 'Hi… or describe your question',
     inputLabel: 'Message to QRA',
     send: 'Send',
@@ -792,6 +796,13 @@ export function Chatbot() {
                           {copy.hintSend}
                           <span className="font-medium text-foreground">Shift+Enter</span>
                           {copy.hintNewline}
+                          {/* KVKK (ai-ozellikleri Y5): kayıt + sağlayıcı aktarımı açıkça söylenir. */}
+                          <span className="mt-1 block">
+                            {copy.privacyNotice}
+                            <a href="/gizlilik-politikasi#yapay-zeka" className="font-medium text-foreground underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {copy.privacyLink}
+                            </a>
+                          </span>
                         </p>
                         <div className="mx-auto grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
                           {quickActions.map((action, i) => (
