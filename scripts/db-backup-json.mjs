@@ -19,6 +19,7 @@
  *  - Nesne adı 128 bit rastgele sonek taşır. Çözme: `node scripts/db-restore.mjs`.
  *  - Okunamayan model varsa yedek BAŞARISIZ sayılır (eskiden "atlandı" deyip başarıyla
  *    bitiyordu, eksik yedek fark edilmiyordu). Bilerek devam etmek için `--allow-skip`.
+ *  - Tablolar SAYFALI okunur ve dosyaya akıtılır (O9): büyük tablo belleği doldurmaz.
  *
  * KULLANIM
  *   node scripts/db-backup-json.mjs                # yedek al + şifrele + yedek kovasına yükle
@@ -77,6 +78,64 @@ function modelNames() {
   );
 }
 
+/** Sayfa başına satır: büyük tablolar (AnalyticsEvent vb.) belleğe TEK SEFERDE yüklenmez (O9). */
+const PAGE_SIZE = 2000;
+
+/**
+ * İstemci model anahtarı (camelCase) → sıralama/imleç alanları (DMMF'den). Tek alanlı kimlikte
+ * imleç sayfalaması; bileşik birincil anahtarda o alanlara göre sıralı ofset sayfalaması.
+ * Kimliksiz model (olmamalı) → sayfasız tek okuma.
+ */
+function pagingPlan(Prisma) {
+  const plan = new Map();
+  for (const m of Prisma?.dmmf?.datamodel?.models ?? []) {
+    const key = m.name.charAt(0).toLowerCase() + m.name.slice(1);
+    const id = m.fields.find((f) => f.isId)?.name;
+    const pk = m.primaryKey?.fields ?? [];
+    plan.set(key, id ? { cursor: id } : pk.length ? { orderBy: pk } : null);
+  }
+  return plan;
+}
+
+/** Bir modelin bütün satırlarını sayfa sayfa okuyup `onPage` ile akıtır; toplam satırı döner. */
+async function readModelPaged(delegate, plan, onPage) {
+  if (!plan) {
+    const rows = await delegate.findMany();
+    if (rows.length) await onPage(rows);
+    return rows.length;
+  }
+  let total = 0;
+  if (plan.cursor) {
+    let cursor;
+    for (;;) {
+      const rows = await delegate.findMany({
+        take: PAGE_SIZE,
+        orderBy: { [plan.cursor]: 'asc' },
+        ...(cursor !== undefined ? { cursor: { [plan.cursor]: cursor }, skip: 1 } : {}),
+      });
+      if (!rows.length) break;
+      await onPage(rows);
+      total += rows.length;
+      if (rows.length < PAGE_SIZE) break;
+      cursor = rows[rows.length - 1][plan.cursor];
+    }
+    return total;
+  }
+  for (let skip = 0; ; skip += PAGE_SIZE) {
+    const rows = await delegate.findMany({ take: PAGE_SIZE, skip, orderBy: plan.orderBy.map((f) => ({ [f]: 'asc' })) });
+    if (!rows.length) break;
+    await onPage(rows);
+    total += rows.length;
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return total;
+}
+
+/** Yazma akışı tamponu doluysa boşalmasını bekle (büyük tabloda bellek sınırlı kalsın). */
+function writeChunk(stream, chunk) {
+  return stream.write(chunk) ? Promise.resolve() : new Promise((r) => stream.once('drain', r));
+}
+
 /** BigInt ve Date, JSON.stringify'ı patlatır / bozar — açıkça çeviriyoruz. */
 function replacer(_k, v) {
   if (typeof v === 'bigint') return v.toString();
@@ -111,8 +170,9 @@ async function main() {
     throw new BackupConfigError('--keep pozitif bir tam sayı olmalı.');
   }
 
-  const { PrismaClient } = await import('../generated-prisma-client/index.js');
+  const { PrismaClient, Prisma } = await import('../generated-prisma-client/index.js');
   prisma = new PrismaClient();
+  const plans = pagingPlan(Prisma);
 
   const tmpBase = path.join(tmpdir(), `qratex-json-${randomBytes(12).toString('hex')}`);
   const outPath = `${tmpBase}.json`;
@@ -131,18 +191,24 @@ async function main() {
   const counts = {};
   const skipped = [];
   for (const m of models) {
-    let rows;
+    // Model sayfa sayfa okunur ve diziye akıtılır (eskiden tek `findMany()` ile tablonun tamamı
+    // belleğe alınıyordu). Okuma ortasında hata olursa model "atlanan" sayılır ve yedek BAŞARISIZ
+    // olur (--allow-skip yoksa); yarım dizi JSON'u bozmasın diye dizi yine kapatılır.
+    await writeChunk(out, `${first ? '' : ','}${JSON.stringify(m)}:[`);
+    first = false;
+    let firstRow = true;
     try {
-      rows = await prisma[m].findMany();
+      counts[m] = await readModelPaged(prisma[m], plans.get(m) ?? null, async (rows) => {
+        const body = rows.map((r) => JSON.stringify(r, replacer)).join(',');
+        await writeChunk(out, `${firstRow ? '' : ','}${body}`);
+        firstRow = false;
+      });
+      total += counts[m];
     } catch (e) {
       skipped.push(m);
       log(`  OKUNAMADI: ${m} (${String(e.message).split('\n')[0].slice(0, 80)})`);
-      continue;
     }
-    counts[m] = rows.length;
-    total += rows.length;
-    out.write(`${first ? '' : ','}${JSON.stringify(m)}:${JSON.stringify(rows, replacer)}`);
-    first = false;
+    await writeChunk(out, ']');
   }
   out.write(`},"atlanan":${JSON.stringify(skipped)}}`);
   await new Promise((r) => out.end(r));

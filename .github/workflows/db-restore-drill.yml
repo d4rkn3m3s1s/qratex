@@ -1,0 +1,112 @@
+# Aylık otomatik GERİ YÜKLEME TATBİKATI (arka plan denetimi O9).
+#
+# "Yedek var" ile "yedekten dönülebilir" aynı şey değil: eskiden hiçbir betik geri yüklemeyi
+# denemiyordu (yalnız boyut > 1 KB kontrolü). Bu iş ayda bir, kovadaki EN YENİ pg yedeğini
+# indirir, çözer (GCM doğrulamalı), runner içindeki geçici bir postgres konteynerine yükler
+# (ON_ERROR_STOP) ve kritik tabloların dolu olduğunu doğrular. Canlı veritabanına HİÇ dokunmaz;
+# veri yalnız tek kullanımlık runner'da yaşar ve iş sonunda silinir.
+#
+# AÇMAK İÇİN: Variables: BACKUP_ENABLED=true (+ ops. PG_MAJOR)
+#   Secrets:   BACKUP_ENCRYPTION_KEY, BACKUP_R2_ACCOUNT_ID, BACKUP_R2_BUCKET, BACKUP_R2_PREFIX (ops.),
+#              BACKUP_R2_READ_ACCESS_KEY_ID + BACKUP_R2_READ_SECRET_ACCESS_KEY (yalnız okuma token'ı;
+#              yedek alan token yalnız yazabilir), BACKUP_DRILL_HEARTBEAT_URL (ops. — tatbikat
+#              başarısız ya da hiç koşmadıysa alarm)
+name: DB Geri Yükleme Tatbikatı (aylık)
+
+on:
+  schedule:
+    - cron: '0 4 1 * *' # her ayın 1'i 04:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    name: En yeni yedek → geçici postgres → doğrula
+    if: ${{ vars.BACKUP_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PG_MAJOR: ${{ vars.PG_MAJOR || '17' }}
+      DRILL_URL: postgres://postgres:drill@localhost:5432/drill
+    services:
+      postgres:
+        image: postgres:${{ vars.PG_MAJOR || '17' }}
+        env:
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Bağımlılıklar
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: psql ${{ env.PG_MAJOR }} (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}"
+
+      - name: En yeni yedeği indir + çöz
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_R2_ACCOUNT_ID: ${{ secrets.BACKUP_R2_ACCOUNT_ID }}
+          BACKUP_R2_BUCKET: ${{ secrets.BACKUP_R2_BUCKET }}
+          BACKUP_R2_PREFIX: ${{ secrets.BACKUP_R2_PREFIX }}
+          BACKUP_R2_READ_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_READ_ACCESS_KEY_ID }}
+          BACKUP_R2_READ_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_READ_SECRET_ACCESS_KEY }}
+        run: node scripts/db-restore.mjs --latest --kind pg --gunzip --out "$RUNNER_TEMP/drill.sql"
+
+      - name: Geçici veritabanına yükle (hata = tatbikat başarısız)
+        run: |
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/psql" "$DRILL_URL" -q -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/drill.sql" > /dev/null
+
+      - name: Kritik tabloları doğrula
+        run: |
+          PSQL="/usr/lib/postgresql/${PG_MAJOR}/bin/psql"
+          fail=0
+          for t in User QRCode Feedback PointsLedger _prisma_migrations; do
+            exists=$("$PSQL" "$DRILL_URL" -tAc "SELECT to_regclass('public.\"$t\"') IS NOT NULL")
+            if [ "$exists" != "t" ]; then
+              # Model adı değiştiyse tatbikatı kırmak yerine görünür uyarı (tablo listesi aşağıda).
+              echo "::warning::Tablo yok: $t"
+              continue
+            fi
+            n=$("$PSQL" "$DRILL_URL" -tAc "SELECT count(*) FROM public.\"$t\"")
+            echo "$t: $n satır"
+            if [ "$t" = "User" ] || [ "$t" = "_prisma_migrations" ]; then
+              if [ "$n" -lt 1 ]; then echo "::error::$t boş — yedek geri yüklenebilir değil"; fail=1; fi
+            fi
+          done
+          echo "Tablo sayısı: $("$PSQL" "$DRILL_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")"
+          exit $fail
+
+      - name: Heartbeat
+        if: ${{ always() }}
+        env:
+          HB: ${{ secrets.BACKUP_DRILL_HEARTBEAT_URL }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          if [ -z "$HB" ]; then exit 0; fi
+          if [ "$OUTCOME" = "success" ]; then curl -fsS -m 10 -X POST "$HB" || true; else curl -fsS -m 10 -X POST "${HB%/}/fail" || true; fi
+
+      - name: Çözülmüş dökümü sil
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/drill.sql"

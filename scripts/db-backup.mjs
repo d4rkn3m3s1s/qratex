@@ -28,7 +28,9 @@
  *   node scripts/db-backup.mjs --keep 14       # kovada son 14 yedeği tut (List+Delete yetkisi ister;
  *                                              # Object Lock / yalnız-yazma token'ında R2 yaşam döngüsü kuralı kullan)
  *
- * ZAMANLAMA (Windows Görev Zamanlayıcı örneği, günlük 03:30)
+ * ZAMANLAMA: birincil yol `.github/workflows/db-backup.yml` (günlük, runner'da pg_dump 17;
+ * aylık geri yükleme tatbikatı `db-restore-drill.yml`). Yerel yedek gerekirse
+ * (Windows Görev Zamanlayıcı örneği, günlük 03:30):
  *   schtasks /create /tn "QRateX DB Yedek" /tr "node C:\qratex\scripts\db-backup.mjs" ^
  *            /sc daily /st 03:30
  *   `BACKUP_HEARTBEAT_URL` tanımlarsan yedek alınmayan gün alarm alırsın.

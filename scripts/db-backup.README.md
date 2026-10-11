@@ -111,10 +111,17 @@ o branch'e çevrilir. Çözülmüş dosya bütün veritabanıdır; iş bitince s
 
 İlk 28 bayt AAD olarak doğrulanır. Değiştirilmiş dosyada çözme başarısız olur ve yarım çıktı bırakılmaz.
 
+## Zamanlama ve geri yükleme tatbikatı (GitHub Actions)
+
+- `.github/workflows/db-backup.yml` — her gün 00:30 UTC (03:30 TSİ) runner'da pg_dump 17 ile bu betik
+  (şifreli, özel kova, heartbeat). Geliştirici makinesine bağlı zamanlama gerekmez.
+- `.github/workflows/db-restore-drill.yml` — her ayın 1'i: en yeni pg yedeği indirilir, çözülür, runner
+  içindeki geçici `postgres:17` konteynerine `ON_ERROR_STOP` ile yüklenir ve kritik tabloların dolu olduğu
+  doğrulanır. Canlı veritabanına dokunmaz; sonuç `BACKUP_DRILL_HEARTBEAT_URL`'e pinglenir.
+- İkisi de **opt-in**: repo değişkeni `BACKUP_ENABLED=true` ve iş dosyalarının başında listelenen
+  sırlar tanımlanmadan çalışmaz.
+
 ## Açık kalanlar
 
-- Zamanlama hâlâ bir makineye bağlı. Hedef: GitHub Actions `schedule` + `postgres:17` imajı +
-  bu betik + heartbeat (denetim O9).
-- Aylık otomatik geri yükleme tatbikatı (Neon branch → `psql` → satır sayısı karşılaştırması) henüz yok.
-- JSON yedeği tabloları sayfalamadan okur ve tablolar arası tutarlı anlık görüntü vermez; yalnız acil
-  durum aracıdır.
+- JSON yedeği artık tabloları sayfalı okuyup akıtır, ama tablolar arası tutarlı anlık görüntü vermez;
+  yalnız acil durum aracıdır (tam kurtarma pg yedeğiyle).
