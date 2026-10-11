@@ -217,3 +217,66 @@ Kapsam: `app/admin/ai-detailed/page.tsx` (364 satır, tek istemci bileşeni), `a
 - `route.ts:34` ve `:57-60` `deletedAt: null` filtresi içermiyor; oysa diğer admin/dealer analitik uçları bu filtreyi uyguluyor (ör. `app/api/admin/analytics/route.ts`, `app/api/dealer/analytics/route.ts`), yani bu uç platform sözleşmesinden sapıyor.
 - **Yeniden üretim:** Admin, toksik/spam bir yorumu `/admin/feedbacks`'ten siler → kayıt `deletedAt` alır → ilgili bayi `/dealer/ai-insights`'ı açar → `fetch('/api/ai/detailed?limit=50')` (`app/dealer/ai-insights/ai-insights-client.tsx:360`) yanıtındaki `feedbacks` listesi (`:374`, `:2140`) silinen yorumun tam metnini döndürür ve listede göstermeye devam eder (yanıtta `user.name` da var; UI'da adın render edilip edilmediği doğrulanmadı); admin sayfasındaki toplamlar da silinen kayıtları sayar.
 - Öneri: her iki sorguya `deletedAt: null`; uzun vadede Prisma client extension ile `Feedback` için varsayılan aktif-kayıt kapsamı (bilinçli `includeDeleted` bayrağı ile kaçış).
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/ai-detailed` emekliye ayrıldı. Sayfa sorgu parametrelerini koruyarak `/admin/ai?tab=sinyaller` adresine ("Müşteri sesi" sekmesi) kalıcı yönleniyor. Admin artık `/api/ai/detailed` kullanmıyor; ayrı uç `GET /api/admin/ai-ops/signals` yalnız ADMIN'e açık, yalnız toplamları döndürüyor, ham metin içermiyor. Detaya inmek için `GET /api/admin/ai-ops/signals/feedbacks` var: sayfalı, metin kısaltılmış, kullanıcı adı yok. Bu uçların veri katmanı `lib/admin-ai-ops/server.ts` (`getSignalsReport`, `getSignalFeedbacks`).
+
+### Özellik envanteri, yeni durum
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR |
+| 2 | API yetkisi | ÇALIŞIYOR: admin ayrı uçta (`defineRoute roles:['ADMIN']`). STAFF kapsam düzeltmesi `/api/ai/detailed`'da P0-05 ile zaten yapılmıştı (`resolveAiScope`) |
+| 3 | Veri çekme | ÇALIŞIYOR: zarf v2 + `res.ok` kontrolü (`AiOpsApiError`), sunucu ön yüklemesi |
+| 4 | Yükleniyor | ÇALIŞIYOR: iskelet var, düzen kayması yok |
+| 5 | Hata durumu | ÇALIŞIYOR: `QueryState` hata kartı + Tekrar dene; boş ile hata ayrı |
+| 6 | Boş veri | ÇALIŞIYOR: kartlar kaybolmuyor, "Bu dönemde veri yok"; ortalama yoksa "—" ve "Veri yok" |
+| 7 | Hero | ÇALIŞIYOR: abartılı "derin öğrenme" metni ve ilgisiz ikon kaldırıldı |
+| 8 | Yenile | ÇALIŞIYOR: dönen ikon, devre dışı bırakma, başarı/hata bildirimi |
+| 9 | "Toplam" | ÇALIŞIYOR: dönemin gerçek `COUNT(*)` değeri (6.000 tavanı yok); metinsiz kayıtlar ayrıca gösteriliyor |
+| 10 | Analiz edilmiş | ÇALIŞIYOR: `aiProcessedAt` dolu ve sezgisel olmayan kayıtlar; tanımı kapsam satırında yazıyor |
+| 11–13 | Ort. aciliyet / efor / kayıp riski | ÇALIŞIYOR: tek ölçek (0-100), örneklem notu, veri yoksa "—" |
+| 14 | Niyet dağılımı | ÇALIŞIYOR: yüzde + adet, satırdan liste açılıyor |
+| 15 | Aciliyet kovaları | ÇALIŞIYOR: sınırlar çapaların ortasında (<0,4 / <0,6 / <0,85 / ≥0,85), tek kaynak `URGENCY_BUCKETS`, kova sınırları kartta yazıyor |
+| 16 | Kayıp riski kovaları | ÇALIŞIYOR: ton anlamı aciliyetle tutarlı (güvende → yeşil … yüksek → kırmızı) |
+| 17 | Varlıklar | ÇALIŞIYOR: Türkçe tür, olumlu/olumsuz yüzdesi metin olarak (emoji yok), satırdan liste açılıyor |
+| 18 | Temalar | ÇALIŞIYOR: yıldız = gerçek müşteri puanı ortalaması; olumsuz oranı çubuğu; bayi sayısı; satırdan liste açılıyor |
+| 19 | Aksiyon önerileri | ÇALIŞIYOR: birebir metin yerine kategoriye göre kümeleniyor; küme başına öneri sayısı, bayi sayısı, en yüksek öncelik ve örnekler var |
+| 20 | Duygu haritası | ÇALIŞIYOR: Türkçe etiketli duygu listesi ("harita" iddiası kaldırıldı) |
+| 21 | Puan dağılımı | ÇALIŞIYOR: metinsiz puanlar dahil, bu durum açıkça yazıyor |
+| 22 | Puana göre duygu | ÇALIŞIYOR: erişilebilir tablo (caption, th scope), sıra sabit, 5★ + olumsuz tutarsızlığı vurgulanıyor, satırdan liste açılıyor |
+| 23 | Giriş animasyonları | ÇALIŞIYOR: koreografi kaldırıldı; kısa opaklık geçişi var ve azaltılmış harekette kapalı |
+| 24 | Mobil | ÇALIŞIYOR: puan tablosu yatay kaydırılıyor, kartlar tek sütun, dokunma hedefleri ≥44px |
+| 25 | Zaman aralığı | ÇALIŞIYOR: 24 sa / 7 g / 30 g / 90 g, URL'de; önceki dönemle fark dikkat kartlarında |
+| 26 | İşletme filtresi | ÇALIŞIYOR (kısmen): riskli bayiler tablosu ve bayi bazlı olumsuz listesi var. Sektör/segment filtresi yapılmadı (kalan) |
+| 27 | Detaya inme | ÇALIŞIYOR: niyet, aciliyet, tema, varlık, puan, acil, kayıp riski, toksik ve olumsuz satırlarından sayfalı çekmece açılıyor → `/admin/feedbacks?id=` |
+| 28 | Dönem karşılaştırma | ÇALIŞIYOR: dikkat sayaçlarında önceki döneme göre fark var. Tema/niyet trend grafiği yapılmadı (kalan) |
+| 29 | CSV | ÇALIŞIYOR: sinyal özeti CSV olarak indirilebiliyor |
+| 30 | ActionItem'a çevirme | KALDIRILDI (bu yüzeyden): bayi görev ataması bayi/görev yüzeyinin işi. Bu sayfa yalnız kümeyi gösteriyor, hiçbir şey yapmayan bir düğme bırakılmadı |
+| 31 | Veri tazeliği | ÇALIŞIYOR: başlıkta "Son hesaplama" |
+| 32 | i18n | KISMİ: metinler tam Türkçe; EN sözlüğü bu dalgada eklenmedi (kalan) |
+| 33 | Ölü importlar | KALDIRILDI: sayfa yeniden yazıldı |
+| 34 | 50 tam metinli ölü yük | KALDIRILDI: admin uç ham metin döndürmüyor |
+
+### Kapanan bulgular
+- **1:** Admin ayrı ADMIN-only uca taşındı; dealer ucunun STAFF kapsamı P0-05 ile zaten kapalıydı.
+- **2:** Kovalar düzeltildi ve tek kaynakta toplandı.
+- **3:** Gerçek `count` kullanılıyor; kapsam satırı var.
+- **4:** `deletedAt: null` her sorguda var.
+- **5:** Hata durumu doğru.
+- **6:** Tema yıldızı artık gerçek puan.
+- **7:** Toplamalar SQL'de (`jsonb_array_elements`), Redis'te 60 sn önbellekte; ölü yük yok.
+- **8:** Kümeleme kategoriye göre, öncelik × frekans. Göreve çevirme bu yüzeyin dışında bırakıldı.
+- **9:** Etiketler Türkçe, emoji yok.
+- **10:** Erişilebilir dağılımlar ve tablolar.
+- **11:** Yenile geri bildirimi ve tek ölçek.
+- **12:** `any` kaçakları yok; nötr oranı sunucuda sayıdan hesaplanıyor.
+- **13:** Hareket kuralları uygulandı.
+
+### Kalanlar
+- Sektör/segment filtresi.
+- Niyet/tema zaman serisi ve "yükselen tema" anomali rozeti.
+- EN çeviri sözlüğü.
+- Kümeden toplu ActionItem oluşturma (bayi görev yüzeyiyle birlikte ele alınmalı).

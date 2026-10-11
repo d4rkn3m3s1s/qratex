@@ -972,6 +972,11 @@ export interface AskAIContext {
   urgencyChurnSummary?: { highUrgencyCount: number; highChurnCount: number };
   /** Son 7 gün günlük trend (tarih -> adet) */
   last7DaysTrend?: { date: string; count: number }[];
+  /**
+   * (İsteğe bağlı, admin asistanı) Bayi risk sıralaması — "hangi bayi" sorularının bağlamda
+   * gerçekten cevabı olsun diye (admin_ai-dashboard B6). Bayi adları sınırlı/temizlenmiş girer.
+   */
+  dealerRanking?: { name: string; feedbacks: number; negativePercent: number | null; urgent: number; churnHigh: number; avgRating: number | null }[];
 }
 
 /**
@@ -1042,6 +1047,14 @@ export function buildAskAISystemContent(
   }
   if (context.last7DaysTrend && context.last7DaysTrend.length > 0) {
     extraDataParts.push(`- Son 7 Gün Trend: ${context.last7DaysTrend.map(t => `${sanitizeContextLine(t.date, 20) ?? '-'}: ${Number(t.count) || 0}`).join(', ')}`);
+  }
+  if (context.dealerRanking && context.dealerRanking.length > 0) {
+    extraDataParts.push(
+      `- Bayi Risk Sıralaması (yüksekten düşüğe): ${context.dealerRanking
+        .slice(0, 10)
+        .map(d => `${sanitizeContextLine(d.name, 60) ?? '-'} [geri bildirim ${Number(d.feedbacks) || 0}, olumsuz %${d.negativePercent ?? '-'}, acil ${Number(d.urgent) || 0}, kayıp riski ${Number(d.churnHigh) || 0}, ort. puan ${d.avgRating ?? '-'}]`)
+        .join('; ')}`
+    );
   }
 
   const topics = (context.topTopics ?? [])

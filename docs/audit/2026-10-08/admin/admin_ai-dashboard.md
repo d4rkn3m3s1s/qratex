@@ -222,3 +222,75 @@ Kısa hüküm: Sayfa görsel olarak düzgün görünse de ekrandaki sayıların 
 - Sınırlayıcı etkenler (ciddiyeti düşürüyor): erişim yalnız ADMIN/DEALER rolüne açık (CUSTOMER 403, `route.ts:373`). Kullanıcı başına dakikada 20 istek rate limit var (`route.ts:24`, `:101`). Bu yüzden sınırsız değil, ama yenileme sayısıyla orantılı ve ölçülmeyen bir harcama.
 - Gecikme iddiası makul: istemci timeout'u 15 sn, `maxRetries: 1` (`lib/ai-engine.ts:50-51`). `withRetry` 429'da 3/6/9 sn bekliyor (`:157-176`). Ardışık iki çağrı olduğundan ilk boyamanın 20 sn'yi aşması mümkün. Sayfa `Promise.all` ile bu yanıtı beklediği için tüm ekran spinner'da kalıyor (`page.tsx:107`, `:236`).
 - **Yeniden üretim:** Admin sayfayı açar ve 5 kez "Yenile"ye basar. Bu, 5–10 ölçülmeyen LLM çağrısı ve 5 kez aynı `system/YYYY-MM/monthly` satırının üzerine yazılması demek. Ekranda bu raporun hiçbir alanı görünmez. AIUsageLog'da iz yok; günlük maliyet limiti devreye girmez.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/ai-dashboard` emekliye ayrıldı. Sayfa artık sorgu parametrelerini koruyarak `/admin/ai`'ye kalıcı yönleniyor (`permanentRedirect`). Yerine **AI Operasyon Merkezi** (`app/admin/ai/page.tsx`) geldi. Sayfa sunucu bileşeniyle açılıyor, ilk veri sunucuda okunuyor ve 6 sekmeden oluşuyor: Genel bakış · Kullanım ve maliyet · Kuyruk · Bayiler · Müşteri sesi · Asistan. Asistan sekmesi lazy yükleniyor.
+- **Veri katmanı:** `lib/admin-ai-ops/{contract,server}.ts`. Sayıların hepsi DB'de hesaplanıyor (`count/groupBy/$queryRaw`). Hepsi tek bir dönem penceresine bağlı (24 sa / 7 g / 30 g / 90 g) ve önceki dönemle karşılaştırılıyor. Silinmiş kayıtlar her yerde hariç. Sonuçlar Redis'te 60 sn önbellekte tutuluyor, "Yenile" önbelleği atlıyor.
+- **BFF:** `app/api/admin/ai-ops/*` altında `usage`, `budget`, `errors`, `backlog` (GET + POST), `backlog/pending`, `dealers` (GET + PATCH), `signals`, `signals/feedbacks` ve `assistant`. Hepsi `defineRoute` ile yazıldı: yalnız ADMIN, zod doğrulaması ve oran sınırı var. GET uçlarında LLM çağrısı yok.
+- **Testler:** `__tests__/lib/admin-ai-ops.test.ts` (19 test, geçti).
+
+### Özellik envanteri, yeni durum
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Yetki | ÇALIŞIYOR: sayfa `requireAuth(['ADMIN'])`, bütün uçlar `defineRoute roles:['ADMIN']` |
+| 2 | Yükleniyor | ÇALIŞIYOR: sunucu ön yükleme yapıyor, her bölümün kendi `QueryState` iskeleti var, tam sayfa spinner yok |
+| 3 | Hata durumu | ÇALIŞIYOR: her bölümde `QueryState` hata kartı ve "Tekrar dene" var; "200 + sıfırlar" yok |
+| 4 | Hero | ÇALIŞIYOR: QDL `PageHeader` (ops); meta satırında sağlık rozeti, son hesaplama zamanı ve AI kalite / stüdyo bağlantıları var |
+| 5 | "Toplam analiz" rozeti | ÇALIŞIYOR: Müşteri sesi sekmesindeki kapsam satırı dönemin gerçek sayılarını veriyor (toplam / yazılı / analizli / bekleyen / hariç tutulan sahte) |
+| 6 | "AI başarı %" | ÇALIŞIYOR: kalıcı `AIUsageLog`'dan hata oranı (null → "—"). Sağlık sınıfı `classifyHealth`: çağrı yoksa "çağrı yok", hepsi başarısızsa "Kesinti" |
+| 7 | Yenile | ÇALIŞIYOR: önbelleği atlayıp taze hesaplıyor; başarı/hata bildirimi doğru ve döner ikonla gösteriliyor |
+| 8 | "Veri doldur" | KALDIRILDI: yerine güvenli Kuyruk sekmesi geldi (Şimdi işle / Yeniden kuyruğa al / Sahte sinyalleri temizle). Hepsi onaylı, gerekçeli ve denetim kayıtlı |
+| 9 | "AI'a Sor" aç/kapa | ÇALIŞIYOR: "Asistan" sekmesi |
+| 10 | Mojibake uyarı kartı | KALDIRILDI: tehlikeli bootstrap çağrısıyla birlikte gitti |
+| 11 | Önerilen sorular | ÇALIŞIYOR: bağlama bayi risk sıralaması eklendi (`AskAIContext.dealerRanking`), bayi soruları artık veriye dayanıyor |
+| 12 | Mesaj gönderme | ÇALIŞIYOR: IME koruması (`isComposing`), etiketli alan, adı olan gönder düğmesi |
+| 13 | Çok turlu sohbet | ÇALIŞIYOR: son 12 tur istemciden gidiyor. Sohbet DB'ye kaydedilmiyor, metinde bu açıkça yazıyor |
+| 14 | Yazıyor göstergesi | ÇALIŞIYOR: "Yanıt hazırlanıyor…"; azaltılmış harekette dönme kapalı |
+| 15 | Otomatik kaydırma | ÇALIŞIYOR: yalnız sohbet kabı kayıyor (`scrollTo`), sayfa zıplamıyor |
+| 16 | Chat hata gösterimi | ÇALIŞIYOR: `askAI` hata/kota metni 503/429'a çevriliyor, geçmişe girmiyor; hata balonu + "Tekrar dene" |
+| 17 | Sohbet geçmişi | ÇALIŞIYOR (oturum içi): "Yeni sohbet" düğmesi var. Kalıcı geçmiş listesi yapılmadı (kalan) |
+| 18 | Markdown / kaynak | ÇALIŞIYOR: güvenli kalın + liste çizimi (HTML enjeksiyonu yok); yanıtın altında kaynak çipleri |
+| 19 | Kritik uyarı kartları | ÇALIŞIYOR: Yüksek aciliyet / Kayıp riski / Toksik / Analiz kuyruğu kartları tıklanınca filtreli liste çekmecesi açılıyor; önceki döneme göre fark gösteriliyor; sıfırsa "Sakin" |
+| 20 | Toplam Feedback | ÇALIŞIYOR: `count` ile dönemin gerçek toplamı (600 tavanı yok) |
+| 21 | AI Analiz Edilmiş | ÇALIŞIYOR: aynı pencere, sezgisel kayıtlar hariç |
+| 22 | Ort. puan | ÇALIŞIYOR: dönemin `AVG(rating)` değeri, metinsiz puanlar dahil |
+| 23 | AI Model | ÇALIŞIYOR: sağlayıcı/model `getAIProviderStatus`'tan; model dağılımı tablosu kalıcı kayıttan |
+| 24 | Toplam çağrı | ÇALIŞIYOR: `AIUsageLog` sayımı, delta ve mini grafikle |
+| 25 | Başarı oranı | ÇALIŞIYOR: #6 ile aynı |
+| 26 | Ort. yanıt | ÇALIŞIYOR: p50/p95 (`percentile_cont`), yalnız başarılı çağrılar |
+| 27 | İlerleme çubuğu | ÇALIŞIYOR: `Meter` bileşeni, `role="progressbar"` ve aria değerleriyle |
+| 28 | Duygu dağılımı | ÇALIŞIYOR: dönem bazlı, sezgisel kayıtlar hariç, yüzde + adet |
+| 29 | Duygu çubuğu | ÇALIŞIYOR: her satırda metin karşılığı ve aria etiketi |
+| 30 | Niyet dağılımı | ÇALIŞIYOR: Türkçe etiketli; satıra basınca liste açılıyor |
+| 31 | Konular | ÇALIŞIYOR: İngilizce `topics` yerine LLM temaları gösteriliyor (Türkçe, gerçek puan ortalaması ve bayi sayısıyla) |
+| 32 | Tema kümeleri | ÇALIŞIYOR: `avgScore*5` yıldızı kaldırıldı, yıldız artık gerçek müşteri puanı. Sayfa açılışında LLM kümelemesi yok |
+| 33 | Bayi AI performansı | ÇALIŞIYOR: "Riskli bayiler" tablosu gerçekten risk skoruna göre sıralı, satırdan Olumsuzlar / Sağlık detayına gidiliyor. "Bayiler" sekmesi bütün bayileri sayfalı gösteriyor |
+| 34 | Son AI analizleri | ÇALIŞIYOR: model türü rozeti (yapay zekâ / yerel yedek / sezgisel), Türkçe etiketler, geri bildirime bağlantı |
+| 35 | Arka plan rapor üretimi | KALDIRILDI: gereksiz LLM + DB yazımıydı ve sonucu kullanılmıyordu |
+| 36 | Dönem filtresi | ÇALIŞIYOR: 24 sa / 7 g / 30 g / 90 g, URL'de `?period=` olarak tutuluyor |
+| 37 | CSV | ÇALIŞIYOR: işe/modele göre kullanım ve sinyal özeti indirilebiliyor (BOM'lu, formül kaçışlı) |
+| 38 | Son güncelleme | ÇALIŞIYOR: "Son hesaplama HH:MM:SS (x önce)"; kullanım 2 dk, kuyruk 1 dk arayla arka planda yenileniyor |
+| 39 | Maliyet / token / bütçe | ÇALIŞIYOR: token KPI'ı; bugünkü platform tavanları (bayisiz / QRA / sistem öğrenmesi); kotasının en çoğunu kullanan bayiler; bayi başı kota sütunu |
+| 40 | Mobil | ÇALIŞIYOR: tek sütun, kaydırılabilir çipler, tablolar mobilde kart görünümünde, dokunma hedefleri ≥44px |
+| 41 | Azaltılmış hareket | ÇALIŞIYOR: kart giriş koreografisi kaldırıldı; `Meter` ve dönen ikonlar `useReducedMotionPref` / `motion-reduce` kurallarına uyuyor |
+| 42 | Erişilebilirlik | ÇALIŞIYOR: `role="log"` + `aria-live`, etiketli alanlar, ikon düğmelerin adı var, dağılımlar metinle de okunuyor, tablolarda caption ve th scope var |
+
+### Kapanan bulgular
+- **B1:** "Veri doldur" kaldırıldı. Yerine aynı `runFeedbackAnalyzePipeline` + politika kapısı geldi. Gerçek bayilerdeki sezgisel kayıtlar sayılıyor ve onaylı, gerekçeli temizleniyor (`clear_synthetic`, "TEMİZLE" yazarak onay).
+- **B2:** GET'te LLM yok, rapor upsert'i yok. Asistan `askAI` (guardAiCall + AIUsageLog) üzerinden çalışıyor ve `rateLimit:'ai'` altında.
+- **B3:** Bellek-içi sayaç yerine kalıcı `AIUsageLog`; `??` / null kullanılıyor, %100 uydurulmuyor.
+- **B4:** Tek dönem, tek sorgu katmanı, `deletedAt` her yerde hariç.
+- **B5:** Bayi metrikleri SQL'de toplanıyor; liste sayfalı; sıralama gerçek.
+- **B6:** Bayi sıralaması bağlamda; hata metni yanıt sayılmıyor.
+- **B7:** Mojibake'li metinler silindi; yeni metinlerin hepsi tam Türkçe karakterli.
+- **B8:** Etiket sözlükleri `contract.ts`'te tek yerde; `mixed` için "Karışık" var.
+- **B9:** Hata ve başarı bildirimleri tutarlı.
+- **B10:** Erişilebilirlik ve mikro-etkileşim eksikleri kapatıldı.
+
+### Kalanlar
+- Kalıcı asistan sohbet geçmişi listesi yapılmadı. Bilerek oturum içi bırakıldı, gerekirse `AIConversation` kullanılabilir.
+- Eşik tabanlı uyarı kuralları ("hata oranı >%10 → bildirim") yapılmadı. Bildirim altyapısına bağlanması ayrı bir iş.
+- Tema kümeleri ve sistem raporunun cron'la üretilmesi yapılmadı. Bu sayfa artık LLM çağırmadığı için gerekmiyor; temalar doğrudan geri bildirim JSON'undan SQL ile toplanıyor.
