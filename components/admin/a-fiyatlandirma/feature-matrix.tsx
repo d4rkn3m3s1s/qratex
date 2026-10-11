@@ -10,6 +10,7 @@ import { buildFeatureMatrix, featureKey, toggleFeature, type PlanSummary } from 
 import { cn } from '@/lib/utils';
 import { errorText, updatePlan } from './api';
 import { fmtNum } from './format';
+import { AdminFiyatlandirmaText } from './copy';
 
 /**
  * Özellik matrisi: satırlar tüm planların özellik birleşimi, sütunlar vitrin sırasındaki planlar.
@@ -78,7 +79,7 @@ export function FeatureMatrix({ plans, onChanged }: { plans: PlanSummary[]; onCh
       </p>
       <div className="overflow-x-auto rounded-card border border-subtle bg-surface-1">
         <table className="w-full min-w-[36rem] border-collapse text-sm">
-          <caption className="sr-only">Plan özellik matrisi</caption>
+          <caption className="sr-only"><AdminFiyatlandirmaText k="matrixCaption" /></caption>
           <thead>
             <tr className="border-b border-subtle bg-surface-muted">
               <th scope="col" className="sticky left-0 z-10 bg-surface-muted px-3 py-2 text-left font-medium text-fg">
@@ -87,7 +88,7 @@ export function FeatureMatrix({ plans, onChanged }: { plans: PlanSummary[]; onCh
               {plans.map((p) => (
                 <th key={p.id} scope="col" className="px-3 py-2 text-center font-medium text-fg">
                   <span className="block max-w-[10rem] truncate" title={p.name}>{p.name}</span>
-                  {!p.isActive ? <span className="qx-small block font-normal text-fg-muted">satışa kapalı</span> : null}
+                  {!p.isActive ? <span className="qx-small block font-normal text-fg-muted"><AdminFiyatlandirmaText k="offSale" /></span> : null}
                 </th>
               ))}
             </tr>
@@ -138,7 +139,7 @@ export function FeatureMatrix({ plans, onChanged }: { plans: PlanSummary[]; onCh
           <Plus className="h-4 w-4" aria-hidden /> Satır ekle
         </Button>
       </form>
-      {extra.length ? <p className="qx-small text-fg-muted">Yeni satır, en az bir plana eklenene kadar yalnız bu ekranda görünür.</p> : null}
+      {extra.length ? <p className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="newRowHint" /></p> : null}
     </div>
   );
 }

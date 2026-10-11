@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { archivePlan, createPlan, errorText, fetchHistory, previewArchive, pricingKeys, updatePlan, verifyStripe } from './api';
 import { StripeCheckLine } from './stripe-check-line';
 import { fmtAbs } from './format';
+import { AdminFiyatlandirmaText } from './copy';
 
 export type EditorState = { mode: 'create' } | { mode: 'edit'; plan: PlanSummary } | null;
 
@@ -189,7 +190,7 @@ export function PlanEditor({ state, onClose, onSaved, onReloadLatest, stripeConf
         </div>
 
         <aside aria-label="Canlı önizleme" className="lg:sticky lg:top-0 lg:self-start">
-          <p className="qx-small mb-2 font-medium text-fg-muted">Bayinin göreceği kart</p>
+          <p className="qx-small mb-2 font-medium text-fg-muted"><AdminFiyatlandirmaText k="dealerCard" /></p>
           <PreviewCard control={form.control} />
         </aside>
       </div>
@@ -327,7 +328,7 @@ function PreviewCard({ control }: { control: Control<PlanFormValues> }) {
         ))}
         {features.length > 8 ? <li className="qx-small text-fg-muted">Vitrinde ilk 8 özellik gösterilir (+{features.length - 8}).</li> : null}
       </ul>
-      {!v.isActive ? <p className="qx-small mt-3 rounded-chip bg-surface-muted px-2 py-1 text-fg-muted">Satışa kapalı — vitrinde görünmez</p> : null}
+      {!v.isActive ? <p className="qx-small mt-3 rounded-chip bg-surface-muted px-2 py-1 text-fg-muted"><AdminFiyatlandirmaText k="offSaleHidden" /></p> : null}
     </div>
   );
 }
@@ -358,7 +359,7 @@ function HistorySection({ planId }: { planId: string }) {
           <QueryState query={q} skeleton="list" empty={{ title: 'Kayıt yok', description: 'Bu plan için denetim kaydı bulunmuyor.' }}>
             {(d) =>
               d.items.length === 0 ? (
-                <p className="qx-small text-fg-muted">Bu plan için denetim kaydı bulunmuyor.</p>
+                <p className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="noAudit" /></p>
               ) : (
                 <ol className="space-y-3">
                   {d.items.map((h) => (

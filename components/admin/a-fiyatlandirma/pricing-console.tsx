@@ -32,6 +32,7 @@ import { ArchiveAction, PlanEditor, type EditorState } from './plan-editor';
 import { FeatureMatrix } from './feature-matrix';
 import { StripeTab } from './stripe-tab';
 import { fmtAbs, fmtNum } from './format';
+import { AdminFiyatlandirmaText } from './copy';
 
 /**
  * Plan ve Abonelik konsolu (/admin/pricing). ops kaydı: sakin, yoğun; 3B yok.
@@ -221,7 +222,7 @@ function Storefront({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="qx-small text-fg-muted">Kartlar bayinin ve vitrinin göreceği sırada. Okları kullanarak sıralayın, sonra kaydedin.</p>
+        <p className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="orderHint" /></p>
         {dirty ? (
           <div className="flex gap-2" role="group" aria-label="Sıralama değişikliği">
             <Button variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setOrder(null)} disabled={save.isPending}>
@@ -304,11 +305,11 @@ function PlanCard({
 
       <dl className="grid grid-cols-3 gap-2 rounded-card bg-surface-muted p-3 text-center">
         <div>
-          <dt className="qx-small text-fg-muted">İşletme</dt>
+          <dt className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="business" /></dt>
           <dd className="font-semibold tabular-nums text-fg">{fmtNum(s.total)}</dd>
         </div>
         <div>
-          <dt className="qx-small text-fg-muted">Ödeyen</dt>
+          <dt className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="payer" /></dt>
           <dd className="font-semibold tabular-nums text-fg">
             {fmtNum(s.paying)}
             {s.pastDue ? <span className="qx-small block font-normal text-warning">{fmtNum(s.pastDue)} gecikmede</span> : null}
@@ -335,7 +336,7 @@ function PlanCard({
             Son değişiklik: {plan.lastChange.by ?? 'Sistem'} · <time dateTime={plan.lastChange.at}>{fmtAbs(plan.lastChange.at)}</time>
           </>
         ) : (
-          <>Oluşturma: <time dateTime={plan.createdAt}>{fmtAbs(plan.createdAt)}</time></>
+          <><AdminFiyatlandirmaText k="created" /> <time dateTime={plan.createdAt}>{fmtAbs(plan.createdAt)}</time></>
         )}
       </p>
 

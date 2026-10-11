@@ -11,6 +11,7 @@ import { INTERVAL_SUFFIX, formatMoney, type PlanSummary, type PricingOverview, t
 import { cn } from '@/lib/utils';
 import { createStripePrice, errorText, verifyStripe } from './api';
 import { StripeCheckLine } from './stripe-check-line';
+import { AdminFiyatlandirmaText } from './copy';
 
 /**
  * Stripe fiyat eşlemesi: her satıştaki planın Stripe Price'ı ile tutar/para birimi/döngü uyumu.
@@ -57,7 +58,7 @@ export function StripeTab({
             Stripe bağlı ({stripe.mode === 'live' ? 'canlı mod' : stripe.mode === 'test' ? 'test modu' : 'mod bilinmiyor'}). Fiyat kimliği kaydedilirken Stripe’tan okunur; tutar, para birimi ya da döngü plana uymazsa kayıt reddedilir. Bir planın fiyatını değiştirmek için önce yeni Stripe fiyatı oluşturun — mevcut aboneler eski fiyatta kalır.
           </p>
         ) : (
-          <p>Stripe anahtarı tanımlı değil. Eşlemeler kaydedilebilir ama doğrulanamaz ve bayiler çevrim içi ödeme yapamaz.</p>
+          <p><AdminFiyatlandirmaText k="noStripeKey" /></p>
         )}
       </div>
 
@@ -87,7 +88,7 @@ export function StripeTab({
                 ) : (
                   <StatusBadge size="sm" label={p.price === 0 ? 'Ücretsiz — Stripe gerekmez' : 'Eşlenmemiş'} tone={p.price === 0 ? 'neutral' : 'warning'} srPrefix="Stripe:" />
                 )}
-                {c ? <StripeCheckLine check={c} /> : p.stripePriceId ? <p className="qx-small text-fg-muted">Henüz doğrulanmadı.</p> : null}
+                {c ? <StripeCheckLine check={c} /> : p.stripePriceId ? <p className="qx-small text-fg-muted"><AdminFiyatlandirmaText k="notVerified" /></p> : null}
                 {p.subscribers.paying ? <p className="qx-small text-fg-muted">{p.subscribers.paying} ödeyen abone bu planda.</p> : null}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
