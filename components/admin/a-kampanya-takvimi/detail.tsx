@@ -26,6 +26,7 @@ import {
 } from '@/lib/campaigns-calendar/contract';
 import * as api from './api';
 import { ItemStatus, STATUS_HINT, campaignAudience, campaignEffect, fmtInt, fmtMult } from './parts';
+import { AdminKampanyaTakvimiText } from './copy';
 
 const SOURCE_LABEL: Record<string, string> = {
   feedback: 'Geri bildirim',
@@ -34,7 +35,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 function ConflictList({ items }: { items: Conflict[] }) {
-  if (items.length === 0) return <p className="qx-small text-fg-muted">Bu kayıtla çakışan etkin kayıt yok.</p>;
+  if (items.length === 0) return <p className="qx-small text-fg-muted"><AdminKampanyaTakvimiText k="noOverlap" /></p>;
   return (
     <ul className="space-y-1.5">
       {items.map((c) => (
@@ -53,7 +54,7 @@ function ConflictList({ items }: { items: Conflict[] }) {
 }
 
 function HistoryList({ items }: { items: HistoryEntry[] }) {
-  if (items.length === 0) return <p className="qx-small text-fg-muted">Kayıtlı değişiklik yok.</p>;
+  if (items.length === 0) return <p className="qx-small text-fg-muted"><AdminKampanyaTakvimiText k="noChanges" /></p>;
   return (
     <Timeline
       events={items.map((h) => ({
@@ -97,8 +98,8 @@ function CampaignBody({ d }: { d: CampaignDetail }) {
       <p className="qx-small text-fg-muted">{STATUS_HINT[c.status]}.</p>
       {(c.conditionsInvalid || c.challengeInvalid || c.multiplier !== c.effectiveMultiplier || c.bonusPoints !== c.effectiveBonus) && (
         <ul className={cn('space-y-1 rounded-md border p-2 qx-small', TONE_CALLOUT.warning)}>
-          {c.conditionsInvalid && <li>Kayıtlı koşullar tanınmıyor; seçici bu kampanyayı hiç uygulamıyor. Düzenleyip kaydedin.</li>}
-          {c.challengeInvalid && <li>Kayıtlı görev geçersiz; müşteride görünmüyor. Düzenleyip kaydedin.</li>}
+          {c.conditionsInvalid && <li><AdminKampanyaTakvimiText k="badConditions" /></li>}
+          {c.challengeInvalid && <li><AdminKampanyaTakvimiText k="badQuest" /></li>}
           {(c.multiplier !== c.effectiveMultiplier || c.bonusPoints !== c.effectiveBonus) && (
             <li>
               Eski kayıt tavan üstü: kayıtta {fmtMult(c.multiplier)} / +{fmtInt(c.bonusPoints)}, uygulanan {fmtMult(c.effectiveMultiplier)} / +

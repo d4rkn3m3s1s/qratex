@@ -34,6 +34,7 @@ import {
 import { SEASONAL_CAMPAIGN_TYPES } from '@/lib/seasonal-campaign-constants';
 import * as api from './api';
 import { FieldError, fmtInt, fmtMult } from './parts';
+import { AdminKampanyaTakvimiText } from './copy';
 
 export type EditorTarget =
   | { kind: CalendarKind; mode: 'create'; source?: CampaignView | ConceptView | null }
@@ -348,7 +349,7 @@ function ImpactPanel({ kind, preview, valid }: { kind: CalendarKind; preview: Re
         Çakışma ve etki
       </h3>
       {!valid ? (
-        <p className="qx-caption text-fg-muted">Formdaki hatalar giderilince çakışma ve etki burada hesaplanır.</p>
+        <p className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="fixToCalc" /></p>
       ) : preview.error ? (
         <p className={cn('rounded-md border p-2 qx-caption', TONE_CALLOUT.danger)} role="alert">
           Önizleme alınamadı: {preview.error}
@@ -394,11 +395,11 @@ function ImpactPanel({ kind, preview, valid }: { kind: CalendarKind; preview: Re
           )}
           {kind === 'campaign' && preview.data.estimate && (
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-subtle p-2 qx-caption">
-              <dt className="text-fg-muted">Taban (son 7 gün, günlük)</dt>
+              <dt className="text-fg-muted"><AdminKampanyaTakvimiText k="baseline" /></dt>
               <dd className="text-right tabular-nums">
                 {fmtInt(preview.data.estimate.baselineDailyPoints)} puan · {fmtInt(preview.data.estimate.baselineDailyEvents)} kazanım
               </dd>
-              <dt className="text-fg-muted">Tahmini ek puan / gün</dt>
+              <dt className="text-fg-muted"><AdminKampanyaTakvimiText k="extraPerDay" /></dt>
               <dd className="text-right font-medium tabular-nums">+{fmtInt(preview.data.estimate.extraPerDay)}</dd>
               <dt className="text-fg-muted">Kalan pencere boyunca</dt>
               <dd className="text-right font-medium tabular-nums">
@@ -406,7 +407,7 @@ function ImpactPanel({ kind, preview, valid }: { kind: CalendarKind; preview: Re
               </dd>
               {preview.data.estimate.budgetDays !== null && (
                 <>
-                  <dt className="text-fg-muted">Bütçe tahmini dolma süresi</dt>
+                  <dt className="text-fg-muted"><AdminKampanyaTakvimiText k="budgetRunway" /></dt>
                   <dd className="text-right tabular-nums">~{preview.data.estimate.budgetDays} gün</dd>
                 </>
               )}
@@ -429,7 +430,7 @@ function CampaignCardPreview({ d }: { d: CampaignDraft }) {
   const left = e ? new Date(e).getTime() - Math.max(Date.now(), s ? new Date(s).getTime() : Date.now()) : 0;
   return (
     <figure className="space-y-1.5">
-      <figcaption className="qx-caption text-fg-muted">Müşterinin Fırsatlar sekmesinde göreceği kart (önizleme)</figcaption>
+      <figcaption className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="dealsCard" /></figcaption>
       <div className="overflow-hidden rounded-lg border border-brand-border bg-brand-subtle p-3">
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden />
@@ -459,7 +460,7 @@ function CampaignCardPreview({ d }: { d: CampaignDraft }) {
         </div>
       </div>
       {d.type !== 'SEASONAL' && d.type !== 'SPECIAL' && (
-        <p className="qx-caption text-fg-muted">Bu kart yalnız hedef kitledeki müşterilere görünür.</p>
+        <p className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="audienceOnly" /></p>
       )}
     </figure>
   );
@@ -470,7 +471,7 @@ function ConceptPreview({ d }: { d: ConceptDraft }) {
   const bg = SEASONAL_BACKGROUND_OPTIONS.find((o) => o.value === d.backgroundEffect)?.label;
   return (
     <figure className="space-y-1.5">
-      <figcaption className="qx-caption text-fg-muted">Kullanıcıların göreceği üst banner ve palet (önizleme)</figcaption>
+      <figcaption className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="bannerPreview" /></figcaption>
       <div className="overflow-hidden rounded-lg border border-subtle">
         <div
           className="flex items-center justify-center gap-2 border-b px-3 py-2 qx-small font-medium"
@@ -493,7 +494,7 @@ function ConceptPreview({ d }: { d: ConceptDraft }) {
               ))}
             </div>
           ) : (
-            <span className="qx-caption text-fg-muted">Palet değişmez</span>
+            <span className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="paletteUnchanged" /></span>
           )}
           <span className="qx-caption text-fg-muted">Arka plan: {bg && d.backgroundEffect !== NONE ? bg : 'değişmez'}</span>
         </div>
@@ -557,9 +558,9 @@ function CampaignForm({ d, set, errors }: { d: CampaignDraft; set: (p: Partial<C
           </Field>
         </div>
         <ul className={cn('space-y-1 rounded-md border p-2 qx-caption', TONE_CALLOUT.info)}>
-          <li>Uygulandığı yollar: geri bildirim ödülü ve tüketim pasif puanı. İkisi de günlük tavana tabidir.</li>
-          <li>Aynı anda tek kampanya uygulanır: çarpanı büyük olan kazanır, eşitse bonusu büyük olan. Zincir tavanı 4×.</li>
-          {Number.isFinite(bonus) && bonus >= 100 && <li>Bonus her kazanıma eklenir; yüksek bonus günlük tavanı hızla doldurabilir.</li>}
+          <li><AdminKampanyaTakvimiText k="appliesTo" /></li>
+          <li><AdminKampanyaTakvimiText k="oneAtATime" /></li>
+          {Number.isFinite(bonus) && bonus >= 100 && <li><AdminKampanyaTakvimiText k="bonusWarn" /></li>}
         </ul>
       </Section>
 
@@ -605,7 +606,7 @@ function CampaignForm({ d, set, errors }: { d: CampaignDraft; set: (p: Partial<C
                     </SelectItem>
                   ))}
                   {d.challengeBadge !== NONE && !(badges.data?.badges ?? []).some((b) => b.id === d.challengeBadge) && (
-                    <SelectItem value={d.challengeBadge}>Seçili rozet (pasif/bulunamadı)</SelectItem>
+                    <SelectItem value={d.challengeBadge}><AdminKampanyaTakvimiText k="badgeMissing" /></SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -644,7 +645,7 @@ function ConceptForm({
             </button>
           ))}
         </div>
-        <p className="qx-caption text-fg-muted">Şablon ad, banner, palet ve arka planı doldurur; tarihleri korur.</p>
+        <p className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="templateFills" /></p>
       </Section>
       <Section title="Temel bilgiler">
         <Field id="kf-name" label="Ad" error={errors.name}>
@@ -892,7 +893,7 @@ export default function CalendarEditor({
                 onCheckedChange={(v) => (kind === 'campaign' ? setCampaign({ isActive: v }) : setConcept({ isActive: v }))}
               />
             </div>
-            {editing?.archived && <p className="qx-caption text-fg-muted">Arşivdeki kayıt etkinleştirilemez; önce arşivden çıkarın.</p>}
+            {editing?.archived && <p className="qx-caption text-fg-muted"><AdminKampanyaTakvimiText k="unarchiveFirst" /></p>}
           </div>
           <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start" aria-label="Önizleme">
             {kind === 'campaign' && cDraft && <CampaignCardPreview d={cDraft} />}

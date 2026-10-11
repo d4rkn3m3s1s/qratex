@@ -41,6 +41,7 @@ import { CalendarTimeline } from './timeline';
 import { ItemStatus, campaignAudience, campaignEffect, conceptLayers, fmtInt } from './parts';
 import { DetailContent, detailTitle } from './detail';
 import type { EditorTarget } from './editor';
+import { AdminKampanyaTakvimiText } from './copy';
 
 // Form + önizleme ağır: yalnız açılınca yüklenir.
 const CalendarEditor = dynamic(() => import('./editor'), { ssr: false, loading: () => null });
@@ -85,7 +86,7 @@ function SummaryStrip({ data }: { data: CalendarData }) {
             </p>
           </div>
         ) : (
-          <p className="qx-small text-fg-muted">Herkese açık canlı kampanya yok; kazanımlar taban puanla işliyor.</p>
+          <p className="qx-small text-fg-muted"><AdminKampanyaTakvimiText k="noLive" /></p>
         )}
         <p className="qx-caption mt-2 text-fg-muted">
           {s.targetedLiveCount > 0 ? `${s.targetedLiveCount} hedefli kampanya da açık. ` : ''}
@@ -104,7 +105,7 @@ function SummaryStrip({ data }: { data: CalendarData }) {
             <p className="qx-small text-fg-muted">{formatSpan(new Date(s.liveConcept.endsAt).getTime() - now)} kaldı</p>
           </div>
         ) : (
-          <p className="qx-small text-fg-muted">Varsayılan tema ve arka plan etkin.</p>
+          <p className="qx-small text-fg-muted"><AdminKampanyaTakvimiText k="defaultTheme" /></p>
         )}
         <p className="qx-caption mt-2 text-fg-muted">
           {s.nextConcept
@@ -265,7 +266,7 @@ function ItemList({ kind, onOpen }: { kind: CalendarKind; onOpen: (kind: Calenda
             <div className="hidden px-3 pb-1 qx-caption text-fg-muted md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.6fr)_auto] md:gap-3" aria-hidden>
               <span>Ad</span>
               <span>{kind === 'campaign' ? 'Etki' : 'Katmanlar'}</span>
-              <span>Pencere (İstanbul)</span>
+              <span><AdminKampanyaTakvimiText k="windowIst" /></span>
               <span>Durum</span>
             </div>
             <ul className="divide-y divide-[color:var(--border-subtle)]">
