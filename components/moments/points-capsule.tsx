@@ -9,6 +9,7 @@ import { formatInt } from '@/components/ds/play/shared';
 import { buzz, confetti, sound } from '@/lib/moments/effects';
 import type { PointsMoment } from '@/lib/moments/types';
 import { useSceneCopy } from '@/lib/moments/scene-copy';
+import { useLocaleSafe } from '@/lib/app-locale';
 
 /**
  * Puan kapsülü (spec §3 "Puan" satırı): akışı kesmeyen, `pointer-events: none`,
@@ -45,6 +46,7 @@ function findAnchor(): HTMLElement | null {
 export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone: () => void }) {
   const reduce = useReducedMotionPref();
   const copy = useSceneCopy();
+  const pointsUnit = useLocaleSafe() === 'en' ? 'points' : 'puan';
   const capsuleRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const doneRef = useRef(false);
@@ -166,7 +168,7 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
               <Coins className="size-4" strokeWidth={2.4} />
             </span>
             <span className="qx-num text-lg font-bold tabular-nums text-warning">+{formatInt(points)}</span>
-            <span className="qx-small font-medium text-fg-muted">puan</span>
+            <span className="qx-small font-medium text-fg-muted">{pointsUnit}</span>
           </>
         ) : (
           <span className="flex size-7 items-center justify-center rounded-full bg-brand-subtle text-brand">

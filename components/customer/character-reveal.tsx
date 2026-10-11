@@ -10,6 +10,8 @@ import { shareCharacter } from '@/components/customer/character-share-card';
 import { categoryRevealTheme, badgeTier, LEGENDARY_OVERLAY, RARE_OVERLAY } from '@/lib/character-reveal-theme';
 import { getCharacterRevealText } from '@/lib/character-reveal-texts';
 import { resolveBadgeThumb } from '@/lib/badge-images';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { useCharacterRevealCopy } from '@/components/customer/character-reveal-copy';
 
 /**
  * KARAKTER ROZETİ REVEAL — göz alıcı, sinematik "sürpriz açığa çıkarma" modalı.
@@ -65,14 +67,7 @@ export interface CharacterRevealProps {
   allowShare?: boolean;
 }
 
-// ── Yardımcı: değişen gizemli hazırlanma yazıları ─────────────────────
-const PREPARING_LINES = [
-  'Kaderin okunuyor…',
-  'Yorumların fısıldıyor…',
-  'Yıldızlar hizalanıyor…',
-  'Ruhun eşleştiriliyor…',
-  'Karakterin şekilleniyor…',
-];
+// Değişen gizemli hazırlanma yazıları: character-reveal-copy.ts → preparingLines.
 
 // Aşama makinesi.
 type Phase = 'preparing' | 'category' | 'reveal' | 'details';
@@ -156,6 +151,7 @@ export function CharacterReveal({
   fetchOnOpen = false,
   allowShare = true,
 }: CharacterRevealProps) {
+  const copy = useCharacterRevealCopy();
   const [phase, setPhase] = useState<Phase>('preparing');
   const [character, setCharacter] = useState<RevealCharacter>(null);
   const [error, setError] = useState<string | null>(null);
@@ -259,7 +255,7 @@ export function CharacterReveal({
 
     // Hazırlanma yazılarını döndür.
     const lineTimer = setInterval(() => {
-      if (!cancelled) setLineIdx((i) => (i + 1) % PREPARING_LINES.length);
+      if (!cancelled) setLineIdx((i) => (i + 1) % copy.preparingLines.length);
     }, reduceMotion ? 2600 : 1500);
 
     // Aşamaları sinematik biçimde ilerleten fonksiyon (veri hazır olunca).
@@ -301,7 +297,7 @@ export function CharacterReveal({
         .then((res: { success?: boolean; character?: NonNullable<RevealCharacter>; error?: string }) => {
           if (cancelled) return;
           if (!res?.success || !res.character) {
-            setError(res?.error || 'Karakterin şu an belirlenemedi, sonra tekrar dene.');
+            setError(res?.error || copy.errorUnavailable);
             return;
           }
           // En az ~2.2sn hazırlanma göster (çok hızlı dönerse sürpriz kaçmasın).
@@ -310,10 +306,10 @@ export function CharacterReveal({
           timers.push(setTimeout(() => runReveal(res.character as NonNullable<RevealCharacter>), wait));
         })
         .catch(() => {
-          if (!cancelled) setError('Bağlantı hatası — karakterin belirlenemedi.');
+          if (!cancelled) setError(copy.errorNetwork);
         });
     } else {
-      setError('Gösterilecek karakter yok.');
+      setError(copy.errorNone);
     }
 
     return () => {
@@ -354,7 +350,7 @@ export function CharacterReveal({
         <Motion.div
           role="dialog"
           aria-modal="true"
-          aria-label="Karakter rozeti keşfi"
+          aria-label={copy.dialogLabel}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -395,7 +391,7 @@ export function CharacterReveal({
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Kapat"
+              aria-label={copy.close}
               className="absolute right-3 top-3 z-30 rounded-full text-white/60 hover:bg-white/10 hover:text-white"
               onClick={onClose}
             >
@@ -421,7 +417,7 @@ export function CharacterReveal({
                 <div className="mt-4 min-h-[112px] w-full">
                   <AnimatePresence mode="wait">
                     {phase === 'preparing' && (
-                      <PreparingText key="prep" line={PREPARING_LINES[lineIdx]} />
+                      <PreparingText key="prep" line={copy.preparingLines[lineIdx % copy.preparingLines.length]} />
                     )}
                     {phase === 'category' && character?.category && (
                       <CategoryText key="cat" category={character.category} />
@@ -451,17 +447,19 @@ export function CharacterReveal({
 
 // ── Hata durumu ──────────────────────────────────────────────────────
 function ErrorState({ message, onClose }: { message: string; onClose: () => void }) {
+  const copy = useCharacterRevealCopy();
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <div className="grid h-16 w-16 place-items-center rounded-full bg-white/10 text-3xl">🔮</div>
       <p className="max-w-xs text-sm text-white/80">{message}</p>
-      <Button variant="secondary" onClick={onClose}>Kapat</Button>
+      <Button variant="secondary" onClick={onClose}>{copy.close}</Button>
     </div>
   );
 }
 
 // ── Aşama 1 metni: değişen gizemli yazı ──────────────────────────────
 function PreparingText({ line }: { line: string }) {
+  const copy = useCharacterRevealCopy();
   return (
     <Motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -474,13 +472,14 @@ function PreparingText({ line }: { line: string }) {
         <Wand2 className="h-4 w-4 animate-pulse text-white/70" />
         {line}
       </p>
-      <p className="text-xs text-white/50">Rozetin hazırlanıyor, biraz bekle…</p>
+      <p className="text-xs text-white/50">{copy.preparingHint}</p>
     </Motion.div>
   );
 }
 
 // ── Aşama 2 metni: kategori belli ────────────────────────────────────
 function CategoryText({ category }: { category: RevealCategory }) {
+  const copy = useCharacterRevealCopy();
   return (
     <Motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -489,7 +488,7 @@ function CategoryText({ category }: { category: RevealCategory }) {
       transition={{ duration: 0.4 }}
       className="flex flex-col items-center gap-2"
     >
-      <span className="text-xs uppercase tracking-[0.25em] text-white/50">Kategorin belirlendi</span>
+      <span className="text-xs uppercase tracking-[0.25em] text-white/50">{copy.categoryReady}</span>
       <p
         className="flex items-center gap-2 text-2xl font-bold"
         style={{ color: category.accent }}
@@ -519,6 +518,7 @@ function DetailsText({
 }) {
   // Karaktere özel açılış metni (lib/character-reveal-texts.ts). Henüz yazılmamışsa null
   // döner ve eski davranış (katalog açıklaması) gösterilir — yarım liste hiçbir şeyi bozmaz.
+  const copy = useCharacterRevealCopy();
   const revealText = getCharacterRevealText(character.badgeId);
 
   // Nadir oran rozeti verisi: ratePct varsa göster; düşükse "çok nadir" vurgusu.
@@ -562,7 +562,7 @@ function DetailsText({
             transition={{ type: 'spring', delay: 0.22, damping: 14 }}
             className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-3 py-0.5 text-xs font-extrabold tracking-wide text-white/90"
           >
-            {revealText.points.toLocaleString('tr-TR')} P
+            {revealText.points.toLocaleString(copy.numberLocale)} P
           </Motion.span>
         )}
       </div>
@@ -599,10 +599,10 @@ function DetailsText({
               <Gem className="h-4 w-4 shrink-0 text-white/90" />
             )}
             <span className="text-sm font-extrabold uppercase tracking-[0.2em] text-white drop-shadow">
-              {theme.label}
+              {theme.key === 'legendary' ? copy.tierLabel.legendary : theme.key === 'rare' ? copy.tierLabel.rare : theme.label}
             </span>
             <span className="text-[11px] font-medium text-white/70">
-              {theme.key === 'legendary' ? '· En özgün arketiplerden' : '· Belirgin, derin karakter'}
+              {theme.key === 'legendary' ? copy.tierNote.legendary : copy.tierNote.rare}
             </span>
           </div>
         </Motion.div>
@@ -710,7 +710,7 @@ function DetailsText({
                 style={{ color: theme.glow, textShadow: `0 0 12px ${hexToRgba(theme.glow, 0.5)}` }}
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                Bu rozeti aldın çünkü
+                {copy.whyTitle}
               </p>
               <p className="text-[15px] leading-relaxed text-white/90">{character.why}</p>
             </div>
@@ -733,8 +733,8 @@ function DetailsText({
         >
           <span aria-hidden="true">🏆</span>
           <span className="truncate">
-            Oyuncuların yalnızca %{rateLabel}&apos;inde
-            {veryRare && <span className="ml-1 font-extrabold">— çok nadir!</span>}
+            {copy.rarity(rateLabel)}
+            {veryRare && <span className="ml-1 font-extrabold">{copy.veryRare}</span>}
           </span>
         </Motion.div>
       )}
@@ -753,7 +753,7 @@ function DetailsText({
             style={{ background: `linear-gradient(135deg, ${accent}, ${hexToRgba(accent, 0.7)})` }}
           >
             <PartyPopper className="h-4 w-4" />
-            Harika!
+            {copy.great}
           </Button>
         </Motion.div>
       )}
@@ -772,6 +772,8 @@ function ShareButton({
   theme: RarityTheme;
 }) {
   // Görsel üretilirken kısa "hazırlanıyor" durumu (buton kilidi + geri bildirim).
+  const copy = useCharacterRevealCopy();
+  const locale = useLocaleSafe();
   const [busy, setBusy] = useState(false);
   const mountedRef = useRef(true);
   // theme yalnızca prop imzasını korumak için — paylaşım metni share-card içinde rarity'den türetilir.
@@ -787,13 +789,13 @@ function ShareButton({
     setBusy(true);
     try {
       // Görsel PNG paylaşımı (mobilde native share, masaüstünde indirme; hata → metin).
-      await shareCharacter(character);
+      await shareCharacter(character, locale);
     } catch {
       /* shareCharacter zaten kendi içinde güvenli — yine de akışı bozma */
     } finally {
       if (mountedRef.current) setBusy(false);
     }
-  }, [character, busy]);
+  }, [character, busy, locale]);
 
   return (
     <Button
@@ -801,10 +803,10 @@ function ShareButton({
       onClick={handleShare}
       disabled={busy}
       className="gap-2"
-      aria-label="Karakterini görsel olarak paylaş"
+      aria-label={copy.shareLabel}
     >
       <Share2 className="h-4 w-4" />
-      {busy ? 'Hazırlanıyor…' : 'Paylaş 📸'}
+      {busy ? copy.sharePreparing : copy.share}
     </Button>
   );
 }

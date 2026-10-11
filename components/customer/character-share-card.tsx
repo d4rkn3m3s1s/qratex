@@ -1,5 +1,8 @@
 'use client';
 
+import type { Locale } from '@/i18n/core';
+import { CHARACTER_SHARE_COPY } from '@/components/customer/character-reveal-copy';
+
 /**
  * KARAKTER ROZETİ — PAYLAŞILABİLİR GÖRSEL KART
  *
@@ -216,8 +219,10 @@ const FONT_STACK =
 // ─────────────────────────────────────────────────────────────────────
 export async function generateCharacterShareImage(
   character: ShareCharacter,
+  locale: Locale = 'tr',
 ): Promise<Blob | null> {
   if (typeof document === 'undefined' || !character) return null;
+  const sc = CHARACTER_SHARE_COPY[locale];
 
   try {
     const canvas = document.createElement('canvas');
@@ -282,7 +287,7 @@ export async function generateCharacterShareImage(
     ctx.save();
     ctx.font = `700 24px ${FONT_STACK}`;
     ctx.fillStyle = rgba('#ffffff', 0.72);
-    drawSpaced(ctx, 'KARAKTER ROZETİ', cx, 156, 8);
+    drawSpaced(ctx, sc.cardTitle, cx, 156, 8);
     ctx.restore();
 
     // ── 4) ORTA: büyük karakter madalyonu (ikon veya emoji) ──
@@ -361,7 +366,7 @@ export async function generateCharacterShareImage(
     let cursorY = medY + medR + 82;
     if (rar.label) {
       ctx.font = `800 30px ${FONT_STACK}`;
-      const labelText = rar.label;
+      const labelText = sc.rarity[(character.rarity || '').toLowerCase()] ?? rar.label;
       const padX = 34;
       const tw = ctx.measureText(labelText).width + padX * 2;
       const th = 62;
@@ -394,7 +399,7 @@ export async function generateCharacterShareImage(
     }
 
     // ── 6) KARAKTER ADI (büyük, şık, taşmaya karşı otomatik küçülür) ──
-    const name = character.name || 'Karakter';
+    const name = character.name || sc.fallbackName;
     const maxTextW = CARD_W - 160;
     const nameSize = fitFontSize(ctx, name, maxTextW, 88, 48, '800');
     ctx.font = `800 ${nameSize}px ${FONT_STACK}`;
@@ -447,8 +452,8 @@ export async function generateCharacterShareImage(
     if (rl !== null) {
       const veryRare = (character.ratePct as number) <= 5;
       const rareText = veryRare
-        ? `🏆  Oyuncuların yalnızca %${rl}'inde — çok nadir!`
-        : `🏆  Oyuncuların %${rl}'inde`;
+        ? sc.rateVeryRare(rl)
+        : sc.rate(rl);
       ctx.font = `700 30px ${FONT_STACK}`;
       const trw = ctx.measureText(rareText).width;
       const rareCol = veryRare ? glow : '#facc15';
@@ -489,7 +494,7 @@ export async function generateCharacterShareImage(
     ctx.fillStyle = rgba('#ffffff', 0.92);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('Sen de karakterini keşfet', cx, CARD_H - 120);
+    ctx.fillText(sc.cta, cx, CARD_H - 120);
     ctx.restore();
 
     // Site etiketi (accent parıltılı).
@@ -584,17 +589,18 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 // ─────────────────────────────────────────────────────────────────────
 // PAYLAŞ — blob üret, sonra native paylaş / indir / (son çare) metin
 // ─────────────────────────────────────────────────────────────────────
-export async function shareCharacter(character: ShareCharacter): Promise<void> {
+export async function shareCharacter(character: ShareCharacter, locale: Locale = 'tr'): Promise<void> {
   if (!character) return;
 
-  const title = `QRateX karakterim: ${character.name}!`;
+  const sc = CHARACTER_SHARE_COPY[locale];
+  const title = sc.shareTitle(character.name);
   const rar = rarityOf(character.rarity);
-  const rarPrefix = rar.label ? `${rar.label} ` : '';
-  const text = `QRateX'te ${rarPrefix}karakter rozetimi kazandım: ${character.name} 🎭 → ${SITE_LABEL}`;
+  const rarLabel = rar.label ? (sc.rarity[(character.rarity || '').toLowerCase()] ?? rar.label) : null;
+  const text = sc.shareText(rarLabel, character.name, SITE_LABEL);
 
   let blob: Blob | null = null;
   try {
-    blob = await generateCharacterShareImage(character);
+    blob = await generateCharacterShareImage(character, locale);
   } catch {
     blob = null;
   }
@@ -602,7 +608,7 @@ export async function shareCharacter(character: ShareCharacter): Promise<void> {
   // 1) PNG dosyasıyla native paylaşım (mobil / destekli tarayıcı).
   if (blob) {
     try {
-      const file = new File([blob], 'qratex-karakter.png', { type: 'image/png' });
+      const file = new File([blob], sc.fileName, { type: 'image/png' });
       const navAny = navigator as Navigator & {
         canShare?: (data?: ShareData) => boolean;
       };
@@ -624,7 +630,7 @@ export async function shareCharacter(character: ShareCharacter): Promise<void> {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'qratex-karakter.png';
+      a.download = sc.fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

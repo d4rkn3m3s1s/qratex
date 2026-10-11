@@ -2,12 +2,15 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { TeamWorkspace } from '@/components/team/team-workspace';
 import { loadTeamBootstrap } from '@/lib/team/page-bootstrap';
+import { getServerLocale } from '@/lib/server-locale';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = {
-  title: 'Ekip',
-  description: 'Sana atanan işler, ekibinin haftası ve girişimler.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale();
+  return locale === 'en'
+    ? { title: 'Team', description: 'Work assigned to you, your team’s week and initiatives.' }
+    : { title: 'Ekip', description: 'Sana atanan işler, ekibinin haftası ve girişimler.' };
+}
 
 /** Müşteri paneli ekip çalışma alanı — yalnız ekip rolü atanmış kullanıcılar (teamOnly). */
 export default async function CustomerTeamPage() {

@@ -12,6 +12,7 @@ import { SceneStage } from './stage-lazy';
 import { StageFallback2D } from './stage-fallback-2d';
 import { DismissHint, Odometer, ReducedSceneCard, SceneProgress, StageAction, CardAction, useSceneCue } from './scene-parts';
 import { useSceneCopy } from '@/lib/moments/scene-copy';
+import { useLocaleSafe } from '@/lib/app-locale';
 
 /**
  * Seviye atlama sahnesi (spec §3): tam ekran, ~4 sn, dokun/Esc ile geçilir.
@@ -102,6 +103,7 @@ function LevelStage({
   progressLabel: string;
 }) {
   const copy = useSceneCopy();
+  const levelWord = useLocaleSafe() === 'en' ? 'Level' : 'Seviye';
   const colors = LEVEL_SCENE_COLORS;
   const textIn = started && elapsed >= BURST_MS - 150;
   const flip = started && elapsed >= BURST_MS;
@@ -125,7 +127,7 @@ function LevelStage({
           transition={{ duration: DURATION.slow, ease: EASE.emphasized, delay: 0.35 }}
           className="flex flex-col items-center"
         >
-          <span className="qx-overline text-white/70">Seviye</span>
+          <span className="qx-overline text-white/70">{levelWord}</span>
           <Odometer
             from={model.from}
             to={model.to}

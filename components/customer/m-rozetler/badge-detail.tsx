@@ -108,7 +108,7 @@ export function BadgeDetailFooter({ item, stats, featuredBadgeId, pinPending, fe
           rarity: item.rarity,
           holders: item.holders,
           ratePct: item.holdersPct,
-        });
+        }, copy.locale);
         outcome = 'shared';
       } else {
         const rarityLabel = RARITY_STYLES[item.rarity].label[copy.locale];
