@@ -7,6 +7,7 @@ import { getClientIp } from '@/lib/request-metadata';
 import { archiveGateResponse, readArchiveIntent, type DeletionImpact } from '@/lib/data-safety/archive';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import { CARD_ARCHIVE_BLOCK_REASON, checkStatusChange, statusChangeData } from '@/lib/cards/lifecycle';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -94,6 +95,8 @@ export async function PATCH(
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.cards.id.patch', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const { id } = await params;
 
@@ -184,6 +187,8 @@ export async function DELETE(
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.cards.id.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const { id } = await params;
 

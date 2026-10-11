@@ -5,6 +5,7 @@ import { parseJsonBody } from '@/lib/http/parse-body';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { clampNotificationListLimit, toPublicNotification } from '@/lib/notification-public-dto';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/notifications - Get user notifications
@@ -86,6 +87,8 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('notifications.patch', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const session = auth.session;
 
     // mimari-api B6: gövde zod ile (bozuk JSON 500 değil 400; kimlik uzunluğu sınırlı).
@@ -165,6 +168,8 @@ export async function DELETE(request: NextRequest) {
   try {
     const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('notifications.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const session = auth.session;
 
     const { searchParams } = new URL(request.url);

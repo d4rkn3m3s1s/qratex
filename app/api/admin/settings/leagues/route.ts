@@ -21,6 +21,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { deriveLeagueRanges, leagueRulesSchema } from '@/lib/admin-economy/contract';
 import { loadLeaguesResource } from '@/lib/admin-economy/server';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,8 @@ export async function PUT(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.settings.leagues.put', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const raw = await request.json().catch(() => null);

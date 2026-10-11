@@ -7,6 +7,7 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { parseJsonBody } from '@/lib/http/parse-body';
 import { PASSWORD_MAX_LENGTH, passwordPolicyError } from '@/components/auth/p-auth/password-policy';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,8 @@ export async function POST(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('user.initial-password.post', auth.session.user.id, 'sensitive');
+    if (limited) return limited;
     const { session } = auth;
 
     const parsed = await parseJsonBody(request, bodySchema, { maxBytes: 4_096 });

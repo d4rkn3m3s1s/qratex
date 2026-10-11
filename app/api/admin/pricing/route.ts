@@ -6,6 +6,7 @@ import { archivedListFilter, readArchiveIntent } from '@/lib/data-safety/archive
 import { ApiError } from '@/lib/http/define-route';
 import { actionCtx } from '@/lib/admin-users/actions.server';
 import { archivePlan } from '@/lib/admin-pricing/pricing.server';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,8 @@ export const PUT = gone;
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.pricing.delete', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   try {

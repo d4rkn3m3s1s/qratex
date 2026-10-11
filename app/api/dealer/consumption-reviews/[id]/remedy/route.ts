@@ -23,7 +23,10 @@ const paramsSchema = z.object({ id: z.string().min(1).max(64) });
 export const POST = defineRoute(
   {
     name: 'dealer.consumption-reviews.remedy.create',
-    roles: ['DEALER', 'ADMIN'],
+    // mimari-api B2: yalnız işletme sahibi. Eskiden ADMIN de kabul ediliyordu → yönetici herhangi
+    // bir işletme adına (onun bütçesinden) denetimsiz telafi teklifi yaratabiliyordu; hiçbir
+    // yönetici ekranı bu ucu çağırmıyor (yalnız bayi gelen kutusu).
+    roles: ['DEALER'],
     module: 'remedy_offers',
     rateLimit: 'mutation',
     idempotent: true,
@@ -41,7 +44,7 @@ export const POST = defineRoute(
       select: { id: true, customerId: true, deletedAt: true, consumption: { select: { dealerId: true } } },
     });
     if (!review || review.deletedAt) throw new ApiError('NOT_FOUND', 'Tüketim yorumu bulunamadı.');
-    if (user.role === 'DEALER' && review.consumption.dealerId !== user.id) {
+    if (review.consumption.dealerId !== user.id) {
       throw new ApiError('FORBIDDEN', 'Bu yoruma telafi başlatma yetkiniz yok.');
     }
 

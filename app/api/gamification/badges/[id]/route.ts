@@ -7,7 +7,7 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { sanitizeHexColor } from '@/lib/badge-colors';
 import { archiveGateResponse, readArchiveIntent, type DeletionImpact } from '@/lib/data-safety/archive';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { ApiError } from '@/lib/http/define-route';
 import { updateBadge as updateAdminBadge } from '@/lib/admin-badges/server';
 
@@ -55,6 +55,8 @@ async function isCharacterBadge(badgeId: string): Promise<boolean> {
   return CHARACTER_PROFILES.some((c) => c.badgeId === badgeId);
 }
 
+const patchEnvelope = z.object({ restore: z.boolean().optional() }).passthrough();
+
 // PATCH /api/gamification/badges/[id] - Update badge
 // `{ "restore": true }` → arşivden geri alır (P0-26). Arşivdeki rozet düzenlenemez.
 export async function PATCH(
@@ -70,10 +72,15 @@ export async function PATCH(
     const { session } = auth;
 
     const { id } = await params;
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ success: false, error: 'Geçersiz istek gövdesi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    // Zarf şeması: `restore` bayrağı tipli; düzenleme alanları servis şemasında (updateAdminBadge, zod).
+    const parsedBody = patchEnvelope.safeParse(await request.json().catch(() => null));
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { success: false, code: 'VALIDATION', error: 'Geçersiz istek gövdesi' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
+    const body = parsedBody.data;
 
     // Get old badge for audit
     const oldBadge = await prisma.badge.findUnique({ where: { id } });

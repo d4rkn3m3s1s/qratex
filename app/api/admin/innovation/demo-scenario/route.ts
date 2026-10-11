@@ -7,6 +7,7 @@ import { buildInnovationDemoScenario } from '@/lib/innovation-demo-scenario';
 import { demoSeedGate, demoTargetRequiredResponse, isDemoSeedAllowed } from '@/lib/data-safety/demo-guard';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import { seedInnovationDemoPackage } from '@/lib/innovation-demo-seed';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,8 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.innovation.demo-scenario.post', auth.session.user.id, 'mutation');
+  if (limited) return limited;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { isProtectedSettingKey } from '@/lib/admin-gate';
 import { RETIRED_SECRET_SETTING_KEYS, isDedicatedSettingKey } from '@/lib/platform-settings/registry';
 import { revalidateTag } from 'next/cache';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.settings.rollback.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const raw = await request.json();
     const parsed = schema.safeParse(raw);

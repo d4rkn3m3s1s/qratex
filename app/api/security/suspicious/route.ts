@@ -6,6 +6,8 @@ import { PRIVATE_NO_STORE_HEADERS, paginationSkip } from '@/lib/api-http';
 import { requireCronSecretOrAdmin } from '@/lib/internal-cron-or-admin';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { parseJsonBody } from '@/lib/http/parse-body';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIp } from '@/lib/request-metadata';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 
 export const dynamic = 'force-dynamic';
@@ -84,6 +86,9 @@ export const GET = defineRoute(
 export async function POST(req: NextRequest) {
   const denied = await requireCronSecretOrAdmin(req);
   if (denied) return denied;
+  // Kötüye kullanım tavanı (iç iş tek IP'den gelir; yönetici de IP ile sayılır).
+  const limited = await enforceRouteRateLimit('security.suspicious.report', getClientIp(req) ?? 'unknown', 'mutation');
+  if (limited) return limited;
   const parsed = await parseJsonBody(req, reportBody, { maxBytes: 32_000 });
   if (!parsed.ok) return parsed.response;
   try {

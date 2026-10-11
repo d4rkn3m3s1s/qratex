@@ -15,6 +15,33 @@ const config = [
       "import/no-anonymous-default-export": "warn",
     },
   },
+  {
+    // mimari-api korkulukları (B1/B5/B7): API uçlarında kimlik TEK yoldan (`defineRoute` /
+    // `requireAuth` / `getOptionalSession`: askı, oturum sürümü, güncel rol, token replay, admin
+    // kapısı). Çıplak `getServerSession` bu denetimlerin hepsini atlar. Yapısal denetim ayrıca
+    // __tests__/architecture/api-architecture.test.ts içinde (CI'da jest).
+    files: ["app/api/**/*.ts"],
+    ignores: ["app/api/auth/[[]...nextauth[]]/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next-auth",
+              importNames: ["getServerSession"],
+              message: "API uçlarında requireAuth/getOptionalSession (lib/api-auth) ya da defineRoute kullanın.",
+            },
+            {
+              name: "next-auth/next",
+              importNames: ["getServerSession"],
+              message: "API uçlarında requireAuth/getOptionalSession (lib/api-auth) ya da defineRoute kullanın.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 /** @type {import("eslint").Linter.Config[]} */

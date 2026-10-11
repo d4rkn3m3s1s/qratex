@@ -5,6 +5,7 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { buildAdminComposeEmail } from '@/lib/email';
 import { isMailConfigured, sendTransactionalEmail } from '@/lib/mail-sender';
 import { getPublicAppOriginFromRequest } from '@/lib/public-app-origin';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,8 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.compose-mail.post', auth.session.user.id, {max:10,windowMs:10*60_000});
+  if (limited) return limited;
 
   if (!isMailConfigured()) {
     return NextResponse.json(

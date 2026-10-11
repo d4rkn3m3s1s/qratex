@@ -22,6 +22,7 @@ import {
   revokeBadge,
   sendDirectNotification,
 } from '@/lib/admin-users/actions.server';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
               pricingPlan: { select: { id: true, name: true } },
               _count: {
                 select: {
-                  feedbacks: true,
+                  feedbacks: { where: { deletedAt: null } },
                   qrCodes: true,
                   badges: true,
                 },
@@ -210,7 +211,7 @@ export async function GET(request: NextRequest) {
               pricingPlan: { select: { id: true, name: true } },
               _count: {
                 select: {
-                  feedbacks: true,
+                  feedbacks: { where: { deletedAt: null } },
                   qrCodes: true,
                   badges: true,
                 },
@@ -248,6 +249,8 @@ export async function POST(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const body = await request.json();
@@ -327,6 +330,8 @@ export async function PUT(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.put', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { searchParams } = new URL(request.url);
@@ -472,6 +477,8 @@ export async function PATCH(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.patch', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const body = await request.json();
@@ -666,6 +673,8 @@ export async function DELETE(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { searchParams } = new URL(request.url);

@@ -22,6 +22,7 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { PROTECTED_SETTING_KEYS, isProtectedSettingKey as isGateProtectedKey } from '@/lib/admin-gate';
 // B4: eski ekranın düz metin yazdığı OpenAI anahtarı vb. listelenmez/yazılmaz.
 import { RETIRED_SECRET_SETTING_KEYS, isDedicatedSettingKey } from '@/lib/platform-settings/registry';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 const HIDDEN_SETTING_KEYS = [...PROTECTED_SETTING_KEYS, ...RETIRED_SECRET_SETTING_KEYS];
 /** Yazma yasağı: gizli kapı, emekli sır anahtarları ve kendi uçları olan kayıt defteri/güven anahtarları. */
@@ -153,6 +154,8 @@ export async function PUT(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.settings.put', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const body = await request.json();

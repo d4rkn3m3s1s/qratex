@@ -19,6 +19,7 @@ import {
 } from '@/lib/admin-gate';
 import { elevationCookieOptions, signElevation } from '@/lib/admin-elevation';
 import { parseJsonBody } from '@/lib/http/parse-body';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -205,6 +206,8 @@ export async function POST(request: NextRequest) {
 export async function DELETE() {
   const auth = await requireAuth(['ADMIN'], { adminGate: false });
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.gate.delete', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const res = json({ success: true });
   res.cookies.set(ADMIN_GATE_COOKIE, '', { ...elevationCookieOptions(), maxAge: 0 });
   return res;

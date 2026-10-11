@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { processNextAutomationJob } from '@/lib/users-automation/queue';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.automation.jobs.process.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
 
     const body = await request.json().catch(() => ({}));
     const parsed = processSchema.safeParse(body);

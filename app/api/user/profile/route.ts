@@ -13,6 +13,7 @@ import {
   versionConflictResponse,
   versionFromContent,
 } from '@/lib/settings-version';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,8 @@ export async function PATCH(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('user.profile.patch', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const body = await request.json();
@@ -196,7 +199,7 @@ export async function GET(request: NextRequest) {
         password: true,
         _count: {
           select: {
-            feedbacks: true,
+            feedbacks: { where: { deletedAt: null } },
             badges: true,
             quests: true,
           },

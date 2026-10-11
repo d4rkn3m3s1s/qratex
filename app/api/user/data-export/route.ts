@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 // GET — export all personal data as JSON
 
@@ -11,6 +12,8 @@ export async function GET() {
     try {
         const auth = await requireAuth(['CUSTOMER', 'DEALER', 'ADMIN']);
         if ('error' in auth) return auth.error;
+        const limited = await enforceRouteRateLimit('user.data-export.get', auth.session.user.id, {max:3,windowMs:60*60_000});
+        if (limited) return limited;
         const userId = auth.session.user.id;
 
         const [user, feedbacks, badges, rewards, notifications, analytics] = await Promise.all([
@@ -23,7 +26,7 @@ export async function GET() {
                     preferredLanguage: true, createdAt: true, updatedAt: true,
                 },
             }),
-            prisma.feedback.findMany({
+            prisma.feedback.findMany({ /* soft-delete: silinmiş dahil — KVKK m.11 erişim hakkı: moderasyonla gizlenen kayıt da kişinin verisidir */
                 where: { userId },
                 select: { id: true, rating: true, text: true, sentiment: true, createdAt: true },
                 orderBy: { createdAt: 'desc' },

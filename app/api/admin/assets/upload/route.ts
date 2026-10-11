@@ -9,6 +9,7 @@ import {
   svgContainsScript,
   stripExifPng,
 } from '@/lib/media-validation';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,6 +72,8 @@ export async function POST(req: Request) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.assets.upload.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
 
     let formData: FormData;
     try {

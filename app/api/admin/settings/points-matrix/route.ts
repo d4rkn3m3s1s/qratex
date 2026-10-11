@@ -20,6 +20,7 @@ import {
   writeVersionedSetting,
 } from '@/lib/settings-version';
 import { Prisma } from '@prisma/client';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +58,8 @@ export async function PUT(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.settings.points-matrix.put', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const raw = await request.json().catch(() => null);

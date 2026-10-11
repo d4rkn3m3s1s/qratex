@@ -27,7 +27,10 @@ const paramsSchema = z.object({ id: z.string().min(1).max(64) });
 export const POST = defineRoute(
   {
     name: 'dealer.feedbacks.remedy.create',
-    roles: ['DEALER', 'ADMIN'],
+    // mimari-api B2: yalnız işletme sahibi. Eskiden ADMIN de kabul ediliyordu → yönetici herhangi
+    // bir işletme adına (onun bütçesinden) denetimsiz telafi teklifi yaratabiliyordu; hiçbir
+    // yönetici ekranı bu ucu çağırmıyor (yalnız bayi gelen kutusu).
+    roles: ['DEALER'],
     module: 'remedy_offers',
     rateLimit: 'mutation',
     idempotent: true,
@@ -45,7 +48,7 @@ export const POST = defineRoute(
       select: { id: true, userId: true, qrCode: { select: { dealerId: true, locationId: true } } },
     });
     if (!feedback) throw new ApiError('NOT_FOUND', 'Geri bildirim bulunamadı.');
-    if (user.role === 'DEALER' && feedback.qrCode.dealerId !== user.id) {
+    if (feedback.qrCode.dealerId !== user.id) {
       throw new ApiError('FORBIDDEN', 'Bu geri bildirime telafi başlatma yetkiniz yok.');
     }
     if (!feedback.userId) {

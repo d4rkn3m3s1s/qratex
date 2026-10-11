@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getDealerPlanLimits } from '@/lib/plan-limits';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,8 @@ export async function PATCH(
 ) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.users.id.plan.patch', auth.session.user.id, 'mutation');
+  if (limited) return limited;
 
   const { id } = await params;
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));

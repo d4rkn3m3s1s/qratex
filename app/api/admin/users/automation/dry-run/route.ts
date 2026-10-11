@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { buildTargetQuery } from '@/lib/users-automation/engine';
 import { AUTOMATION_LIMITS, parseAutomation, runImpact } from '@/lib/users-automation/schema';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.automation.dry-run.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const parsed = dryRunSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

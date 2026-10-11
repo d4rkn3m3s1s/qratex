@@ -11,6 +11,7 @@ import {
   automationConditionSchema,
   automationFingerprint,
 } from '@/lib/users-automation/schema';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -61,6 +62,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.automation.rules.id.put', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const { id } = await context.params;
     const body = await request.json().catch(() => null);
@@ -146,6 +149,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.users.automation.rules.id.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const { id } = await context.params;
     const existing = await prisma.userAutomationRule.findUnique({ where: { id } });

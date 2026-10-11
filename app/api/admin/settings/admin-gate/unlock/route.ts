@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { ADMIN_GATE_AUDIT, ADMIN_GATE_AUDIT_ENTITY } from '@/lib/admin-gate';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,8 @@ export async function POST(request: NextRequest) {
   const auditMeta = getAuditRequestMeta(request);
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.settings.admin-gate.unlock.post', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const actorId = auth.session.user.id;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

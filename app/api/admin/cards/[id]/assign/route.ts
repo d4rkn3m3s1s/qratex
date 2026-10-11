@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 import { checkAssign } from '@/lib/cards/lifecycle';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,8 @@ export async function POST(
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('admin.cards.id.assign.post', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
     const { id } = await params;
 

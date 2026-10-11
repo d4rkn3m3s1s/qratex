@@ -7,6 +7,7 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { demoSeedGate } from '@/lib/data-safety/demo-guard';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import { parseJsonBody } from '@/lib/http/parse-body';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -468,6 +469,8 @@ async function runDemoAction(action: DemoAction, dryRun: boolean, adminId: strin
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('admin.bootstrap.post', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const { session } = auth;
 
   // mimari-api B6: gövde zod ile (eylem kapalı listeden; bozuk JSON 400).

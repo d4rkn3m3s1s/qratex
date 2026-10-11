@@ -8,12 +8,15 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { EXPORT_ROW_LIMIT, feedbackCSVColumns } from '@/lib/export-utils';
 import { formatDateUTC } from '@/lib/timezone';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('export.feedbacks.post', auth.session.user.id, {max:10,windowMs:60_000});
+  if (limited) return limited;
   const { session } = auth;
 
   const scope = dealerScopeWhere(session);
