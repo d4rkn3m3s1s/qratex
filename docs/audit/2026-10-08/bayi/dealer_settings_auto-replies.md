@@ -259,3 +259,68 @@ Yöntem: Her iddia çağıran ve çağrılan taraflar baştan okunarak çürüt�
 - Yan gözlem (ayrı bir iddia değil, doğrulanması önerilir): `lib/notify-email.ts:113,116` `dealerName` ve `feedbackSnippet` değerlerini HTML'e kaçış uygulamadan ekliyor. Müşteri metninden e-posta HTML'ine enjeksiyon yapılabilir (alıcı yine müşterinin kendisi).
 
 **Özet:** 3 iddianın 3'ü de doğrulandı. 1. iddia gerçek bir Yüksek önem bulgusudur ve idempotency kilidiyle önce o kapatılmalı (koşullu `updateMany where dealerReply IS NULL AND autoActionAt IS NULL`, `Incident` için `(feedbackId, ruleId)` tekilliği, ai-retry'ın AI'si kapalı bayileri dışlaması). 2. ve 3. iddialar gerçek ama Orta önemdedir.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni rota:** `/dealer/automation/replies` (Otomasyon › Otomatik yanıtlar). `/dealer/settings/auto-replies` sorgu parametreleri korunarak kalıcı yönlendirme.
+**Dosyalar:** `app/dealer/automation/replies/page.tsx` (sunucu önce, SSR ön-yükleme) · `components/dealer/b-otomasyon/{replies-screen,reply-editor,automation-nav,api}` · `lib/dealer-automation/{reply-rules,replies.server,types}.ts` · BFF `app/api/dealer/automation/replies/**` (defineRoute: DEALER + kiracı + zod + hız sınırı) · motor `lib/auto-reply-engine.ts` (eklemeli) · test `__tests__/lib/dealer-automation/{reply-rules,automation-server}.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Başlık/açıklama | ÇALIŞIYOR (PageHeader) |
+| 2 | Geri butonu | ÇALIŞIYOR — yerine etiketli Otomasyon gezinmesi (3 bölüm, `aria-current`, 44px) |
+| 3 | Yeni kural | ÇALIŞIYOR — 20/20'de devre dışı + gerekçe |
+| 4 | Liste çekme | ÇALIŞIYOR — SSR + BFF aynı yükleyici |
+| 5 | Yükleniyor | ÇALIŞIYOR — QueryState iskeleti |
+| 6 | Boş durum | ÇALIŞIYOR — 4 hazır kural galerisi (önizlemeli düzenleyicide açılır) |
+| 7 | Hata durumu | ÇALIŞIYOR — hata asla "kural yok" gibi görünmez (zarf v2 + QueryState + yeniden dene) |
+| 8 | Ad/eylem/öncelik rozetleri | ÇALIŞIYOR — "Vaka aç", sıra numarası, durduruldu/tetiklenemez rozetleri |
+| 9 | Koşul özeti | ÇALIŞIYOR — okunur Türkçe cümle ("Yorumun duygusu olumsuz ise") |
+| 10 | Şablon önizlemesi | ÇALIŞIYOR — AI kuralında "Yedek:" önekli |
+| 11 | Alan ikonu | KALDIRILDI — dekoratifti; yerine eylem ikonu + cümle |
+| 12 | Aktif/pasif | ÇALIŞIYOR — iyimser, satır beklemesi, toast, kural adlı `aria-label` |
+| 13 | Düzenle | ÇALIŞIYOR — IconButton (`aria-label`, ipucu, 44px) |
+| 14 | Sil | ÇALIŞIYOR — ConfirmAction + "Geri al" (anlık görüntüden yeniden oluşturma) + denetim kaydı |
+| 15 | Liste animasyonu | ÇALIŞIYOR — `m.li` layout, azaltılmış harekette statik |
+| 16 | Diyalog | ÇALIŞIYOR — EntityEditorSheet (form, Enter, kirli kapanış onayı, alan hataları) |
+| 17 | Kural adı | ÇALIŞIYOR — 80 sınır, Türkçe zod |
+| 18 | Alan seçimi | ÇALIŞIYOR — alan değişince operatör+değer o alanın varsayılanına döner |
+| 19 | Operatör | ÇALIŞIYOR — yalnız geçerli seçenekler (çip) |
+| 20 | Puan değeri | ÇALIŞIYOR — 1–5 yıldız çipi, tam sayı (sunucu da) |
+| 21 | Duygu değeri | ÇALIŞIYOR — AI analizi gereksinimi ve kapalıysa uyarı ekranda |
+| 22 | Anahtar kelime | ÇALIŞIYOR — çoklu (≤10), TR büyük/küçük + aksan katlama, tam kelime seçeneği; olumsuzlama farkındalığı yok ve ekranda açıkça yazıyor |
+| 23 | Eylem | ÇALIŞIYOR |
+| 24 | Öncelik sayısı | KALDIRILDI — öncelik artık listedeki SIRA (yukarı/aşağı, `reorder` kilit altında); "ilk eşleşen çalışır" açıklaması var |
+| 25 | AI üslup seçici | ÇALIŞIYOR — "Sabit metin / AI ile kişiselleştir" modu, üsluplar `AITone`'dan; ham i18n anahtarı yok |
+| 26 | Şablon | ÇALIŞIYOR — AI modunda "Yedek metin" etiketi, sayaç, `{{musteri}} {{isletme}} {{puan}}` ekleme, örnek önizleme |
+| 27 | İpucu | ÇALIŞIYOR |
+| 28 | İptal | ÇALIŞIYOR |
+| 29 | Kaydet | ÇALIŞIYOR — alan bazlı Türkçe hata (`details`) |
+| 30 | 20 limiti | ÇALIŞIYOR — advisory kilit altında sayım + "n/20" göstergesi |
+| 31 | Yetki | ÇALIŞIYOR — defineRoute `tenant: 'dealer'`, her yazma `dealerId` kapsamlı (STAFF bilinçli olarak kapalı) |
+| 32 | Puan koşulu (after) | ÇALIŞIYOR — huni `after()` içinde (önceki dalga) |
+| 33 | Duygu koşulu | ÇALIŞIYOR |
+| 34 | Metin koşulu | ÇALIŞIYOR — B7 |
+| 35 | Otomatik yanıt yazma | ÇALIŞIYOR — atomik tek seferlik (E2/P0-32) + toksik/güven işaretli atlanır + `auto_reply_fired` kaynak kaydı |
+| 36 | AI üsluplu yanıt | ÇALIŞIYOR — puansızda "-" (eskiden 5), AI politikası + moderasyon, yedek metne değişkenler |
+| 37 | Bildirim/e-posta | ÇALIŞIYOR — müşteri diline göre TR/EN, işletme adıyla; tekrar gönderim yok |
+| 38 | Olay açma | ÇALIŞIYOR — geri bildirim başına tek, başlık "Otomatik kural: …", puansızda "-" |
+| 39 | Çalışma geçmişi/sayaç | ÇALIŞIYOR — kart başına 30 gün sayaç + son tetiklenme + "Geçmiş" paneli (Gelen Kutusu'na derin link); şema değişmeden `AnalyticsEvent` ile, Dalga 2 öncesini içermez |
+| 40 | Test/önizleme | ÇALIŞIYOR — düzenleyicide son 30 gün eşleşme sayısı + 3 örnek (motorla aynı eşleştirici, LLM yok) |
+| 41 | Şablon değişkenleri | ÇALIŞIYOR |
+| 42 | Onaylı taslak modu | EKSİK (kalan) — ŞEMA İSTEĞİ gerekiyor (aşağıda) |
+| 43 | Çoğaltma/sıralama/arama | ÇALIŞIYOR (çoğalt + klavyeyle erişilebilir yukarı/aşağı); arama KALDIRILDI — en çok 20 kural |
+| 44 | Eski `/api/dealer/auto-replies` | KALDIRILDI (ayrıca `/api/dealer/auto-reply-rules` BFF'e taşındı ve kaldırıldı) |
+| 45 | Mobil | ÇALIŞIYOR — tek sütun, 44px hedefler, düzenleyici çekmece |
+
+### Bulgular
+- **Kapandı (14):** B1, B2, B3 (önceki dalga atomikliği korunur + kaynak kaydı), B4, B5, B6, B7, B8, B10, B11, B12, B13, B14 (motor bildirimi alıcı diline göre; arayüz terimi "Vaka"), B15.
+- **Açık (1):** B9 onaylı taslak/gecikmeli gönderim — yanıt önerisini saklayacak alan yok.
+
+### Kalanlar ve ŞEMA İSTEĞİ
+- `Feedback.suggestedReply String?` + `Feedback.autoReplyRuleId String?` ve `AutoReplyRule.mode ('auto'|'draft')` — B9 ve "bu yanıtı otomasyon yazdı" rozeti için.
+- Bileşik koşullar (VE/VEYA), şube/QR kapsamı, tüketim yorumu (ConsumptionReview) kapsamı — ayrı iş.

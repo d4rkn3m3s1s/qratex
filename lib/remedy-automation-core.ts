@@ -1,103 +1,112 @@
 /**
- * Otomatik telafi (remedy) taslağı çekirdeği — tek bir feedback için onay
- * kuyruğuna RemedyOffer taslağı ekler. Hem batch (apply-scan) hem feedback
- * analiz pipeline'ı (yüksek churn anında) bunu kullanır.
+ * Otomatik telafi (remedy) taslağı çekirdeği — tek bir geri bildirim için onay kuyruğuna
+ * RemedyOffer taslağı ekler. Gerçek zamanlı yol (analiz hattı ve AI'sız yol) ile bayinin
+ * "Şimdi tara" taraması AYNI fonksiyonu kullanır (denetim bulgu 7: eskiden iki kopya mantık).
  *
- * `User.dealerRemedyAutomation` config'i şemada vardı ama analiz pipeline'ı
- * yalnızca bildirim atıp bırakıyordu — döngü burada kapanır.
+ * Değişmezler:
+ *  - Otomasyon ASLA doğrudan müşteriye göndermez (`mode: 'queue'`).
+ *  - Bir geri bildirime HERHANGİ bir teklif açıldıysa (reddedilmiş dahil) yenisi üretilmez.
+ *  - Aylık üst sınır yalnız OTOMATİK taslakları sayar (`remedy_automation_queued` olayı) ve
+ *    ay sınırı Europe/Istanbul'dur.
+ *  - Müşteri başına bekleme süresi: son N günde teklif almış müşteriye yeni taslak yok.
+ *  - Ayar `lib/dealer-automation/remedy-config.ts` ile tek kaynaktan, tam sayı ve kırpılmış okunur.
  */
 import { prisma } from '@/lib/prisma';
 import { createRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
 import { getRemedyOptionsForQrCode } from '@/lib/remedy-options';
+import {
+  istanbulMonthStart,
+  parseRemedyAutomationConfig,
+  remedyTrigger,
+  renderRemedyMessage,
+  type RemedyAutomationConfig,
+} from '@/lib/dealer-automation/remedy-config';
 
-export interface RemedyAutomationConfig {
-  enabled: boolean;
-  minRating: number;
-  maxPerRun: number;
-  maxMonthlyAuto: number;
-  messageTemplate: string;
-}
+export type { RemedyAutomationConfig };
 
-const DEFAULTS: RemedyAutomationConfig = {
-  enabled: false,
-  minRating: 2,
-  maxPerRun: 5,
-  maxMonthlyAuto: 40,
-  messageTemplate:
-    'Deneyiminiz için özür dileriz. Aşağıdan telafi türü ve miktarınızı seçin (otomatik teklif).',
-};
+/** Geriye uyumlu ad. */
+export const parseRemedyAutomation = parseRemedyAutomationConfig;
 
-export function parseRemedyAutomation(raw: unknown): RemedyAutomationConfig {
-  const base = { ...DEFAULTS };
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const o = raw as Record<string, unknown>;
-    if (typeof o.enabled === 'boolean') base.enabled = o.enabled;
-    if (typeof o.minRating === 'number') base.minRating = o.minRating;
-    if (typeof o.maxPerRun === 'number') base.maxPerRun = o.maxPerRun;
-    if (typeof o.maxMonthlyAuto === 'number') base.maxMonthlyAuto = o.maxMonthlyAuto;
-    if (typeof o.messageTemplate === 'string' && o.messageTemplate.trim()) {
-      base.messageTemplate = o.messageTemplate.trim().slice(0, 500);
-    }
-  }
-  return base;
-}
+export const REMEDY_AUTOMATION_EVENT = 'remedy_automation_queued';
 
-function monthStartUTC(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+export type AutoRemedySkipReason =
+  | 'no_user'
+  | 'disabled'
+  | 'not_eligible'
+  | 'monthly_limit'
+  | 'already_exists'
+  | 'cooldown'
+  | 'no_options';
+
+/** Bu ay (İstanbul) üretilen otomatik taslak sayısı. */
+export async function countMonthlyAutoRemedies(dealerId: string, now: Date = new Date()): Promise<number> {
+  return prisma.analyticsEvent.count({
+    where: { userId: dealerId, event: REMEDY_AUTOMATION_EVENT, createdAt: { gte: istanbulMonthStart(now) } },
+  });
 }
 
 /**
  * Tek bir feedback için otomatik remedy taslağı oluşturmayı dener.
- * Koşullar: otomasyon açık, kullanıcı var, puan eşiği altında, bu feedback için
- * daha önce (reddedilmiş dahil) teklif yok, aylık limit aşılmamış. Döndürür: oluşturulan offer id veya null.
+ * Döndürür: oluşturulduysa offer id; değilse neden kodu.
  */
 export async function maybeCreateAutoRemedyForFeedback(params: {
   feedbackId: string;
   dealerId: string;
   userId: string | null;
-  rating: number;
+  rating: number | null;
   churnRisk?: number | null;
   /** Mekana özel telafi seçeneklerini çözmek için (opsiyonel, geriye uyumlu). */
   qrCodeId?: string | null;
-}): Promise<{ created: boolean; offerId?: string; reason?: string }> {
+  /** Çağıran ayarı zaten okuduysa (tarama) tekrar okunmaz. */
+  config?: RemedyAutomationConfig;
+  /** Tarama kendi bildirimini toplu verir. */
+  notify?: boolean;
+  trigger?: 'event' | 'scan';
+}): Promise<{ created: boolean; offerId?: string; reason?: AutoRemedySkipReason }> {
   const { feedbackId, dealerId, userId, rating, churnRisk, qrCodeId } = params;
   if (!userId) return { created: false, reason: 'no_user' };
 
-  const dealer = await prisma.user.findUnique({
-    where: { id: dealerId },
-    select: { dealerRemedyAutomation: true },
-  });
-  const cfg = parseRemedyAutomation(dealer?.dealerRemedyAutomation);
+  let cfg = params.config;
+  let businessName: string | null = null;
+  if (!cfg) {
+    const dealer = await prisma.user.findUnique({
+      where: { id: dealerId },
+      select: { dealerRemedyAutomation: true, businessName: true, name: true },
+    });
+    cfg = parseRemedyAutomationConfig(dealer?.dealerRemedyAutomation);
+    businessName = dealer?.businessName || dealer?.name || null;
+  }
   if (!cfg.enabled) return { created: false, reason: 'disabled' };
 
-  // Tetik: düşük puan VEYA yüksek churn riski.
-  const lowRating = rating <= cfg.minRating;
-  const highChurn = typeof churnRisk === 'number' && churnRisk >= 0.7;
-  if (!lowRating && !highChurn) return { created: false, reason: 'not_eligible' };
+  const trigger = remedyTrigger(cfg, rating, churnRisk);
+  if (!trigger) return { created: false, reason: 'not_eligible' };
 
-  // Aylık otomatik limit.
-  const monthCount = await prisma.remedyOffer.count({
-    where: {
-      dealerId,
-      createdAt: { gte: monthStartUTC() },
-      status: { in: ['awaiting_dealer_approval', 'pending', 'accepted'] },
-    },
-  });
-  if (monthCount >= cfg.maxMonthlyAuto) return { created: false, reason: 'monthly_limit' };
+  if ((await countMonthlyAutoRemedies(dealerId)) >= cfg.maxMonthlyAuto) return { created: false, reason: 'monthly_limit' };
 
-  // Bu feedback için DAHA ÖNCE herhangi bir teklif açıldı mı? (P0-22 / bayi P0-10)
-  // `rejected` da sayılır: bayinin açıkça reddettiği taslak otomasyonla yeniden üretilmez;
-  // `expired`/`accepted` da — aynı yoruma ikinci otomatik telafi gitmez.
-  const existing = await prisma.remedyOffer.findFirst({
-    where: { feedbackId },
-    select: { id: true },
-  });
+  // Bu feedback için DAHA ÖNCE herhangi bir teklif açıldı mı? (reddedilmiş dahil — P0-22)
+  const existing = await prisma.remedyOffer.findFirst({ where: { feedbackId }, select: { id: true } });
   if (existing) return { created: false, reason: 'already_exists' };
 
-  // Telafi seçenekleri: mekana/işletmeye özel şablonlardan (yoksa varsayılan).
-  const options = await getRemedyOptionsForQrCode(dealerId, qrCodeId);
-  const trigger = highChurn ? 'high_churn' : 'low_rating';
+  if (cfg.cooldownDays > 0) {
+    const recent = await prisma.remedyOffer.findFirst({
+      where: { dealerId, userId, createdAt: { gte: new Date(Date.now() - cfg.cooldownDays * 86_400_000) } },
+      select: { id: true },
+    });
+    if (recent) return { created: false, reason: 'cooldown' };
+  }
+
+  const [options, names] = await Promise.all([
+    getRemedyOptionsForQrCode(dealerId, qrCodeId),
+    prisma.user
+      .findMany({ where: { id: { in: businessName ? [userId] : [userId, dealerId] } }, select: { id: true, name: true, businessName: true } })
+      .catch(() => [] as Array<{ id: string; name: string | null; businessName: string | null }>),
+  ]);
+  const customer = names.find((u) => u.id === userId);
+  const dealerRow = names.find((u) => u.id === dealerId);
+  const message = renderRemedyMessage(cfg.messageTemplate, {
+    musteri: customer?.name ?? null,
+    isletme: businessName ?? dealerRow?.businessName ?? dealerRow?.name ?? null,
+  });
 
   let offerId: string;
   try {
@@ -105,7 +114,7 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
       source: { kind: 'feedback', feedbackId },
       dealerId,
       userId,
-      message: cfg.messageTemplate,
+      message,
       mode: 'queue', // otomasyon ASLA doğrudan müşteriye göndermez
       options,
       createdLabel: 'Otomasyon ile telafi taslağı oluşturuldu',
@@ -119,30 +128,56 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
     }
     throw err;
   }
-  const offer = { id: offerId };
 
   await prisma.analyticsEvent.create({
     data: {
       userId: dealerId,
-      event: 'remedy_automation_queued',
+      event: REMEDY_AUTOMATION_EVENT,
       category: 'dealer',
-      data: { feedbackId, offerId: offer.id, trigger },
+      data: { feedbackId, offerId, trigger, via: params.trigger ?? 'event' },
     },
   });
 
-  // Bayiye onay kuyruğu bildirimi.
-  await prisma.notification.create({
-    data: {
-      userId: dealerId,
-      title: 'Otomatik telafi taslağı hazır',
-      message: highChurn
-        ? 'Yüksek kayıp riski tespit edilen bir yorum için telafi taslağı onay kuyruğunda.'
-        : 'Düşük puanlı bir yorum için telafi taslağı onay kuyruğunda.',
-      type: 'info',
-      // Gelen Kutusu → Telafi onayı'nda taslağın detay çekmecesine derin link (denetim B12).
-      data: { type: 'remedy_draft', module: 'remedy_offers', offerId: offer.id, feedbackId, ctaPath: `/dealer/inbox/remedy?id=${offer.id}` },
-    },
-  });
+  if (params.notify !== false) {
+    await prisma.notification.create({
+      data: {
+        userId: dealerId,
+        title: 'Otomatik telafi taslağı hazır',
+        message:
+          trigger === 'high_churn'
+            ? 'Yüksek kayıp riski tespit edilen bir yorum için telafi taslağı onay kuyruğunda.'
+            : 'Düşük puanlı bir yorum için telafi taslağı onay kuyruğunda.',
+        type: 'info',
+        // Gelen Kutusu → Telafi onayı'nda taslağın detay çekmecesine derin link (denetim B12).
+        data: { type: 'remedy_draft', module: 'remedy_offers', offerId, feedbackId, ctaPath: `/dealer/inbox/remedy?id=${offerId}` },
+      },
+    });
+  }
 
-  return { created: true, offerId: offer.id };
+  return { created: true, offerId };
+}
+
+/**
+ * AI analizi YAPILMAYAN geri bildirim (metinsiz yalnız-puan, AI'ı kapalı bayi) için gerçek
+ * zamanlı puan tetiği (denetim bulgu 5). Analiz hattı başarılıysa taslağı zaten o üretir;
+ * buradaki çağrı idempotenttir (mevcut teklif kontrolü + servis kilidi). Asla fırlatmaz.
+ */
+export async function maybeCreateAutoRemedyForFeedbackId(feedbackId: string): Promise<void> {
+  try {
+    const f = await prisma.feedback.findUnique({
+      where: { id: feedbackId },
+      select: { id: true, userId: true, rating: true, churnRisk: true, deletedAt: true, qrCodeId: true, qrCode: { select: { dealerId: true } } },
+    });
+    if (!f || f.deletedAt || !f.qrCode) return;
+    await maybeCreateAutoRemedyForFeedback({
+      feedbackId: f.id,
+      dealerId: f.qrCode.dealerId,
+      userId: f.userId,
+      rating: f.rating,
+      churnRisk: f.churnRisk,
+      qrCodeId: f.qrCodeId,
+    });
+  } catch (err) {
+    console.error('[REMEDY_AUTOMATION] gerçek zamanlı taslak denenemedi:', err);
+  }
 }

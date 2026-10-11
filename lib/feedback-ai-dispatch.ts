@@ -43,6 +43,14 @@ export async function runAutoRepliesOnly(feedbackId: string): Promise<void> {
   } catch (err) {
     console.error('[FEEDBACK_AI] otomatik yanıt motoru başarısız:', err);
   }
+  // Telafi otomasyonunun puan tetiği AI analizine bağlı değildir (Otomasyon › Telafi, denetim
+  // bulgu 5): metinsiz 1 yıldız ya da AI'ı kapalı bayi de gerçek zamanlı taslak alır. İdempotent.
+  try {
+    const { maybeCreateAutoRemedyForFeedbackId } = await import('@/lib/remedy-automation-core');
+    await maybeCreateAutoRemedyForFeedbackId(feedbackId);
+  } catch (err) {
+    console.error('[FEEDBACK_AI] telafi otomasyonu denenemedi:', err);
+  }
 }
 
 /**

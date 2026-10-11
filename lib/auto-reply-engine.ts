@@ -12,38 +12,42 @@
  *  - AI üsluplu yanıt yalnız bayinin AI ana anahtarı açıksa üretilir; çıktı moderasyondan
  *    geçemezse (vaat, bağlantı, aşırı uzunluk) bayinin şablonuna düşülür.
  */
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getDealerAiPolicy, canUseAi } from '@/lib/ai-policy';
 import { moderateAutoReply } from '@/lib/ai-prompt-safety';
+import { matchReplyCondition, parseStoredCondition, renderReplyTemplate } from '@/lib/dealer-automation/reply-rules';
 
 export interface AutoReplyRuleCondition {
   field: 'rating' | 'sentiment' | 'text';
   op: 'lte' | 'gte' | 'eq' | 'contains';
   value: string | number;
+  keywords?: string[];
+  wholeWord?: boolean;
 }
 
-/** Kuralın eşleşip eşleşmediği — saf fonksiyon (test edilebilir). */
+/**
+ * Kuralın eşleşip eşleşmediği — saf fonksiyon (test edilebilir). Saklanan koşul önce
+ * `parseStoredCondition` ile doğrulanır: motorun eşleştiremeyeceği eski bozuk kombinasyonlar
+ * (ör. `text` + `lte`) hiçbir zaman eşleşmez ve arayüzde "tetiklenemez" olarak işaretlenir.
+ * Metin eşleşmesi Türkçe büyük/küçük harf + aksan katlamalı, çoklu anahtar kelimelidir.
+ */
 export function matchesAutoReplyCondition(
-  condition: AutoReplyRuleCondition | null | undefined,
+  condition: AutoReplyRuleCondition | Record<string, unknown> | null | undefined,
   feedback: { rating: number | null; sentiment: string | null; text: string | null }
 ): boolean {
-  if (!condition || typeof condition !== 'object') return false;
-  if (condition.field === 'rating' && feedback.rating !== null && feedback.rating !== undefined) {
-    const val = Number(condition.value);
-    if (!Number.isFinite(val)) return false;
-    if (condition.op === 'lte') return feedback.rating <= val;
-    if (condition.op === 'gte') return feedback.rating >= val;
-    if (condition.op === 'eq') return feedback.rating === val;
-    return false;
+  return matchReplyCondition(parseStoredCondition(condition), feedback);
+}
+
+/** Motorun her etkisi (yanıt yazıldı / olay açıldı) için kural geçmişi kaydı. */
+export const AUTO_REPLY_FIRED_EVENT = 'auto_reply_fired';
+
+async function recordFired(dealerId: string, data: Record<string, unknown>): Promise<void> {
+  try {
+    await prisma.analyticsEvent.create({ data: { userId: dealerId, event: AUTO_REPLY_FIRED_EVENT, category: 'dealer', data: data as Prisma.InputJsonValue } });
+  } catch (err) {
+    console.error('[AUTO_REPLY] kural geçmişi yazılamadı:', err);
   }
-  if (condition.field === 'sentiment' && feedback.sentiment) {
-    return condition.op === 'eq' && feedback.sentiment.toLowerCase() === String(condition.value).toLowerCase();
-  }
-  if (condition.field === 'text' && feedback.text) {
-    const needle = String(condition.value).toLocaleLowerCase('tr-TR').trim();
-    return condition.op === 'contains' && needle.length > 0 && feedback.text.toLocaleLowerCase('tr-TR').includes(needle);
-  }
-  return false;
 }
 
 /** Yanıt veren bayinin gösterim adını çözer (e-posta için). */
@@ -59,14 +63,15 @@ async function resolveDealerNameForEmail(dealerId: string): Promise<string> {
 async function maybeGenerateAiReply(params: {
   dealerId: string;
   text: string;
-  rating: number;
+  /** Puansız geri bildirimde 0 → istemde "-" (eskiden 5 sayılıyordu, denetim B6). */
+  rating: number | null;
   tone: string;
 }): Promise<string | null> {
   const policy = await getDealerAiPolicy(params.dealerId);
   if (!canUseAi(policy)) return null;
   try {
     const { generateAutoReply } = await import('@/lib/ai-engine');
-    const aiReply = await generateAutoReply(params.text, params.rating, params.tone, params.dealerId);
+    const aiReply = await generateAutoReply(params.text, params.rating ?? 0, params.tone, params.dealerId);
     const verdict = moderateAutoReply(aiReply);
     if (!verdict.ok) {
       if (aiReply) console.warn('[AUTO_REPLY] AI yanıtı moderasyondan geçmedi:', verdict.reason);
@@ -106,7 +111,7 @@ async function createIncidentOnce(params: {
     await tx.incident.create({
       data: {
         dealerId: params.dealerId,
-        title: `Otomatik Kural İhlali: ${params.ruleName}`,
+        title: `Otomatik kural: ${params.ruleName}`,
         description: `[Sistem] Kural tetiklendi: ${params.template}\n\nMüşteri Puanı: ${params.rating ?? '-'}\nYorum: ${params.text || '-'}`,
         severity: params.rating !== null && params.rating <= 2 ? 'high' : 'medium',
         status: 'open',
@@ -138,6 +143,7 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
         deletedAt: true,
         dealerReply: true,
         dealerRepliedAt: true,
+        user: { select: { name: true, preferredLanguage: true } },
         qrCode: { select: { dealerId: true } },
       },
     });
@@ -154,16 +160,20 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
     if (rules.length === 0) return { action: 'none', reason: 'no-rules' };
 
     // Yalnız en yüksek öncelikli / ilk eşleşen kural çalışır.
-    const rule = rules.find((r) =>
-      matchesAutoReplyCondition(r.condition as unknown as AutoReplyRuleCondition, feedback)
-    );
+    // Geçersiz (tetiklenemez) koşullu kural atlanır.
+    const rule = rules.find((r) => matchReplyCondition(parseStoredCondition(r.condition), feedback));
     if (!rule) return { action: 'none', reason: 'no-match' };
 
     if (rule.action === 'reply') {
       if (feedback.dealerReply || feedback.dealerRepliedAt) return { action: 'none', reason: 'already-replied' };
       if (feedback.isToxic || feedback.trustFlagged) return { action: 'none', reason: 'unsafe-feedback' };
 
-      let finalReply = rule.template;
+      const dealerName = await resolveDealerNameForEmail(dealerId);
+      let finalReply = renderReplyTemplate(rule.template, {
+        musteri: feedback.user?.name ?? null,
+        isletme: dealerName,
+        puan: feedback.rating,
+      });
       let usedAi = false;
       if (rule.tone && feedback.text) {
         const aiReply = await maybeGenerateAiReply({
@@ -184,24 +194,22 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
         data: { dealerReply: finalReply, dealerRepliedAt: new Date() },
       });
       if (written.count === 0) return { action: 'reply', written: false, ai: usedAi };
+      await recordFired(dealerId, { ruleId: rule.id, feedbackId: feedback.id, action: 'reply', ai: usedAi });
 
       if (feedback.userId) {
+        const en = feedback.user?.preferredLanguage === 'en';
         await prisma.notification.create({
           data: {
             userId: feedback.userId,
-            title: 'Geri bildiriminize yanıt var',
-            message: 'İşletme geri bildiriminize yanıt verdi.',
+            title: en ? 'Your feedback got a reply' : 'Geri bildiriminize yanıt var',
+            message: en ? `${dealerName} replied to your feedback.` : `${dealerName} geri bildiriminize yanıt verdi.`,
             type: 'info',
           },
         });
         // Transactional e-posta (opt-out kontrollü, ateşle-unut).
         const customerId = feedback.userId;
         import('@/lib/notify-email')
-          .then(({ emailDealerReply }) =>
-            resolveDealerNameForEmail(dealerId).then((dealerName) =>
-              emailDealerReply({ customerId, dealerName, feedbackSnippet: feedback.text })
-            )
-          )
+          .then(({ emailDealerReply }) => emailDealerReply({ customerId, dealerName, feedbackSnippet: feedback.text }))
           .catch((err) => console.error('[AUTO_REPLY_EMAIL]', err));
       }
       return { action: 'reply', written: true, ai: usedAi };
@@ -217,6 +225,7 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
         rating: feedback.rating,
         text: feedback.text,
       });
+      if (created) await recordFired(dealerId, { ruleId: rule.id, feedbackId: feedback.id, action: 'incident', ai: false });
       return { action: 'incident', created };
     }
 

@@ -216,3 +216,54 @@ Salt okunur inceleme; kod, veritabanı ve sunucu çalıştırılmadı. Her iddia
 - **Gerçekçi tek senaryo:** İki sekmeden aynı anda (milisaniye düzeyinde) "Şimdi tara" denmesi ya da bir taramanın, yeni gelen geri bildirimin analiz hattıyla `findFirst` ve `create` arasındaki `getRemedyOptions` sorgusu kadar dar bir pencerede çakışması. Bu senaryo canlıda doğrulanmadı.
 - **Etki sınırlı:** Her iki kopya da `awaiting_dealer_approval` durumunda oluşuyor. Müşteriye ulaşmaları için bayinin **ikisini de** kuyruktan elle yayınlaması gerekir (`remedy-offers/[id]/route.ts:56-59, 89-92`). Ayrıca müşterinin kabulü otomatik puan ya da para basmıyor, yalnızca seçimi kaydediyor (`app/api/customer/remedy/[offerId]/route.ts:160-168`). Sistem zaten geri bildirim başına çoklu teklife izin veriyor: manuel telafi yolu hiç tekrar kontrolü yapmadan `create` çağırıyor (`app/api/dealer/feedbacks/[id]/remedy/route.ts:79-89`). Yani "geri bildirim başına tek teklif" bir veri değişmezi değil.
 - **Öneri:** Kalıcı çözüm olarak `source='auto'` olan aktif teklifler için kısmi tekil index (`CREATE UNIQUE INDEX ... ON "RemedyOffer"("feedbackId") WHERE source='auto' AND status IN (...)`) eklenebilir ve `create` çağrısındaki `P2002` hatası "already_exists" olarak yutulabilir. Aylık kota için sayım ve oluşturma işlemi bayi başına `pg_advisory_xact_lock(hashtext(dealerId))` içeren tek bir `$transaction` ile yapılabilir. Bu düzeltme 1. bulgudaki `source` alanıyla birlikte yapılmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni rota:** `/dealer/automation/remedy` (Otomasyon › Telafi). Eski `/dealer/remedy-automation` ve `/templates` sorgu korunarak kalıcı yönlendirir (şablonlar `#katalog`'a).
+**Dosyalar:** `app/dealer/automation/remedy/page.tsx` · `components/dealer/b-otomasyon/{remedy-screen,remedy-catalog}.tsx` · `lib/dealer-automation/{remedy-config,remedy-catalog,remedy.server}.ts` · BFF `app/api/dealer/automation/remedy/**` (modül `remedy_offers`, kiracı, zod, hız sınırı) · çekirdek `lib/remedy-automation-core.ts` (tek mantık, geriye uyumlu adlar) · `lib/feedback-ai-dispatch.ts` (AI'sız yolda puan tetiği). Eski `app/api/dealer/remedy-automation/**` kaldırıldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR — gerçek kapsamı anlatıyor |
+| 2 | Geri bağlantısı | ÇALIŞIYOR — Otomasyon gezinmesi |
+| 3 | Başlık kartı | ÇALIŞIYOR |
+| 4 | Şablonlar bağlantısı | ÇALIŞIYOR — katalog aynı sayfada (`#katalog`), Türkçe |
+| 5 | Ayar yükleme | ÇALIŞIYOR — SSR + zarf v2; hata varsayılan gibi görünmez |
+| 6 | Yükleniyor | ÇALIŞIYOR — iskelet |
+| 7 | Hata | ÇALIŞIYOR — QueryState (yeniden dene, modül kapalı durumu); form gösterilmez |
+| 8 | Açık anahtarı | ÇALIŞIYOR — "gerçek zamanlı" açıklaması, canlı nokta (azaltılmış harekette statik) |
+| 9 | Puan eşiği | ÇALIŞIYOR — 1–3 çip ("2 ★ ve altı"), tam sayı; eski 4–5 kayıtları 3'e kırpılır |
+| 10 | Tarama başına sınır | ÇALIŞIYOR — `.int()` + okumada `Math.trunc`/kırpma; 500 riski yok |
+| 11 | Aylık sınır | ÇALIŞIYOR — yalnız OTOMATİK taslaklar (İstanbul ayı), kullanım çubuğu |
+| 12 | Mesaj | ÇALIŞIYOR — çok satır, sayaç, en az 10, `{{musteri}}`/`{{isletme}}`, müşteri önizlemesi |
+| 13 | Yerelleştirilmiş varsayılan | ÇALIŞIYOR — tek kaynak sunucu varsayılanı |
+| 14 | Kaydet | ÇALIŞIYOR — Türkçe alan hataları, denetim kaydı |
+| 15 | Kaydedilmemiş değişiklik | ÇALIŞIYOR — DirtyBar (Kaydet/Vazgeç, ⌘S, çıkış uyarısı) |
+| 16 | Yenile | KALDIRILDI — React Query tazeleme + "Vazgeç" yeterli |
+| 17 | Şimdi tara | ÇALIŞIYOR — önce "dene" (yazmaz), sonra "N taslağı ekle"; kayıtlı ayarla; kirliyken kilitli; sonuç paneli + kuyruk bağlantısı |
+| 18 | Aday penceresi | ÇALIŞIYOR — teklifi olan yorumlar sorguda dışlanır, aynı müşterinin tek yorumu |
+| 19 | Kuyruk bağlantısı | ÇALIŞIYOR — bekleyen sayılı (Gelen Kutusu › Telafi onayı) |
+| 20 | Gerçek zamanlı tetik | ÇALIŞIYOR — puan tetiği AI/metinden bağımsız |
+| 21 | Churn tetiği | ÇALIŞIYOR — aç/kapa + %50–90 eşik |
+| 22 | Anonim | ÇALIŞIYOR — kapsam notu + tarama sayacı |
+| 23 | Tüketim yorumu | EKSİK (kalan) — ekranda dürüstçe belirtildi |
+| 24 | Bayiye bildirim | ÇALIŞIYOR — gerçek zamanlı tekil, tarama toplu |
+| 25 | Analitik olayları | ÇALIŞIYOR — istatistik buradan okunur |
+| 26 | Yetki | ÇALIŞIYOR |
+| 27 | Modül kapısı | ÇALIŞIYOR — BFF `module: 'remedy_offers'` + SSR |
+| 28 | Denetim kaydı | ÇALIŞIYOR — AuditLog önce/sonra |
+| 29 | Hız sınırı | ÇALIŞIYOR — tarama 4/dk |
+| 30 | Motion | ÇALIŞIYOR — kota dolumu, ölçülü |
+
+### Bulgular
+- **Kapandı (12):** 1, 2, 4, 5 (QR geri bildirimi için), 6, 7, 8, 9, 11 (aday sorgusu daraltıldı; aday başına çekirdek, ≤ 25), 12, 13, 14.
+- **Kısmi (2):** 3 — kaynak başına çift taslak servis kilidiyle engelli; aylık sınırın eşzamanlı aşımı (en çok birkaç) kaldı. 10 — müşteri mesajı tek dil (TR).
+- **Eksik özelliklerden uygulanan:** müşteri başına bekleme süresi, kuru çalıştırma, sonuç analitiği (hazırlanan/bekleyen/yayın/red/kabul oranı), mesaj kişiselleştirme.
+
+### Kalanlar / ŞEMA İSTEĞİ
+- `RemedyOffer.source ('auto'|'manual')` + kısmi tekil index — sayımı olaydan değil kayıttan yapmak ve TOCTOU'yu kapatmak için.
+- Tüketim yorumları için otomatik telafi; kural oluşturucu (çoklu kural/şube/konu); churn sayfasındaki `autoFlashOffer` ile tek tetikte birleşme.

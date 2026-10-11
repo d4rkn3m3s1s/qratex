@@ -204,3 +204,51 @@ Dosyalar: `app/dealer/remedy-automation/templates/page.tsx` (344 satır, tamamı
   - Etki sınırı (çürütmeye en yakın nokta): `selectedType/selectedValue` tüketicileri arandı — yalnız müşteri GET/PATCH, müşteri listesi (`app/api/customer/remedy/route.ts:56-57`) ve müşteri ekranları (`app/customer/remedy/page.tsx:221`, `app/customer/remedy/[offerId]/page.tsx:203`). Puan defterine yazan, kupon üreten ya da bayi panelinde seçimi gösteren kod yok (`app/dealer/**` altında eşleşme yok). Dolayısıyla sahte değer **otomatik bir ekonomik kayba dönüşmüyor**; zarar, müşterinin kasada "uygulamada kabul edilmiş %100 indirim" ekranını göstermesi ve bayinin bunu sunucu tarafında doğrulayacak bir görünümünün olmaması üzerinden doğuyor.
 - **Yeniden üretim:** Müşteri, seçenekleri `discount: [10,15,20]` olan `pending` teklifinin sahibi olarak oturum çerezleriyle `PATCH /api/customer/remedy/<offerId>` gövdesi `{"selectedType":"discount","selectedValue":"100"}` gönderir → 200 `success:true`, kayıt `status:'accepted', selectedValue:'100'` olur; `app/customer/remedy/[offerId]/page.tsx:203` resmi kabul ekranında "discount / 100" gösterir, zaman çizelgesi "Seçiminiz kaydedildi — teklif kullanıma hazır" der. Aynı yolla `selectedType` şablonda hiç olmayan bir tür veya çok uzun bir metin de olabilir.
 - **Not:** Öneri (PATCH'te `options` seçip tür+değer eşleşmesi, eşleşmezse 400; değeri sayı olarak saklama) doğru ve küçük efor. Ek olarak `selectedType`'ı `z.enum(['discount','points','free_item'])`, `selectedValue`'yu `max` sınırıyla daraltın. Bulgu 3'teki yerine getirme (fulfilment/kupon) adımı eklendiğinde bu doğrulama **zorunlu** hale gelir; aksi halde gerçek puan basımına dönüşür (puan ekonomisi değişmezleri).
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/dealer/automation/remedy#katalog` ("Teklif kataloğu"); eski rota yönlendirir. Şube (mekan) yönetimi bu yüzeyden ÇIKARILDI — tek kaynak QR kodlar › Şubeler (`/dealer/qr-codes?tab=locations`). Eski `app/api/dealer/remedy-templates/**` ve `app/api/dealer/locations/**` kaldırıldı; yerine `app/api/dealer/automation/remedy/templates/**` (modül kapısı, kiracı, zod, denetim kaydı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Geri butonu | ÇALIŞIYOR — Otomasyon gezinmesi (iç içe etkileşimli öğe yok) |
+| 2 | Başlık | ÇALIŞIYOR |
+| 3 | İlk yükleme | ÇALIŞIYOR — SSR; hata görünür |
+| 4–7 | Mekan adı / ekle / boş ad / aynı ad | KALDIRILDI — QR kodlar › Şubeler |
+| 8 | Mekan listesi | ÇALIŞIYOR — kapsam seçicide şubeler |
+| 9 | QR sayacı | ÇALIŞIYOR — arşivsiz QR sayısı; 0 ise "set etkisiz" uyarısı + bağlama bağlantısı |
+| 10 | Mekan silme | KALDIRILDI — cascade riski bu yüzeyden çıktı |
+| 11 | Yükleniyor/boş | ÇALIŞIYOR |
+| 12–14 | Yeniden adlandırma / adres / aktiflik | KALDIRILDI — Şubeler sekmesinin işi; pasif şube bilgisi gösterilir |
+| 15 | QR'ı mekana bağlama | ÇALIŞIYOR — QR kodlar yüzeyinde |
+| 16 | Kapsam seçimi | ÇALIŞIYOR |
+| 17 | Tür | ÇALIŞIYOR — tür başına kart |
+| 18 | Değer girişi | ÇALIŞIYOR — çip editörü, türe göre sınır, tekil + sıralı, geçersizler adıyla bildirilir |
+| 19 | Ekle | ÇALIŞIYOR — kart başına bekleme |
+| 20 | 9+ değer hatası | ÇALIŞIYOR — Türkçe, en çok 8 göstergesi |
+| 21 | Etiket/birim | ÇALIŞIYOR — etiket özelleştirilebilir ("Ücretsiz kahve"); ürün kataloğu bağı kalan |
+| 22–23 | Liste / kapsam etiketi | ÇALIŞIYOR |
+| 24 | Aktiflik göstergesi | ÇALIŞIYOR |
+| 25 | Düzenleme | ÇALIŞIYOR |
+| 26 | Aktif/pasif | ÇALIŞIYOR |
+| 27 | Sıralama | ÇALIŞIYOR — yukarı/aşağı (müşteri ekranındaki sıra) |
+| 28 | Silme | ÇALIŞIYOR — ConfirmAction, etkisi anlatılır |
+| 29 | Aynı tür tekrarı | ÇALIŞIYOR — kilit altında 409; eski fazlalıklar uyarı + sil |
+| 30 | Öncelik kuralı | ÇALIŞIYOR — "şube seti işletme setinin yerine geçer (birleşmez)" + etkin set kaynağı |
+| 31 | Müşteri önizlemesi | ÇALIŞIYOR — kapsam başına etkin set + mesaj önizlemesi |
+| 32 | Toast | ÇALIŞIYOR — doğru Türkçe |
+| 33 | i18n | ÇALIŞIYOR (TR); EN çevirisi kalan |
+| 34 | Yetki | ÇALIŞIYOR |
+| 35 | Modül kapısı | ÇALIŞIYOR |
+| 36 | Mobil | ÇALIŞIYOR — 44px hedefler |
+| 37 | Erişilebilirlik | ÇALIŞIYOR — etiketli alanlar, adlı ikon butonlar |
+| 38 | Kabul doğrulaması | ÇALIŞIYOR — önceki dalgada (`findRemedySelection` allowlist) |
+| 39 | Puan teslimi | ÇALIŞIYOR — önceki dalgada (`acceptRemedyOffer` + lib/economy) |
+
+### Bulgular
+- **Kapandı (11):** 1 (QR yüzeyi + 0-QR uyarısı), 2 ve 3 (önceki dalga), 4, 5, 6, 7, 8, 9, 10 (TR), 11.
+- **Kalan:** ürün kataloğuna bağlı ücretsiz ürün, son kullanma/bütçe alanları (ŞEMA İSTEĞİ: `RemedyTemplate.productId`, `expiresInDays`, `monthlyBudget`, `(dealerId, locationId, type)` kısmi tekil index), şablon başına kabul oranı.
