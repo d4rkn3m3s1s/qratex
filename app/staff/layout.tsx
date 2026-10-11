@@ -13,6 +13,7 @@ import { getShellConfig } from '@/lib/navigation/get-shell-config';
 import { getActiveStaffDealerId } from '@/lib/auth/scope';
 import { StaffSignOutButton } from '@/components/staff/b-ekip/sign-out-button';
 import { StaffInactiveNotice } from '@/components/staff/b-ekip/inactive-notice';
+import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';
 
 export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
@@ -45,6 +46,7 @@ export default async function StaffLayout({
   const en = locale === 'en';
   const inactive = activeDealerId === null;
   return (
+    <ServerLocaleBoundary>
     <div className="min-h-dvh flex flex-col bg-background">
       <SkipToMainContent targetId="staff-main" />
       <header className="sticky top-0 z-10 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
@@ -70,5 +72,6 @@ export default async function StaffLayout({
       </main>
       <WebVitalsReporter />
     </div>
+    </ServerLocaleBoundary>
   );
 }

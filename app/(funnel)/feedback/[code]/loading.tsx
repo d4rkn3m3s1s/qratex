@@ -1,3 +1,4 @@
+import { LoadingLabel } from '@/components/layout/loading-label';
 /**
  * Huni yükleme iskeleti — statik (shimmer yok, §4.2 kural 4), son yerleşimle aynı iskelet:
  * üst çubuk, logo, soru, beş yıldız yeri. Ekran okuyucuya tek "yükleniyor" duyurusu.
@@ -5,7 +6,7 @@
 export default function FeedbackLoading() {
   return (
     <div className="flex min-h-dvh flex-col bg-surface-0" role="status" aria-live="polite">
-      <span className="sr-only">Yükleniyor…</span>
+      <LoadingLabel />
       <div className="border-b border-subtle bg-surface-1">
         <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-4 py-2.5" aria-hidden>
           <div className="h-10 w-10 rounded-control bg-surface-3" />

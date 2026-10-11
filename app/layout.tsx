@@ -16,6 +16,7 @@ import { VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/bra
 import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
 import { RUNTIME_THEME_STYLE_ID, buildRuntimeThemeCss, runtimeThemeStateFromRows } from '@/lib/design-system/theme-runtime';
 import { PageTransition } from '@/components/layout/page-transition';
+import { LOCALE_LANG_INIT_SNIPPET } from '@/lib/locale-shared';
 
 /** İlk boyamadan önce light/dark sınıfı (next-themes / localStorage ile uyumlu; FOUC azaltır). */
 /** Platform varsayılan modu (Tasarım Sistemi → Temalar `defaultMode`); kullanıcının kayıtlı seçimi önce gelir. */
@@ -49,6 +50,8 @@ const themeClassInitScript = (defaultMode: 'system' | 'light' | 'dark') => `
       if (a.textScale === 'lg' || a.textScale === 'xl') c.add('text-scale-' + a.textScale);
     }
   } catch (e) {}
+  // Dil (B2): kök layout statik kalsın diye sunucu lang="tr" basar; çerezdeki dil ilk boyamadan önce.
+  ${LOCALE_LANG_INIT_SNIPPET}
 })();
 `;
 

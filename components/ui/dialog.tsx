@@ -4,6 +4,13 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { uiCopy } from '@/lib/i18n/ui-copy';
+
+/** Kapat düğmesinin erişilebilir adı uygulama dilinde (eskiden her dilde sabit 'Kapat (Escape)'). */
+function CloseLabel() {
+  return <span className="sr-only">{uiCopy(useLocaleSafe()).closeEscape}</span>;
+}
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -47,9 +54,9 @@ const DialogContent = React.forwardRef<
             'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-200 hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground',
             'right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))]'
           )}
-          aria-label="Kapat (Escape)"
         >
           <X className="h-4 w-4 shrink-0" aria-hidden />
+          <CloseLabel />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </div>

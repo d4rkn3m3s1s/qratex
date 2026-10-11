@@ -8,6 +8,7 @@ import { useMiniGame } from '@/lib/use-mini-game';
 import { gameFx } from '@/lib/games/engine/fx';
 import { getGameEntry, isPlayable, type GameEntry, type GameFinish, type GameMode, type V2GameComponent } from '@/lib/games/registry';
 import { getGameCopy } from '@/lib/minigame-copy';
+import { LoadingLabel } from '@/components/layout/loading-label';
 
 /**
  * Dinamik oyun sayfasının istemci adası. Kayıt defterinden bileşeni `next/dynamic` ile yükler
@@ -23,7 +24,7 @@ function GameLoading() {
   return (
     <div role="status" className="flex min-h-[460px] items-center justify-center rounded-3xl border border-white/10 bg-black/60">
       <Loader2 className="h-8 w-8 animate-spin text-white/70 motion-reduce:animate-none" aria-hidden />
-      <span className="sr-only">Oyun yükleniyor…</span>
+      <LoadingLabel tr="Oyun yükleniyor…" en="Loading game…" />
     </div>
   );
 }

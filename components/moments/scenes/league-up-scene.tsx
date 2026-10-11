@@ -6,11 +6,12 @@ import { DURATION, EASE, OFFSET } from '@/lib/motion';
 import { BUZZ } from '@/lib/moments/effects';
 import { getLeagueSceneColors, lightenHex, sceneBackdrop, type ScenePair } from '@/lib/moments/scene-colors';
 import type { Moment } from '@/lib/moments/types';
-import { GEM_SCREEN_FRACTION, GEM_TIMELINE, formatSceneInt, secToMs, type SceneClock } from './scene-math';
+import { GEM_SCREEN_FRACTION, GEM_TIMELINE, secToMs, type SceneClock } from './scene-math';
 import { SceneShell } from './scene-shell';
 import { SceneStage } from './stage-lazy';
 import { StageFallback2D } from './stage-fallback-2d';
 import { CardAction, DismissHint, ReducedSceneCard, StageAction, useSceneCue } from './scene-parts';
+import { useSceneCopy } from '@/lib/moments/scene-copy';
 
 /**
  * Lig yükselme sahnesi (spec §3): tam ekran, ~4,5 sn. Eski amblem parçacıklara dağılır,
@@ -33,6 +34,7 @@ function cleanName(v: unknown): string {
 export default function LeagueUpScene({ moment, onDone }: { moment: Moment; onDone: () => void }) {
   const payload = moment.kind === 'league_up' ? moment.payload : null;
 
+  const copy = useSceneCopy();
   useEffect(() => {
     if (!payload) onDone();
   }, [payload, onDone]);
@@ -43,8 +45,8 @@ export default function LeagueUpScene({ moment, onDone }: { moment: Moment; onDo
   const toColors = getLeagueSceneColors(payload.toKey);
   const fromColors = getLeagueSceneColors(payload.fromKey);
   const points = Number.isFinite(Number(payload.points)) ? Number(payload.points) : null;
-  const title = toName ? `${toName} Ligi'ne yükseldin!` : 'Yeni lige yükseldin!';
-  const announce = `Tebrikler! ${title}` + (fromName ? ` ${fromName} ligini geride bıraktın.` : '');
+  const title = copy.leagueTitle(toName);
+  const announce = copy.leagueAnnounce(title, fromName);
 
   return (
     <SceneShell kind="league_up" variant="fullscreen" announce={announce} marks={MARKS} onDone={onDone}>
@@ -53,13 +55,13 @@ export default function LeagueUpScene({ moment, onDone }: { moment: Moment; onDo
           <div className="grid size-full place-items-center bg-overlay/70 p-4">
             <ReducedSceneCard
               titleId={titleId}
-              overline="Yeni lig"
+              overline={copy.leagueOverline}
               title={title}
               visual={<StageFallback2D preset="gem" colors={toColors} />}
               actions={
                 <>
                   <CardAction onClick={close} autoFocus>
-                    Harika!
+                    {copy.great}
                   </CardAction>
                   <DismissHint tone="card" />
                 </>
@@ -67,8 +69,8 @@ export default function LeagueUpScene({ moment, onDone }: { moment: Moment; onDo
             >
               {(fromName || points != null) && (
                 <p className="qx-body text-fg-muted">
-                  {fromName ? `${fromName} ligini geride bıraktın.` : ''}
-                  {points != null ? ` Bakiyen ${formatSceneInt(points)} puan.` : ''}
+                  {fromName ? copy.leagueLeftBehind(fromName) : ''}
+                  {points != null ? copy.leagueBalance(points) : ''}
                 </p>
               )}
             </ReducedSceneCard>
@@ -121,6 +123,7 @@ function LeagueStage({
   toColors: ScenePair;
   fromColors: ScenePair;
 }) {
+  const copy = useSceneCopy();
   const oldOut = started && elapsed >= HOLD_MS;
   const toBackdrop = started && elapsed >= BACKDROP_MS;
   const textIn = started && elapsed >= LAND_MS - 120;
@@ -179,7 +182,7 @@ function LeagueStage({
           animate={textIn ? { opacity: 1, y: 0 } : { opacity: 0, y: OFFSET.enter }}
           transition={{ duration: DURATION.slow, ease: EASE.emphasized }}
         >
-          <p className="qx-overline text-white/70">Yeni lig</p>
+          <p className="qx-overline text-white/70">{copy.leagueOverline}</p>
           <h2 id={titleId} className="qx-h1 text-white">
             {toName ? (
               <>
@@ -190,15 +193,15 @@ function LeagueStage({
                 >
                   {toName}
                 </span>{' '}
-                Ligi
+                {copy.leagueSuffix}
               </>
             ) : (
               title
             )}
           </h2>
           <p className="qx-body text-white/80 [@media(max-height:520px)]:hidden">
-            {fromName ? `${fromName} ligini geride bıraktın.` : 'Bir üst lige çıktın.'}
-            {points != null ? ` Bakiyen ${formatSceneInt(points)} puan.` : ''}
+            {fromName ? copy.leagueLeftBehind(fromName) : copy.leagueUp}
+            {points != null ? copy.leagueBalance(points) : ''}
           </p>
         </Motion.div>
       </div>
@@ -208,7 +211,7 @@ function LeagueStage({
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }}
       >
         <StageAction onClick={close} autoFocus>
-          Harika!
+          {copy.great}
         </StageAction>
         <DismissHint compact />
       </div>

@@ -12,6 +12,7 @@ import { RealtimeNotifications } from '@/components/dashboard/realtime-notificat
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
+import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';
 
 export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
@@ -33,6 +34,7 @@ export default async function DealerLayout({
   // Menü sunucuda, kayıttan ve önbellekten çözülür (lib/navigation) — istemci isteği yok.
   const [seo, shell] = await Promise.all([getSeoSettings(), getShellConfig('dealer')]);
   return (
+    <ServerLocaleBoundary>
     <ShellProvider shell={shell}>
     <div className="flex min-h-dvh overflow-x-hidden">
       <SkipToMainContent />
@@ -57,6 +59,7 @@ export default async function DealerLayout({
       <ServiceWorkerRegistrar />
     </div>
     </ShellProvider>
+    </ServerLocaleBoundary>
   );
 }
 

@@ -16,6 +16,7 @@ import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registra
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
+import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';
 import './customer-shell.css';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -38,6 +39,7 @@ export default async function CustomerLayout({
   // Menü sunucuda, kayıttan ve önbellekten çözülür (lib/navigation) — istemci isteği yok.
   const [seo, shell] = await Promise.all([getSeoSettings(), getShellConfig('customer')]);
   return (
+    <ServerLocaleBoundary>
     <ShellProvider shell={shell}>
     {/* --qx-tabbar-h: alt sekme çubuğu yüksekliği; alt kenara yapışan katmanlar bununla kayar. */}
     <div className="customer-shell flex min-h-dvh overflow-x-hidden [--qx-tabbar-h:calc(4rem+env(safe-area-inset-bottom,0px))] lg:[--qx-tabbar-h:0px]">
@@ -71,6 +73,7 @@ export default async function CustomerLayout({
       </NavClickTracker>
     </div>
     </ShellProvider>
+    </ServerLocaleBoundary>
   );
 }
 

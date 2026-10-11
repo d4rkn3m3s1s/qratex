@@ -25,6 +25,10 @@ const statusColor = (name: 'success' | 'warning' | 'danger' | 'info') => ({
 
 const config: Config = {
   darkMode: ['class'],
+  // Dokunmatikte "yapışkan hover" yok: `hover:` yalnız (hover: hover) and (pointer: fine) cihazlarda
+  // (mobil-erisilebilirlik-i18n B8). Hover ile AÇILAN kontrol bırakmayın — dokunmatikte görünmez
+  // olur; `__tests__/architecture/a11y-i18n-guards.test.ts` yalnız-hover açılımı yakalar.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',

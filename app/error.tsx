@@ -26,7 +26,7 @@ export default function Error({
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-background to-destructive/5 px-4">
-      <SkipToMainContent targetId="app-error-main" label="İçeriğe atla" />
+      <SkipToMainContent targetId="app-error-main" variant="content" />
       <main
         id="app-error-main"
         tabIndex={-1}

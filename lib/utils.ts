@@ -63,12 +63,13 @@ export function formatRelativeTime(
   return formatDate(d);
 }
 
-export function formatNumber(num: number): string {
-  return new Intl.NumberFormat('tr-TR').format(num);
+/** Sayı biçimi. `locale` verilmezse TR (geriye uyum); arayüz dilinde: `useFormatters()` (lib/app-locale). */
+export function formatNumber(num: number, locale: 'tr' | 'en' = 'tr'): string {
+  return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'tr-TR').format(num);
 }
 
-export function formatCurrency(amount: number, currency: string = 'TRY'): string {
-  return new Intl.NumberFormat('tr-TR', {
+export function formatCurrency(amount: number, currency: string = 'TRY', locale: 'tr' | 'en' = 'tr'): string {
+  return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'tr-TR', {
     style: 'currency',
     currency,
   }).format(amount);

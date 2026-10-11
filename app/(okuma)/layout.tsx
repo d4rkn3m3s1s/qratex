@@ -47,7 +47,7 @@ export default function ReadingLayout({ children }: { children: React.ReactNode 
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand-subtle to-transparent opacity-70 print:hidden"
       />
-      <SkipToMainContent targetId="main-content" label="İçeriğe atla" />
+      <SkipToMainContent targetId="main-content" variant="content" />
       <div className="relative z-[1] flex min-h-dvh flex-col">
         <div className="print:hidden">
           <Header />

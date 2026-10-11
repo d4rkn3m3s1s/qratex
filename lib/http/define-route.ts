@@ -45,6 +45,7 @@ import { isPrismaConnectivityError } from '@/lib/prisma';
 import { captureApiError } from '@/lib/capture-api-error';
 import { checkRateLimitDb } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/request-metadata';
+import { englishErrorMessage, requestLocale, type RequestLocale } from '@/lib/http/error-locale';
 import { resolveDealerScope, type DealerScope } from '@/lib/auth/scope';
 import { scheduleRouteMetric } from '@/lib/observability/route-metrics';
 import { normalizePath } from '@/lib/observability/histogram';
@@ -115,6 +116,8 @@ export class ApiError extends Error {
   readonly details?: ApiErrorDetail[] | Record<string, unknown>;
   readonly retryable?: boolean;
   readonly headers?: Record<string, string>;
+  /** İngilizce istekte gösterilecek metin; yoksa kodun genel İngilizce metni (lib/http/error-locale). */
+  readonly messageEn?: string;
 
   constructor(
     code: ApiErrorCode | (string & {}),
@@ -124,6 +127,7 @@ export class ApiError extends Error {
       details?: ApiErrorDetail[] | Record<string, unknown>;
       retryable?: boolean;
       headers?: Record<string, string>;
+      messageEn?: string;
     } = {}
   ) {
     const known = code as ApiErrorCode;
@@ -134,6 +138,7 @@ export class ApiError extends Error {
     this.details = init.details;
     this.retryable = init.retryable;
     this.headers = init.headers;
+    this.messageEn = init.messageEn;
   }
 }
 
@@ -202,9 +207,14 @@ function jsonResponse(body: unknown, status: number, headers: Record<string, str
   });
 }
 
-export function errorResponse(err: ApiError, requestId: string): Response {
+/**
+ * Hata yanıtı. `locale` 'en' ise insan-okur metin İngilizce (B1: API locale-kör idi — EN arayüzde
+ * Türkçe hata gösteriliyordu); kod ve ayrıntılar dilden bağımsız aynen gider.
+ */
+export function errorResponse(err: ApiError, requestId: string, locale: RequestLocale = 'tr'): Response {
+  const message = locale === 'en' ? englishErrorMessage(String(err.code), err.status, err.messageEn) : err.message;
   return jsonResponse(
-    errorBody(String(err.code), err.message, requestId, { details: err.details, retryable: err.retryable }),
+    errorBody(String(err.code), message, requestId, { details: err.details, retryable: err.retryable }),
     err.status,
     baseHeaders(requestId, err.headers)
   );
@@ -617,7 +627,7 @@ export function defineRoute<
         console.error('[defineRoute]', requestId, method, pathname, err);
         captureApiError(err, { route: routeKey, status: 500, requestId, method });
       }
-      return errorResponse(apiError, requestId);
+      return errorResponse(apiError, requestId, requestLocale(request.headers));
     }
   };
 

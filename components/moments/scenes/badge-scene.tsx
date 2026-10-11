@@ -20,6 +20,7 @@ import { MEDALLION_TIMELINE, classifyBadgeIcon, secToMs, type SceneClock } from 
 import { SceneShell } from './scene-shell';
 import { SceneStage } from './stage-lazy';
 import { CardAction, DismissHint, useSceneCue } from './scene-parts';
+import { useSceneCopy } from '@/lib/moments/scene-copy';
 
 /**
  * Rozet sahnesi (spec §3): orta kart, ~3 sn. 3B madalyon dönerek gelir, takla atar ve
@@ -44,18 +45,19 @@ const RARITY_CHIP: Record<SceneRarity, string> = {
 
 export default function BadgeScene({ moment, onDone }: { moment: Moment; onDone: () => void }) {
   const payload = moment.kind === 'badge' ? moment.payload : null;
+  const copy = useSceneCopy();
 
   useEffect(() => {
     if (!payload) onDone();
   }, [payload, onDone]);
   if (!payload) return null;
 
-  const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim().slice(0, 60) : 'Yeni rozet';
+  const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim().slice(0, 60) : copy.badgeFallbackName;
   const rarity = normalizeSceneRarity(payload.rarity);
-  const rarityLabel = SCENE_RARITY_LABEL[rarity];
+  const rarityLabel = copy.rarity[rarity] ?? SCENE_RARITY_LABEL[rarity];
   const colors = getBadgeSceneColors({ color: payload.color, rarity: payload.rarity });
-  const overline = payload.hidden ? 'Gizli rozet açıldı' : 'Yeni rozet';
-  const announce = `${overline}: ${name} (${rarityLabel}). Koleksiyonuna eklendi.`;
+  const overline = copy.badgeOverline(Boolean(payload.hidden));
+  const announce = copy.badgeAnnounce(overline, name, rarityLabel);
 
   return (
     <SceneShell kind="badge" variant="card" announce={announce} marks={MARKS} onDone={onDone}>
@@ -137,6 +139,7 @@ function BadgeCard({
   rarityLabel: string;
   colors: ScenePair;
 }) {
+  const copy = useSceneCopy();
   useSceneCue(burst, { sound: 'reveal', buzz: BUZZ.success, withConfetti: false });
 
   return (
@@ -190,11 +193,11 @@ function BadgeCard({
             }}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
-            Koleksiyonuna eklendi
+            {copy.badgeAdded}
             <ArrowRight className="size-4" aria-hidden />
           </Link>
           <CardAction onClick={close} autoFocus>
-            Tamam
+            {copy.ok}
           </CardAction>
           <DismissHint tone="card" />
         </div>

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { buzz, confetti, sound, type SoundName } from '@/lib/moments/effects';
 import { sceneGradient, type ScenePair } from '@/lib/moments/scene-colors';
 import { odometerColumns } from './scene-math';
+import { useSceneCopy } from '@/lib/moments/scene-copy';
 
 /**
  * Sahne kabuklarının ortak DOM parçaları: odometre, ilerleme çubuğu, eylem düğmesi,
@@ -129,6 +130,7 @@ export function StageAction({ children, onClick, autoFocus }: { children: ReactN
 
 /** `compact`: alçak ekranda (≤ 700 px) gizlenir — eylem düğmesi ve Esc/dokunuş yine çalışır. */
 export function DismissHint({ tone = 'stage', compact }: { tone?: 'stage' | 'card'; compact?: boolean }) {
+  const copy = useSceneCopy();
   return (
     <p
       className={cn(
@@ -137,7 +139,7 @@ export function DismissHint({ tone = 'stage', compact }: { tone?: 'stage' | 'car
         compact && '[@media(max-height:700px)]:hidden',
       )}
     >
-      Geçmek için dokun ya da Esc tuşuna bas
+      {copy.dismissHint}
     </p>
   );
 }

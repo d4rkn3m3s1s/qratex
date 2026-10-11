@@ -1,15 +1,19 @@
 {
+  "id": "/",
   "name": "QRATEX",
   "short_name": "QRATEX",
-  "description": "QR Tabanlı Geri Bildirim ve Gamification Platformu",
-  "start_url": "/",
+  "description": "QR tabanlı geri bildirim ve oyunlaştırma platformu",
+  "start_url": "/app?source=pwa",
   "display": "standalone",
   "background_color": "#0a0a0a",
-  "theme_color": "#9333ea",
-  "orientation": "portrait-primary",
+  "theme_color": "#7c3aed",
   "scope": "/",
   "lang": "tr",
-  "categories": ["business", "productivity"],
+  "dir": "ltr",
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/icon-72x72.svg",
@@ -61,7 +65,7 @@
     },
     {
       "src": "/logo/logo.png",
-      "sizes": "any",
+      "sizes": "500x500",
       "type": "image/png",
       "purpose": "maskable"
     }
@@ -74,10 +78,16 @@
       "url": "/customer/scan"
     },
     {
-      "name": "Dashboard",
-      "short_name": "Panel",
-      "description": "Dashboard'a git",
-      "url": "/customer"
+      "name": "Kartım",
+      "short_name": "Kart",
+      "description": "Kasada QR kartını göster",
+      "url": "/customer/wallet/card"
+    },
+    {
+      "name": "Ana sayfa",
+      "short_name": "Ana sayfa",
+      "description": "Panelini aç",
+      "url": "/app"
     }
   ],
   "related_applications": [],

@@ -12,7 +12,16 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /a11y-mobile\.spec\.ts$/ },
+    // Mobil + erişilebilirlik kapısı (mobil-erisilebilirlik-i18n B13): ürünün birincil yüzeyi
+    // telefon. Pixel 7 (Chromium) ve iPhone 13 ölçüleri (WebKit kurulu değilse Chromium motoruyla
+    // aynı viewport/dokunma/DPR) — axe taraması + yatay taşma + dokunma hedefi kontrolleri.
+    { name: 'mobile-android', use: { ...devices['Pixel 7'] }, testMatch: /(a11y-mobile|smoke)\.spec\.ts$/ },
+    {
+      name: 'mobile-iphone',
+      use: { ...devices['iPhone 13'], browserName: 'chromium', defaultBrowserType: 'chromium' },
+      testMatch: /a11y-mobile\.spec\.ts$/,
+    },
   ],
   webServer: process.env.CI
     ? undefined

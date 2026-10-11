@@ -2,71 +2,126 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { m as Motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { useFirstRunTurn } from '@/lib/first-run-queue';
+import { useMotionPolicy } from '@/lib/motion/use-reduced-motion-pref';
 
 /**
  * HOŞGELDİN VİDEO MODALI — müşteri giriş yaptıktan sonra bir kez açılan karşılama.
  *
- * Karakter videosu (sessiz otomatik oynatır; kullanıcı sesi açabilir) + kişisel mesaj.
- * "Bir kez göster" mantığı localStorage ile (kullanıcı bazlı anahtar) — kapatınca
- * bir daha açılmaz. Video dosyası yoksa modal HİÇ açılmaz (sessizce devre dışı),
- * yani dosya eklenene kadar kullanıcı bir şey görmez.
+ * Karakter videosu (sessiz başlar; kullanıcı sesi açabilir) + kişisel mesaj. "Bir kez göster"
+ * mantığı localStorage ile (kullanıcı bazlı anahtar). Video dosyası yoksa modal HİÇ açılmaz.
+ *
+ * Erişilebilirlik (mobil-erisilebilirlik-i18n B6/B7/B8):
+ *  - Radix Dialog: odak tuzağı, Esc ile kapanma, açanı geri odaklama, başlık/açıklama bağları
+ *    (eskiden elle yazılmış Motion katmanıydı: Esc yok, odak tuzağı yok).
+ *  - Otomatik oynatma hareket politikasına bağlı (OS ya da uygulama "Animasyonları azalt" →
+ *    oynatmaz); görünür oynat/duraklat düğmesi (WCAG 2.2.2 — döngüdeki hareketli içerik).
+ *  - İlk açılış sırası: tanıtım ve doğum günü katmanlarıyla aynı anda açılmaz (lib/first-run-queue).
+ *  - Metinler uygulama dilinde.
  *
  * Video: public/videos/welcome-customer.mp4  (yoksa modal gösterilmez)
  */
-
-/**
- * Video yolu — SABİT ad. Videoyu değiştirmek için kodu düzenlemeye gerek yok:
- * yeni dosyayı aynı adla (public/videos/welcome-customer.mp4) üzerine yaz, yeter.
- */
 const WELCOME_VIDEO_SRC = '/videos/welcome-customer.mp4';
+
+const COPY = {
+  tr: {
+    title: (name: string | null) => (name ? `Hoş geldin, ${name}! 👋` : 'Hoş geldin! 👋'),
+    body: 'QRateX’e katıldığın için teşekkürler. Deneyimini paylaş, puan kazan, rozet koleksiyonunu büyüt — hadi başlayalım!',
+    start: 'Başlayalım',
+    close: 'Kapat',
+    unmute: 'Sesi aç',
+    mute: 'Sesi kapat',
+    play: 'Videoyu oynat',
+    pause: 'Videoyu duraklat',
+    video: 'Karşılama videosu',
+  },
+  en: {
+    title: (name: string | null) => (name ? `Welcome, ${name}! 👋` : 'Welcome! 👋'),
+    body: 'Thanks for joining QRateX. Share your experiences, earn points and grow your badge collection — let’s get started!',
+    start: 'Let’s go',
+    close: 'Close',
+    unmute: 'Turn sound on',
+    mute: 'Turn sound off',
+    play: 'Play video',
+    pause: 'Pause video',
+    video: 'Welcome video',
+  },
+} as const;
 
 /** Kullanıcıya özel "gördü" anahtarı (aynı tarayıcıda farklı hesap → ayrı kayıt). */
 function storageKey(userId: string): string {
   return `qratex-welcome-video-seen:${userId}`;
 }
 
+const overlayButton =
+  'absolute top-2 z-20 h-11 w-11 rounded-full bg-black/50 text-white hover:bg-black/70 hover:text-white focus-visible:ring-2 focus-visible:ring-white';
+
 export function WelcomeVideoModal() {
   const { data: session, status } = useSession();
-  const [open, setOpen] = useState(false);
+  const copy = COPY[useLocaleSafe() === 'en' ? 'en' : 'tr'];
+  const { allowAutoplay } = useMotionPolicy();
+  const [wants, setWants] = useState<boolean | null>(null);
+  const [closed, setClosed] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { granted, finish } = useFirstRunTurn('welcome-video', wants);
 
   const userId = session?.user?.id ?? null;
   const firstName = (session?.user?.name ?? '').trim().split(/\s+/)[0] || null;
 
   useEffect(() => {
-    if (status !== 'authenticated' || !userId) return;
+    if (status === 'loading') return;
     // Yalnız MÜŞTERİ panelinde karşılama (bayi/admin görmesin).
-    if (session?.user?.role !== 'CUSTOMER') return;
+    if (status !== 'authenticated' || !userId || session?.user?.role !== 'CUSTOMER') {
+      setWants(false);
+      return;
+    }
 
     let cancelled = false;
     (async () => {
       try {
-        if (localStorage.getItem(storageKey(userId)) === 'true') return; // zaten gördü
+        if (localStorage.getItem(storageKey(userId)) === 'true') {
+          if (!cancelled) setWants(false);
+          return;
+        }
       } catch { /* localStorage kapalıysa yine de göster */ }
 
       // Video dosyası gerçekten var mı? Yoksa modalı hiç açma (kırık kutu görünmesin).
+      let exists = false;
       try {
         const res = await fetch(WELCOME_VIDEO_SRC, { method: 'HEAD' });
-        if (!res.ok) return;
+        exists = res.ok;
       } catch {
-        return; // erişilemiyorsa sessizce vazgeç
+        exists = false;
       }
-      if (!cancelled) setOpen(true);
+      if (!cancelled) setWants(exists);
     })();
 
     return () => { cancelled = true; };
   }, [status, userId, session?.user?.role]);
 
+  const open = granted && !closed;
+
   const close = () => {
     if (userId) {
       try { localStorage.setItem(storageKey(userId), 'true'); } catch { /* yoksay */ }
     }
-    setOpen(false);
+    setClosed(true);
+    finish();
   };
+
+  // Hareket serbestse sessiz otomatik oynat; azaltılmışta kullanıcı başlatır.
+  useEffect(() => {
+    if (!open) return;
+    const v = videoRef.current;
+    if (!v || !allowAutoplay) return;
+    void v.play().catch(() => {});
+  }, [open, allowAutoplay]);
 
   const toggleSound = () => {
     const v = videoRef.current;
@@ -77,77 +132,77 @@ export function WelcomeVideoModal() {
     if (!v.muted) { v.currentTime = 0; void v.play().catch(() => {}); }
   };
 
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play().catch(() => {});
+    else v.pause();
+  };
+
   return (
-    <AnimatePresence>
-      {open && (
-        <Motion.div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Hoş geldin"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-toast overflow-y-auto bg-black/70 backdrop-blur-md"
-          onClick={close}
+    <DialogPrimitive.Root open={open} onOpenChange={(next) => { if (!next) close(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-modal bg-black/70 backdrop-blur-md data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto p-4 outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
-          <div className="flex min-h-full items-center justify-center p-4">
-            <Motion.div
-              initial={{ scale: 0.92, y: 24, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.92, y: 24, opacity: 0 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
-              className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-neutral-950 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-neutral-950 shadow-2xl">
+            <DialogPrimitive.Close asChild>
+              <Button variant="ghost" size="icon" aria-label={copy.close} className={`${overlayButton} right-2`}>
+                <X className="h-5 w-5" aria-hidden />
+              </Button>
+            </DialogPrimitive.Close>
+
+            <div className="absolute left-2 top-2 z-20 flex gap-2">
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Kapat"
-                className="absolute right-2 top-2 z-20 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
-                onClick={close}
+                aria-label={playing ? copy.pause : copy.play}
+                className={`${overlayButton} static`}
+                onClick={togglePlay}
               >
-                <X className="h-5 w-5" />
+                {playing ? <Pause className="h-5 w-5" aria-hidden /> : <Play className="h-5 w-5" aria-hidden />}
               </Button>
-
               {/* Ses aç/kapa — tarayıcılar sesli otomatik oynatmayı engeller, sessiz başlar */}
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={muted ? 'Sesi aç' : 'Sesi kapat'}
-                className="absolute left-2 top-2 z-20 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
+                aria-label={muted ? copy.unmute : copy.mute}
+                aria-pressed={!muted}
+                className={`${overlayButton} static`}
                 onClick={toggleSound}
               >
-                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                {muted ? <VolumeX className="h-5 w-5" aria-hidden /> : <Volume2 className="h-5 w-5" aria-hidden />}
               </Button>
+            </div>
 
-              <video
-                ref={videoRef}
-                src={WELCOME_VIDEO_SRC}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="h-auto w-full bg-neutral-900 object-cover"
-                aria-label="Karşılama videosu"
-              />
+            <video
+              ref={videoRef}
+              src={WELCOME_VIDEO_SRC}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              className="h-auto w-full bg-neutral-900 object-cover"
+              aria-label={copy.video}
+            />
 
-              <div className="space-y-3 p-5 text-center">
-                <h2 className="text-2xl font-extrabold text-white">
-                  {firstName ? `Hoş geldin, ${firstName}! 👋` : 'Hoş geldin! 👋'}
-                </h2>
-                <p className="text-sm leading-relaxed text-white/70">
-                  QRateX’e katıldığın için teşekkürler. Deneyimini paylaş, puan kazan,
-                  rozet koleksiyonunu büyüt — hadi başlayalım!
-                </p>
-                <Button onClick={close} className="w-full" size="lg">
-                  Başlayalım
-                </Button>
-              </div>
-            </Motion.div>
+            <div className="space-y-3 p-5 text-center">
+              <DialogPrimitive.Title className="text-2xl font-extrabold text-white">
+                {copy.title(firstName)}
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-sm leading-relaxed text-white/80">
+                {copy.body}
+              </DialogPrimitive.Description>
+              <Button onClick={close} className="w-full" size="lg">
+                {copy.start}
+              </Button>
+            </div>
           </div>
-        </Motion.div>
-      )}
-    </AnimatePresence>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

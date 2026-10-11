@@ -26,6 +26,81 @@ import { AuthCard } from '@/components/auth/p-auth/auth-card';
 import { AuthNotice } from '@/components/auth/p-auth/auth-notice';
 import { PasswordField, PasswordMatchHint } from '@/components/auth/p-auth/password-field';
 import { validateInviteSignup, type FieldErrors } from './validate';
+import { useFormatters, useLocaleSafe } from '@/lib/app-locale';
+
+/** Metinler (TR/EN — mobil-erisilebilirlik-i18n B1): personelin ilk temas ekranı. */
+const COPY = {
+  tr: {
+    missingLink: 'Davet bağlantısı eksik. E-postadaki bağlantıyı yeniden açın.',
+    loadFailed: 'Davet bilgisi alınamadı.',
+    network: 'Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.',
+    loginRequired: 'Devam etmek için giriş yapın.',
+    acceptFailed: 'Davet kabul edilemedi.',
+    networkShort: 'Bağlantı kurulamadı. Lütfen tekrar deneyin.',
+    loading: 'Davet yükleniyor',
+    unusable: 'Davet kullanılamıyor',
+    openFailed: 'Davet açılamadı',
+    home: 'Ana sayfaya dön',
+    joined: 'Ekibe katıldınız',
+    joinedFallback: 'Davet kabul edildi.',
+    staffLogin: 'Personel olarak giriş yap',
+    inviteTitle: (business: string) => `${business} sizi ekibine davet ediyor`,
+    sentTo: 'Davet',
+    sentToAfter: 'adresine gönderildi',
+    role: 'Görev:',
+    expires: (d: string) => `. Son geçerlilik: ${d}.`,
+    notExpected: 'Bu daveti beklemiyorsanız sayfayı kapatabilirsiniz; hesabınızda hiçbir değişiklik yapılmaz.',
+    wrongAccount: 'Şu an başka bir hesapla giriş yaptınız. Daveti kabul etmek için davet edilen e-posta adresinin hesabıyla giriş yapın.',
+    needsLogin: 'Bu e-posta ile zaten bir hesabınız var. Daveti kabul etmek için önce giriş yapın; bu sayfaya geri döneceksiniz.',
+    convertBefore: 'Kabul ettiğinizde hesabınız ',
+    convertStrong: 'personel hesabına',
+    convertAfter:
+      ' dönüşür ve müşteri paneline erişiminiz kapanır. Şifreniz ve kişisel bilgileriniz değişmez. Kabulden sonra yeniden giriş yapmanız gerekir.',
+    switchAccount: 'Çıkış yap ve doğru hesapla giriş yap',
+    signIn: 'Giriş yap',
+    createIntro: 'Hesabınızı oluşturun. Şifrenizi yalnızca siz belirlersiniz; işletme şifrenizi göremez.',
+    name: 'Adınız soyadınız',
+    password: 'Şifre',
+    confirm: 'Şifre (tekrar)',
+    createAndJoin: 'Hesabımı oluştur ve katıl',
+    accept: 'Daveti kabul et',
+  },
+  en: {
+    missingLink: 'The invitation link is incomplete. Open the link in the email again.',
+    loadFailed: 'The invitation could not be loaded.',
+    network: 'Could not connect. Check your internet connection and try again.',
+    loginRequired: 'Sign in to continue.',
+    acceptFailed: 'The invitation could not be accepted.',
+    networkShort: 'Could not connect. Please try again.',
+    loading: 'Loading invitation',
+    unusable: 'This invitation can no longer be used',
+    openFailed: 'The invitation could not be opened',
+    home: 'Back to home',
+    joined: 'You joined the team',
+    joinedFallback: 'The invitation was accepted.',
+    staffLogin: 'Sign in as staff',
+    inviteTitle: (business: string) => `${business} invites you to join their team`,
+    sentTo: 'The invitation was sent to',
+    sentToAfter: '',
+    role: 'Role:',
+    expires: (d: string) => `. Valid until ${d}.`,
+    notExpected: 'If you were not expecting this invitation you can close this page; nothing changes in your account.',
+    wrongAccount: 'You are signed in with a different account. To accept, sign in with the account of the invited email address.',
+    needsLogin: 'You already have an account with this email. Sign in first to accept; you will come back to this page.',
+    convertBefore: 'When you accept, your account becomes a ',
+    convertStrong: 'staff account',
+    convertAfter:
+      ' and you lose access to the customer panel. Your password and personal details stay the same. You will need to sign in again after accepting.',
+    switchAccount: 'Sign out and sign in with the right account',
+    signIn: 'Sign in',
+    createIntro: 'Create your account. Only you set your password; the business cannot see it.',
+    name: 'Full name',
+    password: 'Password',
+    confirm: 'Password (again)',
+    createAndJoin: 'Create my account and join',
+    accept: 'Accept invitation',
+  },
+} as const;
 
 type Preview = {
   businessName: string;
@@ -43,6 +118,9 @@ type LoadState =
   | { kind: 'done'; message: string; createdAccount: boolean };
 
 function StaffInviteInner() {
+  const locale = useLocaleSafe() === 'en' ? 'en' : 'tr';
+  const copy = COPY[locale];
+  const fmt = useFormatters();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
   const { data: session, status: sessionStatus } = useSession();
@@ -59,7 +137,7 @@ function StaffInviteInner() {
 
   const load = useCallback(async () => {
     if (!token) {
-      setState({ kind: 'error', message: 'Davet bağlantısı eksik. E-postadaki bağlantıyı yeniden açın.' });
+      setState({ kind: 'error', message: copy.missingLink });
       return;
     }
     setState({ kind: 'loading' });
@@ -69,14 +147,15 @@ function StaffInviteInner() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        setState({ kind: 'error', message: data.error || 'Davet bilgisi alınamadı.', code: data.code });
+        // Sunucu metni dil çerezine göre (zarf v2, lib/http/error-locale).
+        setState({ kind: 'error', message: data.error || copy.loadFailed, code: data.code });
         return;
       }
       setState({ kind: 'ready', preview: data.invitation as Preview });
     } catch {
-      setState({ kind: 'error', message: 'Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.' });
+      setState({ kind: 'error', message: copy.network });
     }
-  }, [token]);
+  }, [token, copy]);
 
   useEffect(() => {
     if (sessionStatus === 'loading') return;
@@ -90,7 +169,7 @@ function StaffInviteInner() {
     setFieldErrors({});
     const needsSignup = !session?.user && !state.preview.accountExists;
     if (needsSignup) {
-      const errs = validateInviteSignup({ name, password, confirm });
+      const errs = validateInviteSignup({ name, password, confirm }, locale);
       if (errs.name || errs.password || errs.confirm) {
         setFieldErrors(errs);
         const first = errs.name ? 'invite-name' : errs.password ? 'invite-password' : 'invite-confirm';
@@ -108,17 +187,17 @@ function StaffInviteInner() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         if (data.code === 'LOGIN_REQUIRED') {
-          setFormError(data.error || 'Devam etmek için giriş yapın.');
+          setFormError(data.error || copy.loginRequired);
           return;
         }
-        setFormError(data.error || 'Davet kabul edilemedi.');
+        setFormError(data.error || copy.acceptFailed);
         return;
       }
       setPassword('');
       setConfirm('');
       setState({ kind: 'done', message: data.message, createdAccount: !!data.createdAccount });
     } catch {
-      setFormError('Bağlantı kurulamadı. Lütfen tekrar deneyin.');
+      setFormError(copy.networkShort);
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +205,7 @@ function StaffInviteInner() {
 
   if (state.kind === 'loading' || sessionStatus === 'loading') {
     return (
-      <div role="status" aria-label="Davet yükleniyor" className="w-full max-w-md">
+      <div role="status" aria-label={copy.loading} className="w-full max-w-md">
         <SkeletonForm fields={3} />
       </div>
     );
@@ -138,12 +217,12 @@ function StaffInviteInner() {
       <div className="w-full max-w-md">
         <ErrorState
           kind={terminal ? 'notFound' : 'generic'}
-          title={terminal ? 'Davet kullanılamıyor' : 'Davet açılamadı'}
+          title={terminal ? copy.unusable : copy.openFailed}
           description={state.message}
           onRetry={terminal ? undefined : load}
           action={
             <Button variant="outline" asChild>
-              <Link href="/">Ana sayfaya dön</Link>
+              <Link href="/">{copy.home}</Link>
             </Button>
           }
         />
@@ -156,8 +235,8 @@ function StaffInviteInner() {
       <AuthCard
         tone="success"
         icon={<CheckCircle2 className="h-6 w-6" aria-hidden />}
-        title="Ekibe katıldınız"
-        description={state.message}
+        title={copy.joined}
+        description={locale === 'tr' ? state.message || copy.joinedFallback : copy.joinedFallback}
         live="polite"
       >
         <Button
@@ -169,7 +248,7 @@ function StaffInviteInner() {
           }}
         >
           <LogIn className="h-4 w-4" aria-hidden />
-          Personel olarak giriş yap
+          {copy.staffLogin}
         </Button>
       </AuthCard>
     );
@@ -180,46 +259,40 @@ function StaffInviteInner() {
   const wrongAccount = signedIn && !preview.signedInAsInvitee;
   const needsLogin = !signedIn && preview.accountExists;
   const needsSignup = !signedIn && !preview.accountExists;
-  const expires = new Date(preview.expiresAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const expires = fmt.date(preview.expiresAt, { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <AuthCard
       icon={<Building2 className="h-6 w-6" aria-hidden />}
-      title={`${preview.businessName} sizi ekibine davet ediyor`}
+      title={copy.inviteTitle(preview.businessName)}
       description={
         <>
-          Davet <span className="font-medium text-fg">{preview.emailMasked}</span> adresine gönderildi
+          {copy.sentTo} <span className="font-medium text-fg">{preview.emailMasked}</span>
+          {copy.sentToAfter ? ` ${copy.sentToAfter}` : null}
           {preview.jobTitle ? (
             <>
-              {' '}
-              · Görev: <span className="font-medium text-fg">{preview.jobTitle}</span>
+              {' · '}
+              {copy.role} <span className="font-medium text-fg">{preview.jobTitle}</span>
             </>
           ) : null}
-          . Son geçerlilik: {expires}.
+          {copy.expires(expires)}
         </>
       }
-      footer={
-        <p className="qx-small text-fg-muted text-pretty">
-          Bu daveti beklemiyorsanız sayfayı kapatabilirsiniz; hesabınızda hiçbir değişiklik yapılmaz.
-        </p>
-      }
+      footer={<p className="qx-small text-fg-muted text-pretty">{copy.notExpected}</p>}
     >
       {wrongAccount ? (
-        <AuthNotice tone="warning">
-          Şu an başka bir hesapla giriş yaptınız. Daveti kabul etmek için davet edilen e-posta adresinin hesabıyla giriş yapın.
-        </AuthNotice>
+        <AuthNotice tone="warning">{copy.wrongAccount}</AuthNotice>
       ) : null}
 
       {needsLogin ? (
-        <AuthNotice tone="info">
-          Bu e-posta ile zaten bir hesabınız var. Daveti kabul etmek için önce giriş yapın; bu sayfaya geri döneceksiniz.
-        </AuthNotice>
+        <AuthNotice tone="info">{copy.needsLogin}</AuthNotice>
       ) : null}
 
       {signedIn && preview.signedInAsInvitee ? (
         <AuthNotice tone="warning">
-          Kabul ettiğinizde hesabınız <strong>personel hesabına</strong> dönüşür ve müşteri paneline erişiminiz kapanır.
-          Şifreniz ve kişisel bilgileriniz değişmez. Kabulden sonra yeniden giriş yapmanız gerekir.
+          {copy.convertBefore}
+          <strong>{copy.convertStrong}</strong>
+          {copy.convertAfter}
         </AuthNotice>
       ) : null}
 
@@ -236,17 +309,15 @@ function StaffInviteInner() {
           }
         >
           <LogIn className="h-4 w-4" aria-hidden />
-          {wrongAccount ? 'Çıkış yap ve doğru hesapla giriş yap' : 'Giriş yap'}
+          {wrongAccount ? copy.switchAccount : copy.signIn}
         </Button>
       ) : (
         <form onSubmit={accept} noValidate className="space-y-4">
           {needsSignup ? (
             <>
-              <p className="qx-small text-fg-muted text-pretty">
-                Hesabınızı oluşturun. Şifrenizi yalnızca siz belirlersiniz; işletme şifrenizi göremez.
-              </p>
+              <p className="qx-small text-fg-muted text-pretty">{copy.createIntro}</p>
               <div className="space-y-1.5">
-                <Label htmlFor="invite-name">Adınız soyadınız</Label>
+                <Label htmlFor="invite-name">{copy.name}</Label>
                 <Input
                   id="invite-name"
                   name="name"
@@ -262,7 +333,7 @@ function StaffInviteInner() {
               <PasswordField
                 id="invite-password"
                 name="new-password"
-                label="Şifre"
+                label={copy.password}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
@@ -275,7 +346,7 @@ function StaffInviteInner() {
                 <PasswordField
                   id="invite-confirm"
                   name="confirm-password"
-                  label="Şifre (tekrar)"
+                  label={copy.confirm}
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   autoComplete="new-password"
@@ -289,11 +360,20 @@ function StaffInviteInner() {
           ) : null}
           <Button type="submit" className="w-full" loading={submitting}>
             {!submitting ? <UserPlus className="h-4 w-4" aria-hidden /> : null}
-            {needsSignup ? 'Hesabımı oluştur ve katıl' : 'Daveti kabul et'}
+            {needsSignup ? copy.createAndJoin : copy.accept}
           </Button>
         </form>
       )}
     </AuthCard>
+  );
+}
+
+function InviteFallback() {
+  const copy = COPY[useLocaleSafe() === 'en' ? 'en' : 'tr'];
+  return (
+    <div role="status" aria-label={copy.loading} className="w-full max-w-md">
+      <SkeletonForm fields={3} />
+    </div>
   );
 }
 
@@ -302,11 +382,7 @@ export default function StaffInvitePage() {
   // (`qx-enter`, azaltılmış harekette kapalı).
   return (
     <Suspense
-      fallback={
-        <div role="status" aria-label="Davet yükleniyor" className="w-full max-w-md">
-          <SkeletonForm fields={3} />
-        </div>
-      }
+      fallback={<InviteFallback />}
     >
       <StaffInviteInner />
     </Suspense>

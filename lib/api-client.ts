@@ -9,7 +9,9 @@
  *    kodlu `ApiClientError` fırlatılır (QueryState hatayı "boş liste" sanmaz).
  *  - Başarıda zarf v2'nin `data` alanı döner; eski `{ success, ...alanlar }` yanıtlarında gövdenin
  *    kendisi döner (geçiş dönemi uyumu).
- *  - Hata mesajı sunucunun Türkçe `error`/`message` alanıdır; yoksa duruma göre Türkçe varsayılan.
+ *  - Hata mesajı sunucunun `error`/`message` alanıdır (sunucu dili çerezden seçer — zarf v2,
+ *    lib/http/error-locale); yoksa duruma göre arayüz dilinde varsayılan. Arayüz İngilizceyken
+ *    dil-kör eski uçtan Türkçe metin gelirse kodun genel İngilizce metni gösterilir (B1).
  *  - 429'da `Retry-After` saniyesi `retryAfterSec` olarak taşınır; `requestId` destek için korunur.
  *  - Ağ hatası `code: 'NETWORK'`, iptal (`AbortSignal`) özgün `AbortError` olarak yeniden fırlatılır
  *    (React Query iptali hata saymasın).
@@ -17,6 +19,8 @@
  * Yeni istemci kodu modül-yerel `XxxApiError` sınıfı yazmak yerine bunu kullanır; mevcut modül
  * istemcileri `ApiClientError`'dan türeyerek kademeli olarak buraya taşınır.
  */
+
+import { englishErrorMessage, enMessageForStatus } from '@/lib/http/error-locale';
 
 export interface ApiErrorDetail {
   path: string;
@@ -69,8 +73,22 @@ export class ApiClientError extends Error {
 
 const NETWORK_MESSAGE = 'Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.';
 
-/** Duruma göre Türkçe varsayılan mesaj (sunucu mesaj vermediyse). */
+/** Arayüz dili İngilizce mi (sağlayıcı `<html lang>`'i günceller; sunucuda/testte TR). */
+function uiIsEnglish(): boolean {
+  return typeof document !== 'undefined' && document.documentElement?.lang === 'en';
+}
+
+const TURKISH_CHARS = /[çğışöüÇĞİŞÖÜ]/;
+
+/** Sunucu metnini arayüz diline uydurur: EN arayüzde Türkçe metin → kodun genel İngilizce metni. */
+function localizeServerMessage(message: string, code: string, status: number): string {
+  if (!uiIsEnglish() || !TURKISH_CHARS.test(message)) return message;
+  return englishErrorMessage(code, status);
+}
+
+/** Duruma göre varsayılan mesaj (sunucu mesaj vermediyse), arayüz dilinde. */
 export function defaultMessageForStatus(status: number): string {
+  if (uiIsEnglish()) return enMessageForStatus(status);
   if (status === 0) return NETWORK_MESSAGE;
   if (status === 401) return 'Oturumunuz sona erdi. Lütfen yeniden giriş yapın.';
   if (status === 403) return 'Bu işlem için yetkiniz yok.';
@@ -141,13 +159,13 @@ export async function decodeApiResponse<T>(res: Response): Promise<T> {
   const failed = !res.ok || env.success === false || env.ok === false;
   if (failed) {
     const status = res.ok ? 400 : res.status;
-    const message =
-      (typeof env.error === 'string' && env.error) ||
-      (typeof env.message === 'string' && env.message) ||
-      defaultMessageForStatus(status);
+    const code = typeof env.code === 'string' && env.code ? env.code : defaultCodeForStatus(status);
+    const serverMessage =
+      (typeof env.error === 'string' && env.error) || (typeof env.message === 'string' && env.message) || '';
+    const message = serverMessage ? localizeServerMessage(serverMessage, code, status) : defaultMessageForStatus(status);
     throw new ApiClientError(message, {
       status,
-      code: typeof env.code === 'string' && env.code ? env.code : defaultCodeForStatus(status),
+      code,
       details: env.details,
       requestId: (typeof env.requestId === 'string' && env.requestId) || res.headers.get('x-request-id'),
       retryable: typeof env.retryable === 'boolean' ? env.retryable : undefined,
@@ -156,7 +174,7 @@ export async function decodeApiResponse<T>(res: Response): Promise<T> {
   }
   if (res.status !== 204 && !parsed) {
     // 2xx ama JSON değil: sessizce boş veri sayma.
-    throw new ApiClientError('Sunucudan beklenmeyen yanıt alındı. Lütfen tekrar deneyin.', {
+    throw new ApiClientError(uiIsEnglish() ? englishErrorMessage('BAD_RESPONSE', res.status) : 'Sunucudan beklenmeyen yanıt alındı. Lütfen tekrar deneyin.', {
       status: res.status,
       code: 'BAD_RESPONSE',
       requestId: res.headers.get('x-request-id'),
@@ -217,7 +235,7 @@ export async function apiRequest<T>(
     });
   } catch (err) {
     if (isAbortError(err)) throw err;
-    throw new ApiClientError(NETWORK_MESSAGE, { status: 0, code: 'NETWORK', retryable: true });
+    throw new ApiClientError(defaultMessageForStatus(0), { status: 0, code: 'NETWORK', retryable: true });
   }
   return decodeApiResponse<T>(res);
 }
@@ -230,9 +248,9 @@ export const api = {
   delete: <T>(path: string, body?: unknown, opts?: ApiRequestOptions) => apiRequest<T>('DELETE', path, body, opts),
 };
 
-/** Kullanıcıya gösterilecek mesaj (ApiClientError ise sunucunun Türkçe mesajı). */
-export function apiErrorMessage(err: unknown, fallback = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'): string {
+/** Kullanıcıya gösterilecek mesaj (ApiClientError ise sunucunun, arayüz diline uydurulmuş mesajı). */
+export function apiErrorMessage(err: unknown, fallback?: string): string {
   if (err instanceof ApiClientError && err.message) return err.message;
   if (err instanceof Error && err.message && !isAbortError(err)) return err.message;
-  return fallback;
+  return fallback ?? (uiIsEnglish() ? enMessageForStatus(-1) : 'İşlem tamamlanamadı. Lütfen tekrar deneyin.');
 }

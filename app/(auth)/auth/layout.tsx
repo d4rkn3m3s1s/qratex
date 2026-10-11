@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
+import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';
 
 /**
  * /auth/* için sekme başlığı şablonu: alt segment başlığı + "|" + uygulama adı.
@@ -20,5 +21,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function AuthRoutesLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ServerLocaleBoundary>{children}</ServerLocaleBoundary>;
 }

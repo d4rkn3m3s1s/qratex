@@ -1,8 +1,9 @@
+import { LoadingLabel } from '@/components/layout/loading-label';
 /** Kart yüklenirken statik iskelet (shimmer yok — §4.2). Yerleşim kartla aynı → sıçrama yok. */
 export default function ExperienceLoading() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-6 px-4 py-6 sm:py-10" role="status" aria-busy="true">
-      <span className="sr-only">Yükleniyor… / Loading…</span>
+      <LoadingLabel />
       <div aria-hidden className="space-y-5 rounded-sheet border border-subtle bg-surface-1 p-5 sm:p-6">
         <div className="h-3 w-32 rounded bg-surface-3" />
         <div className="flex items-center gap-4">

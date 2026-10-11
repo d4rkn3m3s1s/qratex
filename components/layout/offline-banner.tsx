@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { usePWA } from '@/hooks/use-pwa';
 import { useBareChrome } from '@/lib/pwa/bare-chrome';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { uiCopy } from '@/lib/i18n/ui-copy';
 
 /**
  * Çevrimdışı olunduğunda ekranın altında sabit bir uyarı şeridi gösterir.
@@ -19,6 +21,7 @@ export function OfflineBanner() {
   // Çevrimdışı yedek sayfası kendi durumunu gösterir (aynı mesaj iki kez çıkmasın); masa
   // sinyali sayfası kendi kuyruk/bağlantı durumunu gösterir.
   const bare = useBareChrome();
+  const copy = uiCopy(useLocaleSafe());
 
   if (!mounted || isOnline || bare !== false) return null;
 
@@ -30,7 +33,7 @@ export function OfflineBanner() {
       style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
     >
       <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
-      <span>Çevrimdışısınız — bazı özellikler bağlantı gelene kadar çalışmayabilir.</span>
+      <span>{copy.offline}</span>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/admin-toast';
 import { useAppT } from '@/lib/app-locale';
+import { useFirstRunTurn } from '@/lib/first-run-queue';
 
 function todayKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -22,26 +23,42 @@ function todayKey(d: Date) {
 export function CustomerBirthdayBonusHost() {
   const { data: session, status } = useSession();
   const t = useAppT();
-  const [open, setOpen] = useState(false);
+  // İlk açılış sırası (B6): karşılama videosu ve tanıtımdan sonra açılır, onlarla üst üste binmez.
+  const [wants, setWants] = useState<boolean | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const { granted, finish } = useFirstRunTurn('birthday', wants);
+  const open = granted && !dismissed;
   const [bonusAmount, setBonusAmount] = useState(0);
   const [claiming, setClaiming] = useState(false);
 
   const check = useCallback(async () => {
-    if (status !== 'authenticated' || session?.user?.role !== 'CUSTOMER' || !session.user.id) return;
+    if (status === 'loading') return;
+    if (status !== 'authenticated' || session?.user?.role !== 'CUSTOMER' || !session.user.id) {
+      setWants(false);
+      return;
+    }
     const day = todayKey(new Date());
     const dismissKey = `qratex_birthday_popup_dismiss_${session.user.id}_${day}`;
-    if (typeof window !== 'undefined' && sessionStorage.getItem(dismissKey) === '1') return;
+    if (typeof window !== 'undefined' && sessionStorage.getItem(dismissKey) === '1') {
+      setWants(false);
+      return;
+    }
 
     try {
       const res = await fetch('/api/birthday', { cache: 'no-store' });
       const data = await res.json();
-      if (!res.ok || !data.success) return;
+      if (!res.ok || !data.success) {
+        setWants(false);
+        return;
+      }
       if (data.isBirthdayToday && data.canClaimBonus) {
         setBonusAmount(typeof data.bonusAmount === 'number' ? data.bonusAmount : 0);
-        setOpen(true);
+        setWants(true);
+      } else {
+        setWants(false);
       }
     } catch {
-      /* ignore */
+      setWants(false);
     }
   }, [status, session?.user?.role, session?.user?.id]);
 
@@ -54,7 +71,8 @@ export function CustomerBirthdayBonusHost() {
       const day = todayKey(new Date());
       sessionStorage.setItem(`qratex_birthday_popup_dismiss_${session.user.id}_${day}`, '1');
     }
-    setOpen(false);
+    setDismissed(true);
+    finish();
   };
 
   const claim = async () => {

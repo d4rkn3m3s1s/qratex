@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { m as Motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
+import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
+import { useLocaleSafe } from '@/lib/app-locale';
 import {
   X,
   Send,
@@ -33,27 +35,88 @@ interface Message {
   timestamp: Date;
 }
 
+/** Karşılama mesajı: içerik render anında dilden gelir (dil değişince eski dilde kalmasın). */
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
-  content:
-    'Hey! Ben QRA — minik pencereden bile büyük işler çıkaran yardımcın. Bugün aklında ne var? Sor, merak ettiğini yaz, birlikte halledelim.',
+  content: '',
   timestamp: new Date(),
 };
 
-const QUICK_ACTIONS = [
-  { label: 'QRateX nedir?', message: 'QRateX nedir ve nasıl çalışır?', icon: Rocket },
-  { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star },
-  { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?', icon: Zap },
-  { label: 'Yardım iste', message: 'Bana yardım eder misin?', icon: Heart },
-];
+const QUICK_ACTION_ICONS = [Rocket, Star, Zap, Heart] as const;
 
-const TYPING_MESSAGES = [
-  'Hmm, düşünüyorum…',
-  'Cevabı paketliyorum…',
-  'Neredeyse…',
-  'Son dokunuşlar…',
-];
+/**
+ * Metinler (TR/EN — mobil-erisilebilirlik-i18n B1). QRA her sayfada; eskiden İngilizce arayüzde
+ * de karşılama, hızlı eylemler, ekran okuyucu etiketleri ve hata metinleri Türkçeydi.
+ */
+const CHAT_COPY = {
+  tr: {
+    welcome:
+      'Hey! Ben QRA — minik pencereden bile büyük işler çıkaran yardımcın. Bugün aklında ne var? Sor, merak ettiğini yaz, birlikte halledelim.',
+    quick: [
+      { label: 'QRateX nedir?', message: 'QRateX nedir ve nasıl çalışır?' },
+      { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?' },
+      { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?' },
+      { label: 'Yardım iste', message: 'Bana yardım eder misin?' },
+    ],
+    typing: ['Hmm, düşünüyorum…', 'Cevabı paketliyorum…', 'Neredeyse…', 'Son dokunuşlar…'],
+    rateLimited: (sec: number) =>
+      `Vay, çok hızlısın! Dakika kotası doldu — ${sec} sn sonra tekrar dene. (Giriş yapan müşteriler de sınırlı; bayi ve admin daha rahat.)`,
+    noReply: 'Yanıt alınamadı.',
+    connectionError: 'Bağlantı hatası. Lütfen tekrar deneyin.',
+    open: 'QRA sohbetini aç',
+    dialogMin: 'QRA sohbet — küçük görünüm',
+    dialog: 'QRA ile sohbet',
+    subtitle: 'QRateX için yapay zeka yardımcısı',
+    online: 'Çevrimiçi · Hazırım',
+    expand: 'Sohbeti genişlet',
+    minimize: 'Küçült',
+    close: 'Kapat',
+    closePanel: 'Sohbet panelini kapat',
+    writing: 'Yazıyorum…',
+    quickStart: 'Hızlı başlangıç',
+    hintBefore: 'Aşağıdan seç veya yaz; masaüstünde ',
+    hintSend: ' gönderir, ',
+    hintNewline: ' satır kırar.',
+    placeholder: 'Merhaba… veya sorunu yaz',
+    inputLabel: 'QRA’ya mesaj',
+    send: 'Gönder',
+    poweredBy: 'Groq ile hızlı yanıt',
+  },
+  en: {
+    welcome:
+      'Hey! I’m QRA — your helper who gets big things done from a tiny window. What’s on your mind today? Ask anything and we’ll sort it out together.',
+    quick: [
+      { label: 'What is QRateX?', message: 'What is QRateX and how does it work?' },
+      { label: 'Points & badges', message: 'How do points and badges work?' },
+      { label: 'Creating QR codes', message: 'How can I create a QR code?' },
+      { label: 'Get help', message: 'Can you help me?' },
+    ],
+    typing: ['Hmm, thinking…', 'Wrapping up the answer…', 'Almost there…', 'Final touches…'],
+    rateLimited: (sec: number) =>
+      `Whoa, you’re fast! The per-minute limit is reached — try again in ${sec} s. (Signed-in customers are limited too; businesses and admins have more room.)`,
+    noReply: 'No reply received.',
+    connectionError: 'Connection error. Please try again.',
+    open: 'Open QRA chat',
+    dialogMin: 'QRA chat — compact view',
+    dialog: 'Chat with QRA',
+    subtitle: 'AI assistant for QRateX',
+    online: 'Online · Ready',
+    expand: 'Expand chat',
+    minimize: 'Minimise',
+    close: 'Close',
+    closePanel: 'Close chat panel',
+    writing: 'Writing…',
+    quickStart: 'Quick start',
+    hintBefore: 'Pick one below or type; on desktop ',
+    hintSend: ' sends, ',
+    hintNewline: ' adds a new line.',
+    placeholder: 'Hi… or describe your question',
+    inputLabel: 'Message to QRA',
+    send: 'Send',
+    poweredBy: 'Fast replies with Groq',
+  },
+} as const;
 
 /** Sohbet gövdesinde çok hafif sıvı-cam ışık lekeleri (yeşil / nabız yok) */
 function LiquidGlassWash({ enabled }: { enabled: boolean }) {
@@ -116,8 +179,12 @@ const FAB_LIQUID_BUBBLES = [
 
 export function Chatbot() {
   const { data: session } = useSession();
-  const prefersReducedMotion = useReducedMotion();
+  // Tek hareket politikası: OS tercihi VEYA uygulama "Animasyonları azalt" (framer'ın
+  // useReducedMotion'ı yalnız OS'u okuyordu — B7).
+  const prefersReducedMotion = useReducedMotionPref();
   const motionLite = prefersReducedMotion === true;
+  const copy = CHAT_COPY[useLocaleSafe() === 'en' ? 'en' : 'tr'];
+  const quickActions = copy.quick.map((q, i) => ({ ...q, icon: QUICK_ACTION_ICONS[i] }));
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
@@ -125,7 +192,7 @@ export function Chatbot() {
   const [isLoading, setIsLoading] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [finePointer, setFinePointer] = useState(false);
-  const [typingMessage, setTypingMessage] = useState(TYPING_MESSAGES[0]);
+  const [typingMessage, setTypingMessage] = useState<string>(CHAT_COPY.tr.typing[0]);
   const [botImageOk, setBotImageOk] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -187,11 +254,11 @@ export function Chatbot() {
   useEffect(() => {
     if (isLoading) {
       const interval = setInterval(() => {
-        setTypingMessage(TYPING_MESSAGES[Math.floor(Math.random() * TYPING_MESSAGES.length)]);
+        setTypingMessage(copy.typing[Math.floor(Math.random() * copy.typing.length)]);
       }, 2000);
       return () => clearInterval(interval);
     }
-  }, [isLoading]);
+  }, [isLoading, copy.typing]);
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -237,8 +304,8 @@ export function Chatbot() {
           role: 'assistant',
           content:
             response.status === 429
-              ? `Vay, çok hızlısın! Dakika kotası doldu — ${waitSec} sn sonra tekrar dene. (Giriş yapan müşteriler de sınırlı; bayi ve admin daha rahat.)`
-              : (data.error as string) || 'Yanıt alınamadı.',
+              ? copy.rateLimited(waitSec)
+              : (data.error as string) || copy.noReply,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
@@ -248,7 +315,7 @@ export function Chatbot() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.message || 'Yanıt alınamadı.',
+        content: data.message || copy.noReply,
         timestamp: new Date(),
       };
 
@@ -258,7 +325,7 @@ export function Chatbot() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Bağlantı hatası. Lütfen tekrar deneyin.',
+        content: copy.connectionError,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -296,7 +363,7 @@ export function Chatbot() {
               aria-haspopup="dialog"
               aria-expanded={false}
               aria-controls="qratex-chatbot-panel"
-              aria-label="QRA sohbetini aç"
+              aria-label={copy.open}
               onClick={() => setIsOpen(true)}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
@@ -429,7 +496,7 @@ export function Chatbot() {
           >
             <Motion.button
               type="button"
-              aria-label="Sohbet panelini kapat"
+              aria-label={copy.closePanel}
               className="pointer-events-auto absolute inset-0 bg-black/45 backdrop-blur-md sm:bg-black/35"
               onClick={closePanel}
             />
@@ -442,7 +509,7 @@ export function Chatbot() {
               id="qratex-chatbot-panel"
               role="dialog"
               aria-modal="true"
-              aria-label={isMinimized ? 'QRA sohbet — küçük görünüm' : 'QRA ile sohbet'}
+              aria-label={isMinimized ? copy.dialogMin : copy.dialog}
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 floatingZTw.assistant,
@@ -539,7 +606,7 @@ export function Chatbot() {
                     </h3>
                     {!isMinimized && (
                       <>
-                        <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">QRateX için yapay zeka yardımcısı</p>
+                        <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">{copy.subtitle}</p>
                         <Motion.p
                           className="mt-1 flex min-h-[1.125rem] items-center gap-1.5 truncate text-[11px] text-muted-foreground sm:mt-1.5 sm:text-xs"
                           key={isLoading ? typingMessage : 'idle'}
@@ -555,7 +622,7 @@ export function Chatbot() {
                           ) : (
                             <>
                               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/30" aria-hidden />
-                              <span className="truncate">Çevrimiçi · Hazırım</span>
+                              <span className="truncate">{copy.online}</span>
                             </>
                           )}
                         </Motion.p>
@@ -568,7 +635,7 @@ export function Chatbot() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={isMinimized ? 'Sohbeti genişlet' : 'Küçült'}
+                    aria-label={isMinimized ? copy.expand : copy.minimize}
                     type="button"
                     className={cn(
                       'touch-manipulation rounded-xl border border-transparent hover:border-white/25 hover:bg-white/25 dark:hover:bg-white/[0.06]',
@@ -586,7 +653,7 @@ export function Chatbot() {
                     variant="ghost"
                     size="icon"
                     type="button"
-                    aria-label="Kapat"
+                    aria-label={copy.close}
                     className={cn(
                       'touch-manipulation rounded-xl border border-transparent hover:border-white/20 hover:bg-red-500/10 hover:text-destructive dark:hover:bg-red-950/30',
                       isMinimized ? 'h-8 w-8 sm:h-9 sm:w-9' : 'h-9 w-9 sm:h-10 sm:w-10'
@@ -643,7 +710,7 @@ export function Chatbot() {
                                 : cn(glassBubbleAssistant, 'rounded-2xl rounded-tl-md')
                             )}
                           >
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.id === 'welcome' ? copy.welcome : message.content}</p>
                             <time
                               className={cn(
                                 'mt-1.5 block text-[10px] tabular-nums sm:text-[11px]',
@@ -699,7 +766,7 @@ export function Chatbot() {
                                 />
                               ))}
                             </div>
-                            <span className="text-xs text-muted-foreground">Yazıyorum…</span>
+                            <span className="text-xs text-muted-foreground">{copy.writing}</span>
                           </div>
                         </div>
                       </Motion.div>
@@ -717,14 +784,17 @@ export function Chatbot() {
                       >
                         <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-foreground">
                           <Lightbulb className="h-4 w-4 text-foreground/50" aria-hidden />
-                          Hızlı başlangıç
+                          {copy.quickStart}
                         </p>
                         <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground sm:mb-3 sm:text-xs">
-                          Aşağıdan seç veya yaz; masaüstünde <span className="font-medium text-foreground">Enter</span> gönderir,{' '}
-                          <span className="font-medium text-foreground">Shift+Enter</span> satır kırar.
+                          {copy.hintBefore}
+                          <span className="font-medium text-foreground">Enter</span>
+                          {copy.hintSend}
+                          <span className="font-medium text-foreground">Shift+Enter</span>
+                          {copy.hintNewline}
                         </p>
                         <div className="mx-auto grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
-                          {QUICK_ACTIONS.map((action, i) => (
+                          {quickActions.map((action, i) => (
                             <Motion.button
                               key={action.label}
                               type="button"
@@ -755,7 +825,9 @@ export function Chatbot() {
                           value={input}
                           onChange={(e) => setInput(e.target.value)}
                           onKeyDown={handleKeyDown}
-                          placeholder="Merhaba… veya sorunu yaz"
+                          placeholder={copy.placeholder}
+                          aria-label={copy.inputLabel}
+                          enterKeyHint="send"
                           disabled={isLoading}
                           rows={1}
                           className={cn(
@@ -769,7 +841,7 @@ export function Chatbot() {
                       <Motion.div whileTap={{ scale: 0.94 }} className="shrink-0 self-end">
                         <Button
                           type="button"
-                          aria-label="Gönder"
+                          aria-label={copy.send}
                           onClick={() => sendMessage(input)}
                           disabled={!input.trim() || isLoading}
                           size="icon"
@@ -781,7 +853,7 @@ export function Chatbot() {
                     </div>
                     <p className="mx-auto mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:mt-2.5 sm:text-[11px]">
                       <Zap className="h-3 w-3 shrink-0 text-foreground/35 sm:h-3.5 sm:w-3.5" aria-hidden />
-                      Groq ile hızlı yanıt
+                      {copy.poweredBy}
                       <Coffee className="h-3 w-3 shrink-0 text-foreground/35 sm:h-3.5 sm:w-3.5" aria-hidden />
                     </p>
                   </div>

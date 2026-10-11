@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,30 +20,13 @@ interface LanguageSwitcherProps {
 }
 
 export function LanguageSwitcher({ className, compact = true }: LanguageSwitcherProps) {
-  const { data: session, update } = useSession();
   const { locale, setLocale } = useAppLocale();
   const t = useAppT();
-  const [saving, setSaving] = useState(false);
-
-  const handleChange = async (nextLocale: Locale) => {
-    if (saving || nextLocale === locale) return;
+  // Dilin tek yazarı sağlayıcı: cihaz (çerez + localStorage) ve oturum açıksa hesap tercihi
+  // (PATCH /api/user/profile + oturum güncellemesi) orada yazılır (lib/app-locale.tsx, B2).
+  const handleChange = (nextLocale: Locale) => {
+    if (nextLocale === locale) return;
     setLocale(nextLocale);
-
-    if (!session?.user) return;
-
-    try {
-      setSaving(true);
-      await fetch('/api/user/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferredLanguage: nextLocale }),
-      });
-      await update({ preferredLanguage: nextLocale });
-    } catch {
-      // UI already switched with local preference; fail silently.
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -57,7 +38,6 @@ export function LanguageSwitcher({ className, compact = true }: LanguageSwitcher
           size={compact ? 'icon' : 'sm'}
           className={cn('touch-manipulation', className)}
           aria-label={t('appShell.languageSelect')}
-          disabled={saving}
         >
           <Globe className="h-4 w-4" aria-hidden />
           {!compact ? <span className="ml-2">{locale.toUpperCase()}</span> : null}
@@ -70,8 +50,11 @@ export function LanguageSwitcher({ className, compact = true }: LanguageSwitcher
             onSelect={() => handleChange(lang.key)}
             onClick={() => handleChange(lang.key)}
             className={lang.key === locale ? 'font-semibold' : undefined}
+            lang={lang.key}
+            aria-current={lang.key === locale ? 'true' : undefined}
           >
-            {lang.key === 'tr' ? t('appShell.languageTr') : t('appShell.languageEn')}
+            {/* Dil adları kendi dilinde (endonim) + lang: ekran okuyucu doğru telaffuz eder. */}
+            {lang.key === 'tr' ? 'TR · Türkçe' : 'EN · English'}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

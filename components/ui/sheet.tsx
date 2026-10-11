@@ -5,6 +5,13 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLocaleSafe } from '@/lib/app-locale';
+import { uiCopy } from '@/lib/i18n/ui-copy';
+
+/** Kapat düğmesinin erişilebilir adı uygulama dilinde (eskiden her dilde sabit 'Kapat (Escape)'). */
+function CloseLabel() {
+  return <span className="sr-only">{uiCopy(useLocaleSafe()).closeEscape}</span>;
+}
 
 const Sheet = SheetPrimitive.Root;
 const SheetTrigger = SheetPrimitive.Trigger;
@@ -66,9 +73,9 @@ const SheetContent = React.forwardRef<
           'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-200 hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary',
           'right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))]'
         )}
-        aria-label="Kapat (Escape)"
       >
         <X className="h-4 w-4 shrink-0" aria-hidden />
+        <CloseLabel />
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
   </SheetPortal>

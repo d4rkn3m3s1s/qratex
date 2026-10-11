@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { QrCode, MessageSquare, CheckCircle, ArrowRight } from 'lucide-react';
 import { useAppT } from '@/lib/app-locale';
+import { useFirstRunTurn } from '@/lib/first-run-queue';
 
 const STORAGE_KEY = 'qratex-onboarding-done';
 
@@ -51,19 +52,30 @@ export function OnboardingSheet() {
   const t = useAppT();
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  // İlk açılış sırası (B6): karşılama videosu varsa önce o; doğum günü diyaloğu bundan sonra.
+  const [wants, setWants] = useState<boolean | null>(null);
+  const [closed, setClosed] = useState(false);
   const [step, setStep] = useState(0);
+  const { granted, finish } = useFirstRunTurn('onboarding', wants);
+  const open = granted && !closed;
 
   useEffect(() => {
-    if (status !== 'authenticated' || !session?.user?.role) return;
+    if (status === 'loading') return;
+    if (status !== 'authenticated' || !session?.user?.role) {
+      setWants(false);
+      return;
+    }
     try {
-      const done = localStorage.getItem(STORAGE_KEY);
-      if (done === 'true') return;
-      setOpen(true);
+      setWants(localStorage.getItem(STORAGE_KEY) !== 'true');
     } catch {
-      // ignore
+      setWants(false);
     }
   }, [status, session?.user?.role]);
+
+  const dismiss = () => {
+    setClosed(true);
+    finish();
+  };
 
   const role = session?.user?.role ?? 'CUSTOMER';
   const cfg = STEPS_BY_ROLE[role] ?? STEPS_BY_ROLE.CUSTOMER;
@@ -79,7 +91,7 @@ export function OnboardingSheet() {
       try {
         localStorage.setItem(STORAGE_KEY, 'true');
       } catch {}
-      setOpen(false);
+      dismiss();
     } else {
       setStep((s) => s + 1);
     }
@@ -89,7 +101,7 @@ export function OnboardingSheet() {
     try {
       localStorage.setItem(STORAGE_KEY, 'true');
     } catch {}
-    setOpen(false);
+    dismiss();
   };
 
   if (!current) return null;
@@ -101,7 +113,7 @@ export function OnboardingSheet() {
     .replace('{{total}}', String(steps.length));
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={(next) => { if (!next) dismiss(); }}>
       <SheetContent
         side="bottom"
         className="max-h-[85vh] rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]"

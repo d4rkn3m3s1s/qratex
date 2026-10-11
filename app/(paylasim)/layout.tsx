@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { SkipLink } from '@/components/ds/a11y';
 import { getServerLocale } from '@/lib/server-locale';
 import { getShareCopy } from '@/components/public/p-deneyim-anket/copy';
+import { ServerLocaleBoundary } from '@/lib/server-locale-boundary';
 
 /**
  * Paylaşım bağlantılarının hafif kabuğu (`/experience/[token]`, `/surveys/[id]`).
@@ -16,6 +17,7 @@ import { getShareCopy } from '@/components/public/p-deneyim-anket/copy';
 export default async function ShareLayout({ children }: { children: ReactNode }) {
   const copy = getShareCopy(await getServerLocale());
   return (
+    <ServerLocaleBoundary>
     <div className="flex min-h-dvh flex-col bg-background text-fg">
       <SkipLink targetId="main-content" />
       <header className="safe-top border-b border-subtle bg-surface-0">
@@ -50,5 +52,6 @@ export default async function ShareLayout({ children }: { children: ReactNode })
         </div>
       </footer>
     </div>
+    </ServerLocaleBoundary>
   );
 }

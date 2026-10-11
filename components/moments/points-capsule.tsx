@@ -8,6 +8,7 @@ import { MOMENT_PULSE_EVENT } from '@/components/ds/play/points-chip';
 import { formatInt } from '@/components/ds/play/shared';
 import { buzz, confetti, sound } from '@/lib/moments/effects';
 import type { PointsMoment } from '@/lib/moments/types';
+import { useSceneCopy } from '@/lib/moments/scene-copy';
 
 /**
  * Puan kapsülü (spec §3 "Puan" satırı): akışı kesmeyen, `pointer-events: none`,
@@ -43,6 +44,7 @@ function findAnchor(): HTMLElement | null {
 
 export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone: () => void }) {
   const reduce = useReducedMotionPref();
+  const copy = useSceneCopy();
   const capsuleRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const doneRef = useRef(false);
@@ -126,11 +128,7 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
         : { duration: reduce ? DURATION.fast : DURATION.slow, ease: EASE.exit };
 
   const hasPoints = moment.points > 0;
-  const label = !hasPoints
-    ? `+${formatInt(xp)} XP kazandın`
-    : xp > 0
-      ? `+${formatInt(moment.points)} puan ve +${formatInt(xp)} XP kazandın`
-      : `+${formatInt(moment.points)} puan kazandın`;
+  const label = copy.pointsEarned(moment.points, xp);
 
   return (
     // Konum bu sarmalayıcıda (CSS); animasyon içteki Motion öğesinde (framer transform'u Tailwind translate'ini ezmesin).

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/states';
 import { deleteAccount, fetchDeletePreview, SettingsApiError, settingsKeys } from './api';
 import { errorText, useSettingsCopy } from './copy';
+import { useFormatters } from '@/lib/app-locale';
 import { Panel } from './ui';
 
 const RELOGIN_URL = `/auth/login?callbackUrl=${encodeURIComponent('/customer/me/settings?tab=privacy')}`;
@@ -30,6 +31,7 @@ const RELOGIN_URL = `/auth/login?callbackUrl=${encodeURIComponent('/customer/me/
  */
 export function DeleteAccount() {
   const { copy } = useSettingsCopy();
+  const fmt = useFormatters();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -157,7 +159,7 @@ export function DeleteAccount() {
                   {losses.map((l) => (
                     <div key={l.label} className="contents">
                       <dt className="qx-small text-fg">{l.label}</dt>
-                      <dd className="qx-small qx-num text-right font-semibold text-fg">{l.value.toLocaleString('tr-TR')}</dd>
+                      <dd className="qx-small qx-num text-right font-semibold text-fg">{fmt.number(l.value)}</dd>
                     </div>
                   ))}
                 </dl>

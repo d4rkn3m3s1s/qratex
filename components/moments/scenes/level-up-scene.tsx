@@ -6,11 +6,12 @@ import { DURATION, EASE, OFFSET } from '@/lib/motion';
 import { BUZZ } from '@/lib/moments/effects';
 import { LEVEL_SCENE_COLORS, sceneBackdrop } from '@/lib/moments/scene-colors';
 import type { Moment } from '@/lib/moments/types';
-import { RING_SCREEN_FRACTION, RING_TIMELINE, formatSceneInt, levelSceneModel, secToMs, type SceneClock } from './scene-math';
+import { RING_SCREEN_FRACTION, RING_TIMELINE, levelSceneModel, secToMs, type SceneClock } from './scene-math';
 import { SceneShell } from './scene-shell';
 import { SceneStage } from './stage-lazy';
 import { StageFallback2D } from './stage-fallback-2d';
 import { DismissHint, Odometer, ReducedSceneCard, SceneProgress, StageAction, CardAction, useSceneCue } from './scene-parts';
+import { useSceneCopy } from '@/lib/moments/scene-copy';
 
 /**
  * Seviye atlama sahnesi (spec §3): tam ekran, ~4 sn, dokun/Esc ile geçilir.
@@ -28,6 +29,7 @@ export default function LevelUpScene({ moment, onDone }: { moment: Moment; onDon
   const payload = moment.kind === 'level_up' ? moment.payload : null;
 
   // Yanlış türde an gelirse kuyruk tıkanmasın.
+  const copy = useSceneCopy();
   useEffect(() => {
     if (!payload) onDone();
   }, [payload, onDone]);
@@ -35,11 +37,8 @@ export default function LevelUpScene({ moment, onDone }: { moment: Moment; onDon
 
   const model = levelSceneModel(payload);
   const colors = LEVEL_SCENE_COLORS;
-  const progressLabel =
-    model.xpToNext != null ? `Sonraki seviyeye ${formatSceneInt(model.xpToNext)} XP` : 'Sonraki seviyeye ilerleme';
-  const announce =
-    `Seviye atladın! Artık ${model.to}. seviyedesin.` +
-    (model.xpToNext != null ? ` Sonraki seviyeye ${formatSceneInt(model.xpToNext)} XP kaldı.` : '');
+  const progressLabel = copy.levelProgress(model.xpToNext);
+  const announce = copy.levelAnnounce(model.to, model.xpToNext);
 
   return (
     <SceneShell kind="level_up" variant="fullscreen" announce={announce} marks={MARKS} onDone={onDone}>
@@ -48,21 +47,19 @@ export default function LevelUpScene({ moment, onDone }: { moment: Moment; onDon
           <div className="grid size-full place-items-center bg-overlay/70 p-4">
             <ReducedSceneCard
               titleId={titleId}
-              overline="Seviye atladın"
-              title={`${model.to}. seviyedesin`}
+              overline={copy.levelOverline}
+              title={copy.levelCardTitle(model.to)}
               visual={<StageFallback2D preset="ring" colors={colors} />}
               actions={
                 <>
                   <CardAction onClick={close} autoFocus>
-                    Devam et
+                    {copy.continue}
                   </CardAction>
                   <DismissHint tone="card" />
                 </>
               }
             >
-              <p className="qx-body text-fg-muted">
-                {model.from}. seviyeden {model.to}. seviyeye yükseldin.
-              </p>
+              <p className="qx-body text-fg-muted">{copy.levelFromTo(model.from, model.to)}</p>
               {model.progressPct != null && (
                 <SceneProgress pct={model.progressPct} colors={colors} run="static" label={progressLabel} tone="card" />
               )}
@@ -104,6 +101,7 @@ function LevelStage({
   titleId: string;
   progressLabel: string;
 }) {
+  const copy = useSceneCopy();
   const colors = LEVEL_SCENE_COLORS;
   const textIn = started && elapsed >= BURST_MS - 150;
   const flip = started && elapsed >= BURST_MS;
@@ -150,9 +148,9 @@ function LevelStage({
           transition={{ duration: DURATION.slow, ease: EASE.emphasized }}
         >
           <h2 id={titleId} className="qx-h1 text-white">
-            Seviye atladın!
+            {copy.levelTitle}
           </h2>
-          <p className="qx-body text-white/80">Artık {model.to}. seviyedesin.</p>
+          <p className="qx-body text-white/80">{copy.levelNow(model.to)}</p>
           {model.progressPct != null && (
             // Çok alçak yatay ekranda (telefon yan) çubuk eylem düğmesiyle çakışmasın.
             <div className="w-full [@media(max-height:520px)]:hidden">
@@ -167,7 +165,7 @@ function LevelStage({
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }}
       >
         <StageAction onClick={close} autoFocus>
-          Devam et
+          {copy.continue}
         </StageAction>
         <DismissHint compact />
       </div>
