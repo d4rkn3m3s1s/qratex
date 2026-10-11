@@ -10,6 +10,7 @@ import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { createUser, errorText } from './api';
 import { FormField, fieldError } from './parts';
+import { AdminKullanicilarText } from './copy';
 
 type Mode = 'invite' | 'password';
 type Role = 'CUSTOMER' | 'DEALER';
@@ -80,8 +81,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: { open: bool
           }}
         >
           <DialogHeader>
-            <DialogTitle>Kullanıcı ekle</DialogTitle>
-            <DialogDescription>Yönetici hesabı buradan açılmaz: kullanıcıyı oluşturup Erişim sekmesinden yükseltme talebi verin.</DialogDescription>
+            <DialogTitle><AdminKullanicilarText k="addUser" /></DialogTitle>
+            <DialogDescription><AdminKullanicilarText k="noAdminHere" /></DialogDescription>
           </DialogHeader>
 
           <FormField htmlFor={`${id}-name`} label="Ad soyad" error={err('name')}>
@@ -96,7 +97,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: { open: bool
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CUSTOMER">Müşteri</SelectItem>
+                <SelectItem value="CUSTOMER"><AdminKullanicilarText k="customer" /></SelectItem>
                 <SelectItem value="DEALER">Bayi</SelectItem>
               </SelectContent>
             </Select>
@@ -108,7 +109,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: { open: bool
           ) : null}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-fg">Giriş yöntemi</legend>
+            <legend className="text-sm font-medium text-fg"><AdminKullanicilarText k="signInMethod" /></legend>
             <ChoiceChips
               aria-label="Giriş yöntemi"
               value={mode}

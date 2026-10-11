@@ -15,6 +15,7 @@ import type { EarnedBadge, User360 } from '@/lib/admin-users/contract';
 import { errorText, fetchBadgeCatalog, fetchBadges, fetchRewardCatalog, fetchRewards, grantBadge, grantReward, revokeBadge, usersKeys } from '../api';
 import { fmtDate, fmtNumber, rarityLabel } from '../format';
 import { FormField, Pager, ReasonDialog } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 const RARITY_TONE: Record<string, 'neutral' | 'info' | 'brand' | 'warning'> = { common: 'neutral', rare: 'info', epic: 'brand', legendary: 'warning' };
 
@@ -71,7 +72,7 @@ function EarnedBadges({ userId, locked, onChanged }: { userId: string; locked: b
                     {b.category === 'character' ? <span>Karakter</span> : null}
                     {b.featured ? <span>Vitrinde</span> : null}
                     {b.hidden ? <span>Gizli</span> : null}
-                    {b.archived ? <span>Arşivli</span> : null}
+                    {b.archived ? <span><AdminKullanicilarText k="archived" /></span> : null}
                   </div>
                 </div>
                 {!locked ? (

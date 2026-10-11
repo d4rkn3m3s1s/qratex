@@ -9,6 +9,7 @@ import { QueryState } from '@/components/states';
 import { fetchFeedbacks, usersKeys } from '../api';
 import { fmtDateTime } from '../format';
 import { Pager } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 const SENTIMENT: Record<string, { label: string; tone: 'success' | 'neutral' | 'danger' }> = {
   positive: { label: 'Olumlu', tone: 'success' },
@@ -46,7 +47,7 @@ export function FeedbackTab({ userId }: { userId: string }) {
                     {f.deleted ? <StatusBadge size="sm" tone="neutral" label="Silindi" /> : null}
                     {f.replied ? <StatusBadge size="sm" tone="info" icon={null} label="Yanıtlandı" /> : null}
                   </div>
-                  {f.text ? <p className="mt-2 whitespace-pre-line text-sm text-fg">{f.text}</p> : <p className="mt-2 text-sm text-fg-subtle">Yalnız puan bırakıldı.</p>}
+                  {f.text ? <p className="mt-2 whitespace-pre-line text-sm text-fg">{f.text}</p> : <p className="mt-2 text-sm text-fg-subtle"><AdminKullanicilarText k="ratingOnly" /></p>}
                 </li>
               ))}
             </ol>

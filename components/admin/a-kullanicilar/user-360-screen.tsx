@@ -18,6 +18,7 @@ import { errorText, fetchUser, notifyUser, setSuspension, usersKeys } from './ap
 import { STATUS, TRUST, displayName, fmtDate, fmtNumber, fmtRelative, roleLabel, roleTone } from './format';
 import { FormField, ReasonDialog, UserAvatar } from './parts';
 import { OverviewTab } from './tabs/overview-tab';
+import { AdminKullanicilarText } from './copy';
 
 // Ağır sekmeler yalnız açıldığında yüklenir (ilk boyama: kimlik kartı + genel bakış).
 const loading = () => <SkeletonDetail />;
@@ -228,8 +229,8 @@ function NotifyDialog({ userId, open, onOpenChange }: { userId: string; open: bo
           }}
         >
           <DialogHeader>
-            <DialogTitle>Uygulama içi bildirim</DialogTitle>
-            <DialogDescription>Kullanıcının bildirim merkezine düşer ve denetim kaydına yazılır. Pazarlama içeriği için kampanya araçlarını kullanın.</DialogDescription>
+            <DialogTitle><AdminKullanicilarText k="inAppNotice" /></DialogTitle>
+            <DialogDescription><AdminKullanicilarText k="noticeHint" /></DialogDescription>
           </DialogHeader>
           <FormField htmlFor="notify-title" label="Başlık" hint={`${title.length}/80`}>
             <Input id="notify-title" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} required />
@@ -254,7 +255,7 @@ function NotifyDialog({ userId, open, onOpenChange }: { userId: string; open: bo
           </div>
           {valid ? (
             <div className="rounded-lg border border-subtle bg-surface-2 p-3" aria-label="Önizleme">
-              <p className="text-xs text-fg-muted">Önizleme</p>
+              <p className="text-xs text-fg-muted"><AdminKullanicilarText k="preview" /></p>
               <p className="font-medium text-fg">{title}</p>
               <p className="whitespace-pre-line text-sm text-fg-muted">{message}</p>
             </div>

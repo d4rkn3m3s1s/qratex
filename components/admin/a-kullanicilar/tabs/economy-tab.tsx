@@ -24,6 +24,7 @@ import {
 import { UsersApiError, adjustPoints, errorText, fetchAdmins, fetchLedger, issueApproval, newRequestId, usersKeys } from '../api';
 import { LEDGER_STATUS, fmtDateTime, fmtNumber, fmtSigned, sourceLabel } from '../format';
 import { FormField, fieldError } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 type Direction = 'credit' | 'debit' | 'xp';
 type ReasonCode = AdjustPointsInput['reasonCode'];
@@ -270,7 +271,7 @@ function ApprovalIssuer({ user: u }: { user: User360 }) {
         }}
       >
         {admins.isSuccess && admins.data.items.length === 0 ? (
-          <InlineError>Sistemde sizden başka etkin bir yönetici yok; onay belirteci yalnız başka bir yöneticinin talebi için üretilebilir.</InlineError>
+          <InlineError><AdminKullanicilarText k="noOtherAdmin" /></InlineError>
         ) : null}
         <FormField htmlFor={`${id}-req`} label="Talep eden yönetici">
           <Select value={requesterId} onValueChange={setRequesterId} disabled={admins.isLoading}>
@@ -310,7 +311,7 @@ function ApprovalIssuer({ user: u }: { user: User360 }) {
         {error ? <InlineError>{error}</InlineError> : null}
         {issued ? (
           <div className="space-y-2 rounded-lg border border-subtle bg-surface-2 p-3">
-            <p className="text-sm font-medium text-fg">Belirteç hazır — talep eden yöneticiye iletin</p>
+            <p className="text-sm font-medium text-fg"><AdminKullanicilarText k="tokenReady" /></p>
             <Input readOnly value={issued.token} aria-label="Onay belirteci" onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
               <span>Son geçerlilik: {fmtDateTime(issued.expiresAt)}</span>

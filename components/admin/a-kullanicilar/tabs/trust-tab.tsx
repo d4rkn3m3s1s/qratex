@@ -10,6 +10,7 @@ import { QueryState } from '@/components/states';
 import type { User360 } from '@/lib/admin-users/contract';
 import { fetchActivity, usersKeys } from '../api';
 import { FRAUD, TRUST, fmtDateTime } from '../format';
+import { AdminKullanicilarText } from '../copy';
 
 const SEVERITY_TONE: Record<string, 'neutral' | 'info' | 'warning' | 'danger'> = { LOW: 'info', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' };
 
@@ -22,7 +23,7 @@ export function TrustTab({ user: u }: { user: User360 }) {
         icon={<ShieldAlert />}
         actions={
           <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
-            <Link href="/admin/trust">Güven merkezi</Link>
+            <Link href="/admin/trust"><AdminKullanicilarText k="trustCenter" /></Link>
           </Button>
         }
       >

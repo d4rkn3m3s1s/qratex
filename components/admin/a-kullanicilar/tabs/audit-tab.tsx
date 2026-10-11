@@ -11,6 +11,7 @@ import { QueryState } from '@/components/states';
 import { fetchAudit, usersKeys } from '../api';
 import { auditLabel } from '../format';
 import { Pager } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 export function AuditTab({ userId }: { userId: string }) {
   const [page, setPage] = useState(1);
@@ -27,7 +28,7 @@ export function AuditTab({ userId }: { userId: string }) {
       description="Bu kullanıcı üzerinde yapılan ve kullanıcının kendi yaptığı kayıtlı işlemler."
       actions={
         <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
-          <Link href="/admin/audit">Tüm denetim günlüğü</Link>
+          <Link href="/admin/audit"><AdminKullanicilarText k="fullAuditLog" /></Link>
         </Button>
       }
     >

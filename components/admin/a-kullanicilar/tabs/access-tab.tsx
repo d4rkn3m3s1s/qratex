@@ -16,6 +16,7 @@ import type { User360 } from '@/lib/admin-users/contract';
 import { anonymize, changeRole, decideElevation, errorText, previewAnonymize, revokeSessions, sendAccessLink, usersKeys } from '../api';
 import { fmtDateTime, fmtNumber, fmtRelative, roleLabel } from '../format';
 import { FormField, fieldError } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 export function AccessTab({ user: u, onChanged }: { user: User360; onChanged: () => void }) {
   const qc = useQueryClient();
@@ -115,8 +116,8 @@ function RoleCard({ user: u, onDone }: { user: User360; onDone: () => Promise<vo
         Mevcut rol: <strong>{roleLabel(current)}</strong>
         {current === 'STAFF' ? ' — personel kaydı yeni rolde pasifleşir (silinmez).' : ''}
       </p>
-      {lastAdmin ? <InlineError tone="warning">Bu, platformdaki son etkin yönetici; rolü düşürülemez.</InlineError> : null}
-      {u.pendingElevation ? <InlineError tone="info">Bekleyen bir yönetici yükseltme talebi var; önce o karara bağlanmalı.</InlineError> : null}
+      {lastAdmin ? <InlineError tone="warning"><AdminKullanicilarText k="lastAdmin" /></InlineError> : null}
+      {u.pendingElevation ? <InlineError tone="info"><AdminKullanicilarText k="pendingUpgrade" /></InlineError> : null}
       <form
         className="space-y-4"
         onSubmit={async (e) => {
@@ -192,7 +193,7 @@ function PendingElevation({ user: u, onDone }: { user: User360; onDone: () => Pr
         {!mine && !u.isSelf ? (
           <ConfirmAction
             tone="danger"
-            trigger={<Button className="min-h-11">Onayla ve yönetici yap</Button>}
+            trigger={<Button className="min-h-11"><AdminKullanicilarText k="approveAdmin" /></Button>}
             title={`${u.identity.email} yönetici yapılsın mı?`}
             description="Kişi platformun tüm yönetim uçlarına erişir. Onayınız ikinci imza olarak denetime yazılır."
             confirmPhrase={u.identity.email}

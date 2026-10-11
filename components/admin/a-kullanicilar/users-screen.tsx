@@ -38,6 +38,7 @@ import { bulkAction, errorText, fetchList, fetchStats, usersKeys } from './api';
 import { CreateUserDialog } from './create-user-dialog';
 import { FRAUD, ROLE_OPTIONS, STATUS, TRUST, displayName, fmtDate, fmtNumber, roleLabel, roleTone } from './format';
 import { ReasonDialog, UserAvatar } from './parts';
+import { AdminKullanicilarText } from './copy';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'q', label: 'Ara', placeholder: 'Ad, e-posta, işletme ya da kimlik', minLength: 2 },
@@ -154,7 +155,7 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
                   {displayName(u)}
                 </Link>
                 <p className="truncate text-xs text-fg-muted">{u.email}</p>
-                {u.isDemo ? <span className="text-xs text-fg-subtle">Demo hesabı</span> : null}
+                {u.isDemo ? <span className="text-xs text-fg-subtle"><AdminKullanicilarText k="demoAccount" /></span> : null}
               </div>
             </div>
           );
@@ -213,7 +214,7 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
         header: 'Plan',
         enableSorting: false,
         meta: { label: 'Plan' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => (row.original.role === 'DEALER' ? row.original.planName ?? <span className="text-fg-muted">Ücretsiz kademe</span> : <span className="text-fg-subtle">—</span>),
+        cell: ({ row }) => (row.original.role === 'DEALER' ? row.original.planName ?? <span className="text-fg-muted"><AdminKullanicilarText k="freeTier" /></span> : <span className="text-fg-subtle">—</span>),
       },
       {
         id: 'createdAt',
@@ -312,7 +313,7 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
                   </Button>
                 ),
               }
-            : { variant: 'first-use', title: 'Henüz kullanıcı yok', action: <Button className="min-h-11" onClick={() => setCreateOpen(true)}>Kullanıcı ekle</Button> }
+            : { variant: 'first-use', title: 'Henüz kullanıcı yok', action: <Button className="min-h-11" onClick={() => setCreateOpen(true)}><AdminKullanicilarText k="addUser" /></Button> }
         }
         enableRowSelection
         rowSelection={rowSelection}

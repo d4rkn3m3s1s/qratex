@@ -15,6 +15,7 @@ import type { ProfilePatch, User360 } from '@/lib/admin-users/contract';
 import { assignPlan, errorText, fetchPlans, patchProfile } from '../api';
 import { fmtDate, fmtNumber } from '../format';
 import { FormField, fieldError } from '../parts';
+import { AdminKullanicilarText } from '../copy';
 
 const SUB_LABELS: Record<string, string> = {
   active: 'Etkin',
@@ -185,7 +186,7 @@ function PlanPicker({ userId, currentPlanId, onChanged }: { userId: string; curr
               <SelectValue placeholder={plans.isLoading ? 'Yükleniyor…' : 'Seçin'} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Plansız (ücretsiz kademe)</SelectItem>
+              <SelectItem value="none"><AdminKullanicilarText k="noPlan" /></SelectItem>
               {(plans.data ?? []).map((p) => (
                 <SelectItem key={p.id} value={p.id} disabled={!p.isActive}>
                   {p.name} · {fmtNumber(p.price)} {p.currency}
