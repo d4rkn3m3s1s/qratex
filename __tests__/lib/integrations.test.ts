@@ -28,6 +28,7 @@ jest.mock('@/lib/redis', () => ({
   redisGetJson: jest.fn().mockResolvedValue(null),
   isRedisConfigured: jest.fn().mockReturnValue(false),
 }));
+jest.mock('@/lib/safe-webhook-post', () => ({ ...jest.requireActual('@/lib/safe-webhook-post'), safeWebhookPost: jest.fn() }));
 jest.mock('@/lib/module-gate', () => ({ getModuleControls: jest.fn().mockResolvedValue({}) }));
 jest.mock('@/lib/innovation-config', () => ({ getInnovationPlatformConfig: jest.fn().mockResolvedValue({ features: { partnerDigestApi: true } }) }));
 
@@ -40,6 +41,7 @@ import { generateWebhookSecret, openSecret, sealSecret } from '@/lib/integration
 import { authenticatePartnerApiKey, hashApiKey } from '@/lib/partner-api-auth';
 import { createKey, createWebhook, revokeKey, rollKey, updateWebhook } from '@/lib/integrations/server';
 import { deliverWithRetry, signV2 } from '@/lib/webhook-dispatch';
+import { safeWebhookPost } from '@/lib/safe-webhook-post';
 
 const ctx = { actor: { id: 'admin1', email: 'a@x.com', role: 'ADMIN', name: 'Ada' }, request: { headers: { get: () => null } } };
 const NOW = new Date('2026-10-11T10:00:00.000Z');
@@ -225,38 +227,42 @@ describe('webhook servisi', () => {
 });
 
 describe('dispatcher teslimi', () => {
-  const realFetch = global.fetch;
-  afterEach(() => {
-    global.fetch = realFetch;
-  });
+  const post = safeWebhookPost as jest.MockedFunction<typeof safeWebhookPost>;
+  afterEach(() => post.mockReset());
   const target = { id: 'w1', url: 'https://93.184.216.34/hook', secret: 'whsec_abc' };
 
-  it('5xx sonrası yeniden dener ve başarılı olur; imza başlıkları gönderilir', async () => {
-    const calls: RequestInit[] = [];
-    global.fetch = jest.fn(async (_u: unknown, init?: RequestInit) => {
-      calls.push(init as RequestInit);
-      return new Response('ok', { status: calls.length === 1 ? 502 : 200 });
-    }) as unknown as typeof fetch;
+  it('5xx sonrası yeniden dener ve başarılı olur; imza başlıkları gönderilir; teslim safeWebhookPost ile', async () => {
+    post.mockResolvedValueOnce({ ok: false, status: 502, body: 'x' }).mockResolvedValueOnce({ ok: true, status: 200, body: 'ok' });
     const o = await deliverWithRetry(target, 'feedback.created', '{"a":1}', { wait: async () => undefined });
     expect(o).toMatchObject({ ok: true, status: 200, attempts: 2 });
-    const h = calls[1].headers as Record<string, string>;
+    const h = post.mock.calls[1][2];
     const t = Number(h['X-Qratex-Timestamp']);
     expect(h['X-Qratex-Signature-V2']).toBe(`t=${t},v1=${signV2('whsec_abc', t, '{"a":1}')}`);
     expect(h['X-Qratex-Delivery']).toBe(o.deliveryId);
-    expect(calls[1].redirect).toBe('manual');
+    expect(post.mock.calls[1][3]).toMatchObject({ timeoutMs: expect.any(Number), maxBytes: expect.any(Number) });
   });
 
   it('4xx yeniden denenmez; 3xx başarısız sayılır', async () => {
-    global.fetch = jest.fn(async () => new Response('no', { status: 400 })) as unknown as typeof fetch;
+    post.mockResolvedValue({ ok: false, status: 400, body: 'no' });
     expect(await deliverWithRetry(target, 'feedback.created', '{}', { wait: async () => undefined })).toMatchObject({ ok: false, attempts: 1, errorKind: 'http_4xx' });
-    global.fetch = jest.fn(async () => new Response(null, { status: 302 })) as unknown as typeof fetch;
+    post.mockResolvedValue({ ok: false, status: 302, body: '' });
     expect(await deliverWithRetry(target, 'feedback.created', '{}', { wait: async () => undefined })).toMatchObject({ ok: false, errorKind: 'redirect' });
   });
 
+  it('bağlantı anında SSRF (DNS rebinding) blocked_url olur, yeniden denenmez', async () => {
+    post.mockRejectedValue(Object.assign(new Error('SSRF: x özel/iç adrese çözülüyor'), { code: 'ESSRF' }));
+    expect(await deliverWithRetry(target, 'feedback.created', '{}', { wait: async () => undefined })).toMatchObject({ ok: false, attempts: 1, errorKind: 'blocked_url' });
+  });
+
   it('engellenen hedefe hiç istek atılmaz', async () => {
-    global.fetch = jest.fn() as unknown as typeof fetch;
     const o = await deliverWithRetry({ ...target, url: 'https://10.0.0.1/x' }, 'feedback.created', '{}', { wait: async () => undefined });
     expect(o).toMatchObject({ ok: false, errorKind: 'blocked_url' });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('IPv6 biçimleri ve kimlik bilgili URL reddedilir', () => {
+    for (const ip of ['::a9fe:a9fe', '::ffff:a9fe:a9fe', '[::ffff:127.0.0.1]', '2002:a9fe:a9fe::1', '64:ff9b::a9fe:a9fe', 'fe80::1']) expect(isNonPublicIp(ip)).toBe(true);
+    expect(checkUrlShape('https://[::ffff:7f00:1]/h').ok).toBe(false);
+    expect(checkUrlShape('https://user@example.com/h').ok).toBe(false);
   });
 });

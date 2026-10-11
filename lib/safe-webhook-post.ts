@@ -82,6 +82,9 @@ export function safeWebhookPost(
   if (isIP(host) && isPrivateIp(host)) return Promise.reject(new Error('SSRF: özel IP'));
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (r: SafePostResult) => { if (!settled) { settled = true; clearTimeout(deadline); resolve(r); } };
+    const fail = (e: Error) => { if (!settled) { settled = true; clearTimeout(deadline); reject(e); } };
     const req = request(
       {
         protocol: 'https:',
@@ -106,15 +109,22 @@ export function safeWebhookPost(
         });
         const done = () => {
           const status = res.statusCode ?? 0;
-          resolve({ ok: status >= 200 && status < 300, status, body: Buffer.concat(chunks).toString('utf8') });
+          finish({ ok: status >= 200 && status < 300, status, body: Buffer.concat(chunks).toString('utf8') });
         };
         res.on('end', done);
         res.on('close', done);
         res.on('error', done);
       },
     );
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('webhook zaman aşımı')));
-    req.on('error', reject);
+    const timeoutErr = () => {
+      const e: NodeJS.ErrnoException = new Error('webhook zaman aşımı');
+      e.code = 'ETIMEDOUT';
+      return e;
+    };
+    // Boşta kalma zaman aşımı + toplam süre sınırı (yavaş damlatan sunucu bağlantıyı tutamasın).
+    req.setTimeout(timeoutMs, () => req.destroy(timeoutErr()));
+    const deadline = setTimeout(() => { const e = timeoutErr(); req.destroy(e); fail(e); }, timeoutMs);
+    req.on('error', fail);
     req.end(body);
   });
 }

@@ -9,7 +9,7 @@
  *  - Çağıranlar `after()` / `runAfter` içinde çağırır (serverless yanıt sonrası tamamlanır).
  *  - Geçici hatalarda (ağ, zaman aşımı, 429, 5xx) en fazla 3 deneme, artan bekleme (1 sn, 3 sn).
  *  - Her teslimde hedef yeniden doğrulanır (SSRF, DNS rebinding) ve yönlendirme İZLENMEZ
- *    (`redirect: 'manual'`; 3xx başarısız sayılır).
+ *    (safeWebhookPost: node:https yönlendirme izlemez; 3xx başarısız sayılır).
  *  - Art arda 15 başarısız teslimden sonra webhook otomatik duraklatılır (denetim kaydıyla).
  *
  * İmza (geriye uyumlu):
@@ -23,6 +23,7 @@ import { WEBHOOK_TEST_EVENT, type WebhookEventKey } from '@/lib/integrations/con
 import { parseWebhookMeta, serializeWebhookMeta } from '@/lib/integrations/meta';
 import { openSecret } from '@/lib/integrations/secret-box';
 import { assertSafeWebhookUrl } from '@/lib/integrations/url-safety';
+import { safeWebhookPost } from '@/lib/safe-webhook-post';
 
 /** Yalnız gerçekten tetiklenen olaylar (lib/integrations/contract.ts WEBHOOK_EVENTS). */
 export type WebhookEvent = WebhookEventKey;
@@ -89,16 +90,11 @@ async function attemptOnce(
     headers['X-Qratex-Signature-V2'] = `t=${ts},v1=${signV2(plainSecret, ts, body)}`;
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
+  // Teslim tek kaynak safeWebhookPost ile: bağlantı anında çözülen IP denetlenir (DNS rebinding
+  // TOCTOU yok), yönlendirme izlenmez, toplam süre + yanıt boyutu sınırlı.
   try {
-    const res = await fetch(safe.url.toString(), { method: 'POST', headers, body, signal: controller.signal, redirect: 'manual' });
-    let snippet: string | null = null;
-    try {
-      snippet = (await res.text()).slice(0, RESPONSE_SNIPPET_LIMIT) || null;
-    } catch {
-      snippet = null;
-    }
+    const res = await safeWebhookPost(safe.url.toString(), body, headers, { timeoutMs: DELIVERY_TIMEOUT_MS, maxBytes: RESPONSE_SNIPPET_LIMIT });
+    const snippet = res.body.slice(0, RESPONSE_SNIPPET_LIMIT) || null;
     if (res.status >= 300 && res.status < 400) {
       return { ok: false, status: res.status, error: 'Hedef yönlendirme döndürdü; yönlendirmeler izlenmez.', errorKind: 'redirect', responseSnippet: snippet };
     }
@@ -113,16 +109,18 @@ async function attemptOnce(
     }
     return { ok: true, status: res.status, error: null, errorKind: null, responseSnippet: snippet };
   } catch (err) {
-    const aborted = (err as { name?: string })?.name === 'AbortError';
+    const e = err as { code?: string; message?: string };
+    if (e?.code === 'ESSRF' || /^SSRF/.test(e?.message ?? '')) {
+      return { ok: false, status: null, error: 'Hedef özel/iç ağ adresine çözümleniyor; gönderilmedi.', errorKind: 'blocked_url', responseSnippet: null };
+    }
+    const timedOut = e?.code === 'ETIMEDOUT';
     return {
       ok: false,
       status: null,
-      error: aborted ? `Hedef ${DELIVERY_TIMEOUT_MS / 1000} sn içinde yanıt vermedi.` : 'Hedefe bağlanılamadı (DNS/TLS/ağ).',
-      errorKind: aborted ? 'timeout' : 'network',
+      error: timedOut ? `Hedef ${DELIVERY_TIMEOUT_MS / 1000} sn içinde yanıt vermedi.` : 'Hedefe bağlanılamadı (DNS/TLS/ağ).',
+      errorKind: timedOut ? 'timeout' : 'network',
       responseSnippet: null,
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

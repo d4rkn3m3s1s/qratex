@@ -1,61 +1,25 @@
 /**
  * Giden webhook hedefi doğrulaması (SSRF derinlemesine savunma). Sunucu-yalnız.
  *
- *  - Üretimde yalnız `https:` (geliştirmede `WEBHOOK_ALLOW_HTTP=1` ile http).
+ *  - Yalnız `https:` (teslim yolu safeWebhookPost http'yi zaten reddeder).
  *  - Kullanıcı bilgisi (user:pass@) yasak.
  *  - Ana makine DNS ile çözülür; loopback, RFC1918, link-local (169.254/16 — bulut
  *    metadata), CGNAT, ULA, multicast ve ayrılmış aralıklar REDDEDİLİR.
- *  - Teslim anında yeniden çağrılır (DNS rebinding) ve fetch `redirect: 'manual'` kullanır.
+ *  - Bu denetim kayıt/ön kontroldür; TESLİM lib/safe-webhook-post safeWebhookPost ile yapılır:
+ *    bağlantı anında çözülen IP denetlenir (DNS rebinding TOCTOU yok), yönlendirme izlenmez.
  */
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
+import { isPrivateIp } from '@/lib/safe-webhook-post';
 
 export type UrlCheck = { ok: true; url: URL } | { ok: false; reason: string };
 
-function v4Parts(ip: string): number[] | null {
-  const p = ip.split('.').map((x) => Number(x));
-  return p.length === 4 && p.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? p : null;
-}
-
-/** Herkese açık olmayan (özel/ayrılmış) bir IP mi? */
+/**
+ * Herkese açık olmayan (özel/ayrılmış) bir IP mi? Tek kaynak: lib/safe-webhook-post isPrivateIp
+ * (IPv4-uyumlu/gömülü/hex eşlemeli IPv6, NAT64, 6to4 dahil).
+ */
 export function isNonPublicIp(ip: string): boolean {
-  const clean = ip.replace(/^\[|\]$/g, '').toLowerCase();
-  const mapped = clean.startsWith('::ffff:') ? clean.slice(7) : clean;
-  const v4 = v4Parts(mapped);
-  if (v4) {
-    const [a, b] = v4;
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 0) ||
-      (a === 192 && b === 168) ||
-      (a === 198 && (b === 18 || b === 19)) ||
-      a >= 224
-    );
-  }
-  if (isIP(clean) === 6) {
-    return (
-      clean === '::' ||
-      clean === '::1' ||
-      clean.startsWith('fc') ||
-      clean.startsWith('fd') ||
-      clean.startsWith('fe8') ||
-      clean.startsWith('fe9') ||
-      clean.startsWith('fea') ||
-      clean.startsWith('feb') ||
-      clean.startsWith('ff') ||
-      clean.startsWith('64:ff9b:')
-    );
-  }
-  return true; // tanınmayan biçim → güvenli tarafta kal
-}
-
-export function allowHttp(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.WEBHOOK_ALLOW_HTTP === '1';
+  return isPrivateIp(ip.replace(/^\[|\]$/g, '').toLowerCase());
 }
 
 /** Sözdizimi + şema + çıplak IP denetimi (DNS'siz, hızlı). */
@@ -66,7 +30,7 @@ export function checkUrlShape(raw: string): UrlCheck {
   } catch {
     return { ok: false, reason: 'Geçerli bir adres değil.' };
   }
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && allowHttp())) {
+  if (url.protocol !== 'https:') {
     return { ok: false, reason: 'Yalnız https:// adresleri kabul edilir (imzalı veri açık ağda gitmesin).' };
   }
   if (url.username || url.password) return { ok: false, reason: 'Adreste kullanıcı adı/parola olamaz.' };
