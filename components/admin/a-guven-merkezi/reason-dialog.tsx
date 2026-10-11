@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { errorText } from './api';
+import { AdminGuvenMerkeziText } from './copy';
 
 export type ReasonChoice<V extends string> = { value: V; label: string };
 
@@ -106,7 +107,7 @@ export function ReasonDialog<V extends string = string>({
             </div>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor={noteId}>Gerekçe</Label>
+            <Label htmlFor={noteId}><AdminGuvenMerkeziText k="reason" /></Label>
             <Textarea
               id={noteId}
               value={note}

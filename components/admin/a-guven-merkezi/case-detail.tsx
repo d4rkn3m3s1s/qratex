@@ -22,6 +22,7 @@ import {
 import { caseAction, fetchCase, reverseLedger, subjectAction, trustKeys } from './api';
 import { LEDGER_STATUS_LABEL, ROLE_LABEL, fmtAbs, fmtNum, fmtRel, ledgerSourceLabel, subjectText, toDsSeverity } from './format';
 import { ReasonDialog } from './reason-dialog';
+import { AdminGuvenMerkeziText } from './copy';
 
 const RESOLUTION_CHOICES = RESOLUTION_CODES.map((c) => ({ value: c, label: RESOLUTION_LABEL[c] }));
 const FRAUD_TONE: Record<FraudStatus, 'success' | 'warning' | 'danger'> = { clean: 'success', flagged: 'warning', shadow_ban: 'danger' };
@@ -214,13 +215,13 @@ function CaseBody({ c }: { c: CaseDetail }) {
             }))}
           />
         ) : (
-          <p className="text-sm text-fg-muted">Henüz işlem yapılmadı.</p>
+          <p className="text-sm text-fg-muted"><AdminGuvenMerkeziText k="noActions" /></p>
         )}
       </SectionCard>
 
       {meta ? (
         <details className="rounded-card border border-border bg-surface-1 p-3 text-sm">
-          <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Ham kanıt (metadata)</summary>
+          <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><AdminGuvenMerkeziText k="rawEvidence" /></summary>
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-fg-muted">{JSON.stringify(meta, null, 2)}</pre>
         </details>
       ) : null}
@@ -276,7 +277,7 @@ function SubjectCard({ caseId, profile: p }: { caseId: string; profile: SubjectP
           ]}
         />
         {p.fraudStatus === 'shadow_ban' ? (
-          <p className="text-xs text-fg-muted">Gölge yasaklı hesabın yeni puan kazanımları bakiyeye yansımaz (defterde "geçersiz" olarak kalır); kullanıcıya başarı görünür.</p>
+          <p className="text-xs text-fg-muted"><AdminGuvenMerkeziText k="shadowNote" /></p>
         ) : null}
         {isAdmin || p.anonymized ? (
           <p className="text-sm text-fg-muted">{isAdmin ? 'Yönetici hesaplarında güven aksiyonu alınamaz.' : 'Anonimleştirilmiş hesapta işlem yapılamaz.'}</p>
@@ -341,18 +342,18 @@ function LedgerCard({ caseId, rows }: { caseId: string; rows: LedgerRow[] }) {
       density="compact"
     >
       {rows.length === 0 ? (
-        <p className="text-sm text-fg-muted">Defterde kayıt yok.</p>
+        <p className="text-sm text-fg-muted"><AdminGuvenMerkeziText k="noLedger" /></p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <caption className="sr-only">Kullanıcının son puan hareketleri</caption>
+            <caption className="sr-only"><AdminGuvenMerkeziText k="recentPoints" /></caption>
             <thead>
               <tr className="text-left text-xs text-fg-muted">
                 <th scope="col" className="py-2 pr-3 font-medium">Zaman</th>
                 <th scope="col" className="py-2 pr-3 font-medium">Kaynak</th>
                 <th scope="col" className="py-2 pr-3 text-right font-medium">Puan</th>
                 <th scope="col" className="py-2 pr-3 font-medium">Durum</th>
-                <th scope="col" className="py-2 font-medium"><span className="sr-only">İşlem</span></th>
+                <th scope="col" className="py-2 font-medium"><span className="sr-only"><AdminGuvenMerkeziText k="operation" /></span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

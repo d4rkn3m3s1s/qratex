@@ -24,6 +24,7 @@ import {
 import { fetchRules, saveRules, trustKeys } from './api';
 import { fmtAbs, fmtNum } from './format';
 import { ReasonDialog } from './reason-dialog';
+import { AdminGuvenMerkeziText } from './copy';
 
 const SEVERITY_CHOICES = CASE_SEVERITIES.map((s) => ({ value: s, label: SEVERITY_LABEL[s] }));
 
@@ -97,7 +98,7 @@ function RulesEditor({ state }: { state: RulesState }) {
           Kuralları kaydet
         </Button>
       </div>
-      {!parsed.success && dirty ? <p className="text-sm text-danger" role="alert">Bazı değerler izin verilen aralığın dışında.</p> : null}
+      {!parsed.success && dirty ? <p className="text-sm text-danger" role="alert"><AdminGuvenMerkeziText k="outOfRange" /></p> : null}
       <ReasonDialog
         open={confirm}
         onOpenChange={setConfirm}
@@ -175,7 +176,7 @@ function RuleCard({
           })}
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-fg" id={`${id}-sev`}>Açılan vakanın önemi</p>
+          <p className="text-sm font-medium text-fg" id={`${id}-sev`}><AdminGuvenMerkeziText k="caseSeverity" /></p>
           <ChoiceChips<CaseSeverity>
             aria-labelledby={`${id}-sev`}
             size="sm"
@@ -187,15 +188,15 @@ function RuleCard({
         </div>
         <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
           <div>
-            <dt className="text-xs text-fg-muted">30 günde</dt>
+            <dt className="text-xs text-fg-muted"><AdminGuvenMerkeziText k="in30d" /></dt>
             <dd className="font-semibold tabular-nums text-fg">{fmtNum(stats.triggered30d)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-fg-muted">Açık</dt>
+            <dt className="text-xs text-fg-muted"><AdminGuvenMerkeziText k="open" /></dt>
             <dd className="font-semibold tabular-nums text-fg">{fmtNum(stats.open)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-fg-muted">Yanlış alarm</dt>
+            <dt className="text-xs text-fg-muted"><AdminGuvenMerkeziText k="falseAlarm" /></dt>
             <dd className="font-semibold tabular-nums text-fg" title={`${fmtNum(stats.falsePositive30d)} / ${fmtNum(stats.resolved30d)} çözülen`}>
               {fpRate === null ? '—' : `%${fpRate}`}
             </dd>
