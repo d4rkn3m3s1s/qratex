@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { AnimatePresence, m as Motion } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,11 @@ export function CookieConsentBanner() {
     };
   }, [consent.ready, consent.decided, syncChecked]);
 
-  const visible = consent.ready && !consent.decided && syncChecked;
+  // Müşteri sesi duvarı (/wall/[token]) TV/kiosk ekranında açılır: dokunan kimse yok, banner
+  // istatistik ve QR'ı kalıcı örter. Rıza verilmediği için analitik zaten kapalı kalır.
+  const pathname = usePathname();
+  const kiosk = pathname?.startsWith('/wall/') ?? false;
+  const visible = !kiosk && consent.ready && !consent.decided && syncChecked;
 
   return (
     <>
