@@ -11,7 +11,6 @@ import { InlineError } from '@/components/states';
 import type { GameRow } from '@/lib/admin-games/contract';
 import { bulkGames, errorText, fmt, gamesKeys } from './api';
 import { useGamesCopy } from './copy';
-import { useGamesCopy } from './copy';
 
 /**
  * Toplu aç/kapat (acil durdurma dahil) — gerekçe zorunlu, her oyun ayrı audit satırı.
@@ -28,7 +27,6 @@ export function BulkDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const c = useGamesCopy().bulk;
   const c = useGamesCopy().bulk;
   const qc = useQueryClient();
   const reasonId = useId();

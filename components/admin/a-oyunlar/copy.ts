@@ -7,7 +7,7 @@ const tr = {
   bulk: {
     noChange: 'Değişiklik gerekmedi',
     changed: (n: number, disable: boolean) => `${n} oyun ${disable ? 'kapatıldı — yeni ödüller hemen durdu' : 'açıldı'}`,
-    title: (disable: boolean) => (disable ? 'Oyunları kapat' : 'Oyunları aç'),
+    title: (disable: boolean): string => (disable ? 'Oyunları kapat' : 'Oyunları aç'),
     descDisable: 'Kapatılan oyunda yeni deneme açılmaz; süren denemeler tamamlansa da ödül almaz. İstediğinizde yeniden açabilirsiniz.',
     descEnable: 'Açılan oyunlar hub’da görünür ve ödüllü deneme kabul eder (portföyden çıkarılmış oyunlar yine gizli kalır).',
     allAlready: (disable: boolean) => `Seçilen oyunların hepsi zaten ${disable ? 'kapalı' : 'açık'}.`,

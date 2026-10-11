@@ -8,7 +8,6 @@ import { QueryState, SectionCard, TONE_CALLOUT } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { fetchTournament, fmt, fmtDateTime, gamesKeys } from './api';
 import { useGamesCopy } from './copy';
-import { useGamesCopy } from './copy';
 
 /**
  * Haftalık turnuva (salt-okunur + oyuna geçiş). Rotasyon (haftaya dondurulmuş TOURNAMENT_ROTATION
@@ -16,7 +15,6 @@ import { useGamesCopy } from './copy';
  * günlük `tournament-settle` işi otomatik dağıtır. Yönetim kolu öne çıkan oyunun ayarları ve aç/kapat anahtarıdır.
  */
 export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string) => void }) {
-  const c = useGamesCopy().tournament;
   const c = useGamesCopy().tournament;
   const q = useQuery({ queryKey: gamesKeys.tournament(), queryFn: fetchTournament, staleTime: 60_000 });
   return (
