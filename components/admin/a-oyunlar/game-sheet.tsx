@@ -12,13 +12,8 @@ import { SectionTabs } from '@/components/ds/page';
 import { ConfirmAction, EmptyState, InlineError, QueryState, TONE_CALLOUT, type ImpactItem } from '@/components/states';
 import { cn } from '@/lib/utils';
 import {
-  FIELD_LABELS,
-  FIELD_REACH,
-  HISTORY_ACTION_LABELS,
-  INTEGRITY_FLAG_LABELS,
   NUM_FIELDS,
   OVERRIDE_FIELDS,
-  PORTFOLIO_LABELS,
   type GameDetail,
   type GameRow,
   type GamesOverview,
@@ -28,6 +23,7 @@ import {
 } from '@/lib/admin-games/contract';
 import { errorText, fetchDetail, fmt, fmtDateTime, fmtDay, gamesKeys, patchGame, resetGame } from './api';
 import { useGamesCopy } from './copy';
+import { useDsLocale } from '@/components/ds/a11y/copy';
 
 type EditState = Record<OverrideField, string>;
 type SheetTab = 'rules' | 'look' | 'metrics' | 'history';
@@ -55,9 +51,10 @@ export function dirtyPatch(initial: EditState, edit: EditState): Partial<Record<
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export function GameSheetBody({ gameType, row, overview }: { gameType: string; row: GameRow | null; overview: GamesOverview | null }) {
+  const ux = useGamesCopy().ui;
   const [tab, setTab] = useState<SheetTab>('rules');
   if (!row || !overview) {
-    return <EmptyState title="Oyun bulunamadı" description="Bu anahtarla tanımlı bir oyun yok ya da liste henüz yüklenmedi." />;
+    return <EmptyState title={ux.oyunBulunamadi} description={ux.buAnahtarlaTanimliBir} />;
   }
   return (
     <div className="space-y-4">
@@ -66,12 +63,12 @@ export function GameSheetBody({ gameType, row, overview }: { gameType: string; r
         value={tab}
         onValueChange={(v) => setTab(v as SheetTab)}
         variant="pill"
-        ariaLabel="Oyun ayrıntı bölümleri"
+        ariaLabel={ux.oyunAyrintiBolumleri}
         tabs={[
-          { value: 'rules', label: 'Ödül ve zorluk' },
-          { value: 'look', label: 'Görünüm' },
-          { value: 'metrics', label: 'Metrikler' },
-          { value: 'history', label: 'Geçmiş' },
+          { value: 'rules', label: ux.odulVeZorluk },
+          { value: 'look', label: ux.gorunum },
+          { value: 'metrics', label: ux.metrikler },
+          { value: 'history', label: ux.gecmis },
         ]}
       >
         {(active) =>
@@ -89,12 +86,13 @@ export function GameSheetBody({ gameType, row, overview }: { gameType: string; r
 }
 
 function SheetSummary({ row }: { row: GameRow }) {
+  const gx = useGamesCopy().fx;
   const c = useGamesCopy().sheet;
   const p = row.portfolio;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        <StatusBadge size="sm" label={PORTFOLIO_LABELS[p.status]} tone={p.status === 'live' ? 'success' : p.status === 'building' ? 'info' : 'neutral'} />
+        <StatusBadge size="sm" label={gx.portfolio[p.status] ?? p.status} tone={p.status === 'live' ? 'success' : p.status === 'building' ? 'info' : 'neutral'} />
         <StatusBadge size="sm" label={row.effective.enabled ? c.on : c.off} tone={row.effective.enabled ? 'success' : 'danger'} />
         {row.featured && <StatusBadge size="sm" label={c.featured} tone="warning" icon={Swords} />}
         {p.practice && <StatusBadge size="sm" label={c.practice} tone="neutral" icon={null} />}
@@ -114,6 +112,10 @@ function SheetSummary({ row }: { row: GameRow }) {
 // ─────────────────────────── Düzenleme ───────────────────────────
 
 function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOverview; section: 'rules' | 'look' }) {
+  const gx = useGamesCopy().fx;
+  const locTag = useDsLocale() === 'en' ? 'en-US' : 'tr-TR';
+  const uy = useGamesCopy().ui2;
+  const ux = useGamesCopy().ui;
   const gc = useGamesCopy().sheet;
   const qc = useQueryClient();
   const initial = useMemo(() => toEdit(row), [row]);
@@ -127,7 +129,7 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
   const save = useMutation({
     mutationFn: () => patchGame({ gameType: row.gameType, expectedUpdatedAt: row.updatedAt, ...changes }),
     onSuccess: () => {
-      toast.success('Oyun ayarları kaydedildi — hemen yürürlükte');
+      toast.success(ux.oyunAyarlariKaydedildiHemen);
       void qc.invalidateQueries({ queryKey: gamesKeys.all });
     },
     onError: (e) => {
@@ -137,7 +139,7 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
   const reset = useMutation({
     mutationFn: () => resetGame(row.gameType),
     onSuccess: () => {
-      toast.success(`${row.defaults.title} varsayılan ayarlara döndü`);
+      toast.success(gx.resetDone(row.defaults.title));
       void qc.invalidateQueries({ queryKey: gamesKeys.all });
     },
   });
@@ -149,14 +151,14 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
     if (edit[k].trim() === '') continue;
     const n = Number(edit[k]);
     const lim = limits[k];
-    if (!Number.isInteger(n)) errors[k] = `${FIELD_LABELS[k]} tam sayı olmalı.`;
-    else if (n < lim.min || n > lim.max) errors[k] = `${FIELD_LABELS[k]} ${lim.min}–${lim.max.toLocaleString('tr-TR')} aralığında olmalı.`;
+    if (!Number.isInteger(n)) errors[k] = gx.mustBeInt(gx.fieldLabels[k] ?? k);
+    else if (n < lim.min || n > lim.max) errors[k] = gx.mustBeRange(gx.fieldLabels[k] ?? k, lim.min, lim.max.toLocaleString(locTag));
   }
   if (!errors.rewardThreshold && !errors.maxScore && numVal('rewardThreshold') > numVal('maxScore')) {
-    errors.rewardThreshold = 'Ödül eşiği maks. skoru aşamaz.';
+    errors.rewardThreshold = ux.odulEsigiMaksSkoru;
   }
-  if (edit.accent.trim() && !HEX.test(edit.accent.trim())) errors.accent = 'Renk #RRGGBB biçiminde olmalı (ör. #22d3ee).';
-  if (edit.emoji.trim() && [...edit.emoji.trim()].length > 8) errors.emoji = 'Emoji tek bir simge olmalı.';
+  if (edit.accent.trim() && !HEX.test(edit.accent.trim())) errors.accent = ux.renkRrggbbBicimindeOlmali;
+  if (edit.emoji.trim() && [...edit.emoji.trim()].length > 8) errors.emoji = ux.emojiTekBirSimge;
   const hasErrors = Object.keys(errors).length > 0;
 
   const nextPoints = numVal('rewardPoints');
@@ -169,11 +171,11 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
     if (!risky) return save.mutate();
     const monthlyDelta = (nextPoints - e.rewardPoints) * row.stats.rewarded30d;
     setRisk([
-      { label: 'Ödül puanı', value: `${fmt(e.rewardPoints)} → ${fmt(nextPoints)}`, emphasis: nextPoints !== e.rewardPoints },
-      { label: 'Ödül eşiği', value: `${fmt(e.rewardThreshold)} → ${fmt(nextThr)}`, emphasis: nextThr < e.rewardThreshold },
-      { label: 'Min. süre', value: `${fmt(e.minDurationSec)} sn → ${fmt(nextMin)} sn`, emphasis: nextMin < e.minDurationSec },
+      { label: ux.odulPuani, value: `${fmt(e.rewardPoints)} → ${fmt(nextPoints)}`, emphasis: nextPoints !== e.rewardPoints },
+      { label: ux.odulEsigi, value: `${fmt(e.rewardThreshold)} → ${fmt(nextThr)}`, emphasis: nextThr < e.rewardThreshold },
+      { label: ux.minSure, value: `${fmt(e.minDurationSec)} sn → ${fmt(nextMin)} sn`, emphasis: nextMin < e.minDurationSec },
       {
-        label: `Son 30 günün ${fmt(row.stats.rewarded30d)} ödüllü denemesine göre aylık puan farkı`,
+        label: gx.monthlyDelta(fmt(row.stats.rewarded30d)),
         value: `${monthlyDelta >= 0 ? '+' : ''}${fmt(monthlyDelta)} puan`,
         emphasis: true,
       },
@@ -189,11 +191,11 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
     <div className="space-y-4">
       {section === 'rules' && row.featured && (
         <p className={cn('rounded-control border px-3 py-2 text-xs', TONE_CALLOUT.warning)}>
-          Bu oyun haftanın ödüllü turnuvasında. Eşik ve maks. skor değişikliği haftanın sıralamasını etkiler; hafta içinde dikkatli değiştirin.
+          {ux.buOyunHaftaninOdullu}
         </p>
       )}
       <p className="text-xs text-fg-muted">
-        Boş alan varsayılanı kullanır. Yalnız değiştirdiğiniz alanlar kaydedilir; aç/kapat anahtarı ayrı ve anında çalışır.
+        {ux.bosAlanVarsayilaniKullanir}
       </p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -222,9 +224,9 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
 
       {section === 'rules' && (
         <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-          <Fact label="Sıralı deneme" value={`Günde ${overview.caps.attemptsPerDay}`} />
-          <Fact label="Deneme penceresi" value={`${Math.round(row.effective.maxDurationSec / 60)} dk`} />
-          <Fact label="Makullük tavanı" value={row.effective.maxScorePerSec == null ? 'Tanımsız' : `≤ ${row.effective.maxScorePerSec} skor/sn`} />
+          <Fact label={ux.siraliDeneme} value={gx.perDay(overview.caps.attemptsPerDay)} />
+          <Fact label={ux.denemePenceresi} value={`${Math.round(row.effective.maxDurationSec / 60)} dk`} />
+          <Fact label={ux.makullukTavani} value={row.effective.maxScorePerSec == null ? ux.tanimsiz : `≤ ${row.effective.maxScorePerSec} skor/sn`} />
         </dl>
       )}
 
@@ -242,7 +244,7 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
               <p className="font-semibold text-fg">{edit.title.trim() || row.defaults.title}</p>
               <p className="mt-0.5 text-sm text-fg-muted">{edit.description.trim() || row.defaults.description}</p>
               <p className="mt-2 text-xs font-medium" style={{ color: previewAccent }}>
-                +{nextPoints} puan · eşik {nextThr}
+                {gx.previewReward(nextPoints, nextThr)}
               </p>
             </div>
           </div>
@@ -255,27 +257,27 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <Button className="min-h-11 sm:min-h-10" disabled={!dirty || hasErrors || save.isPending} loading={save.isPending} onClick={trySave}>
           {!save.isPending && <Save className="h-4 w-4" aria-hidden />}
-          Kaydet
+          {uy.kaydet}
         </Button>
         <Button variant="ghost" className="min-h-11 sm:min-h-10" disabled={!dirty || save.isPending} onClick={() => setEdit(initial)}>
-          Değişiklikleri geri al
+          {ux.degisiklikleriGeriAl}
         </Button>
         {row.customizedFields.length > 0 && (
           <ConfirmAction
             trigger={
               <Button variant="outline" className="ml-auto min-h-11 sm:min-h-10" disabled={reset.isPending}>
-                <RotateCcw className="h-4 w-4" aria-hidden /> Varsayılana sıfırla
+                <RotateCcw className="h-4 w-4" aria-hidden /> {ux.varsayilanaSifirla}
               </Button>
             }
             tone="warning"
-            title={`${row.effective.title} varsayılana dönsün mü?`}
-            description="Tüm özelleştirmeler kaldırılır; açık/kapalı durumu korunur. İşlem denetim kaydına yazılır ve Geçmiş’ten geri alınabilir."
+            title={gx.resetTitle(row.effective.title)}
+            description={ux.tumOzellestirmelerKaldirilirAcik}
             impact={row.customizedFields.map((k) => ({
-              label: FIELD_LABELS[k],
+              label: gx.fieldLabels[k] ?? k,
               value: `${String(row.effective[k])} → ${String(row.defaults[k])}`,
             }))}
             irreversibleNote={false}
-            confirmLabel="Sıfırla"
+            confirmLabel={ux.sifirla}
             onConfirm={() => reset.mutateAsync()}
           />
         )}
@@ -285,15 +287,15 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
         open={!!risk}
         onOpenChange={(o) => !o && setRisk(null)}
         tone="warning"
-        title="Ekonomiyi etkileyen değişiklik"
-        description="Bu değişiklik oyunun bastığı puanı artırabilir ya da bot korumasını gevşetebilir. Etkisini kontrol edip onaylayın."
+        title={ux.ekonomiyiEtkileyenDegisiklik}
+        description={ux.buDegisiklikOyununBastigi}
         impact={
           risk
-            ? { items: risk, warning: `Oyun puanı kullanıcı başına yine günde ${fmt(overview.caps.daily)}, haftada ${fmt(overview.caps.weekly)} ile sınırlıdır.` }
+            ? { items: risk, warning: gx.capsWarning(fmt(overview.caps.daily), fmt(overview.caps.weekly)) }
             : undefined
         }
         irreversibleNote={false}
-        confirmLabel="Onayla ve kaydet"
+        confirmLabel={ux.onaylaVeKaydet}
         onConfirm={async () => {
           await save.mutateAsync();
           setRisk(null);
@@ -339,19 +341,21 @@ function Field({
   wide?: boolean;
   customized: boolean;
 }) {
+  const gx = useGamesCopy().fx;
+  const ux = useGamesCopy().ui;
   const sc = useGamesCopy().sheet;
   const id = useId();
   const hintId = `${id}-hint`;
   const errId = `${id}-err`;
   const range = min != null && max != null ? `${min.toLocaleString('tr-TR')}–${max.toLocaleString('tr-TR')}` : null;
-  const helper = [`Varsayılan: ${placeholder}`, range ? `Aralık: ${range}` : null, maxLength ? `${value.length}/${maxLength}` : null]
+  const helper = [gx.defaultIs(placeholder), range ? gx.rangeIs(range) : null, maxLength ? `${value.length}/${maxLength}` : null]
     .filter(Boolean)
     .join(' · ');
   return (
     <div className={cn('space-y-1', wide && 'sm:col-span-2')}>
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id} className="text-xs">
-          {FIELD_LABELS[field]}
+          {gx.fieldLabels[field] ?? field}
           {customized && <span className="ml-1.5 text-[10px] font-semibold uppercase text-brand">{sc.custom}</span>}
         </Label>
         {value.trim() !== '' && (
@@ -359,9 +363,9 @@ function Field({
             type="button"
             onClick={onClear}
             className="inline-flex min-h-8 items-center gap-1 rounded-control px-1.5 text-[11px] text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`${FIELD_LABELS[field]} alanını varsayılana döndür`}
+            aria-label={gx.resetField(gx.fieldLabels[field] ?? field)}
           >
-            <Undo2 className="h-3 w-3" aria-hidden /> Varsayılan
+            <Undo2 className="h-3 w-3" aria-hidden /> {ux.varsayilan}
           </button>
         )}
       </div>
@@ -380,7 +384,7 @@ function Field({
         className="h-11 sm:h-10"
       />
       <p id={hintId} className="text-[11px] text-fg-muted">
-        {helper} · Yansır: {FIELD_REACH[field]}
+        {helper} · {gx.reach} {gx.fieldReach[field]}
       </p>
       {error && (
         <p id={errId} className="text-[11px] text-danger">
@@ -392,18 +396,20 @@ function Field({
 }
 
 function ColorField({ value, onChange, placeholder, error }: { value: string; onChange: (v: string) => void; placeholder: string; error?: string }) {
+  const gx = useGamesCopy().fx;
+  const ux = useGamesCopy().ui;
   const id = useId();
   const errId = `${id}-err`;
   const valid = value.trim() === '' || HEX.test(value.trim());
   return (
     <div className="space-y-1">
       <Label htmlFor={id} className="text-xs">
-        {FIELD_LABELS.accent}
+        {gx.fieldLabels.accent}
       </Label>
       <div className="flex items-center gap-2">
         <input
           type="color"
-          aria-label="Renk seçici"
+          aria-label={ux.renkSecici}
           value={valid && value.trim() ? value.trim() : placeholder}
           onChange={(e) => onChange(e.target.value)}
           className="h-11 w-12 shrink-0 cursor-pointer rounded-control border border-border bg-transparent p-0.5 sm:h-10"
@@ -418,7 +424,7 @@ function ColorField({ value, onChange, placeholder, error }: { value: string; on
           className="h-11 font-mono sm:h-10"
         />
       </div>
-      <p className="text-[11px] text-fg-muted">Varsayılan: {placeholder} · Yansır: {FIELD_REACH.accent}</p>
+      <p className="text-[11px] text-fg-muted">{gx.defaultIs(placeholder)} · {gx.reach} {gx.fieldReach.accent}</p>
       {error && (
         <p id={errId} className="text-[11px] text-danger">
           {error}
@@ -431,6 +437,7 @@ function ColorField({ value, onChange, placeholder, error }: { value: string; on
 // ─────────────────────────── Metrikler ───────────────────────────
 
 function MetricsTab({ gameType, row }: { gameType: string; row: GameRow }) {
+  const ux = useGamesCopy().ui;
   const q = useQuery({ queryKey: gamesKeys.detail(gameType), queryFn: () => fetchDetail(gameType), staleTime: 60_000 });
   const t = row.stats.today;
   const m = row.stats.last30d;
@@ -439,13 +446,13 @@ function MetricsTab({ gameType, row }: { gameType: string; row: GameRow }) {
       <section aria-labelledby={`${gameType}-funnel`} className="space-y-2">
         <h3 id={`${gameType}-funnel`} className="text-sm font-semibold">Deneme hunisi</h3>
         <dl className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-          <Fact label="Bugün başlatılan" value={fmt(t.started)} />
-          <Fact label="30g başlatılan" value={fmt(m.started)} />
-          <Fact label="30g kazanılan" value={`${fmt(m.won)}${row.stats.winRate30d == null ? '' : ` (%${row.stats.winRate30d})`}`} />
-          <Fact label="30g ödüllenen" value={`${fmt(row.stats.rewarded30d)}${row.stats.rewardRate30d == null ? '' : ` (%${row.stats.rewardRate30d})`}`} />
+          <Fact label={ux.bugunBaslatilan} value={fmt(t.started)} />
+          <Fact label={ux.t30gBaslatilan} value={fmt(m.started)} />
+          <Fact label={ux.t30gKazanilan} value={`${fmt(m.won)}${row.stats.winRate30d == null ? '' : ` (%${row.stats.winRate30d})`}`} />
+          <Fact label={ux.t30gOdullenen} value={`${fmt(row.stats.rewarded30d)}${row.stats.rewardRate30d == null ? '' : ` (%${row.stats.rewardRate30d})`}`} />
           <Fact label="30g kaybedilen" value={fmt(m.lost)} />
-          <Fact label="Süren / terk" value={fmt(m.active)} />
-          <Fact label="30g basılan puan" value={fmt(row.stats.pointsAwarded30d)} />
+          <Fact label={ux.surenTerk} value={fmt(m.active)} />
+          <Fact label={ux.t30gBasilanPuan} value={fmt(row.stats.pointsAwarded30d)} />
           <Fact label="30g sinyal" value={fmt(row.stats.flagged30d)} />
         </dl>
       </section>
@@ -552,6 +559,7 @@ function HistogramBlock({ d }: { d: GameDetail }) {
 }
 
 function IntegrityBlock({ d }: { d: GameDetail }) {
+  const gx = useGamesCopy().fx;
   const c = useGamesCopy().sheet;
   const i = d.integrity;
   return (
@@ -571,7 +579,7 @@ function IntegrityBlock({ d }: { d: GameDetail }) {
           <ul className="flex flex-wrap gap-1.5">
             {i.byFlag.map((f) => (
               <li key={f.flag}>
-                <StatusBadge size="sm" tone="danger" label={`${INTEGRITY_FLAG_LABELS[f.flag] ?? f.flag}: ${fmt(f.count)}`} />
+                <StatusBadge size="sm" tone="danger" label={`${gx.integrityFlags[f.flag] ?? f.flag}: ${fmt(f.count)}`} />
               </li>
             ))}
           </ul>
@@ -591,7 +599,7 @@ function IntegrityBlock({ d }: { d: GameDetail }) {
                   <tr key={`${r.at}-${idx}`} className="border-t border-border">
                     <td className="py-1 tabular-nums">{fmtDateTime(r.at)}</td>
                     <td className="py-1">{r.user}</td>
-                    <td className="py-1">{r.flags.map((f) => INTEGRITY_FLAG_LABELS[f] ?? f).join(', ')}</td>
+                    <td className="py-1">{r.flags.map((f) => gx.integrityFlags[f] ?? f).join(', ')}</td>
                     <td className="py-1 text-right tabular-nums">
                       {fmt(r.clientScore)} → {fmt(r.verifiedScore)}
                     </td>
@@ -619,19 +627,21 @@ function revertBody(e: HistoryEntry): Record<string, unknown> | null {
   return Object.keys(body).length ? body : null;
 }
 
-function show(v: unknown): string {
-  if (v === null || v === undefined || v === '') return 'varsayılan';
-  if (typeof v === 'boolean') return v ? 'açık' : 'kapalı';
+function show(v: unknown, w: { showDefault: string; showOn: string; showOff: string }): string {
+  if (v === null || v === undefined || v === '') return w.showDefault;
+  if (typeof v === 'boolean') return v ? w.showOn : w.showOff;
   return String(v);
 }
 
 function HistoryTab({ gameType, row }: { gameType: string; row: GameRow }) {
+  const gx = useGamesCopy().fx;
+  const ux = useGamesCopy().ui;
   const qc = useQueryClient();
   const q = useQuery({ queryKey: gamesKeys.detail(gameType), queryFn: () => fetchDetail(gameType), staleTime: 60_000 });
   const revert = useMutation({
     mutationFn: (body: Record<string, unknown>) => patchGame({ gameType, expectedUpdatedAt: row.updatedAt, ...body }),
     onSuccess: () => {
-      toast.success('Önceki sürüme dönüldü');
+      toast.success(ux.oncekiSurumeDonuldu);
       void qc.invalidateQueries({ queryKey: gamesKeys.all });
     },
   });
@@ -640,7 +650,7 @@ function HistoryTab({ gameType, row }: { gameType: string; row: GameRow }) {
       query={q}
       skeleton="list"
       isEmpty={(d) => d.history.length === 0}
-      empty={{ title: 'Değişiklik kaydı yok', description: 'Bu oyunun ayarları hiç değiştirilmemiş.', icon: History }}
+      empty={{ title: ux.degisiklikKaydiYok, description: ux.buOyununAyarlariHic, icon: History }}
     >
       {(d) => (
         <ol className="space-y-3">
@@ -651,19 +661,19 @@ function HistoryTab({ gameType, row }: { gameType: string; row: GameRow }) {
             return (
               <li key={e.id} className="rounded-control border border-border p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">{HISTORY_ACTION_LABELS[e.action] ?? e.action}</p>
+                  <p className="font-medium">{gx.historyActions[e.action] ?? e.action}</p>
                   <p className="text-xs tabular-nums text-fg-muted">
                     {fmtDateTime(e.at)}
                     {e.actor ? ` · ${e.actor}` : ''}
                   </p>
                 </div>
-                {e.reason && <p className="mt-1 text-xs text-fg-muted">Gerekçe: {e.reason}</p>}
+                {e.reason && <p className="mt-1 text-xs text-fg-muted">{gx.reasonIs} {e.reason}</p>}
                 <ul className="mt-2 space-y-0.5 text-xs">
                   {keys.map((k) => (
                     <li key={k}>
-                      <span className="text-fg-muted">{FIELD_LABELS[k as OverrideField] ?? k}:</span>{' '}
+                      <span className="text-fg-muted">{gx.fieldLabels[k] ?? k}:</span>{' '}
                       <span className="tabular-nums">
-                        {e.oldData ? show(e.oldData[k]) : '—'} → {show(e.newData?.[k])}
+                        {e.oldData ? show(e.oldData[k], gx) : '—'} → {show(e.newData?.[k], gx)}
                       </span>
                     </li>
                   ))}
@@ -672,18 +682,18 @@ function HistoryTab({ gameType, row }: { gameType: string; row: GameRow }) {
                   <ConfirmAction
                     trigger={
                       <Button size="sm" variant="ghost" className="mt-2 min-h-11 sm:min-h-9" disabled={revert.isPending}>
-                        <Undo2 className="h-3.5 w-3.5" aria-hidden /> Bu değişikliği geri al
+                        <Undo2 className="h-3.5 w-3.5" aria-hidden /> {ux.buDegisikligiGeriAl}
                       </Button>
                     }
                     tone="warning"
-                    title="Önceki değerlere dönülsün mü?"
-                    description="Bu kayıttaki alanlar değişiklikten önceki değerlerine döner. Geri alma da denetim kaydına yazılır."
+                    title={ux.oncekiDegerlereDonulsunMu}
+                    description={ux.buKayittakiAlanlarDegisiklikten}
                     impact={Object.entries(body).map(([k, v]) => ({
-                      label: FIELD_LABELS[k as OverrideField] ?? k,
-                      value: `→ ${show(v)}`,
+                      label: gx.fieldLabels[k] ?? k,
+                      value: `→ ${show(v, gx)}`,
                     }))}
                     irreversibleNote={false}
-                    confirmLabel="Geri al"
+                    confirmLabel={ux.geriAl}
                     onConfirm={() => revert.mutateAsync(body)}
                   />
                 )}

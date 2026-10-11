@@ -24,10 +24,11 @@ import { DetailSheet, MetricGrid, MetricTile, StatusBadge, useDetailSheet } from
 import { PageHeader, PanelPage, SectionTabs } from '@/components/ds/page';
 import { EmptyState, QueryState, TONE_CALLOUT, type Tone } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { PORTFOLIO_LABELS, type GameRow, type GamesOverview, type PortfolioStatus } from '@/lib/admin-games/contract';
+import { type GameRow, type GamesOverview, type PortfolioStatus } from '@/lib/admin-games/contract';
 import { errorText, fetchOverview, fmt, gamesKeys, patchGame } from './api';
 import { useGamesCopy } from './copy';
 import { BulkDialog } from './bulk-dialog';
+import { useDsLocale } from '@/components/ds/a11y/copy';
 
 const GameSheetBody = dynamic(() => import('./game-sheet').then((m) => m.GameSheetBody), { ssr: false });
 const TournamentPanel = dynamic(() => import('./tournament-panel').then((m) => m.TournamentPanel), { ssr: false });
@@ -81,6 +82,10 @@ function matches(g: GameRow, f: Filter): boolean {
 }
 
 export function GamesControlRoom({ initial }: { initial: GamesOverview | null }) {
+  const gx = useGamesCopy().fx;
+  const locTag = useDsLocale() === 'en' ? 'en-US' : 'tr-TR';
+  const uy = useGamesCopy().ui2;
+  const ux = useGamesCopy().ui;
   const rc = useGamesCopy().room;
   const qc = useQueryClient();
   const overview = useQuery({
@@ -103,7 +108,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
   const toggle = useMutation({
     mutationFn: (v: { g: GameRow; enabled: boolean }) => patchGame({ gameType: v.g.gameType, enabled: v.enabled }),
     onSuccess: (_r, v) => {
-      toast.success(v.enabled ? `${v.g.effective.title} açıldı` : `${v.g.effective.title} kapatıldı — yeni ödüller derhal durdu`);
+      toast.success(gx.toggled(v.g.effective.title, v.enabled));
     },
     onError: (e) => toast.error(errorText(e)),
     onSettled: () => qc.invalidateQueries({ queryKey: gamesKeys.all }),
@@ -147,10 +152,10 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
       register="ops"
       header={
         <PageHeader
-          eyebrow="Oyunlaştırma · Ekonomi"
-          title="Oyun Kontrol Odası"
+          eyebrow={ux.oyunlastirmaEkonomi}
+          title={ux.oyunKontrolOdasi}
           icon={<Gamepad2 />}
-          description="Portföyü, oyun başına ödül/eşik/süreyi, haftalık turnuvayı ve bütünlük sinyallerini tek yerden yönetin. Ödül kararı her zaman sunucuda bu etkin değerlerle verilir."
+          description={ux.portfoyuOyunBasinaOdul}
           actions={
             <div className="flex flex-wrap gap-2">
               <Button
@@ -160,7 +165,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                 disabled={overview.isFetching}
               >
                 <RefreshCw className={cn('h-4 w-4', overview.isFetching && 'motion-safe:animate-spin')} aria-hidden />
-                Yenile
+                {uy.yenile}
               </Button>
               <Button
                 variant="destructive"
@@ -169,63 +174,61 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                 onClick={() => setBulk({ action: 'disable', gameTypes: games.filter((g) => g.effective.enabled).map((g) => g.gameType) })}
               >
                 <PauseCircle className="h-4 w-4" aria-hidden />
-                Tümünü durdur
+                {ux.tumunuDurdur}
               </Button>
             </div>
           }
         />
       }
     >
-      <QueryState query={overview} skeleton="table" isEmpty={(d) => d.games.length === 0} empty={{ title: 'Tanımlı oyun yok', description: 'Sunucu kayıt defterinde oyun bulunamadı.' }}>
+      <QueryState query={overview} skeleton="table" isEmpty={(d) => d.games.length === 0} empty={{ title: ux.tanimliOyunYok, description: ux.sunucuKayitDefterindeOyun }}>
         {(d) => (
           <div className="space-y-5">
             <MetricGrid cols={5}>
               <MetricTile
-                label="Oynanabilir oyun"
+                label={ux.oynanabilirOyun}
                 icon={<Gamepad2 />}
                 tone="brand"
                 metric={{ value: d.kpi.playable, unit: `/ ${d.kpi.total}` }}
-                hint="Açık ve portföyde görünür oyunlar"
+                hint={ux.acikVePortfoydeGorunur}
               />
-              <MetricTile label="Bugün başlatılan" icon={<Play />} metric={{ value: d.kpi.startedToday }} hint="İstanbul günü, tüm oyunlar" />
+              <MetricTile label={ux.bugunBaslatilan} icon={<Play />} metric={{ value: d.kpi.startedToday }} hint={ux.istanbulGunuTumOyunlar} />
               <MetricTile
-                label="30g basılan puan"
+                label={ux.t30gBasilanPuan}
                 icon={<Coins />}
                 tone="warning"
                 metric={{
                   value: d.kpi.points30d,
                   unit: 'puan',
-                  delta: pointsDelta == null ? null : { value: pointsDelta, kind: 'percent', goodDirection: 'neutral', label: 'önceki 30 güne göre' },
+                  delta: pointsDelta == null ? null : { value: pointsDelta, kind: 'percent', goodDirection: 'neutral', label: ux.onceki30GuneGore },
                 }}
               />
               <MetricTile
-                label="30g kazanma oranı"
+                label={ux.t30gKazanmaOrani}
                 icon={<Trophy />}
                 metric={{ value: d.kpi.winRate30d, format: 'percent', n: d.kpi.finished30d, minN: 30 }}
-                hint="Kazanılan / biten deneme"
+                hint={ux.kazanilanBitenDeneme}
               />
               <MetricTile
-                label="30g bütünlük sinyali"
+                label={ux.t30gButunlukSinyali}
                 icon={<ShieldAlert />}
                 tone={d.kpi.flagged30d > 0 ? 'danger' : 'neutral'}
                 metric={{ value: d.kpi.flagged30d }}
-                hint="Doğrulayıcının işaretlediği denemeler"
+                hint={ux.dogrulayicininIsaretledigiDenemeler}
               />
             </MetricGrid>
 
             <p className={cn('rounded-control border px-3 py-2 text-xs', TONE_CALLOUT.info)}>
-              Ekonomi kuralları: oyun başına günde {d.caps.attemptsPerDay} sıralı (ödüllü) deneme; oyun puanı kullanıcı başına günde{' '}
-              {fmt(d.caps.daily)}, haftada {fmt(d.caps.weekly)} ile sınırlı (lib/economy). Ödül puanı en fazla {fmt(d.limits.rewardPoints.max)}, min. süre
-              en az {d.limits.minDurationSec.min} sn olabilir.
+              {gx.economyRules(d.caps.attemptsPerDay, fmt(d.caps.daily), fmt(d.caps.weekly), fmt(d.limits.rewardPoints.max), d.limits.minDurationSec.min)}
             </p>
 
             <SectionTabs
               value={tab}
               onValueChange={(v) => setTab(v === 'tournament' ? 'tournament' : 'games')}
-              ariaLabel="Oyun kontrol odası bölümleri"
+              ariaLabel={ux.oyunKontrolOdasiBolumleri}
               tabs={[
-                { value: 'games', label: 'Oyunlar', icon: <Gamepad2 className="h-4 w-4" />, count: d.games.length },
-                { value: 'tournament', label: 'Turnuva', icon: <Swords className="h-4 w-4" /> },
+                { value: 'games', label: ux.oyunlar, icon: <Gamepad2 className="h-4 w-4" />, count: d.games.length },
+                { value: 'tournament', label: ux.turnuva, icon: <Swords className="h-4 w-4" /> },
               ]}
             >
               {(active) =>
@@ -239,19 +242,19 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                         <Input
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
-                          placeholder="Oyun ara (ad ya da anahtar)…"
-                          aria-label="Oyun ara"
+                          placeholder={ux.oyunAraAdYa}
+                          aria-label={ux.oyunAra}
                           className="h-11 pl-9 sm:h-10"
                         />
                       </div>
                       <label className="flex items-center gap-2 text-sm text-fg-muted">
-                        Sırala
+                        {ux.sirala}
                         <select
                           value={sort}
                           onChange={(e) => setSort(e.target.value as Sort)}
                           className="h-11 rounded-control border border-border bg-surface px-2 text-sm text-fg sm:h-10"
                         >
-                          {SORTS.map(([k, l]) => (
+                          {SORTS.map(([k, l0]) => [k, gx.sorts[k] ?? l0] as const).map(([k, l]) => (
                             <option key={k} value={k}>
                               {l}
                             </option>
@@ -259,8 +262,8 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                         </select>
                       </label>
                     </div>
-                    <div role="radiogroup" aria-label="Oyun süzgeci" className="flex flex-wrap gap-1.5">
-                      {FILTERS.map(([key, label]) => (
+                    <div role="radiogroup" aria-label={ux.oyunSuzgeci} className="flex flex-wrap gap-1.5">
+                      {FILTERS.map(([key, l0]) => [key, gx.filters[key] ?? l0] as const).map(([key, label]) => (
                         <Button
                           key={key}
                           size="sm"
@@ -279,18 +282,18 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                     {selected.size > 0 && (
                       <div
                         role="region"
-                        aria-label="Toplu işlem"
+                        aria-label={ux.topluIslem}
                         className="flex flex-wrap items-center gap-2 rounded-control border border-border bg-surface-muted px-3 py-2 text-sm"
                       >
-                        <span className="font-medium">{selected.size} oyun seçildi</span>
+                        <span className="font-medium">{gx.selectedN(selected.size)}</span>
                         <Button size="sm" variant="destructive" className="min-h-11 sm:min-h-9" onClick={() => setBulk({ action: 'disable', gameTypes: [...selected] })}>
-                          Seçilenleri kapat
+                          {ux.secilenleriKapat}
                         </Button>
                         <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setBulk({ action: 'enable', gameTypes: [...selected] })}>
-                          Seçilenleri aç
+                          {ux.secilenleriAc}
                         </Button>
                         <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => setSelected(new Set())}>
-                          Seçimi temizle
+                          {ux.secimiTemizle}
                         </Button>
                       </div>
                     )}
@@ -298,10 +301,10 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                     {visible.length === 0 ? (
                       <EmptyState
                         variant="no-results"
-                        title="Eşleşen oyun yok"
+                        title={ux.eslesenOyunYok}
                         secondaryAction={
                           <Button size="sm" variant="ghost" onClick={() => { setQuery(''); setFilter('all'); }}>
-                            Süzgeçleri temizle
+                            {ux.suzgecleriTemizle}
                           </Button>
                         }
                       />
@@ -315,7 +318,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                               <tr>
                                 <th scope="col" className="w-10 px-3 py-2">
                                   <Checkbox
-                                    aria-label="Görünen tüm oyunları seç"
+                                    aria-label={ux.gorunenTumOyunlariSec}
                                     checked={allVisibleSelected}
                                     onCheckedChange={(c) =>
                                       setSelected((prev) => {
@@ -351,7 +354,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                                 >
                                   <td className="px-3 py-2">
                                     <Checkbox
-                                      aria-label={`${g.effective.title} seç`}
+                                      aria-label={gx.selectGame(g.effective.title)}
                                       checked={selected.has(g.gameType)}
                                       onCheckedChange={(c) => toggleSel(g.gameType, c === true)}
                                     />
@@ -374,20 +377,20 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                                         <span className="block font-mono text-[11px] text-fg-muted">
                                           {g.gameType}
                                           {g.featured && ' · turnuva'}
-                                          {g.customizedFields.length > 0 && ` · ${g.customizedFields.length} özel alan`}
+                                          {g.customizedFields.length > 0 && gx.customFields(g.customizedFields.length)}
                                         </span>
                                       </span>
                                     </button>
                                   </td>
                                   <td className="px-3 py-2">
-                                    <StatusBadge size="sm" label={PORTFOLIO_LABELS[g.portfolio.status]} tone={PORTFOLIO_TONE[g.portfolio.status]} />
+                                    <StatusBadge size="sm" label={gx.portfolio[g.portfolio.status] ?? g.portfolio.status} tone={PORTFOLIO_TONE[g.portfolio.status]} />
                                   </td>
                                   <td className="px-3 py-2">
                                     <Switch
                                       checked={g.effective.enabled}
                                       disabled={toggle.isPending && toggle.variables?.g.gameType === g.gameType}
                                       onCheckedChange={(c) => toggle.mutate({ g, enabled: c })}
-                                      aria-label={`${g.effective.title} oyununu ${g.effective.enabled ? 'kapat' : 'aç'}`}
+                                      aria-label={gx.toggleGame(g.effective.title, g.effective.enabled)}
                                     />
                                   </td>
                                   <td className="px-3 py-2 text-right tabular-nums">
@@ -415,7 +418,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                               <div className="flex items-start gap-3">
                                 <Checkbox
                                   className="mt-3"
-                                  aria-label={`${g.effective.title} seç`}
+                                  aria-label={gx.selectGame(g.effective.title)}
                                   checked={selected.has(g.gameType)}
                                   onCheckedChange={(c) => toggleSel(g.gameType, c === true)}
                                 />
@@ -426,7 +429,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                                   <span className="min-w-0">
                                     <span className="block truncate font-medium">{g.effective.title}</span>
                                     <span className="block text-xs text-fg-muted">
-                                      {PORTFOLIO_LABELS[g.portfolio.status]} · {g.effective.rewardPoints} p · eşik {g.effective.rewardThreshold}/{g.effective.maxScore}
+                                      {gx.mobileLine(gx.portfolio[g.portfolio.status] ?? g.portfolio.status, g.effective.rewardPoints, g.effective.rewardThreshold, g.effective.maxScore)}
                                     </span>
                                   </span>
                                 </button>
@@ -435,14 +438,14 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                                   checked={g.effective.enabled}
                                   disabled={toggle.isPending && toggle.variables?.g.gameType === g.gameType}
                                   onCheckedChange={(c) => toggle.mutate({ g, enabled: c })}
-                                  aria-label={`${g.effective.title} oyununu ${g.effective.enabled ? 'kapat' : 'aç'}`}
+                                  aria-label={gx.toggleGame(g.effective.title, g.effective.enabled)}
                                 />
                               </div>
                               <dl className="mt-2 grid grid-cols-4 gap-1 text-center text-[11px] text-fg-muted">
                                 <MobileStat label="30g deneme" value={fmt(g.stats.last30d.started)} />
-                                <MobileStat label="Kazanma" value={g.stats.winRate30d == null ? '—' : `%${g.stats.winRate30d}`} />
+                                <MobileStat label={ux.kazanma} value={g.stats.winRate30d == null ? '—' : `%${g.stats.winRate30d}`} />
                                 <MobileStat label="30g puan" value={fmt(g.stats.pointsAwarded30d)} />
-                                <MobileStat label="Sinyal" value={fmt(g.stats.flagged30d)} danger={g.stats.flagged30d > 0} />
+                                <MobileStat label={ux.sinyal} value={fmt(g.stats.flagged30d)} danger={g.stats.flagged30d > 0} />
                               </dl>
                             </li>
                           ))}
@@ -451,7 +454,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                     )}
                     <p className="flex items-center gap-1.5 text-xs text-fg-muted">
                       <Activity className="h-3.5 w-3.5" aria-hidden />
-                      Veriler {new Date(d.generatedAt).toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' })} itibarıyla; kapatma yeni denemeleri ve süren denemelerin ödülünü anında durdurur.
+                      {gx.dataAsOf(new Date(d.generatedAt).toLocaleTimeString(locTag, { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }))}
                     </p>
                   </div>
                 )
@@ -465,8 +468,8 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
         paramKey="oyun"
         size="lg"
         history="push"
-        title={() => (sheetRow ? `${sheetRow.effective.emoji} ${sheetRow.effective.title}` : 'Oyun ayrıntısı')}
-        description="Ödül ve zorluk, görünüm, metrikler ve değişiklik geçmişi"
+        title={() => (sheetRow ? `${sheetRow.effective.emoji} ${sheetRow.effective.title}` : ux.oyunAyrintisi)}
+        description={ux.odulVeZorlukGorunum}
       >
         {(id) => <GameSheetBody gameType={id} row={games.find((g) => g.gameType === id) ?? null} overview={data ?? null} />}
       </DetailSheet>
