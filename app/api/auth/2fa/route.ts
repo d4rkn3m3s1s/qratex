@@ -5,7 +5,7 @@ import { parseJsonBody } from '@/lib/http/parse-body';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
-import { generateBase32Secret, verifyTOTP, buildOtpauthUri } from '@/lib/totp';
+import { generateBase32Secret, verifyTOTP, buildOtpauthUri, sealTotpSecret } from '@/lib/totp';
 import { regenerateRecoveryCodes, countUnusedRecoveryCodes } from '@/lib/two-factor';
 import { bumpSessionVersion, reissueSessionCookie } from '@/lib/auth/session-version';
 import { invalidateSessionState } from '@/lib/auth/session-state';
@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
       if (user.twoFactorEnabled) return NextResponse.json({ error: '2FA zaten aktif' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
 
       const secret = generateBase32Secret();
-      // Henüz etkin değil; verify ile onaylanınca enabled olur.
-      await prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: secret } });
+      // Henüz etkin değil; verify ile onaylanınca enabled olur. DB'ye mühürlü yazılır
+      // (veri modeli B14); kullanıcıya QR için yalnız bu yanıtta düz gösterilir.
+      await prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: sealTotpSecret(secret) } });
       return NextResponse.json(
         { success: true, secret, otpauthUri: buildOtpauthUri(user.email || '', secret) },
         { headers: PRIVATE_NO_STORE_HEADERS }

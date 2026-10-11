@@ -15,6 +15,46 @@ export function generateBase32Secret(length = 20): string {
     .join('');
 }
 
+// ─── Saklama şifrelemesi (veri modeli B14) ──────────────────────────────────────
+// `User.twoFactorSecret` düz metin saklanıyordu: bir DB dökümü/yedeği sızarsa saldırgan her
+// hesabın 2FA kodunu üretebilirdi. Artık kurulumda AES-256-GCM ile mühürlenir (`enc:totp:v1:`).
+// Anahtar: TOTP_SECRET_KEY, yoksa NEXTAUTH_SECRET/AUTH_SECRET'tan türetilir (webhook sırrıyla aynı
+// desen). Hiçbiri yoksa (yerel geliştirme) düz saklanır. Eski düz metin kayıtlar aynen okunur;
+// çözülemeyen kayıt doğrulamayı GEÇEMEZ (fail-closed; kullanıcı kurtarma koduyla girer).
+const SEAL_PREFIX = 'enc:totp:v1:';
+
+function sealKey(): Buffer | null {
+  const base = process.env.TOTP_SECRET_KEY || process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+  if (!base) return null;
+  return crypto.createHash('sha256').update(`totp-secret:v1:${base}`).digest();
+}
+
+/** Kurulumda DB'ye yazılacak değer (anahtar yoksa düz). */
+export function sealTotpSecret(plain: string): string {
+  const key = sealKey();
+  if (!key) return plain;
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(plain, 'utf8'), c.final()]);
+  return SEAL_PREFIX + Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64url');
+}
+
+/** DB değerinden düz sırrı çözer; eski düz kayıt aynen döner, çözülemeyen → null. */
+export function openTotpSecret(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  if (!stored.startsWith(SEAL_PREFIX)) return stored;
+  const key = sealKey();
+  if (!key) return null;
+  try {
+    const raw = Buffer.from(stored.slice(SEAL_PREFIX.length), 'base64url');
+    const d = crypto.createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+    d.setAuthTag(raw.subarray(12, 28));
+    return Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
 function hotp(secret: string, counter: number): string {
   const buf = Buffer.alloc(8);
   buf.writeUInt32BE(0, 0);
@@ -47,7 +87,9 @@ export function verifyTOTP(secret: string, token: string): boolean {
  * Tek kullanımlık doğrulama (aynı kodun pencere içinde ikinci kez kabul edilmemesi) için
  * çağıran bu adımı "kullanıldı" diye işaretler — bkz. lib/two-factor `verifyTwoFactorForLogin`.
  */
-export function verifyTOTPStep(secret: string, token: string): number | null {
+export function verifyTOTPStep(storedSecret: string, token: string): number | null {
+  // Çağıranlar DB değerini olduğu gibi geçirir (mühürlü ya da eski düz metin).
+  const secret = openTotpSecret(storedSecret);
   if (!secret || !token || !/^\d{6}$/.test(token)) return null;
   const base = Math.floor(Date.now() / 1000 / 30);
   let matched: number | null = null;
