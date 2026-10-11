@@ -39,6 +39,7 @@ import { NavApiError, errorText, fetchNavigation, navKeys, saveNavigation } from
 import { buildEditorNodes, flattenNodes, moveChild, moveInGroup, moveNode, moveToGroup, type EditorItem, type EditorNode } from './tree';
 import { NavPreview } from './preview';
 import { NavHistorySheet } from './history-sheet';
+import { useNavStudioCopy } from './copy';
 
 type Drafts = Record<StudioRole, RoleConfig>;
 const UNGROUPED = '__none__';
@@ -68,6 +69,7 @@ function toDrafts(state: NavStudioState): Drafts {
 }
 
 function Studio({ state, reload }: { state: NavStudioState; reload: () => Promise<NavStudioState | null> }) {
+  const nx = useNavStudioCopy();
   const qc = useQueryClient();
   const url = useUrlState();
   const [saved, setSaved] = useState<NavStudioState>(state);
@@ -182,7 +184,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
                 Son yayın: <time dateTime={saved.lastChange.at}>{fmt.format(new Date(saved.lastChange.at))}</time> · {saved.lastChange.actor}
               </span>
             ) : (
-              <span className="text-xs text-fg-muted">Henüz özelleştirme yayınlanmadı; kayıttaki varsayılan menü kullanılıyor.</span>
+              <span className="text-xs text-fg-muted">{nx.notPublished}</span>
             )
           }
           actions={
@@ -222,7 +224,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <label className="relative block sm:w-72">
-              <span className="sr-only">Öğe veya grup ara</span>
+              <span className="sr-only">{nx.searchSr}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
               <Input
                 type="search"
@@ -340,11 +342,11 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
       <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Yayınlanacak değişiklikler</DialogTitle>
-            <DialogDescription>Son yayınlanan sürüme göre fark. Yayınlayınca tüm kullanıcıların menüsü hemen güncellenir.</DialogDescription>
+            <DialogTitle>{nx.publishTitle}</DialogTitle>
+            <DialogDescription>{nx.publishDesc}</DialogDescription>
           </DialogHeader>
           {dirtyRoles.length === 0 ? (
-            <p className="text-sm text-fg-muted">Yayınlanmamış değişiklik yok.</p>
+            <p className="text-sm text-fg-muted">{nx.noUnpublished}</p>
           ) : (
             <div className="space-y-4">
               {dirtyRoles.map((r) => (
@@ -416,6 +418,7 @@ function GroupCard({
   matches: (r: NavRoute) => boolean;
   itemVisible: (it: EditorItem) => boolean;
 }) {
+  const nx = useNavStudioCopy();
   const def = groupsForRole(role).find((g) => g.id === node.groupId);
   const base = def?.label ?? { tr: node.groupId, en: node.groupId };
   const label = cfg.groupLabels[node.groupId] ?? {};
@@ -462,7 +465,7 @@ function GroupCard({
               />
             </label>
           </div>
-          <p className="text-xs text-fg-muted">Boş bırakılan dil varsayılan adı kullanır.</p>
+          <p className="text-xs text-fg-muted">{nx.emptyLangHint}</p>
         </div>
         <div className="flex items-center gap-1">
           {customized && (
@@ -489,7 +492,7 @@ function GroupCard({
         </div>
       </div>
       {node.items.length === 0 ? (
-        <p className="p-3 text-sm text-fg-muted">Bu grupta öğe yok; menüde görünmez. Bir öğeyi “Grup” seçiminden buraya taşıyın.</p>
+        <p className="p-3 text-sm text-fg-muted">{nx.emptyGroup}</p>
       ) : (
         <ol className="divide-y divide-border">
           {items.map(({ it, i }) => (
@@ -549,6 +552,7 @@ function ItemRow({
   matches: (r: NavRoute) => boolean;
   flat?: boolean;
 }) {
+  const nx = useNavStudioCopy();
   const r = item.route;
   const gid = effectiveGroup(r, cfg);
   const regrouped = (r.group ?? '') !== gid;
@@ -576,7 +580,7 @@ function ItemRow({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={UNGROUPED}>Üst düzey (grupsuz)</SelectItem>
+                  <SelectItem value={UNGROUPED}>{nx.ungrouped}</SelectItem>
                   {groups.map((g) => (
                     <SelectItem key={g.id} value={g.id}>
                       {groupName(g.id)}
@@ -637,6 +641,7 @@ function RouteLine({
   badge?: React.ReactNode;
   compact?: boolean;
 }) {
+  const nx = useNavStudioCopy();
   const Icon = navIcon(route.icon);
   const canHide = supportsVisibility(role) && !!route.menuKey;
   const hidden = canHide && cfg.hidden.includes(route.menuKey as string);
@@ -673,7 +678,7 @@ function RouteLine({
         {canHide && (
           <label className="flex min-h-11 items-center gap-2 text-xs text-fg-muted sm:min-h-9">
             <Eye className="h-4 w-4" aria-hidden />
-            <span className="sr-only sm:not-sr-only">Görünür</span>
+            <span className="sr-only sm:not-sr-only">{nx.visible}</span>
             <Switch checked={!hidden} onCheckedChange={toggle} aria-label={`${route.label.tr} menüde görünsün`} />
           </label>
         )}

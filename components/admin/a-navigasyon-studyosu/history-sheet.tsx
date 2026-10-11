@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { QueryState } from '@/components/states';
 import type { NavHistoryEntry } from '@/lib/admin-navigation/contract';
 import { fetchNavHistory, navKeys } from './api';
+import { useNavStudioCopy } from './copy';
 
 const fmt = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' });
 
@@ -24,6 +25,7 @@ export function NavHistorySheet({
   onOpenChange: (o: boolean) => void;
   onLoad: (entry: NavHistoryEntry) => void;
 }) {
+  const nx = useNavStudioCopy();
   const history = useInfiniteQuery({
     queryKey: navKeys.history,
     queryFn: ({ pageParam, signal }) => fetchNavHistory(pageParam, signal),
@@ -86,7 +88,7 @@ export function NavHistorySheet({
                         {e.changes.length > 8 && <li>… ve {e.changes.length - 8} değişiklik daha</li>}
                       </ul>
                     ) : (
-                      <p className="mt-2 text-xs text-fg-muted">Görünür bir fark yok (ör. varsayılanla aynı değer yeniden kaydedildi).</p>
+                      <p className="mt-2 text-xs text-fg-muted">{nx.noVisibleDiff}</p>
                     )}
                   </li>
                 ))}

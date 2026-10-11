@@ -8,6 +8,7 @@ import { navIcon } from '@/lib/navigation/icons';
 import { supportsVisibility, type RoleConfig, type StudioRole } from '@/lib/admin-navigation/contract';
 import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { useNavStudioCopy } from './copy';
 
 type Lang = 'tr' | 'en';
 
@@ -26,6 +27,7 @@ export function NavPreview({
   modulesOff: string[];
   highlightId: string | null;
 }) {
+  const nx = useNavStudioCopy();
   const [lang, setLang] = useState<Lang>('tr');
   const motion = useMotionPolicy();
   const shell = useMemo(
@@ -69,7 +71,7 @@ export function NavPreview({
       </header>
       <nav aria-label="Menü önizlemesi" tabIndex={0} className="max-h-[60vh] overflow-y-auto p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" lang={lang}>
         {shell.nodes.length === 0 ? (
-          <p className="p-3 text-sm text-fg-muted">Görünür öğe kalmadı. En az bir öğeyi görünür yapın.</p>
+          <p className="p-3 text-sm text-fg-muted">{nx.noVisibleItems}</p>
         ) : (
           <ul className="space-y-0.5">
             {shell.nodes.map((node) => (
