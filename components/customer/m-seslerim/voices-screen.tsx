@@ -195,9 +195,9 @@ export function VoicesScreen({ initial }: { initial: VoicesInitial }) {
         <SkeletonList rows={2} />
       )}
 
-      {/* Bekleyen aksiyonlar */}
-      {summaryQ.data ? (
-        <VoiceActionBand summary={summaryQ.data} pendingOffers={pendingOffers} onOpenOffer={openOfferSheet} onOpenVoice={openVoice} />
+      {/* Bekleyen aksiyonlar — özet düşse de bekleyen telafiler görünür (birincil aksiyon). */}
+      {summaryQ.data || pendingOffers.length > 0 ? (
+        <VoiceActionBand summary={summaryQ.data ?? null} pendingOffers={pendingOffers} onOpenOffer={openOfferSheet} onOpenVoice={openVoice} />
       ) : null}
 
       {/* Zaman çizelgesi */}

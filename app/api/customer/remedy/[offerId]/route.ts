@@ -38,8 +38,8 @@ export const GET = defineRoute(
     const offer = await prisma.remedyOffer.findUnique({
       where: { id: params.offerId },
       include: {
-        feedback: { select: { id: true, rating: true, text: true, createdAt: true } },
-        consumptionReview: { select: { id: true, rating: true, text: true, createdAt: true } },
+        feedback: { select: { id: true, rating: true, text: true, createdAt: true, deletedAt: true } },
+        consumptionReview: { select: { id: true, consumptionId: true, rating: true, text: true, createdAt: true, deletedAt: true } },
         dealer: { select: { id: true, name: true, businessName: true } },
       },
     });
@@ -52,7 +52,19 @@ export const GET = defineRoute(
       throw new ApiError('NOT_FOUND', 'Bu teklif henüz aktif değil.');
     }
 
+    // Kaynağı moderasyonla kaldırılmış bekleyen teklif kabul edilemez (acceptRemedyOffer);
+    // seçim formunu açıp onayda hata vermek yerine baştan açıklamalı 404.
+    const sourceRemoved = !!(offer.feedback?.deletedAt || offer.consumptionReview?.deletedAt);
+    if (offer.status === 'pending' && sourceRemoved && user.role !== 'ADMIN') {
+      throw new ApiError('NOT_FOUND', 'Bu telafinin bağlı olduğu yorum kaldırıldı.');
+    }
+
     const { options, selection, selectionLabel } = describeRemedyOffer(offer);
+    const strip = <T extends { deletedAt: Date | null }>(src: T | null) => {
+      if (!src || src.deletedAt) return null;
+      const { deletedAt: _deletedAt, ...rest } = src;
+      return rest;
+    };
     const base = {
       id: offer.id,
       message: offer.message,
@@ -60,8 +72,8 @@ export const GET = defineRoute(
       dealer: offer.dealer,
       feedbackId: offer.feedbackId,
       consumptionReviewId: offer.consumptionReviewId,
-      feedback: offer.feedback,
-      consumptionReview: offer.consumptionReview,
+      feedback: strip(offer.feedback),
+      consumptionReview: strip(offer.consumptionReview),
       createdAt: offer.createdAt,
     };
 

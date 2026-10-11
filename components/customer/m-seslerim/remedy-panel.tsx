@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, Clock, Gift, Ticket } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock, Gift, Ticket } from 'lucide-react';
 import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,8 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
 
   if (remedy.status === 'accepted') {
     const isPoints = remedy.selectionType === 'points';
+    // Kupon türü (indirim / ücretsiz ürün) Cüzdan → Kodlarım'da kasada gösterilir (m-cuzdan-oduller).
+    const isCoupon = remedy.selectionType === 'discount' || remedy.selectionType === 'free_item';
     return (
       <div className="relative overflow-hidden rounded-card border border-brand-border bg-brand-subtle/50 p-card">
         {/* Bilet çentikleri (dekoratif) */}
@@ -83,9 +86,20 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
         <p className="qx-small mt-0.5 text-fg-muted">{business.name}</p>
         <p className="qx-small mt-3 text-fg">
           {isPoints && remedy.creditedPoints != null
-            ? copy.remedyCredited(remedy.creditedPoints)
+            ? remedy.creditedPoints > 0
+              ? copy.remedyCredited(remedy.creditedPoints)
+              : copy.remedyNotCredited
             : copy.remedyDeliveredAtShop}
         </p>
+        {isCoupon ? (
+          <Link
+            href={`/customer/wallet/owned?pass=${encodeURIComponent(`remedy:${remedy.id}`)}`}
+            className="qx-small mt-2 inline-flex min-h-11 items-center gap-1 rounded-control font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copy.remedyOpenWallet}
+            <ChevronRight aria-hidden className="h-4 w-4" />
+          </Link>
+        ) : null}
         <div className="qx-caption mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-dashed border-brand-border pt-2 text-fg-muted">
           {remedy.acceptedAt ? <span>{copy.remedyAcceptedAt(formatDate(remedy.acceptedAt, locale))}</span> : null}
           {!isPoints ? <span className="qx-num font-mono">{copy.remedyRef(shortRef(remedy.id))}</span> : null}
@@ -165,7 +179,9 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
             </Button>
           </div>
         </form>
-      ) : null}
+      ) : (
+        <p className="qx-small mt-3 text-fg-muted">{copy.remedyNoOptions}</p>
+      )}
     </div>
   );
 }

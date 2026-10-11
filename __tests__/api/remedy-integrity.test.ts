@@ -246,6 +246,39 @@ describe('/api/customer/remedy/[offerId]', () => {
     const body = await res.json();
     expect(body.offer.options).toEqual([]);
   });
+
+  it('kaynağı moderasyonla kaldırılmış BEKLEYEN teklif → 404 (seçim formu çıkmazı yok)', async () => {
+    m.offerFindUnique.mockResolvedValue({
+      ...offer,
+      feedback: { id: 'fb1', rating: 1, text: 'sahte', createdAt: new Date(), deletedAt: new Date() },
+    });
+    const res = await customerRemedyGET(jsonReq('/api/customer/remedy/o1', 'GET'), ctx({ offerId: 'o1' }));
+    expect(res.status).toBe(404);
+  });
+
+  it('kabul edilmiş teklifte kaldırılmış kaynağın metni dönmez; canlı kaynak bağlamı (consumptionId) döner', async () => {
+    m.offerFindUnique.mockResolvedValue({
+      ...offer,
+      status: 'accepted',
+      selectedType: 'discount',
+      selectedValue: '20',
+      feedback: { id: 'fb1', rating: 1, text: 'sahte', createdAt: new Date(), deletedAt: new Date() },
+    });
+    let res = await customerRemedyGET(jsonReq('/api/customer/remedy/o1', 'GET'), ctx({ offerId: 'o1' }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).offer.feedback).toBeNull();
+
+    m.offerFindUnique.mockResolvedValue({
+      ...offer,
+      feedbackId: null,
+      consumptionReviewId: 'cr1',
+      consumptionReview: { id: 'cr1', consumptionId: 'c1', rating: 2, text: 'soğuktu', createdAt: new Date(), deletedAt: null },
+    });
+    res = await customerRemedyGET(jsonReq('/api/customer/remedy/o1', 'GET'), ctx({ offerId: 'o1' }));
+    const body = await res.json();
+    expect(body.offer.consumptionReview).toMatchObject({ consumptionId: 'c1', rating: 2, text: 'soğuktu' });
+    expect(body.offer.consumptionReview).not.toHaveProperty('deletedAt');
+  });
 });
 
 describe('churn müdahalesi kişisel teklif', () => {

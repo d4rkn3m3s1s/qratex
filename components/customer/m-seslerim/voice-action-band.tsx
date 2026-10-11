@@ -18,16 +18,18 @@ export function VoiceActionBand({
   onOpenOffer,
   onOpenVoice,
 }: {
-  summary: VoiceSummary;
+  /** Özet düşse bile bekleyen telafiler gösterilir (yalnız yorum-bekleyen kısmı özete bağlı). */
+  summary: VoiceSummary | null;
   pendingOffers: CustomerRemedyListItem[];
   onOpenOffer: (id: string) => void;
   onOpenVoice: (key: string) => void;
 }) {
   const copy = useVoicesCopy();
   const locale = useVoicesLocale();
-  const { pending } = summary;
-  const reward = pending.reward;
-  if (pendingOffers.length === 0 && pending.reviews === 0) return null;
+  const pending = summary?.pending ?? null;
+  const reward = pending?.reward ?? null;
+  const pendingReviews = pending?.reviews ?? 0;
+  if (pendingOffers.length === 0 && pendingReviews === 0) return null;
 
   return (
     <section aria-labelledby="voices-actions" className="space-y-3">
@@ -56,7 +58,7 @@ export function VoiceActionBand({
         </div>
       ) : null}
 
-      {pending.reviews > 0 ? (
+      {pending && pendingReviews > 0 ? (
         <div className="rounded-card border border-subtle bg-surface-1 p-card qx-elevation-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
@@ -71,7 +73,7 @@ export function VoiceActionBand({
               ) : null}
             </div>
             {pending.reviews > pending.reviewPreview.length ? (
-              <Link href="/customer/consumptions" className="qx-small inline-flex min-h-11 items-center gap-1 rounded-control px-2 font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Link href="/customer/wallet/activity" className="qx-small inline-flex min-h-11 items-center gap-1 rounded-control px-2 font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {copy.allConsumptions}
                 <ChevronRight aria-hidden className="h-4 w-4" />
               </Link>

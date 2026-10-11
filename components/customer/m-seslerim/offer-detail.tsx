@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ShieldAlert } from 'lucide-react';
 import { EmptyState, QueryState } from '@/components/states';
 import type { RemedyOption } from '@/lib/remedy-options';
+import { previewText, voiceKey } from '@/lib/customer-voices/core';
 import type { CustomerRemedyListItem, CustomerRemedyStatus } from '@/lib/customer-voices/types';
 import { useVoicesCopy } from './copy';
 import { fetchJson, fetchRemedies, VoicesApiError, voicesKeys } from './lib';
@@ -21,6 +22,8 @@ type SingleOffer = {
     selection?: { type: string } | null;
     selectionLabel?: string | null;
     dealer?: { id: string; name: string | null; businessName: string | null } | null;
+    feedback?: { id: string; rating: number; text: string | null } | null;
+    consumptionReview?: { consumptionId: string; rating: number; text: string | null } | null;
   };
 };
 
@@ -31,6 +34,13 @@ async function loadOffer(id: string, signal?: AbortSignal): Promise<CustomerReme
   if (hit) return hit;
   const one = await fetchJson<SingleOffer>(`/api/customer/remedy/${encodeURIComponent(id)}`, { signal });
   const o = one.offer;
+  // Kaynak bağlamı (listedeki gibi): sunucu kaldırılmış kaynağı zaten null döner. Eskiden
+  // burada hep `source: null` → yoruma bağlı eski teklif yanlışça "Sana özel teklif" görünüyordu.
+  const src = o.feedback
+    ? { key: voiceKey('qr', o.feedback.id), rating: o.feedback.rating, text: o.feedback.text }
+    : o.consumptionReview
+      ? { key: voiceKey('review', o.consumptionReview.consumptionId), rating: o.consumptionReview.rating, text: o.consumptionReview.text }
+      : null;
   return {
     id: o.id,
     status: (o.status === 'accepted' || o.status === 'expired' ? o.status : 'pending') as CustomerRemedyStatus,
@@ -42,8 +52,8 @@ async function loadOffer(id: string, signal?: AbortSignal): Promise<CustomerReme
     selectionLabel: o.selectionLabel ?? null,
     selectionType: o.selection?.type ?? null,
     creditedPoints: null,
-    voiceKey: null,
-    source: null,
+    voiceKey: src?.key ?? null,
+    source: src ? { rating: src.rating, textPreview: previewText(src.text, 120) } : null,
   };
 }
 

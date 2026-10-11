@@ -97,7 +97,7 @@ import {
   pickActiveRemedy,
   voiceKey,
 } from '@/lib/customer-voices/core';
-import { getVoiceDetail, getVoiceSummary, listVoices, VoiceNotFoundError } from '@/lib/customer-voices/server';
+import { customerRemedyWhere, getVoiceDetail, getVoiceSummary, listVoices, VoiceNotFoundError } from '@/lib/customer-voices/server';
 import { acceptRemedyOffer } from '@/lib/remedy-offer-service';
 
 const dealer = { id: 'd1', name: 'Ayşe', businessName: 'Kahve Durağı', businessLogo: null };
@@ -408,11 +408,24 @@ describe('telafi kabulü — puan teslimi', () => {
     expect(mockTimelineCreate.mock.calls[1][0].data.meta).toMatchObject({ creditedPoints: 100, requestedPoints: 100 });
   });
 
-  it('tavan kısarsa gerçek miktar yazılır', async () => {
+  it('tavan seçimi kısarsa kabul EDİLMEZ (tx geri alınır, teklif bekler; kalan telafi kaybolmaz)', async () => {
     mockMint.mockResolvedValue({ credited: 40, capped: true, status: 'posted' });
-    const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100 });
-    expect(r.creditedPoints).toBe(40);
-    expect(mockTimelineCreate.mock.calls[1][0].data.label).toBe('40 puan hesabınıza eklendi');
+    await expect(
+      acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100 })
+    ).rejects.toMatchObject({ code: 'REMEDY_POINTS_CAP', status: 409, message: expect.stringContaining('en fazla 40 puan') });
+    // Tavan tamamen doluysa da aynı: sessizce 0 puanla "kabul edildi" yok.
+    mockMint.mockResolvedValue({ credited: 0, capped: true, status: 'posted' });
+    await expect(
+      acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 50 })
+    ).rejects.toMatchObject({ code: 'REMEDY_POINTS_CAP' });
+    expect(mockTimelineCreate.mock.calls.map((c) => c[0].data.kind)).not.toContain('completed');
+    expect(mockNotificationCreate).not.toHaveBeenCalled();
+  });
+
+  it('gölge banlı hesap: tavan kısmadıysa void kredi başarı gibi yansır (ban sızdırılmaz)', async () => {
+    mockMint.mockResolvedValue({ credited: 50, capped: false, status: 'void' });
+    const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 50 });
+    expect(r.creditedPoints).toBe(50);
   });
 
   it('indirim türü puan basmaz; yarışta kaybeden kabul mint çağırmaz', async () => {
@@ -425,5 +438,38 @@ describe('telafi kabulü — puan teslimi', () => {
       acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: '50' })
     ).rejects.toMatchObject({ code: 'NOT_PENDING' });
     expect(mockMint).not.toHaveBeenCalled();
+  });
+});
+
+describe('müşteri telafi görünürlüğü', () => {
+  it('kaynağı moderasyonla kaldırılmış BEKLEYEN teklif listeden/sayaçtan düşer; geçmiş kayıtlar kalır', () => {
+    const w = customerRemedyWhere('u1');
+    expect(w.userId).toBe('u1');
+    expect(w.status).toEqual({ in: ['pending', 'accepted', 'expired'] });
+    expect(w.NOT).toEqual({
+      status: 'pending',
+      OR: [
+        { feedback: { is: { deletedAt: { not: null } } } },
+        { consumptionReview: { is: { deletedAt: { not: null } } } },
+      ],
+    });
+  });
+
+  it('özet sayacı aynı filtreyi kullanır', async () => {
+    mockFeedbackAggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { rating: null } });
+    mockReviewAggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { rating: null } });
+    mockFeedbackCount.mockResolvedValue(0);
+    mockReviewCount.mockResolvedValue(0);
+    mockQueryRaw.mockResolvedValue([]);
+    mockConsumptionCount.mockResolvedValue(0);
+    mockConsumptionFindMany.mockResolvedValue([]);
+    mockOfferCount.mockResolvedValue(0);
+    mockFeedbackGroupBy.mockResolvedValue([]);
+    mockReviewGroupBy.mockResolvedValue([]);
+    mockFeedbackFindMany.mockResolvedValue([]);
+    await getVoiceSummary('u1').catch(() => null);
+    expect(mockOfferCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({ userId: 'u1', status: 'pending', NOT: expect.objectContaining({ status: 'pending' }) }),
+    });
   });
 });

@@ -341,7 +341,7 @@ export async function getVoiceSummary(userId: string, now: Date = new Date()): P
       take: PENDING_PREVIEW,
       select: { id: true, createdAt: true, dealer: { select: dealerSelect }, product: { select: { name: true } } },
     }),
-    prisma.remedyOffer.count({ where: { userId, status: 'pending' } }),
+    prisma.remedyOffer.count({ where: { ...customerRemedyWhere(userId), status: 'pending' } }),
     prisma.$queryRaw<Array<{ dealerId: string; n: number; avg: number }>>`
       SELECT t."dealerId", COUNT(*)::int AS "n", AVG(t."rating")::float8 AS "avg"
       FROM (
@@ -662,9 +662,29 @@ export async function getVoiceDetail(userId: string, key: string): Promise<Voice
 
 export const REMEDY_LIST_LIMIT = 50;
 
+/**
+ * Müşteriye görünen telafiler. Kaynağı (yorum) moderasyonla kaldırılmış BEKLEYEN teklif
+ * hariç: kabulü sunucuda zaten reddedilir (`acceptRemedyOffer` → "yorum kaldırıldı"), listede
+ * kalırsa "seçimini bekliyor" bandında sonsuza dek duran, seçilemeyen bir çıkmaz olurdu.
+ * Kabul edilmiş/süresi dolmuş geçmiş kayıtlar kaynak kalksa da görünür kalır.
+ */
+export function customerRemedyWhere(userId: string): Prisma.RemedyOfferWhereInput {
+  return {
+    userId,
+    status: { in: VISIBLE },
+    NOT: {
+      status: 'pending',
+      OR: [
+        { feedback: { is: { deletedAt: { not: null } } } },
+        { consumptionReview: { is: { deletedAt: { not: null } } } },
+      ],
+    },
+  };
+}
+
 export async function listCustomerRemedies(userId: string): Promise<{ items: CustomerRemedyListItem[]; hasMore: boolean }> {
   const rows = await prisma.remedyOffer.findMany({
-    where: { userId, status: { in: VISIBLE } },
+    where: customerRemedyWhere(userId),
     // Açık teklifler önce (aksiyon), sonra en yeniler.
     orderBy: [{ createdAt: 'desc' }],
     take: REMEDY_LIST_LIMIT + 1,

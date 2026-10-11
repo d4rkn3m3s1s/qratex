@@ -50,7 +50,8 @@ export type RemedyErrorCode =
   | 'FORBIDDEN'
   | 'NOT_PENDING'
   | 'INVALID_SELECTION'
-  | 'DEALER_BUDGET_EXHAUSTED';
+  | 'DEALER_BUDGET_EXHAUSTED'
+  | 'REMEDY_POINTS_CAP';
 
 const ERROR_STATUS: Record<RemedyErrorCode, number> = {
   OPEN_OFFER_EXISTS: 409,
@@ -62,6 +63,7 @@ const ERROR_STATUS: Record<RemedyErrorCode, number> = {
   NOT_PENDING: 409,
   INVALID_SELECTION: 400,
   DEALER_BUDGET_EXHAUSTED: 409,
+  REMEDY_POINTS_CAP: 409,
 };
 
 export class RemedyOfferError extends Error {
@@ -404,17 +406,26 @@ export async function acceptRemedyOffer(
         capCategory: 'remedy',
         meta: { remedyOfferId: offerId },
       });
+      // Kullanıcının `remedy` tavanı seçimi kısarsa kabul EDİLMEZ (tx geri alınır, teklif
+      // `pending` kalır): eskiden 100 puan seçen müşteri 40 ya da 0 puanla "kabul edildi"
+      // olur, kalan telafi kalıcı olarak kaybolurdu. Bayi bütçesiyle aynı ilke — müşteri daha
+      // düşük miktar / başka tür seçebilir ya da tavan açılınca kabul edebilir. Gölge banlı
+      // hesapta da aynı karar (tavan banlıdan bağımsız hesaplanır → ban sızdırılmaz).
+      if (minted.capped && minted.credited < selection.value) {
+        throw new RemedyOfferError(
+          'REMEDY_POINTS_CAP',
+          minted.credited > 0
+            ? `Telafi puanı sınırına yaklaştın: şu an en fazla ${minted.credited} puan alabilirsin. Daha düşük bir miktar ya da başka bir telafi türü seç; ya da daha sonra tekrar dene.`
+            : 'Telafi puanı sınırın doldu. Başka bir telafi türü seçebilir ya da daha sonra tekrar deneyebilirsin.'
+        );
+      }
       // Gölge ban (`void`): mintPoints kullanıcıya başarı gösterecek miktarı döner — aynen yansıt.
       creditedPoints = minted.credited;
-      await appendRemedyTimelineEvent(
-        tx,
-        offerId,
-        'completed',
-        creditedPoints > 0
-          ? `${creditedPoints} puan hesabınıza eklendi`
-          : 'Puan eklenemedi (telafi puan sınırı doldu)',
-        { creditedPoints, requestedPoints: selection.value, capped: minted.capped }
-      );
+      await appendRemedyTimelineEvent(tx, offerId, 'completed', `${creditedPoints} puan hesabınıza eklendi`, {
+        creditedPoints,
+        requestedPoints: selection.value,
+        capped: minted.capped,
+      });
     }
 
     await tx.notification.create({
