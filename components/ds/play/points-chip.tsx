@@ -137,7 +137,7 @@ export const PointsChip = forwardRef<HTMLElement, PointsChipProps>(function Poin
         {formatInt(display, locale)}
       </span>
       {unitNode !== null && (
-        <span aria-hidden className="font-medium opacity-80">
+        <span aria-hidden className="font-medium">
           {unitNode}
         </span>
       )}

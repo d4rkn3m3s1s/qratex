@@ -183,7 +183,7 @@ export function CalendarTimeline({ data, onOpen, focusConflictId }: Props) {
   const conceptConflicts = data.conflicts.filter((c) => c.kind === 'concept' || c.kind === 'cross');
 
   return (
-    <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-subtle bg-surface-1" tabIndex={-1}>
+    <div role="region" aria-label="Kampanya zaman çizelgesi" className="overflow-x-auto overscroll-x-contain rounded-lg border border-subtle bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" tabIndex={0}>
       <div className="min-w-[56rem]">
         <div className="grid grid-cols-[6.5rem_minmax(0,1fr)]">
           <div className="border-r border-subtle" />

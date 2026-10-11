@@ -83,7 +83,7 @@ export function LiveStatus({ copy, locale }: { copy: TrustCopy['status']; locale
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-fg-subtle">{copy.note}</p>
+        <p className="text-xs text-fg-muted">{copy.note}</p>
         <Button type="button" variant="outline" onClick={() => void check()} disabled={state.kind === 'checking'}>
           <RefreshCw className={cn('h-4 w-4', state.kind === 'checking' && 'motion-safe:animate-spin')} aria-hidden />
           {copy.retry}

@@ -208,7 +208,8 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
         >
           <ul className="space-y-3">
             {m.streak.milestones.map((x, i) => (
-              <li key={streakUids[i] ?? i} role="group" aria-label={`${Number.isFinite(x.days) ? x.days : '?'}. gün kilometre taşı`} className="grid grid-cols-[1fr_1fr_auto] items-start gap-3">
+              <li key={streakUids[i] ?? i}>
+                <div role="group" aria-label={`${Number.isFinite(x.days) ? x.days : '?'}. gün kilometre taşı`} className="grid grid-cols-[1fr_1fr_auto] items-start gap-3">
                 <div onBlur={sortMilestones}>
                   <NumField label="Gün" min={L.streakDays.min} max={L.streakDays.max} value={x.days} onChange={(v) => setMilestone(i, { days: v })} description={duplicateDays.has(x.days) ? 'Bu gün iki kez tanımlı' : undefined} />
                 </div>
@@ -221,6 +222,7 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
                   disabled={m.streak.milestones.length <= L.streakMilestones.min}
                   onClick={() => removeMilestone(i)}
                 />
+                </div>
               </li>
             ))}
           </ul>
@@ -249,7 +251,8 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
                 const pct = totalWeight > 0 && Number.isFinite(x.weight) ? (x.weight / totalWeight) * 100 : 0;
                 const mismatch = labelMismatch(x.label, x.type, x.value);
                 return (
-                  <li key={x.id} role="group" aria-label={`Çark ödülü: ${x.label || 'adsız'}`} className="rounded-control border border-subtle p-3">
+                  <li key={x.id}>
+                  <div role="group" aria-label={`Çark ödülü: ${x.label || 'adsız'}`} className="rounded-control border border-subtle p-3">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-start">
                       <Field label="Etiket" error={x.label.trim() ? undefined : 'Etiket gerekli'} description={mismatch ?? undefined}>
                         {(a11y) => <Input {...a11y} value={x.label} maxLength={L.spinLabel.max} onChange={(e) => setPrize(i, { label: e.target.value })} />}
@@ -280,6 +283,7 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
                         disabled={m.spin.prizes.length <= L.spinPrizes.min}
                         onClick={() => set((p) => ({ ...p, spin: { ...p.spin, prizes: p.spin.prizes.filter((_, j) => j !== i) } }))}
                       />
+                    </div>
                     </div>
                   </li>
                 );

@@ -84,7 +84,7 @@ export function LeagueStrip({ league, showLeaderboardLink }: { league: HomeLeagu
       </div>
 
       {/* Basamaklar: bütün ligler, şu anki vurgulu (yatay kaydırılabilir). */}
-      <ol className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]" aria-label={copy.leagueTitle}>
+      <ol tabIndex={0} className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={copy.leagueTitle}>
         {league.ladder.map((step) => {
           const current = step.key === league.key;
           return (

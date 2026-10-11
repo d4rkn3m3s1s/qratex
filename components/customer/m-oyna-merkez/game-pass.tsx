@@ -60,7 +60,8 @@ export function GamePass({ locale, data }: { locale: PlayLocale; data: Settled<P
 
           <ol
             aria-labelledby="hub-pass"
-            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
+            tabIndex={0}
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {PASS_TIERS.map((t) => {
               const reached = data.data.progress.tier >= t.level;

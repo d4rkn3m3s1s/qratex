@@ -60,7 +60,8 @@ export function LeagueHero({
         {/* Sıra */}
         <div className="flex items-end gap-3 sm:flex-col sm:items-end sm:gap-1">
           {me.rank ? (
-            <p className="flex items-baseline gap-2" aria-label={copy.rankAria(me.rank, board.total)}>
+            <p className="flex items-baseline gap-2">
+              <span className="sr-only">{copy.rankAria(me.rank, board.total)}</span>
               <span aria-hidden className="qx-display font-display tabular-nums text-fg">
                 #{fmt(shownRank ?? me.rank)}
               </span>

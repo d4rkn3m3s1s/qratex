@@ -201,7 +201,7 @@ export const CountdownChip = forwardRef<HTMLSpanElement, CountdownChipProps>(fun
     >
       <Timer aria-hidden className={cn(s.icon, 'shrink-0')} />
       {prefix != null && (
-        <span aria-hidden className="font-medium opacity-90">
+        <span aria-hidden className="font-medium">
           {prefix}
         </span>
       )}

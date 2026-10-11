@@ -269,7 +269,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                           onClick={() => setFilter(key)}
                         >
                           {label}
-                          <span className="ml-1 tabular-nums opacity-80">{counts[key]}</span>
+                          <span className="ml-1 tabular-nums">{counts[key]}</span>
                         </Button>
                       ))}
                     </div>

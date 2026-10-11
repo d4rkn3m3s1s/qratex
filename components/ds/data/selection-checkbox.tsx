@@ -35,18 +35,23 @@ export const SelectionCheckbox = forwardRef<HTMLButtonElement, SelectionCheckbox
       }}
       onCheckedChange={(v) => onCheckedChange(v === true)}
       className={cn(
-        'peer relative grid h-[1.125rem] w-[1.125rem] shrink-0 cursor-pointer place-items-center rounded-[0.3125rem] border border-strong bg-surface-1 text-brand-fg',
-        "before:absolute before:-inset-[0.8125rem] before:content-['']",
-        'transition-colors duration-fast ease-standard',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1',
-        'data-[state=checked]:border-brand data-[state=checked]:bg-brand data-[state=indeterminate]:border-brand data-[state=indeterminate]:bg-brand',
+        // Kutu 24px (WCAG 2.5.8 hedef boyutu axe ölçümü sözde-öğeyi saymaz); görünür kare 18px iç
+        // span, negatif kenar boşluğu düzendeki 18px ayak izini korur, before: 44px dokunma alanı.
+        'peer group relative -m-[0.1875rem] grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-[0.4375rem] text-brand-fg',
+        "before:absolute before:-inset-[0.625rem] before:content-['']",
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
     >
-      <CheckboxPrimitive.Indicator className="grid place-items-center">
-        {checked === 'indeterminate' ? <Minus className="h-3.5 w-3.5" strokeWidth={3} aria-hidden /> : <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
-      </CheckboxPrimitive.Indicator>
+      <span
+        aria-hidden
+        className="grid h-[1.125rem] w-[1.125rem] place-items-center rounded-[0.3125rem] border border-strong bg-surface-1 transition-colors duration-fast ease-standard group-data-[state=checked]:border-brand group-data-[state=checked]:bg-brand group-data-[state=indeterminate]:border-brand group-data-[state=indeterminate]:bg-brand"
+      >
+        <CheckboxPrimitive.Indicator className="grid place-items-center">
+          {checked === 'indeterminate' ? <Minus className="h-3.5 w-3.5" strokeWidth={3} aria-hidden /> : <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
+        </CheckboxPrimitive.Indicator>
+      </span>
     </CheckboxPrimitive.Root>
   );
 });

@@ -58,7 +58,7 @@ export function NavPreview({
               aria-checked={lang === l}
               onClick={() => setLang(l)}
               className={cn(
-                'min-h-9 min-w-11 rounded-chip px-2 text-xs font-semibold uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'hit-area min-h-9 min-w-11 rounded-chip px-2 text-xs font-semibold uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 lang === l ? 'bg-brand text-brand-fg' : 'text-fg-muted hover:text-fg'
               )}
             >
@@ -67,7 +67,7 @@ export function NavPreview({
           ))}
         </div>
       </header>
-      <nav aria-label="Menü önizlemesi" className="max-h-[60vh] overflow-y-auto p-2" lang={lang}>
+      <nav aria-label="Menü önizlemesi" tabIndex={0} className="max-h-[60vh] overflow-y-auto p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" lang={lang}>
         {shell.nodes.length === 0 ? (
           <p className="p-3 text-sm text-fg-muted">Görünür öğe kalmadı. En az bir öğeyi görünür yapın.</p>
         ) : (

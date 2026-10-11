@@ -158,7 +158,7 @@ function JobsBody({ data }: { data: JobsView }) {
         )}
       </SectionCard>
       <NoteText>
-        Sistem sağlığının geri kalanı için <Link className="text-brand underline-offset-4 hover:underline" href="/admin/observability">Gözlemlenebilirlik</Link> sayfasına bakın.
+        Sistem sağlığının geri kalanı için <Link className="text-brand underline underline-offset-4" href="/admin/observability">Gözlemlenebilirlik</Link> sayfasına bakın.
       </NoteText>
     </div>
   );
