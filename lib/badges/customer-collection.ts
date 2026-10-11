@@ -21,6 +21,7 @@ import { BADGE_CATALOG } from '@/lib/badge-catalog';
 import { CHARACTER_PROFILES, getCategoryProgress } from '@/lib/character-badges';
 import { CATEGORY_BY_CHARACTER, CHARACTER_CATEGORIES } from '@/lib/character-categories';
 import { ACTIVITY_BADGE_THRESHOLDS } from '@/lib/activity-badges';
+import { activityBadgeRuleText } from '@/lib/activity-badge-rules';
 import {
   buildStats,
   computeNextSurprise,
@@ -130,7 +131,10 @@ export async function loadCustomerBadgeCollection(userId: string, now: Date = ne
     const catalog = CATALOG_BY_ID.get(o.badgeId);
     // Karakterde ad/ikon katalogdan (reveal ile aynı kaynak), kademe puandan (KADEME = PUAN).
     const name = (isCharacter ? catalog?.name : undefined) ?? o.badge?.name ?? catalog?.name ?? o.badgeId;
-    const description = (isCharacter ? catalog?.description : undefined) ?? o.badge?.description ?? catalog?.description ?? '';
+    // Davranışsal rozette açıklama, onu veren motorun GERÇEK eşiğinden (O3): DB'deki eski tohum
+    // metni farklı kural anlatıyordu (Fırtına "7 gün seri", Usta Yorumcu "50 yorum" …).
+    const description =
+      (isCharacter ? catalog?.description : activityBadgeRuleText(o.badgeId)) ?? o.badge?.description ?? catalog?.description ?? '';
     const icon = (isCharacter ? catalog?.icon : undefined) ?? o.badge?.icon ?? catalog?.icon ?? null;
     const rarity = isCharacter
       ? normalizeCollectionRarity(getCharacterTier(o.badgeId) ?? catalog?.rarity)

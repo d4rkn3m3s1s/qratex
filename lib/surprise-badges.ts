@@ -13,6 +13,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { awardBadge } from '@/lib/badges/award';
+import { ACTIVITY_BADGE_IDS } from '@/lib/activity-badge-rules';
 import { isUserChannelEnabled } from '@/lib/notify-prefs-server';
 import { Prisma } from '@prisma/client';
 
@@ -228,6 +229,10 @@ export async function awardEligibleSurpriseBadges(
     for (const badge of candidates) {
       if (ownedSet.has(badge.id)) continue;
       if (charIds.has(badge.id)) continue; // dizi karakteri → kendi akışı (character-badges)
+      // Davranışsal rozetin TEK sahibi lib/activity-badges (O3): eski tohum `requirement`'ı farklı
+      // bir kural anlatıyordu (örn. Fırtına "7 gün seri" ↔ motor "1 saatte 5+ yorum") ve iki motor
+      // aynı rozeti farklı koşulla verebiliyordu.
+      if (ACTIVITY_BADGE_IDS.has(badge.id)) continue;
       const req = (badge.requirement ?? {}) as { type?: string; value?: number };
       const type = typeof req.type === 'string' ? req.type : 'custom';
       const target = typeof req.value === 'number' ? req.value : 0;

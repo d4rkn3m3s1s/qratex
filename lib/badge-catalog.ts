@@ -3,6 +3,7 @@
  * Kategoriler: Komedi, Fantastik, Dram/Suç, Gizem/Gerilim, Tarih, Genel emoji, Gizemli
  * pointCost = puanla açılabilir (null = sadece requirement ile kazanılır).
  */
+import { activityBadgeRuleText } from './activity-badge-rules';
 
 const B = '/images/badges';
 
@@ -16,7 +17,7 @@ export interface BadgeCatalogEntry {
   rarity: string;
 }
 
-export const BADGE_CATALOG: BadgeCatalogEntry[] = [
+const RAW_BADGE_CATALOG: BadgeCatalogEntry[] = [
   // Genel / Geri bildirim
   { id: 'badge-yeni-ses', name: 'Yeni Ses', description: 'İlk geri bildiriminizi gönderdiniz!', category: 'feedback', pointCost: 200, icon: `${B}/YENİ SES.svg`, rarity: 'common' },
   { id: 'badge-usta-yorumcu', name: 'Usta Yorumcu', description: '50 geri bildirim gönderdiniz!', category: 'feedback', pointCost: 1500, icon: `${B}/USTA YORUMCU.svg`, rarity: 'epic' },
@@ -109,6 +110,17 @@ export const BADGE_CATALOG: BadgeCatalogEntry[] = [
   { id: 'badge-daenerys', name: 'Daenerys Targaryen', description: 'Keşfettiğin güzellikleri herkese gösteren ilham verici bir rehbersin!', category: 'special', pointCost: null, icon: `${B}/DAENERYS.svg`, rarity: 'legendary' },
   { id: 'badge-crowley', name: 'Crowley', description: 'Beklenmedik ironin ve oyunbaz zekanla yorumlarına ayrı bir tat katıyorsun!', category: 'special', pointCost: null, icon: `${B}/CROWLEY.svg`, rarity: 'legendary' },
 ];
+
+/**
+ * Davranışsal rozetlerin açıklaması onları veren motorun GERÇEK kuralından (lib/activity-badge-rules)
+ * — buradaki eski metinler farklı kural anlatıyordu (Fırtına "7 gün üst üste" ↔ motor "1 saatte 5+
+ * yorum", Usta Yorumcu "50" ↔ 20, Taht Sahibi "liderlik zirvesi" ↔ 100 yorum, Copy CV "profil" ↔
+ * tekrar eden yorum). Tohum, yönetici rozet düzenleyicisi ve koleksiyon aynı metni görür.
+ */
+export const BADGE_CATALOG: BadgeCatalogEntry[] = RAW_BADGE_CATALOG.map((b) => {
+  const rule = activityBadgeRuleText(b.id);
+  return rule ? { ...b, description: rule } : b;
+});
 
 export function getBadgePointCostById(badgeId: string): number | null {
   return BADGE_CATALOG.find((b) => b.id === badgeId)?.pointCost ?? null;

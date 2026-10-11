@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { awardBadge } from '@/lib/badges/award';
 import { EMOJI_BADGE_TEXTS } from '@/lib/emoji-badge-texts';
+import { ACTIVITY_BADGE_THRESHOLDS } from '@/lib/activity-badge-rules';
 
 /**
  * DAVRANIŞSAL (aktivite) ROZET ATAMA — metin analizi YOK, saf sayaç/zaman verisi.
@@ -100,26 +101,8 @@ async function repetitionRatio(userId: string): Promise<{ ratio: number; sample:
   return { ratio: duplicates / texts.length, sample: texts.length };
 }
 
-/** Eşikler — tek yerden ayarlanabilir. */
-export const ACTIVITY_BADGE_THRESHOLDS = {
-  ustaYorumcu: 20,
-  efsane: 50,
-  tahtSahibi: 100,
-  yorumMakinesiPerMonth: 12,     // aylık yorum sıklığı (yüksek frekans)
-  filozofAvgWords: 100,          // ortalama 100+ kelime
-  filozofMinSample: 3,           // en az 3 yorum olsun (tek uzun yorum yetmesin)
-  emojiRatio: 0.6,               // yorumların %60+'sında emoji
-  emojiMinSample: 5,
-  copyCvRatio: 0.5,              // yorumların %50+'si tekrar
-  copyCvMinSample: 4,
-  hayaletInactiveDays: 30,       // 1-2 yorum + 30 gün sessizlik
-  nostaljiGapDays: 60,           // 60 gün ara sonrası dönüş
-  firtinaBurstCount: 5,          // 1 saatte 5+ yorum
-  filizMemberDays: 30,           // <30 gün üyelik
-  filizMinReviews: 5,            // + hızlı katkı
-  konukOyuncuMinDays: 120,       // uzun üyelik
-  konukOyuncuMaxPerMonth: 1.5,   // seyrek ama düzenli
-} as const;
+/** Eşikler ve müşteriye anlatılan kural metni tek kaynakta (saf modül): lib/activity-badge-rules. */
+export { ACTIVITY_BADGE_THRESHOLDS };
 
 export type ActivityBadgeAwardResult = { badgeId: string; points: number }[];
 
