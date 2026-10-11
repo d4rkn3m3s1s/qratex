@@ -745,7 +745,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               role="dialog"
               aria-modal="true"
               aria-labelledby="sp-tut-title"
-              className="absolute inset-0 z-10 flex flex-col justify-center gap-3 overflow-y-auto bg-[#03080d]/95 p-5 text-white"
+              className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#03080d]/95 p-5 text-white"
             >
               <h3 id="sp-tut-title" className="text-center text-xl font-bold">
                 Nasıl oynanır?
@@ -797,7 +797,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               role="dialog"
               aria-modal="true"
               aria-labelledby="sp-sum-title"
-              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2.5 overflow-y-auto bg-[#03080d]/95 p-5 text-center text-white"
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#03080d]/95 p-5 text-center text-white"
             >
               <h3 id="sp-sum-title" className="text-xl font-bold">
                 {summary.reason === 'clear' ? 'Tüm hatlar bağlandı!' : summary.reason === 'time' ? 'Süre doldu' : 'Oyunu bitirdin'}

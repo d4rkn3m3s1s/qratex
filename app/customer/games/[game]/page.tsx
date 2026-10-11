@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { permanentRedirect, redirect } from 'next/navigation';
-import { Gamepad2 } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { GAMES_HUB_PATH, resolveGameRoute } from '@/lib/games/registry';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
@@ -103,7 +102,6 @@ export default async function GamePage({ params, searchParams }: PageProps) {
       {eff && !eff.enabled ? (
         <EmptyState
           variant="permission"
-          icon={Gamepad2}
           title="Bu oyun şu anda kapalı"
           description="Oyun yönetici tarafından geçici olarak kapatıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin."
           action={

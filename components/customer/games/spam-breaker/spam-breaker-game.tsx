@@ -460,7 +460,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             role="dialog"
             aria-modal="true"
             aria-labelledby="sb-tut-title"
-            className="absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto bg-[#0b1020]/92 p-5 text-white"
+            className="absolute inset-0 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#0b1020]/92 p-5 text-white"
           >
             <h3 id="sb-tut-title" className="text-center text-xl font-bold">
               Nasıl oynanır?
@@ -517,7 +517,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             role="dialog"
             aria-modal="true"
             aria-labelledby="sb-sum-title"
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 overflow-y-auto bg-[#0b1020]/92 p-5 text-center text-white"
+            className="absolute inset-0 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#0b1020]/92 p-5 text-center text-white"
           >
             <h3 id="sb-sum-title" className="text-xl font-bold">
               {summary.cause ? END_TEXT[summary.cause] : 'Oyun bitti'}

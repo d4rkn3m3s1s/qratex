@@ -678,7 +678,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               role="dialog"
               aria-modal="true"
               aria-labelledby="tm-tut-title"
-              className="absolute inset-0 z-10 flex flex-col justify-center gap-3 overflow-y-auto bg-[#1c1710]/95 p-5 text-white"
+              className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#1c1710]/95 p-5 text-white"
             >
               <h3 id="tm-tut-title" className="text-center text-xl font-bold">
                 Nasıl oynanır?
@@ -731,7 +731,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               role="dialog"
               aria-modal="true"
               aria-labelledby="tm-sum-title"
-              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2.5 overflow-y-auto bg-[#1c1710]/95 p-5 text-center text-white"
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#1c1710]/95 p-5 text-center text-white"
             >
               <h3 id="tm-sum-title" className="text-xl font-bold">
                 {summary.reason === 'bank' ? 'Oyunu bitirdin' : 'Hamle kalmadı'}

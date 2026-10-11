@@ -265,7 +265,7 @@ function Overlay({ labelledBy, children }: { labelledBy: string; children: React
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-[#140f24]/95 p-5 text-center text-white"
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#140f24]/95 p-5 text-center text-white"
     >
       {children}
     </div>

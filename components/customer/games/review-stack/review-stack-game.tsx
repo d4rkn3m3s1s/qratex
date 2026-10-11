@@ -526,7 +526,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               role="dialog"
               aria-modal="true"
               aria-labelledby="rs-tut-title"
-              className="absolute inset-0 flex flex-col justify-center gap-3 overflow-y-auto bg-[#0b1020]/95 p-4 text-white"
+              className="absolute inset-0 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#0b1020]/95 p-4 text-white"
             >
               <h3 id="rs-tut-title" className="text-center text-lg font-bold">
                 Nasıl oynanır?
@@ -579,7 +579,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               role="dialog"
               aria-modal="true"
               aria-labelledby="rs-sum-title"
-              className="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-y-auto bg-[#0b1020]/95 p-4 text-center text-white"
+              className="absolute inset-0 flex flex-col items-center justify-center [justify-content:safe_center] gap-2 overflow-y-auto bg-[#0b1020]/95 p-4 text-center text-white"
             >
               <h3 id="rs-sum-title" className="text-lg font-bold">
                 {summary.cause ? END_TEXT[summary.cause] : 'Oyun bitti'}

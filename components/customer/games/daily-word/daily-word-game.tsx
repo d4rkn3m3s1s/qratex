@@ -445,7 +445,7 @@ export function DailyWordGame({ mode, seed, config, paused, onPauseRequest, onFi
             role="dialog"
             aria-modal="true"
             aria-labelledby="dw-tut-title"
-            className="absolute inset-0 z-10 flex flex-col justify-center gap-3 overflow-y-auto rounded-3xl bg-[#0b1020]/95 p-4"
+            className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto rounded-3xl bg-[#0b1020]/95 p-4"
           >
             <h3 id="dw-tut-title" className="text-center text-lg font-bold">
               Nasıl oynanır?
