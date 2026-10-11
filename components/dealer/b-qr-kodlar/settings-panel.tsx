@@ -21,6 +21,7 @@ import {
 } from '@/lib/dealer/qr-codes/rules';
 import type { LocationDto, QrItemDto } from '@/lib/dealer/qr-codes/types';
 import { QrApiError, updateQr } from './api';
+import { useQrCopy } from './copy';
 
 const inputCls = 'min-h-11';
 const labelCls = 'qx-small font-medium text-fg';
@@ -79,6 +80,8 @@ export function SettingsPanel({
   onSaved: () => void;
 }) {
   const uid = useId();
+  const copy = useQrCopy();
+  const c = copy.settings;
   const initial = useMemo(() => draftFrom(item, links), [item, links]);
   const [draft, setDraft] = useState<Draft>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,7 +107,7 @@ export function SettingsPanel({
         if (!errs[k]) errs[k] = iss.message;
       }
       setErrors(errs);
-      setFormError('Kaydedilmedi: işaretli alanları düzeltin.');
+      setFormError(c.fixFields);
       return;
     }
     setSaving(true);
@@ -112,11 +115,11 @@ export function SettingsPanel({
     setFormError(null);
     try {
       await updateQr(item.id, parsed.data);
-      toast.success('Değişiklikler kaydedildi');
+      toast.success(c.saved);
       onSaved();
     } catch (err) {
       setErrors(fieldErrors(err));
-      setFormError(err instanceof Error ? err.message : 'Kaydedilemedi.');
+      setFormError(err instanceof Error ? err.message : c.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -131,7 +134,7 @@ export function SettingsPanel({
   const described = (k: string) => (errors[k] ? `${uid}-${k}-err` : undefined);
 
   if (readOnly) {
-    return <p className="qx-small rounded-md border border-border bg-surface-muted p-3 text-fg-muted">Arşivdeki kod düzenlenemez. “Geçmiş” sekmesinden arşivden geri alabilirsiniz.</p>;
+    return <p className="qx-small rounded-md border border-border bg-surface-muted p-3 text-fg-muted">{c.archivedReadOnly}</p>;
   }
 
   return (
@@ -139,15 +142,15 @@ export function SettingsPanel({
       {canToggle && (
         <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border p-3">
           <span>
-            <span className={cn(labelCls, 'block')}>Yayında</span>
-            <span className="qx-caption text-fg-muted">Kapalıyken kod okutulsa da form açılmaz; kota harcamaya devam eder.</span>
+            <span className={cn(labelCls, 'block')}>{c.live}</span>
+            <span className="qx-caption text-fg-muted">{c.liveHint}</span>
           </span>
-          <Switch checked={draft.isActive} onCheckedChange={(v) => set('isActive', v)} aria-label="Yayında" />
+          <Switch checked={draft.isActive} onCheckedChange={(v) => set('isActive', v)} aria-label={c.live} />
         </label>
       )}
       <div className="space-y-1">
         <label htmlFor={`${uid}-name`} className={labelCls}>
-          Ad <span aria-hidden className="text-danger">*</span>
+          {c.name} <span aria-hidden className="text-danger">*</span>
         </label>
         <Input
           id={`${uid}-name`}
@@ -163,7 +166,7 @@ export function SettingsPanel({
       </div>
       <div className="space-y-1">
         <label htmlFor={`${uid}-desc`} className={labelCls}>
-          Not
+          {c.note}
         </label>
         <Textarea
           id={`${uid}-desc`}
@@ -182,7 +185,7 @@ export function SettingsPanel({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <label htmlFor={`${uid}-loc`} className={labelCls}>
-            Şube
+            {c.location}
           </label>
           <select
             id={`${uid}-loc`}
@@ -192,13 +195,13 @@ export function SettingsPanel({
             onChange={(e) => set('locationId', e.target.value)}
             className="qx-small min-h-11 w-full rounded-md border border-border bg-surface-1 px-3 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
-            <option value="">Şubesiz (işletme geneli)</option>
+            <option value="">{copy.common.noLocation}</option>
             {locations
               .filter((l) => l.isActive || l.id === initial.locationId)
               .map((l) => (
                 <option key={l.id} value={l.id} disabled={!l.isActive}>
                   {l.name}
-                  {!l.isActive ? ' (arşiv)' : ''}
+                  {!l.isActive ? copy.common.archivedSuffix : ''}
                 </option>
               ))}
           </select>
@@ -206,7 +209,7 @@ export function SettingsPanel({
         </div>
         <div className="space-y-1">
           <label htmlFor={`${uid}-exp`} className={labelCls}>
-            Son kullanma
+            {c.expiry}
           </label>
           <div className="flex gap-2">
             <Input
@@ -221,29 +224,28 @@ export function SettingsPanel({
             />
             {draft.expiresOn && (
               <Button type="button" variant="ghost" className="min-h-11" onClick={() => set('expiresOn', '')}>
-                Kaldır
+                {c.remove}
               </Button>
             )}
           </div>
-          <p className="qx-caption text-fg-muted">Seçilen günün sonunda (İstanbul) kod durur.</p>
+          <p className="qx-caption text-fg-muted">{c.expiryHint}</p>
           {err('expiresOn')}
         </div>
       </div>
 
       <fieldset className="space-y-3 rounded-lg border border-border p-3">
-        <legend className={cn(labelCls, 'px-1')}>Karşılama bağlantıları</legend>
+        <legend className={cn(labelCls, 'px-1')}>{c.links}</legend>
         <p className="qx-caption text-fg-muted">
-          Aynı kodun farklı yerlerde (ör. “paket”, “instagram”) özel karşılama metniyle kullanılması için. Her bağlantı “Yazdır” sekmesinde ayrı basılabilir; taramalar
-          bağlantıya göre ayrışır.
+          {c.linksHint}
         </p>
         {draft.links.map((l, i) => {
-          const keyErr = l.key && !LINK_KEY_RE.test(l.key) ? 'Anahtar 2-32 karakter: küçük harf, rakam, - ve _' : null;
+          const keyErr = l.key && !LINK_KEY_RE.test(l.key) ? c.keyError : null;
           return (
             <div key={i} className="space-y-2 rounded-md bg-surface-muted p-3">
               <div className="flex items-end gap-2">
                 <div className="min-w-0 flex-1 space-y-1">
                   <label htmlFor={`${uid}-lk-${i}`} className="qx-caption text-fg-muted">
-                    Anahtar
+                    {c.key}
                   </label>
                   <Input
                     id={`${uid}-lk-${i}`}
@@ -252,14 +254,14 @@ export function SettingsPanel({
                     aria-invalid={!!keyErr}
                     onChange={(e) => setLink(i, { key: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
                     className={cn(inputCls, 'font-mono')}
-                    placeholder="paket"
+                    placeholder={c.keyPlaceholder}
                   />
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
                   className="min-h-11 min-w-11"
-                  aria-label={`${l.key || 'Bağlantı'} bağlantısını kaldır`}
+                  aria-label={c.removeLink(l.key)}
                   onClick={() => setDraft((d) => ({ ...d, links: d.links.filter((_, j) => j !== i) }))}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden />
@@ -268,7 +270,7 @@ export function SettingsPanel({
               {keyErr && <p className="qx-caption text-danger">{keyErr}</p>}
               <div className="space-y-1">
                 <label htmlFor={`${uid}-lt-${i}`} className="qx-caption text-fg-muted">
-                  Karşılama metni
+                  {c.welcomeText}
                 </label>
                 <Textarea
                   id={`${uid}-lt-${i}`}
@@ -276,7 +278,7 @@ export function SettingsPanel({
                   maxLength={QR_WELCOME_MAX}
                   rows={2}
                   onChange={(e) => setLink(i, { welcomeText: e.target.value })}
-                  placeholder="Paket siparişiniz nasıldı?"
+                  placeholder={c.welcomePlaceholder}
                 />
               </div>
             </div>
@@ -291,7 +293,7 @@ export function SettingsPanel({
           disabled={draft.links.length >= QR_LINKS_MAX}
           onClick={() => setDraft((d) => ({ ...d, links: [...d.links, { key: '', welcomeText: '' }] }))}
         >
-          <Plus className="mr-2 h-4 w-4" aria-hidden /> Bağlantı ekle ({draft.links.length}/{QR_LINKS_MAX})
+          <Plus className="mr-2 h-4 w-4" aria-hidden /> {c.addLink(draft.links.length, QR_LINKS_MAX)}
         </Button>
       </fieldset>
 
@@ -302,10 +304,10 @@ export function SettingsPanel({
       )}
       <div className="sticky bottom-0 flex justify-end gap-2 border-t border-border bg-surface-1 py-3">
         <Button type="button" variant="ghost" className="min-h-11" disabled={!patch || saving} onClick={() => { setDraft(initial); setErrors({}); setFormError(null); }}>
-          Vazgeç
+          {copy.common.cancel}
         </Button>
         <Button type="submit" className="min-h-11" disabled={!patch || saving} aria-busy={saving}>
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          {saving ? copy.common.saving : copy.common.save}
         </Button>
       </div>
     </form>

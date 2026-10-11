@@ -1,5 +1,6 @@
 import type { Tone } from '@/components/states';
 import type { PrintTemplate, QrSort, QrStatus, QrStatusFilter } from '@/lib/dealer/qr-codes/rules';
+import type { QrCopy } from './copy';
 
 export const STATUS_LABEL: Record<QrStatus, string> = {
   active: 'Aktif',
@@ -63,15 +64,15 @@ export function fmtDayShort(day: string): string {
 }
 
 /** "312 tarama · 41 yorum · %13" */
-export function statsLine(scans: number, feedbacks: number, conversion: number | null): string {
-  const parts = [`${fmtInt(scans)} tarama`, `${fmtInt(feedbacks)} yorum`];
-  if (conversion != null) parts.push(`${fmtPct(conversion)} dönüşüm`);
+export function statsLine(scans: number, feedbacks: number, conversion: number | null, t?: QrCopy['stats']): string {
+  const parts = t ? [t.scans(fmtInt(scans)), t.feedbacks(fmtInt(feedbacks))] : [`${fmtInt(scans)} tarama`, `${fmtInt(feedbacks)} yorum`];
+  if (conversion != null) parts.push(t ? t.conversion(fmtPct(conversion)) : `${fmtPct(conversion)} dönüşüm`);
   return parts.join(' · ');
 }
 
-export function errorText(e: unknown): string {
+export function errorText(e: unknown, fallback = 'İşlem tamamlanamadı.'): string {
   if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
     return (e as { message: string }).message;
   }
-  return 'İşlem tamamlanamadı.';
+  return fallback;
 }

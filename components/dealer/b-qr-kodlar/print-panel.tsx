@@ -20,13 +20,16 @@ import {
 } from '@/lib/dealer/qr-codes/rules';
 import type { QrItemDto } from '@/lib/dealer/qr-codes/types';
 import { downloadPng, downloadPrint, printUrl, type PrintParams } from './api';
-import { TEMPLATE_META, errorText } from './format';
+import { errorText } from './format';
+import { useQrCopy } from './copy';
 import { copyText } from './clipboard';
 
 const fieldCls = 'qx-small font-medium text-fg';
 
 export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }) {
   const uid = useId();
+  const copy = useQrCopy();
+  const c = copy.print;
   const [template, setTemplate] = useState<PrintTemplate>('card');
   const [fg, setFg] = useState('#111111');
   const [bg, setBg] = useState('#FFFFFF');
@@ -60,9 +63,9 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
     try {
       if (kind === 'png') await downloadPng(params, `${base}.png`);
       else await downloadPrint({ ...params, format: kind }, `${base}.${kind}`);
-      toast.success(kind === 'pdf' ? 'PDF indirildi — %100 ölçekte yazdırın' : 'Dosya indirildi');
+      toast.success(kind === 'pdf' ? c.pdfDone : c.fileDone);
     } catch (e) {
-      toast.error(errorText(e));
+      toast.error(errorText(e, copy.common.actionFailed));
     } finally {
       setBusy(null);
     }
@@ -77,31 +80,31 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
             <img
               key={debounced}
               src={debounced}
-              alt={`${item.name} — ${TEMPLATE_META[template].label} önizlemesi`}
+              alt={c.previewAlt(item.name, copy.template[template].label)}
               onLoad={() => setLoaded(true)}
               className={cn('max-h-full max-w-full object-contain shadow-sm transition-opacity duration-base motion-reduce:transition-none', loaded ? 'opacity-100' : 'opacity-0')}
             />
           ) : (
-            <p className="qx-small max-w-[16rem] text-center text-fg-muted">Renkler okunabilir olmadığı için önizleme gösterilmiyor.</p>
+            <p className="qx-small max-w-[16rem] text-center text-fg-muted">{c.unreadable}</p>
           )}
-          {debounced && !loaded && <span className="qx-caption absolute inset-x-0 bottom-2 text-center text-fg-muted">Hazırlanıyor…</span>}
+          {debounced && !loaded && <span className="qx-caption absolute inset-x-0 bottom-2 text-center text-fg-muted">{copy.common.preparing}</span>}
         </div>
-        <p className="qx-caption text-fg-muted">{TEMPLATE_META[template].hint}. Önizleme, indirilen dosyanın aynısıdır.</p>
+        <p className="qx-caption text-fg-muted">{c.sameAsFile(copy.template[template].hint)}</p>
       </div>
 
       <div className="space-y-5">
         <fieldset className="space-y-2">
-          <legend className={fieldCls}>Şablon</legend>
+          <legend className={fieldCls}>{c.template}</legend>
           <ChoiceChips
-            aria-label="Şablon"
-            options={PRINT_TEMPLATES.map((t) => ({ value: t, label: TEMPLATE_META[t].label }))}
+            aria-label={c.template}
+            options={PRINT_TEMPLATES.map((t) => ({ value: t, label: copy.template[t].label }))}
             value={template}
             onChange={(next) => next && setTemplate(next as PrintTemplate)}
           />
         </fieldset>
 
         <fieldset className="space-y-2">
-          <legend className={fieldCls}>Renk</legend>
+          <legend className={fieldCls}>{c.color}</legend>
           <div className="flex flex-wrap gap-2">
             {PRINT_PRESETS.map((p) => {
               const active = p.fg === fg.toUpperCase() && p.bg === bg.toUpperCase();
@@ -131,27 +134,27 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label htmlFor={`${uid}-fg`} className="qx-caption text-fg-muted">
-                QR rengi
+                {c.qrColor}
               </label>
               <input id={`${uid}-fg`} type="color" value={fg} onChange={(e) => setFg(e.target.value.toUpperCase())} className="h-11 w-full cursor-pointer rounded-md border border-border bg-surface-1" />
             </div>
             <div className="space-y-1">
               <label htmlFor={`${uid}-bg`} className="qx-caption text-fg-muted">
-                Zemin rengi
+                {c.bgColor}
               </label>
               <input id={`${uid}-bg`} type="color" value={bg} onChange={(e) => setBg(e.target.value.toUpperCase())} className="h-11 w-full cursor-pointer rounded-md border border-border bg-surface-1" />
             </div>
           </div>
           {verdict.ok ? (
             <p className="qx-caption flex items-center gap-1 text-success">
-              <Check className="h-3.5 w-3.5" aria-hidden /> Kontrast {verdict.ratio.toFixed(1).replace('.', ',')}:1 — okunur
+              <Check className="h-3.5 w-3.5" aria-hidden /> {c.contrastOk(verdict.ratio.toFixed(1).replace('.', c.decimalSep))}
             </p>
           ) : (
             <p role="alert" className="qx-caption flex items-start gap-1 text-danger">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {verdict.reason === 'inverted'
-                ? 'QR koyu, zemin açık renk olmalı. Ters renkleri birçok telefon okuyamaz.'
-                : `Kontrast ${verdict.ratio.toFixed(1).replace('.', ',')}:1 — en az 4,5:1 olmalı.`}
+                ? c.inverted
+                : c.contrastLow(verdict.ratio.toFixed(1).replace('.', c.decimalSep))}
             </p>
           )}
         </fieldset>
@@ -159,11 +162,11 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
         {template !== 'plain' && (
           <div className="space-y-1">
             <label htmlFor={`${uid}-cta`} className={fieldCls}>
-              Çağrı metni
+              {c.cta}
             </label>
             <Input id={`${uid}-cta`} value={cta} maxLength={QR_CTA_MAX} placeholder={DEFAULT_CTA} onChange={(e) => setCta(e.target.value)} className="min-h-11" />
             <p className="qx-caption text-fg-muted">
-              {cta.length}/{QR_CTA_MAX} · Boş bırakırsanız “{DEFAULT_CTA}” yazılır.
+              {c.ctaHint(cta.length, QR_CTA_MAX, DEFAULT_CTA)}
             </p>
           </div>
         )}
@@ -171,7 +174,7 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
         {links.length > 0 && (
           <div className="space-y-1">
             <label htmlFor={`${uid}-link`} className={fieldCls}>
-              Karşılama bağlantısı
+              {c.welcomeLink}
             </label>
             <select
               id={`${uid}-link`}
@@ -179,42 +182,42 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
               onChange={(e) => setLink(e.target.value)}
               className="qx-small min-h-11 w-full rounded-md border border-border bg-surface-1 px-3 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             >
-              <option value="">Varsayılan karşılama</option>
+              <option value="">{c.defaultWelcome}</option>
               {links.map((l) => (
                 <option key={l.key} value={l.key}>
                   {l.key}
                 </option>
               ))}
             </select>
-            <p className="qx-caption text-fg-muted">Bu kartı okutan müşteri, bağlantının karşılama metnini görür; taramalar bağlantıya göre ayrışır.</p>
+            <p className="qx-caption text-fg-muted">{c.welcomeHint}</p>
           </div>
         )}
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => run('pdf')} disabled={!verdict.ok || busy !== null} aria-busy={busy === 'pdf'} className="min-h-11">
             <FileText className="mr-2 h-4 w-4" aria-hidden />
-            {busy === 'pdf' ? 'Hazırlanıyor…' : 'PDF indir (baskı)'}
+            {busy === 'pdf' ? copy.common.preparing : c.pdf}
           </Button>
           <Button type="button" variant="outline" onClick={() => run('svg')} disabled={!verdict.ok || busy !== null} aria-busy={busy === 'svg'} className="min-h-11">
             <Download className="mr-2 h-4 w-4" aria-hidden />
-            {busy === 'svg' ? 'Hazırlanıyor…' : 'SVG'}
+            {busy === 'svg' ? copy.common.preparing : 'SVG'}
           </Button>
           <Button type="button" variant="outline" onClick={() => run('png')} disabled={!verdict.ok || busy !== null} aria-busy={busy === 'png'} className="min-h-11">
             <FileImage className="mr-2 h-4 w-4" aria-hidden />
-            {busy === 'png' ? 'Hazırlanıyor…' : 'PNG'}
+            {busy === 'png' ? copy.common.preparing : 'PNG'}
           </Button>
         </div>
 
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <p className={fieldCls}>Bağlantı</p>
+          <p className={fieldCls}>{c.link}</p>
           <p className="qx-caption break-all font-mono text-fg-muted">{target}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => copyText(target, 'Bağlantı kopyalandı')}>
-              <Copy className="mr-2 h-4 w-4" aria-hidden /> Kopyala
+            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => copyText(target, copy.common.linkCopied, copy.common.clipboardFailed)}>
+              <Copy className="mr-2 h-4 w-4" aria-hidden /> {c.copy}
             </Button>
             <Button type="button" variant="ghost" size="sm" className="min-h-11" asChild>
               <a href={target} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" aria-hidden /> Formu aç
+                <ExternalLink className="mr-2 h-4 w-4" aria-hidden /> {c.openForm}
               </a>
             </Button>
           </div>
@@ -222,14 +225,14 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
 
         <details className="group rounded-lg border border-border p-3">
           <summary className="qx-small flex min-h-11 cursor-pointer list-none items-center gap-2 font-medium text-fg">
-            <Link2 className="h-4 w-4 text-fg-muted" aria-hidden /> Kampanya bağlantısı (UTM)
+            <Link2 className="h-4 w-4 text-fg-muted" aria-hidden /> {c.utm}
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="qx-caption text-fg-muted">Instagram, e-posta ya da broşür için ayrı bağlantı; taramalar kaynağa göre ölçülür.</p>
+            <p className="qx-caption text-fg-muted">{c.utmHint}</p>
             {(['source', 'medium', 'campaign'] as const).map((k) => (
               <div key={k} className="space-y-1">
                 <label htmlFor={`${uid}-utm-${k}`} className="qx-caption text-fg-muted">
-                  {k === 'source' ? 'Kaynak (ör. instagram)' : k === 'medium' ? 'Kanal (ör. hikaye)' : 'Kampanya (ör. ekim-menu)'}
+                  {k === 'source' ? c.utmSource : k === 'medium' ? c.utmMedium : c.utmCampaign}
                 </label>
                 <Input
                   id={`${uid}-utm-${k}`}
@@ -247,9 +250,9 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
               size="sm"
               className="min-h-11"
               disabled={!utm.source.trim()}
-              onClick={() => copyText(campaignUrl, 'Kampanya bağlantısı kopyalandı')}
+              onClick={() => copyText(campaignUrl, c.utmCopied, copy.common.clipboardFailed)}
             >
-              <Copy className="mr-2 h-4 w-4" aria-hidden /> Kampanya bağlantısını kopyala
+              <Copy className="mr-2 h-4 w-4" aria-hidden /> {c.utmCopy}
             </Button>
           </div>
         </details>

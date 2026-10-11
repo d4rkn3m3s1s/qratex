@@ -1,6 +1,7 @@
 import type { ImpactItem } from '@/components/states';
 import type { QrLifecycleAction } from '@/lib/dealer/qr-codes/rules';
 import { fmtInt } from './format';
+import type { QrCopy } from './copy';
 
 export interface LifecycleCopy {
   title: string;
@@ -11,7 +12,13 @@ export interface LifecycleCopy {
 }
 
 /** Onay metinleri — sonuç açıkça söylenir (rapor Bulgu 1: "yorumlar da gider" söylenmiyordu). */
-export function lifecycleCopy(action: QrLifecycleAction, name: string): LifecycleCopy {
+const TONE: Record<QrLifecycleAction, LifecycleCopy['tone']> = { revoke: 'danger', unrevoke: 'brand', archive: 'warning', restore: 'brand', rotate: 'warning' };
+
+export function lifecycleCopy(action: QrLifecycleAction, name: string, copy?: QrCopy): LifecycleCopy {
+  if (copy) {
+    const c = copy.lifecycle[action];
+    return { title: c.title(name), description: c.description, confirm: c.confirm, tone: TONE[action], done: c.done };
+  }
   switch (action) {
     case 'revoke':
       return {
@@ -57,9 +64,10 @@ export function lifecycleCopy(action: QrLifecycleAction, name: string): Lifecycl
   }
 }
 
-export function lifecycleImpact(action: QrLifecycleAction, feedbackTotal: number): ImpactItem[] {
-  const items: ImpactItem[] = [{ label: 'Bağlı yorumlar', value: `${fmtInt(feedbackTotal)} — korunur` }];
-  if (action === 'revoke' || action === 'rotate') items.push({ label: 'Basılı kartlar', value: 'Çalışmaz hâle gelir', emphasis: true });
-  if (action === 'unrevoke' || action === 'restore') items.push({ label: 'Kota', value: '1 etkin kod hakkı kullanılır' });
+export function lifecycleImpact(action: QrLifecycleAction, feedbackTotal: number, copy?: QrCopy): ImpactItem[] {
+  const t = copy?.impact;
+  const items: ImpactItem[] = [{ label: t?.linked ?? 'Bağlı yorumlar', value: t ? t.kept(fmtInt(feedbackTotal)) : `${fmtInt(feedbackTotal)} — korunur` }];
+  if (action === 'revoke' || action === 'rotate') items.push({ label: t?.printed ?? 'Basılı kartlar', value: t?.stopsWorking ?? 'Çalışmaz hâle gelir', emphasis: true });
+  if (action === 'unrevoke' || action === 'restore') items.push({ label: t?.quota ?? 'Kota', value: t?.usesQuota ?? '1 etkin kod hakkı kullanılır' });
   return items;
 }

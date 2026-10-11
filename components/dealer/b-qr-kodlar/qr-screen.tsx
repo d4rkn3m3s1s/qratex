@@ -35,7 +35,8 @@ import {
   type QrSummaryDto,
 } from '@/lib/dealer/qr-codes/types';
 import { bulkQr, downloadPrint, fetchLocations, fetchQrList, fetchQrSummary, qrLifecycle, updateQr } from './api';
-import { FILTER_LABEL, SORT_LABEL, errorText, fmtInt, fmtPct } from './format';
+import { errorText, fmtInt } from './format';
+import { useQrCopy } from './copy';
 import { lifecycleCopy, lifecycleImpact } from './lifecycle';
 import { QrCard, type CardIntent } from './qr-card';
 import { copyText } from './clipboard';
@@ -53,21 +54,23 @@ const STUDIO_TABS: StudioTab[] = ['print', 'settings', 'stats', 'history'];
 
 function SummaryTiles({ s, onOpen }: { s: QrSummaryDto; onOpen: (id: string) => void }) {
   const { quota } = s;
+  const sc = useQrCopy();
+  const c = sc.screen;
   const delta = s.scansPrev7 > 0 ? Math.round(((s.scans7 - s.scansPrev7) / s.scansPrev7) * 1000) / 10 : null;
   return (
     <MetricGrid cols={4}>
       <MetricTile
-        label="Etkin kod"
+        label={c.activeCodes}
         icon={<QrCode className="h-4 w-4" aria-hidden />}
         metric={{ value: quota.used }}
-        hint={quota.limit == null ? 'Sınırsız plan' : `${fmtInt(quota.used)}/${fmtInt(quota.limit)} · ${quota.planName}`}
+        hint={quota.limit == null ? c.unlimited : `${fmtInt(quota.used)}/${fmtInt(quota.limit)} · ${quota.planName}`}
         tone={quota.limit != null && quota.used >= quota.limit ? 'warning' : 'neutral'}
         footer={
           quota.limit != null ? (
             <div
               className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
               role="progressbar"
-              aria-label="Kod kotası"
+              aria-label={c.quotaAria}
               aria-valuemin={0}
               aria-valuemax={quota.limit}
               aria-valuenow={quota.used}
@@ -78,34 +81,34 @@ function SummaryTiles({ s, onOpen }: { s: QrSummaryDto; onOpen: (id: string) => 
         }
       />
       <MetricTile
-        label="Tarama (7 gün)"
+        label={c.scans7}
         icon={<ScanLine className="h-4 w-4" aria-hidden />}
         metric={{
           value: s.scans7,
-          delta: delta == null ? null : { value: delta, kind: 'percent', goodDirection: 'up', label: 'önceki 7 güne göre' },
+          delta: delta == null ? null : { value: delta, kind: 'percent', goodDirection: 'up', label: c.vsPrev7 },
           series: s.scanSeries,
         }}
         showSparkline
-        sparklineLabel="Son 14 günün günlük taramaları"
+        sparklineLabel={c.spark14}
       />
       <MetricTile
-        label="Dönüşüm (30 gün)"
+        label={c.conversion30}
         icon={<TrendingUp className="h-4 w-4" aria-hidden />}
         metric={{ value: s.conversion30, format: 'percent', n: s.scans30, minN: 20 }}
-        hint={`${fmtInt(s.scans30)} taramadan ${fmtInt(s.feedbacks30)} yorum`}
+        hint={c.convHint(fmtInt(s.scans30), fmtInt(s.feedbacks30))}
       />
       <MetricTile
-        label="En düşük puanlı nokta"
+        label={c.lowest}
         icon={<Star className="h-4 w-4" aria-hidden />}
         metric={{ value: s.lowest?.avgRating ?? null, fractionDigits: 1 }}
         tone={s.lowest && s.lowest.avgRating < 3.5 ? 'danger' : 'neutral'}
         hint={
           s.lowest ? (
             <button type="button" onClick={() => onOpen(s.lowest!.id)} className="min-h-6 text-left font-medium text-brand underline-offset-2 hover:underline">
-              {s.lowest.name} · {fmtInt(s.lowest.feedbacks)} yorum
+              {s.lowest.name} · {sc.common.feedbacks(fmtInt(s.lowest.feedbacks))}
             </button>
           ) : (
-            '30 günde en az 3 yorum alan kod yok'
+            c.noLowest
           )
         }
       />
@@ -118,6 +121,8 @@ export function QrScreen() {
   const pathname = usePathname();
   const sp = useSearchParams();
   const qc = useQueryClient();
+  const copy = useQrCopy();
+  const c = copy.screen;
 
   const filters = useMemo(() => normalizeQrFilters(Object.fromEntries(sp.entries())), [sp]);
   const tab = sp.get('tab') === 'locations' ? 'locations' : 'codes';
@@ -209,12 +214,10 @@ export function QrScreen() {
     setBulkBusy(action);
     try {
       const r = await bulkQr(action, Array.from(selected.keys()));
-      toast.success(
-        `${fmtInt(r.count)} kod ${action === 'activate' ? 'yayına alındı' : 'duraklatıldı'}${r.skipped ? ` · ${fmtInt(r.skipped)} kod iptal/arşiv olduğu için atlandı` : ''}`
-      );
+      toast.success(c.bulkDone(fmtInt(r.count), action === 'activate', r.skipped ? fmtInt(r.skipped) : null));
       await invalidate();
     } catch (e) {
-      toast.error(errorText(e));
+      toast.error(errorText(e, copy.common.actionFailed));
     } finally {
       setBulkBusy(null);
     }
@@ -227,9 +230,9 @@ export function QrScreen() {
         { ids: printable.slice(0, QR_PRINT_MAX).map(([id]) => id), template: 'card', format: 'pdf', fg: '#111111', bg: '#FFFFFF' },
         `qr-kodlar-${printable.length}-masa-karti.pdf`
       );
-      toast.success('Masa kartları PDF olarak indirildi — %100 ölçekte yazdırın');
+      toast.success(c.pdfDone);
     } catch (e) {
-      toast.error(errorText(e));
+      toast.error(errorText(e, copy.common.actionFailed));
     } finally {
       setBulkBusy(null);
     }
@@ -248,17 +251,17 @@ export function QrScreen() {
   const onIntent = useCallback(
     async (item: QrItemDto, intent: CardIntent) => {
       if (intent.kind === 'open') return openStudio(item.id, intent.tab);
-      if (intent.kind === 'copy') return copyText(item.targetUrl, 'Bağlantı kopyalandı');
+      if (intent.kind === 'copy') return copyText(item.targetUrl, copy.common.linkCopied, copy.common.clipboardFailed);
       if (intent.kind === 'lifecycle') {
         return setPending({ id: item.id, name: item.name, feedbackTotal: item.feedbackTotal, action: intent.action });
       }
       setRowBusy((s) => new Set(s).add(item.id));
       try {
         await updateQr(item.id, { isActive: intent.next });
-        toast.success(intent.next ? `“${item.name}” yayında` : `“${item.name}” duraklatıldı`);
+        toast.success(intent.next ? c.live(item.name) : c.paused(item.name));
         await invalidate();
       } catch (e) {
-        toast.error(errorText(e));
+        toast.error(errorText(e, copy.common.actionFailed));
       } finally {
         setRowBusy((s) => {
           const n = new Set(s);
@@ -267,15 +270,15 @@ export function QrScreen() {
         });
       }
     },
-    [openStudio, invalidate]
+    [openStudio, invalidate, copy, c]
   );
 
   const confirmLifecycle = async () => {
     if (!pending) return;
-    const copy = lifecycleCopy(pending.action, pending.name);
+    const lc = lifecycleCopy(pending.action, pending.name, copy);
     try {
       const r = await qrLifecycle(pending.id, pending.action);
-      toast.success(r.changed ? copy.done : 'Değişiklik gerekmedi');
+      toast.success(r.changed ? lc.done : c.noChange);
       setSelected((prev) => {
         const m = new Map(prev);
         m.delete(pending.id);
@@ -284,7 +287,7 @@ export function QrScreen() {
       await invalidate();
       if (pending.action === 'rotate' && r.id !== pending.id) openStudio(r.id, 'print');
     } catch (e) {
-      toast.error(errorText(e));
+      toast.error(errorText(e, copy.common.actionFailed));
       throw e;
     }
   };
@@ -292,19 +295,19 @@ export function QrScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const activeLocations = locations.data?.items ?? [];
   const counts = summary.data?.counts;
-  const pc = pending ? lifecycleCopy(pending.action, pending.name) : null;
+  const pc = pending ? lifecycleCopy(pending.action, pending.name, copy) : null;
   const filtered = !!filters.q || filters.status !== 'all' || !!filters.location;
 
   return (
     <PanelPage
       header={
         <PageHeader
-          title="QR kodlar ve şubeler"
-          description="Her kod bir temas noktası: kaç kez okutulduğunu, kaçının yoruma döndüğünü görün; masa kartını buradan basın."
+          title={c.title}
+          description={c.description}
           icon={<QrCode className="h-5 w-5" aria-hidden />}
           actions={
             <Button type="button" className="min-h-11" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" aria-hidden /> Yeni QR kod
+              <Plus className="mr-2 h-4 w-4" aria-hidden /> {c.newQr}
             </Button>
           }
         />
@@ -316,12 +319,12 @@ export function QrScreen() {
 
       <SectionTabs
         tabs={[
-          { value: 'codes', label: 'Kodlar', icon: <QrCode className="h-4 w-4" aria-hidden />, count: counts?.all },
-          { value: 'locations', label: 'Şubeler', icon: <MapPin className="h-4 w-4" aria-hidden />, count: locations.data?.quota.used },
+          { value: 'codes', label: c.codes, icon: <QrCode className="h-4 w-4" aria-hidden />, count: counts?.all },
+          { value: 'locations', label: c.locations, icon: <MapPin className="h-4 w-4" aria-hidden />, count: locations.data?.quota.used },
         ]}
         value={tab}
         onValueChange={(v) => replaceParams((p) => (v === 'locations' ? p.set('tab', 'locations') : p.delete('tab')))}
-        ariaLabel="QR kodlar ve şubeler"
+        ariaLabel={c.title}
         variant="underline"
         touchTarget
       >
@@ -352,15 +355,15 @@ export function QrScreen() {
                       type="search"
                       value={term}
                       onChange={(e) => setTerm(e.target.value)}
-                      placeholder="Ad, kod, not ya da şube ara"
-                      aria-label="QR kod ara"
+                      placeholder={c.searchPlaceholder}
+                      aria-label={c.searchAria}
                       className="min-h-11 pl-9"
                       maxLength={80}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:flex">
                     <label className="sr-only" htmlFor="qr-filter-location">
-                      Şube
+                      {c.location}
                     </label>
                     <select
                       id="qr-filter-location"
@@ -368,17 +371,17 @@ export function QrScreen() {
                       onChange={(e) => setFilters({ location: e.target.value || null })}
                       className="qx-small min-h-11 rounded-md border border-border bg-surface-1 px-3 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     >
-                      <option value="">Tüm şubeler</option>
-                      <option value="none">Şubesiz</option>
+                      <option value="">{c.allLocations}</option>
+                      <option value="none">{c.noLocationOpt}</option>
                       {activeLocations.map((l) => (
                         <option key={l.id} value={l.id}>
                           {l.name}
-                          {!l.isActive ? ' (arşiv)' : ''}
+                          {!l.isActive ? copy.common.archivedSuffix : ''}
                         </option>
                       ))}
                     </select>
                     <label className="sr-only" htmlFor="qr-sort">
-                      Sıralama
+                      {c.sortLabel}
                     </label>
                     <select
                       id="qr-sort"
@@ -388,20 +391,20 @@ export function QrScreen() {
                     >
                       {QR_SORTS.map((s) => (
                         <option key={s} value={s}>
-                          {SORT_LABEL[s]}
+                          {copy.sort[s]}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
                 <ChoiceChips
-                  aria-label="Duruma göre süz"
+                  aria-label={c.statusFilter}
                   scroll
                   size="sm"
                   options={QR_STATUS_FILTERS.map((f) => ({
                     value: f,
-                    label: counts ? `${FILTER_LABEL[f]} (${fmtInt(counts[f])})` : FILTER_LABEL[f],
-                    textLabel: FILTER_LABEL[f],
+                    label: counts ? `${copy.filter[f]} (${fmtInt(counts[f])})` : copy.filter[f],
+                    textLabel: copy.filter[f],
                   }))}
                   value={filters.status}
                   onChange={(v) => v && setFilters({ status: v as QrStatusFilter })}
@@ -417,8 +420,8 @@ export function QrScreen() {
                   filtered
                     ? {
                         variant: 'filtered',
-                        title: 'Bu süzgece uyan kod yok',
-                        description: filters.q ? `“${filters.q}” için sonuç bulunamadı.` : 'Süzgeçleri değiştirip tekrar deneyin.',
+                        title: c.noMatch,
+                        description: filters.q ? c.noMatchQuery(filters.q) : c.noMatchHint,
                         action: (
                           <Button
                             type="button"
@@ -429,18 +432,18 @@ export function QrScreen() {
                               setFilters({ q: null, status: 'all', location: null });
                             }}
                           >
-                            Süzgeçleri temizle
+                            {c.clearFilters}
                           </Button>
                         ),
                       }
                     : {
                         variant: 'first-use',
                         icon: QrCode,
-                        title: 'İlk QR kodunuzu oluşturun',
-                        description: 'Masaya, kasaya ya da pakete koyacağınız kod müşterinin yorumunu size getirir. Numaralı seriyle tüm masaları tek seferde açabilirsiniz.',
+                        title: c.firstTitle,
+                        description: c.firstHint,
                         action: (
                           <Button type="button" className="min-h-11" onClick={() => setCreateOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" aria-hidden /> QR kod oluştur
+                            <Plus className="mr-2 h-4 w-4" aria-hidden /> {c.create}
                           </Button>
                         ),
                       }
@@ -453,15 +456,15 @@ export function QrScreen() {
                         <Checkbox
                           checked={pageAllSelected ? true : pageSomeSelected ? 'indeterminate' : false}
                           onCheckedChange={togglePage}
-                          aria-label={pageAllSelected ? 'Bu sayfadaki seçimleri kaldır' : 'Bu sayfadakilerin hepsini seç'}
+                          aria-label={pageAllSelected ? c.unselectPageAria : c.selectPageAria}
                         />
-                        <span className="qx-small text-fg-muted">{pageAllSelected ? 'Bu sayfanın seçimini kaldır' : 'Bu sayfadakileri seç'}</span>
+                        <span className="qx-small text-fg-muted">{pageAllSelected ? c.unselectPage : c.selectPage}</span>
                       </label>
                       <p className="qx-small text-fg-muted" aria-live="polite">
-                        {fmtInt(d.total)} kod{list.isFetching && !list.isLoading ? ' · güncelleniyor…' : ''}
+                        {c.total(fmtInt(d.total), list.isFetching && !list.isLoading)}
                       </p>
                     </div>
-                    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="QR kodlar">
+                    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={c.listAria}>
                       {d.items.map((item, i) => (
                         <QrCard
                           key={item.id}
@@ -475,7 +478,7 @@ export function QrScreen() {
                       ))}
                     </ul>
                     {d.totalPages > 1 && (
-                      <nav aria-label="Sayfalama" className="flex items-center justify-between gap-2 pt-2">
+                      <nav aria-label={c.pagination} className="flex items-center justify-between gap-2 pt-2">
                         <Button
                           type="button"
                           variant="outline"
@@ -483,10 +486,10 @@ export function QrScreen() {
                           disabled={d.page <= 1}
                           onClick={() => setFilters({ page: d.page - 1 })}
                         >
-                          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden /> Önceki
+                          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden /> {c.prev}
                         </Button>
                         <span className="qx-small text-fg-muted">
-                          Sayfa {fmtInt(d.page)} / {fmtInt(d.totalPages)}
+                          {c.page(fmtInt(d.page), fmtInt(d.totalPages))}
                         </span>
                         <Button
                           type="button"
@@ -495,7 +498,7 @@ export function QrScreen() {
                           disabled={d.page >= d.totalPages}
                           onClick={() => setFilters({ page: d.page + 1 })}
                         >
-                          Sonraki <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+                          {c.next} <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
                         </Button>
                       </nav>
                     )}
@@ -511,18 +514,18 @@ export function QrScreen() {
         <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-30 px-4 md:bottom-4">
           <div
             role="region"
-            aria-label="Toplu işlemler"
+            aria-label={c.bulkAria}
             className="pointer-events-auto mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-1 p-2 shadow-lg"
           >
             <p className="qx-small min-w-0 flex-1 px-2 text-fg" aria-live="polite">
-              <span className="font-semibold">{fmtInt(selected.size)} seçili</span>
-              {offPage > 0 && <span className="text-fg-muted"> · {fmtInt(offPage)} tanesi başka sayfada</span>}
+              <span className="font-semibold">{c.selected(fmtInt(selected.size))}</span>
+              {offPage > 0 && <span className="text-fg-muted">{c.offPage(fmtInt(offPage))}</span>}
             </p>
             <Button type="button" size="sm" variant="outline" className="min-h-11" disabled={bulkBusy !== null} aria-busy={bulkBusy === 'activate'} onClick={() => runBulk('activate')}>
-              <PlayCircle className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'activate' ? 'İşleniyor…' : 'Yayına al'}
+              <PlayCircle className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'activate' ? c.processing : c.activate}
             </Button>
             <Button type="button" size="sm" variant="outline" className="min-h-11" disabled={bulkBusy !== null} aria-busy={bulkBusy === 'deactivate'} onClick={() => runBulk('deactivate')}>
-              <PauseCircle className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'deactivate' ? 'İşleniyor…' : 'Duraklat'}
+              <PauseCircle className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'deactivate' ? c.processing : c.deactivate}
             </Button>
             <Button
               type="button"
@@ -531,11 +534,11 @@ export function QrScreen() {
               disabled={bulkBusy !== null || printable.length === 0 || printable.length > QR_PRINT_MAX}
               aria-busy={bulkBusy === 'print'}
               onClick={runBulkPrint}
-              title={printable.length > QR_PRINT_MAX ? `Tek seferde en fazla ${QR_PRINT_MAX} kart` : undefined}
+              title={printable.length > QR_PRINT_MAX ? c.printMax(QR_PRINT_MAX) : undefined}
             >
-              <Printer className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'print' ? 'Hazırlanıyor…' : `Masa kartı PDF (${fmtInt(printable.length)})`}
+              <Printer className="mr-1.5 h-4 w-4" aria-hidden /> {bulkBusy === 'print' ? copy.common.preparing : c.printPdf(fmtInt(printable.length))}
             </Button>
-            <Button type="button" size="sm" variant="ghost" className="min-h-11 min-w-11" aria-label="Seçimi temizle" onClick={() => setSelected(new Map())}>
+            <Button type="button" size="sm" variant="ghost" className="min-h-11 min-w-11" aria-label={c.clearSelection} onClick={() => setSelected(new Map())}>
               <X className="h-4 w-4" aria-hidden />
             </Button>
           </div>
@@ -552,8 +555,8 @@ export function QrScreen() {
             void invalidate();
             if (created.length === 1) openStudio(created[0].id, 'print');
             else if (created.length > 1) {
-              setSelected(new Map(created.map((c) => [c.id, { name: c.name, status: 'active' as QrStatus }])));
-              toast.message(`${fmtInt(created.length)} kod seçildi — “Masa kartı PDF” ile hepsini tek dosyada basın.`);
+              setSelected(new Map(created.map((x) => [x.id, { name: x.name, status: 'active' as QrStatus }])));
+              toast.message(c.seriesSelected(fmtInt(created.length)));
             }
           }}
         />
@@ -586,7 +589,7 @@ export function QrScreen() {
           tone={pc.tone}
           title={pc.title}
           description={pc.description}
-          impact={lifecycleImpact(pending.action, pending.feedbackTotal)}
+          impact={lifecycleImpact(pending.action, pending.feedbackTotal, copy)}
           irreversibleNote={false}
           confirmLabel={pc.confirm}
           onConfirm={confirmLifecycle}

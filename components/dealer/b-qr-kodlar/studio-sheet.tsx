@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import type { QrLifecycleAction } from '@/lib/dealer/qr-codes/rules';
 import { qrDetailKey, type LocationDto, type QrDetailDto } from '@/lib/dealer/qr-codes/types';
 import { fetchQrDetail } from './api';
-import { STATUS_LABEL, STATUS_TONE, fmtDate, fmtDayShort, fmtInt, fmtPct } from './format';
+import { STATUS_TONE, fmtDate, fmtDayShort, fmtInt, fmtPct } from './format';
+import { useQrCopy } from './copy';
 import { PrintPanel } from './print-panel';
 import { SettingsPanel } from './settings-panel';
 
@@ -21,33 +22,34 @@ function StatsPanel({ d }: { d: QrDetailDto }) {
   const fbs = d.daily.map((x) => x.feedbacks);
   const best = d.daily.reduce((a, b) => (b.scans > a.scans ? b : a), d.daily[0]);
   const s = d.item.stats;
+  const c = useQrCopy().studio;
   return (
     <div className="space-y-5">
       <KeyValueList
         items={[
-          { label: 'Tarama (30 gün)', value: fmtInt(s.scans) },
-          { label: 'Yorum (30 gün)', value: fmtInt(s.feedbacks) },
-          { label: 'Dönüşüm', value: fmtPct(s.conversion) },
-          { label: 'Ortalama puan', value: s.avgRating == null ? '—' : `★ ${s.avgRating.toLocaleString('tr-TR')}` },
-          { label: 'Tüm zamanlar yorum', value: fmtInt(d.item.feedbackTotal) },
+          { label: c.scans30, value: fmtInt(s.scans) },
+          { label: c.feedbacks30, value: fmtInt(s.feedbacks) },
+          { label: c.conversion, value: fmtPct(s.conversion) },
+          { label: c.avgRating, value: s.avgRating == null ? '—' : `★ ${s.avgRating.toLocaleString('tr-TR')}` },
+          { label: c.allTime, value: fmtInt(d.item.feedbackTotal) },
         ]}
       />
       {s.scans === 0 && s.feedbacks === 0 ? (
         <p className="qx-small rounded-md border border-border bg-surface-muted p-3 text-fg-muted">
-          Son 30 günde bu koddan tarama ya da yorum gelmedi. Kod basılı ve görünür bir yerde mi?
+          {c.quiet}
         </p>
       ) : (
         <>
           <section aria-labelledby="qr-scan-trend" className="space-y-1">
             <h3 id="qr-scan-trend" className="qx-small font-medium text-fg">
-              Günlük tarama
+              {c.dailyScans}
             </h3>
-            <Sparkline data={scans} tone="brand" height={56} area zeroBased label="Son 30 günün günlük taramaları" />
+            <Sparkline data={scans} tone="brand" height={56} area zeroBased label={c.spark30} />
             <p className="qx-caption flex justify-between text-fg-muted">
               <span>{fmtDayShort(d.daily[0].day)}</span>
               {best.scans > 0 && (
                 <span>
-                  En yoğun: {fmtDayShort(best.day)} ({fmtInt(best.scans)})
+                  {c.busiest(fmtDayShort(best.day), fmtInt(best.scans))}
                 </span>
               )}
               <span>{fmtDayShort(d.daily[d.daily.length - 1].day)}</span>
@@ -55,20 +57,20 @@ function StatsPanel({ d }: { d: QrDetailDto }) {
           </section>
           <section aria-labelledby="qr-fb-trend" className="space-y-1">
             <h3 id="qr-fb-trend" className="qx-small font-medium text-fg">
-              Günlük yorum
+              {c.dailyFb}
             </h3>
-            <Sparkline data={fbs} tone="success" height={40} zeroBased label="Son 30 günün günlük yorumları" />
+            <Sparkline data={fbs} tone="success" height={40} zeroBased label={c.sparkFb30} />
           </section>
           <details className="rounded-md border border-border p-3">
-            <summary className="qx-small min-h-11 cursor-pointer content-center font-medium text-fg">Gün gün tablo</summary>
+            <summary className="qx-small min-h-11 cursor-pointer content-center font-medium text-fg">{c.table}</summary>
             <div className="mt-2 max-h-64 overflow-y-auto">
               <table className="qx-small w-full text-left">
-                <caption className="sr-only">Son 30 gün, gün gün tarama ve yorum</caption>
+                <caption className="sr-only">{c.tableCaption}</caption>
                 <thead>
                   <tr className="text-fg-muted">
-                    <th scope="col" className="py-1 font-medium">Gün</th>
-                    <th scope="col" className="py-1 text-right font-medium">Tarama</th>
-                    <th scope="col" className="py-1 text-right font-medium">Yorum</th>
+                    <th scope="col" className="py-1 font-medium">{c.day}</th>
+                    <th scope="col" className="py-1 text-right font-medium">{c.scans}</th>
+                    <th scope="col" className="py-1 text-right font-medium">{c.feedbacks}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -88,12 +90,12 @@ function StatsPanel({ d }: { d: QrDetailDto }) {
       {d.bySegment.length > 0 && d.bySegment.some((x) => x.segment) && (
         <section aria-labelledby="qr-seg" className="space-y-2">
           <h3 id="qr-seg" className="qx-small font-medium text-fg">
-            Bağlantıya göre tarama (30 gün)
+            {c.bySegment}
           </h3>
           <ul className="space-y-1">
             {d.bySegment.map((x) => (
               <li key={x.segment ?? '__plain'} className="qx-small flex justify-between gap-2">
-                <span className="font-mono text-fg-muted">{x.segment ?? 'Düz QR'}</span>
+                <span className="font-mono text-fg-muted">{x.segment ?? c.plainQr}</span>
                 <span className="tabular-nums text-fg">{fmtInt(x.scans)}</span>
               </li>
             ))}
@@ -115,19 +117,21 @@ function HistoryPanel({
 }) {
   const st = d.item.status;
   const live = st !== 'revoked' && st !== 'archived';
+  const copy = useQrCopy();
+  const c = copy.studio;
   return (
     <div className="space-y-5">
       <KeyValueList
         items={[
-          { label: 'Oluşturuldu', value: fmtDate(d.item.createdAt) },
-          { label: 'Son kullanma', value: d.item.expiresAt ? fmtDate(d.item.expiresAt) : 'Yok' },
-          ...(d.item.revokedAt ? [{ label: 'İptal', value: fmtDate(d.item.revokedAt) }] : []),
-          ...(d.item.archivedAt ? [{ label: 'Arşiv', value: fmtDate(d.item.archivedAt) }] : []),
+          { label: c.created, value: fmtDate(d.item.createdAt) },
+          { label: c.expiry, value: d.item.expiresAt ? fmtDate(d.item.expiresAt) : c.none },
+          ...(d.item.revokedAt ? [{ label: c.revoked, value: fmtDate(d.item.revokedAt) }] : []),
+          ...(d.item.archivedAt ? [{ label: c.archived, value: fmtDate(d.item.archivedAt) }] : []),
         ]}
       />
       {d.successor && (
         <p className="qx-small rounded-md border border-info-border bg-info-subtle p-3 text-fg">
-          Bu kodun yerine yenisi üretildi:{' '}
+          {c.successor}{' '}
           <button type="button" className="font-medium text-brand underline underline-offset-2" onClick={() => onOpen(d.successor!.id)}>
             {d.successor.name} ({d.successor.code})
           </button>
@@ -136,7 +140,7 @@ function HistoryPanel({
       {d.predecessors.length > 0 && (
         <section aria-labelledby="qr-chain" className="space-y-2">
           <h3 id="qr-chain" className="qx-small flex items-center gap-2 font-medium text-fg">
-            <History className="h-4 w-4 text-fg-muted" aria-hidden /> Yenileme geçmişi
+            <History className="h-4 w-4 text-fg-muted" aria-hidden /> {c.chain}
           </h3>
           <ol className="space-y-1">
             {d.predecessors.map((p) => (
@@ -145,7 +149,7 @@ function HistoryPanel({
                   {p.code}
                 </button>
                 <span className="text-fg-muted">
-                  {fmtDate(p.createdAt)} · {fmtInt(p.feedbackTotal)} yorum
+                  {fmtDate(p.createdAt)} · {copy.common.feedbacks(fmtInt(p.feedbackTotal))}
                 </span>
               </li>
             ))}
@@ -154,35 +158,35 @@ function HistoryPanel({
       )}
       <section aria-labelledby="qr-life" className="space-y-2">
         <h3 id="qr-life" className="qx-small font-medium text-fg">
-          Yaşam döngüsü
+          {c.lifecycle}
         </h3>
         <div className="flex flex-wrap gap-2">
           {live && (
             <Button type="button" variant="outline" className="min-h-11" onClick={() => onLifecycle('rotate')}>
-              <RefreshCw className="mr-2 h-4 w-4" aria-hidden /> Kodu yenile
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden /> {copy.card.rotate}
             </Button>
           )}
           {live && (
             <Button type="button" variant="outline" className="min-h-11" onClick={() => onLifecycle('revoke')}>
-              <Ban className="mr-2 h-4 w-4" aria-hidden /> İptal et
+              <Ban className="mr-2 h-4 w-4" aria-hidden /> {copy.card.revoke}
             </Button>
           )}
           {st === 'revoked' && (
             <Button type="button" variant="outline" className="min-h-11" onClick={() => onLifecycle('unrevoke')}>
-              <Undo2 className="mr-2 h-4 w-4" aria-hidden /> İptali geri al
+              <Undo2 className="mr-2 h-4 w-4" aria-hidden /> {copy.card.unrevoke}
             </Button>
           )}
           {st === 'archived' ? (
             <Button type="button" className="min-h-11" onClick={() => onLifecycle('restore')}>
-              <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> Arşivden geri al
+              <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> {copy.card.restore}
             </Button>
           ) : (
             <Button type="button" variant="ghost" className="min-h-11" onClick={() => onLifecycle('archive')}>
-              <Archive className="mr-2 h-4 w-4" aria-hidden /> Arşivle
+              <Archive className="mr-2 h-4 w-4" aria-hidden /> {copy.card.archive}
             </Button>
           )}
         </div>
-        <p className="qx-caption text-fg-muted">Kodlar silinmez; arşivlenir. Yorumlar her durumda korunur.</p>
+        <p className="qx-caption text-fg-muted">{c.neverDeleted}</p>
       </section>
     </div>
   );
@@ -216,7 +220,9 @@ export function StudioSheet({
     staleTime: 15_000,
   });
   const d = q.data;
-  const title = d ? d.item.name : 'QR kod';
+  const copy = useQrCopy();
+  const c = copy.studio;
+  const title = d ? d.item.name : c.qrCode;
 
   return (
     <DetailSheet
@@ -228,7 +234,7 @@ export function StudioSheet({
       description={
         d ? (
           <span className="flex flex-wrap items-center gap-2">
-            <span className={cn('qx-caption rounded-full px-2 py-0.5 font-medium', TONE_CHIP[STATUS_TONE[d.item.status]])}>{STATUS_LABEL[d.item.status]}</span>
+            <span className={cn('qx-caption rounded-full px-2 py-0.5 font-medium', TONE_CHIP[STATUS_TONE[d.item.status]])}>{copy.status[d.item.status]}</span>
             <span className="qx-caption font-mono text-fg-muted">{d.item.code}</span>
             {d.item.location && <span className="qx-caption text-fg-muted">{d.item.location.name}</span>}
           </span>
@@ -239,10 +245,10 @@ export function StudioSheet({
         {(detail) => {
           const live = detail.item.status !== 'revoked' && detail.item.status !== 'archived';
           const tabs = [
-            ...(live ? [{ value: 'print', label: 'Yazdır' }] : []),
-            { value: 'settings', label: 'Ayarlar' },
-            { value: 'stats', label: 'İstatistik' },
-            { value: 'history', label: 'Geçmiş' },
+            ...(live ? [{ value: 'print', label: c.tabPrint }] : []),
+            { value: 'settings', label: c.tabSettings },
+            { value: 'stats', label: c.tabStats },
+            { value: 'history', label: c.tabHistory },
           ];
           const active = !live && tab === 'print' ? 'history' : tab;
           return (
@@ -250,7 +256,7 @@ export function StudioSheet({
               tabs={tabs}
               value={active}
               onValueChange={(v) => onTabChange(v as StudioTab)}
-              ariaLabel="QR kod bölümleri"
+              ariaLabel={c.tabsAria}
               variant="underline"
               touchTarget
             >

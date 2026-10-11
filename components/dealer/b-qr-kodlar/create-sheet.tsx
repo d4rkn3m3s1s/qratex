@@ -21,6 +21,7 @@ import {
 import type { LocationDto, QuotaDto } from '@/lib/dealer/qr-codes/types';
 import { createQr } from './api';
 import { fmtInt } from './format';
+import { useQrCopy } from './copy';
 
 const DEFAULTS: QrCreateForm = {
   mode: 'single',
@@ -46,6 +47,8 @@ export function CreateSheet({
   quota: QuotaDto | null;
   onCreated: (created: Array<{ id: string; name: string }>) => void;
 }) {
+  const copy = useQrCopy();
+  const c = copy.create;
   const form = useZodForm(qrCreateFormSchema, { defaultValues: DEFAULTS });
   const v = useWatch({ control: form.control }) as Partial<QrCreateForm>;
   useEffect(() => {
@@ -59,7 +62,7 @@ export function CreateSheet({
   const today = useMemo(() => istanbulDay(new Date()), []);
 
   const locationOptions = [
-    { value: NO_LOCATION, label: 'Şubesiz (işletme geneli)' },
+    { value: NO_LOCATION, label: copy.common.noLocation },
     ...locations.filter((l) => l.isActive).map((l) => ({ value: l.id, label: l.name })),
   ];
 
@@ -68,12 +71,12 @@ export function CreateSheet({
       open={open}
       onOpenChange={onOpenChange}
       mode="create"
-      title="Yeni QR kod"
-      description="Her kod bir temas noktasıdır: masa, kasa, paket ya da vitrin."
+      title={c.title}
+      description={c.description}
       form={form}
       width="lg"
-      submitLabel={v.mode === 'series' && preview ? `${preview.count} kod oluştur` : 'Oluştur'}
-      successToast={v.mode === 'series' ? 'Kod serisi oluşturuldu' : 'QR kod oluşturuldu'}
+      submitLabel={v.mode === 'series' && preview ? c.createN(preview.count) : c.create}
+      successToast={v.mode === 'series' ? c.seriesDone : c.singleDone}
       onSubmit={(values) => createQr(toCreateInput(values))}
       onSaved={(result) => onCreated((result as { created: Array<{ id: string; name: string }> }).created)}
     >
@@ -86,13 +89,13 @@ export function CreateSheet({
           }
           role={overQuota ? 'alert' : undefined}
         >
-          {quota?.planName} planında {fmtInt(remaining)} etkin kod hakkınız kaldı ({fmtInt(quota?.used ?? 0)}/{fmtInt(quota?.limit ?? 0)}).
+          {c.quotaLeft(quota?.planName ?? '', fmtInt(remaining), fmtInt(quota?.used ?? 0), fmtInt(quota?.limit ?? 0))}
           {overQuota && (
             <>
               {' '}
-              Bu kadar kod oluşturulamaz; kullanılmayan kodları arşivleyin ya da{' '}
+              {c.overQuota}{' '}
               <Link href="/dealer/settings" className="font-medium text-brand underline underline-offset-2">
-                planınızı yükseltin
+                {copy.common.upgrade}
               </Link>
               .
             </>
@@ -103,13 +106,13 @@ export function CreateSheet({
         control={form.control}
         name="mode"
         render={({ field }) => (
-          <Field kind="labelledby" label="Ne oluşturulsun?" required>
+          <Field kind="labelledby" label={c.what} required>
             {(p) => (
               <ChoiceChips
                 aria-labelledby={p['aria-labelledby'] as string}
                 options={[
-                  { value: 'single', label: 'Tek kod', icon: <QrCode className="h-4 w-4" aria-hidden /> },
-                  { value: 'series', label: `Numaralı seri (en çok ${QR_SERIES_MAX})`, icon: <ListOrdered className="h-4 w-4" aria-hidden /> },
+                  { value: 'single', label: c.single, icon: <QrCode className="h-4 w-4" aria-hidden /> },
+                  { value: 'series', label: c.series(QR_SERIES_MAX), icon: <ListOrdered className="h-4 w-4" aria-hidden /> },
                 ]}
                 value={field.value}
                 onChange={(next) => next && field.onChange(next)}
@@ -121,33 +124,33 @@ export function CreateSheet({
       />
       {v.mode === 'series' ? (
         <>
-          <TextField control={form.control} name="prefix" label="Ön ek" required maxLength={QR_NAME_MAX - 6} placeholder="Masa" description="Kodlar “Masa 1”, “Masa 2” … diye adlandırılır." />
+          <TextField control={form.control} name="prefix" label={c.prefix} required maxLength={QR_NAME_MAX - 6} placeholder={c.prefixPlaceholder} description={c.prefixHint} />
           <div className="grid grid-cols-2 gap-3">
-            <NumberField control={form.control} name="from" label="Başlangıç" required mode="integer" min={0} max={9999} />
-            <NumberField control={form.control} name="to" label="Bitiş" required mode="integer" min={0} max={9999} />
+            <NumberField control={form.control} name="from" label={c.from} required mode="integer" min={0} max={9999} />
+            <NumberField control={form.control} name="to" label={c.to} required mode="integer" min={0} max={9999} />
           </div>
           {preview && (
             <p className="qx-small text-fg-muted" aria-live="polite">
-              {fmtInt(preview.count)} kod: “{preview.first}” … “{preview.last}”
+              {c.preview(fmtInt(preview.count), preview.first, preview.last)}
             </p>
           )}
         </>
       ) : (
-        <TextField control={form.control} name="name" label="Ad" required maxLength={QR_NAME_MAX} placeholder="Teras — Masa 4" description="Müşteri bu adı görmez; size ve basılı kartta görünür." />
+        <TextField control={form.control} name="name" label={c.name} required maxLength={QR_NAME_MAX} placeholder={c.namePlaceholder} description={c.nameHint} />
       )}
-      <TextareaField control={form.control} name="description" label="Not (isteğe bağlı)" rows={2} maxLength={QR_DESCRIPTION_MAX} />
+      <TextareaField control={form.control} name="description" label={c.note} rows={2} maxLength={QR_DESCRIPTION_MAX} />
       <SelectField
         control={form.control}
         name="locationId"
-        label="Şube"
+        label={c.location}
         options={locationOptions}
-        description={locations.length === 0 ? 'Şube tanımlamadınız; “Şubeler” sekmesinden ekleyebilirsiniz.' : undefined}
+        description={locations.length === 0 ? c.noLocations : undefined}
       />
       <Controller
         control={form.control}
         name="expiresOn"
         render={({ field, fieldState }) => (
-          <Field label="Son kullanma tarihi (isteğe bağlı)" description="Bu günün sonunda (İstanbul saati) kod taramayı durdurur. Kampanya kodları için." error={errorMessageOf(fieldState.error)}>
+          <Field label={c.expiry} description={c.expiryHint} error={errorMessageOf(fieldState.error)}>
             {(p) => <Input {...p} type="date" min={today} value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} className="min-h-11" />}
           </Field>
         )}

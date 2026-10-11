@@ -18,7 +18,8 @@ import { cn } from '@/lib/utils';
 import type { QrLifecycleAction } from '@/lib/dealer/qr-codes/rules';
 import type { QrItemDto } from '@/lib/dealer/qr-codes/types';
 import { printUrl } from './api';
-import { STATUS_LABEL, STATUS_TONE, fmtDate, statsLine } from './format';
+import { STATUS_TONE, fmtDate, statsLine } from './format';
+import { useQrCopy } from './copy';
 
 export type CardIntent =
   | { kind: 'open'; tab?: 'print' | 'settings' | 'stats' | 'history' }
@@ -45,6 +46,8 @@ export const QrCard = memo(function QrCard({
   const canToggle = live && item.status !== 'expired';
   const tone = STATUS_TONE[item.status];
   const nameId = `qr-${item.id}-name`;
+  const copy = useQrCopy();
+  const c = copy.card;
 
   return (
     <Reveal as="li" index={index} className="list-none">
@@ -61,7 +64,7 @@ export const QrCard = memo(function QrCard({
           <button
             type="button"
             onClick={() => onIntent(item, { kind: 'open', tab: 'print' })}
-            aria-label={`${item.name} — QR önizleme ve yazdırma`}
+            aria-label={c.preview(item.name)}
             className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             {live ? (
@@ -89,7 +92,7 @@ export const QrCard = memo(function QrCard({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label={`${item.name} için işlemler`}
+                    aria-label={c.actions(item.name)}
                     className="-mr-1 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   >
                     <MoreHorizontal className="h-5 w-5" aria-hidden />
@@ -98,45 +101,45 @@ export const QrCard = memo(function QrCard({
                 <DropdownMenuContent align="end" className="w-56">
                   {live && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'open', tab: 'print' })}>
-                      <Printer className="mr-2 h-4 w-4" aria-hidden /> Yazdır ve indir
+                      <Printer className="mr-2 h-4 w-4" aria-hidden /> {c.print}
                     </DropdownMenuItem>
                   )}
                   {item.status !== 'archived' && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'open', tab: 'settings' })}>
-                      <Pencil className="mr-2 h-4 w-4" aria-hidden /> Düzenle
+                      <Pencil className="mr-2 h-4 w-4" aria-hidden /> {c.edit}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'open', tab: 'stats' })}>
-                    <CalendarClock className="mr-2 h-4 w-4" aria-hidden /> İstatistik ve geçmiş
+                    <CalendarClock className="mr-2 h-4 w-4" aria-hidden /> {c.statsHistory}
                   </DropdownMenuItem>
                   {live && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'copy' })}>
-                      <Copy className="mr-2 h-4 w-4" aria-hidden /> Linki kopyala
+                      <Copy className="mr-2 h-4 w-4" aria-hidden /> {c.copyLink}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
                   {live && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'lifecycle', action: 'rotate' })}>
-                      <RefreshCw className="mr-2 h-4 w-4" aria-hidden /> Kodu yenile
+                      <RefreshCw className="mr-2 h-4 w-4" aria-hidden /> {c.rotate}
                     </DropdownMenuItem>
                   )}
                   {live && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'lifecycle', action: 'revoke' })}>
-                      <Ban className="mr-2 h-4 w-4" aria-hidden /> İptal et
+                      <Ban className="mr-2 h-4 w-4" aria-hidden /> {c.revoke}
                     </DropdownMenuItem>
                   )}
                   {item.status === 'revoked' && (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'lifecycle', action: 'unrevoke' })}>
-                      <Undo2 className="mr-2 h-4 w-4" aria-hidden /> İptali geri al
+                      <Undo2 className="mr-2 h-4 w-4" aria-hidden /> {c.unrevoke}
                     </DropdownMenuItem>
                   )}
                   {item.status === 'archived' ? (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'lifecycle', action: 'restore' })}>
-                      <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> Arşivden geri al
+                      <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> {c.restore}
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem onSelect={() => onIntent(item, { kind: 'lifecycle', action: 'archive' })}>
-                      <Archive className="mr-2 h-4 w-4" aria-hidden /> Arşivle
+                      <Archive className="mr-2 h-4 w-4" aria-hidden /> {c.archive}
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
@@ -145,11 +148,11 @@ export const QrCard = memo(function QrCard({
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={cn('qx-caption inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', TONE_CHIP[tone])}>
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-                {STATUS_LABEL[item.status]}
+                {copy.status[item.status]}
               </span>
               {item.expiringSoon && (
                 <span className={cn('qx-caption rounded-full px-2 py-0.5 font-medium', TONE_CHIP.warning)}>
-                  {fmtDate(item.expiresAt)} sona eriyor
+                  {c.expires(fmtDate(item.expiresAt))}
                 </span>
               )}
               {item.location && (
@@ -157,7 +160,7 @@ export const QrCard = memo(function QrCard({
                   <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span className="truncate">
                     {item.location.name}
-                    {!item.location.isActive && ' (arşiv)'}
+                    {!item.location.isActive && copy.common.archivedSuffix}
                   </span>
                 </span>
               )}
@@ -168,19 +171,19 @@ export const QrCard = memo(function QrCard({
 
         <div className="space-y-1">
           <p className="qx-small text-fg">
-            <span className="sr-only">Son 30 gün: </span>
-            {statsLine(item.stats.scans, item.stats.feedbacks, item.stats.conversion)}
+            <span className="sr-only">{c.last30Sr}</span>
+            {statsLine(item.stats.scans, item.stats.feedbacks, item.stats.conversion, copy.stats)}
             {item.stats.avgRating != null && <span className="text-fg-muted"> · ★ {item.stats.avgRating.toLocaleString('tr-TR')}</span>}
           </p>
           <div className="flex items-end gap-2">
             <div className="h-8 min-w-0 flex-1">
               {item.stats.scans > 0 ? (
-                <Sparkline data={item.stats.spark} tone="brand" height={32} area zeroBased label={`${item.name}: son 14 günün günlük taramaları`} />
+                <Sparkline data={item.stats.spark} tone="brand" height={32} area zeroBased label={c.sparkLabel(item.name)} />
               ) : (
-                <p className="qx-caption text-fg-subtle">Son 30 günde tarama yok</p>
+                <p className="qx-caption text-fg-subtle">{c.noScans30}</p>
               )}
             </div>
-            <span className="qx-caption shrink-0 text-fg-subtle">30 gün</span>
+            <span className="qx-caption shrink-0 text-fg-subtle">{c.days30}</span>
           </div>
         </div>
 
@@ -189,22 +192,22 @@ export const QrCard = memo(function QrCard({
             <Checkbox
               checked={selected}
               onCheckedChange={(v) => onSelect(item, v === true)}
-              aria-label={`${item.name} seç`}
+              aria-label={c.selectAria(item.name)}
             />
-            <span className="qx-small text-fg-muted">Seç</span>
+            <span className="qx-small text-fg-muted">{c.select}</span>
           </label>
           {canToggle ? (
             <label className="flex min-h-11 cursor-pointer items-center gap-2">
-              <span className="qx-small text-fg-muted">{item.isActive ? 'Yayında' : 'Duraklatıldı'}</span>
+              <span className="qx-small text-fg-muted">{item.isActive ? c.live : c.paused}</span>
               <Switch
                 checked={item.isActive}
                 disabled={busy}
                 onCheckedChange={(next) => onIntent(item, { kind: 'toggle', next })}
-                aria-label={`${item.name} ${item.isActive ? 'duraklat' : 'yayına al'}`}
+                aria-label={c.toggleAria(item.name, item.isActive)}
               />
             </label>
           ) : (
-            <span className="qx-caption text-fg-subtle">{item.feedbackTotal > 0 ? `${item.feedbackTotal} yorum korunuyor` : ' '}</span>
+            <span className="qx-caption text-fg-subtle">{item.feedbackTotal > 0 ? c.kept(item.feedbackTotal) : ' '}</span>
           )}
         </div>
       </article>
