@@ -7,6 +7,7 @@
  * `Math.random` burada serbest (parçacık saçılımı); mantık `sim.ts`'te.
  */
 import { COLS, COUNTDOWN_TICKS, HZ, KINDS, ROWS, type PieceKind, type SimEvent, type StackSim } from './sim';
+import { CLEAR_LABELS_TR } from './copy';
 
 export const CELL = 20;
 export const RS_W = COLS * CELL;
@@ -64,12 +65,16 @@ export function createFxState(): FxState {
   return { particles: [], stamps: [], shake: 0, flash: 0, flashColor: PALETTE.accent, last: 0 };
 }
 
-const CLEAR_LABEL = ['', 'Onaylandı ✓', 'Çift onay ✓✓', 'Üçlü onay ✓✓✓', 'İSTİF! ✓✓✓✓'];
-
-export function applyEventsToFx(fx: FxState, events: SimEvent[], rich: boolean, shake: (px: number) => number) {
+export function applyEventsToFx(
+  fx: FxState,
+  events: SimEvent[],
+  rich: boolean,
+  shake: (px: number) => number,
+  clearLabels: readonly string[] = CLEAR_LABELS_TR
+) {
   for (const e of events) {
     if (e.t === 'clear') {
-      for (const r of e.rows) fx.stamps.push({ row: r, life: 1, label: CLEAR_LABEL[e.n] ?? '' });
+      for (const r of e.rows) fx.stamps.push({ row: r, life: 1, label: clearLabels[e.n] ?? '' });
       fx.shake = Math.max(fx.shake, shake(1 + e.n));
       if (rich) {
         const count = e.n >= 4 ? 40 : 8 * e.n;

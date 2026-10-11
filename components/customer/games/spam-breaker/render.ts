@@ -6,6 +6,7 @@
  *   kalkan = açık mavi kapsül, top = beyaz daire, kapsüller = sarı "↔" (geniş) / pembe "+" (can).
  * `Math.random` burada serbest (parçacık saçılımı); mantık `sim.ts`'te. `shadowBlur` YOK (pahalı).
  */
+import { BREAKER_CANVAS_TEXTS_TR, type BreakerCanvasTexts } from './copy';
 import {
   BALL_R,
   CAPSULE_H,
@@ -65,7 +66,13 @@ export interface FxState {
 export const createFxState = (): FxState => ({ particles: [], floaters: [], shake: 0, vignette: 0, flash: 0 });
 
 /** Olayları kozmetik efekte çevirir. `rich` false (azaltılmış hareket) → parçacık/sarsıntı yok. */
-export function applyEventsToFx(fx: FxState, events: SimEvent[], rich: boolean, shake: (px: number) => number) {
+export function applyEventsToFx(
+  fx: FxState,
+  events: SimEvent[],
+  rich: boolean,
+  shake: (px: number) => number,
+  texts: BreakerCanvasTexts = BREAKER_CANVAS_TEXTS_TR
+) {
   for (const e of events) {
     if (e.t === 'hit') {
       if (rich) {
@@ -84,9 +91,9 @@ export function applyEventsToFx(fx: FxState, events: SimEvent[], rich: boolean, 
       fx.shake = Math.max(fx.shake, shake(4));
     } else if (e.t === 'catch') {
       fx.flash = 1;
-      fx.floaters.push({ x: SB_W / 2, y: PADDLE_Y - 30, text: e.kind === 'wide' ? 'Geniş kalkan!' : '+1 can', life: 0, color: e.kind === 'wide' ? PALETTE.wide : PALETTE.life });
+      fx.floaters.push({ x: SB_W / 2, y: PADDLE_Y - 30, text: e.kind === 'wide' ? texts.wide : texts.life, life: 0, color: e.kind === 'wide' ? PALETTE.wide : PALETTE.life });
     } else if (e.t === 'threshold') {
-      fx.floaters.push({ x: SB_W / 2, y: SB_H / 2, text: 'Ödül eşiği geçildi!', life: 0, color: PALETTE.good });
+      fx.floaters.push({ x: SB_W / 2, y: SB_H / 2, text: texts.threshold, life: 0, color: PALETTE.good });
     }
   }
   if (fx.particles.length > 220) fx.particles.splice(0, fx.particles.length - 220);
@@ -122,7 +129,13 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-export function drawFrame(ctx: CanvasRenderingContext2D, sim: BreakerSim, fx: FxState, opts: { coarse: boolean }) {
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  sim: BreakerSim,
+  fx: FxState,
+  opts: { coarse: boolean; texts?: BreakerCanvasTexts }
+) {
+  const texts = opts.texts ?? BREAKER_CANVAS_TEXTS_TR;
   ctx.save();
   if (fx.shake > 0) ctx.translate((Math.random() - 0.5) * fx.shake * 2, (Math.random() - 0.5) * fx.shake * 2);
 
@@ -232,19 +245,19 @@ export function drawFrame(ctx: CanvasRenderingContext2D, sim: BreakerSim, fx: Fx
   ctx.fillStyle = PALETTE.text;
   if (sim.phase === 'serve') {
     ctx.font = 'bold 15px system-ui, sans-serif';
-    ctx.fillText(`Seviye ${sim.level} / ${LEVELS}`, SB_W / 2, SB_H / 2 + 20);
+    ctx.fillText(texts.level(sim.level, LEVELS), SB_W / 2, SB_H / 2 + 20);
     ctx.font = '13px system-ui, sans-serif';
     const left = Math.ceil(sim.phaseTicks / HZ);
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillText(
-      `${opts.coarse ? 'Dokunup bırak' : 'Boşluk / tıkla'}: fırlat · ${Math.min(left, SERVE_AUTO_TICKS / HZ)}`,
+      texts.launchHint(opts.coarse, Math.min(left, SERVE_AUTO_TICKS / HZ)),
       SB_W / 2,
       SB_H / 2 + 42
     );
   } else if (sim.phase === 'levelup') {
     ctx.font = 'bold 20px system-ui, sans-serif';
     ctx.fillStyle = PALETTE.good;
-    ctx.fillText('Seviye temizlendi!', SB_W / 2, SB_H / 2);
+    ctx.fillText(texts.cleared, SB_W / 2, SB_H / 2);
   }
 
   if (fx.vignette > 0) {

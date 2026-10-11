@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart, Pause, Rocket, Share2, Shield, Star, Trophy } from 'lucide-react';
 import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useSpamBreakerCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -99,6 +101,10 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
     readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useSpamBreakerCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
+  const cRef = useLatestRef(c);
   const boardRef = useRef<HTMLDivElement>(null);
   const surface = useCanvasSurface(canvasRef, { width: SB_W, height: SB_H });
   const [simObj] = useState<BreakerSim>(() => createBreakerSim(seed, { events: true, threshold }));
@@ -121,7 +127,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
   const handleEvents = useCallback(
     (events: SimEvent[]) => {
       if (events.length === 0) return;
-      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px));
+      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px), tRef.current.canvas);
       for (const e of events) {
         switch (e.t) {
           case 'launch':
@@ -134,30 +140,30 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
           case 'hit':
             fx.sfx(() => sfxCollectStar(e.score % 6));
             if (e.destroyed) fx.haptic('tap');
-            if (e.score % 10 === 0) setAnnounce(`${e.score} isabet.`);
+            if (e.score % 10 === 0) setAnnounce(tRef.current.hits(e.score));
             break;
           case 'capsule':
-            setAnnounce(e.kind === 'wide' ? 'Geniş kalkan kapsülü düşüyor.' : 'Can kapsülü düşüyor.');
+            setAnnounce(tRef.current.capsule(e.kind === 'wide'));
             break;
           case 'catch':
             fx.sfx(() => sfxFanfare());
             fx.haptic('success');
-            setAnnounce(e.kind === 'wide' ? 'Kalkan 10 saniye genişledi.' : 'Bir can kazandın.');
+            setAnnounce(tRef.current.caught(e.kind === 'wide'));
             break;
           case 'threshold':
             fx.sfx(() => sfxWin());
             fx.haptic('success');
-            setAnnounce(`Ödül eşiği ${threshold} geçildi. Artık top kaçsa da skorun sayılır.`);
+            setAnnounce(tRef.current.thresholdAnnounce(threshold));
             break;
           case 'lose':
             fx.sfx(() => sfxHit());
             fx.haptic('big');
-            setAnnounce(e.lives > 0 ? `Top kaçtı. ${e.lives} can kaldı.` : 'Son can gitti.');
+            setAnnounce(tRef.current.lose(e.lives));
             break;
           case 'level':
             fx.sfx(() => sfxFanfare());
             fx.haptic('success');
-            setAnnounce(`Seviye temizlendi. Sıradaki: ${e.level} / ${LEVELS}; top hızlanıyor.`);
+            setAnnounce(tRef.current.levelAnnounce(e.level, LEVELS));
             break;
           case 'over':
             if (e.cause === 'clear') {
@@ -191,7 +197,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
     setSummary(s);
     setHud(snapshot(sim));
     setStage('summary');
-    setAnnounce(`${s.cause ? END_TEXT[s.cause] : 'Oyun bitti'}. Skor ${s.score}. ${s.stars} yıldız.`);
+    setAnnounce(tRef.current.endAnnounce(s.cause ? tRef.current.end[s.cause] : cRef.current.gameOver, s.score, s.stars));
   }, [mode, threshold, simObj]);
 
   const applyPending = useCallback(() => {
@@ -232,7 +238,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
     render: () => {
       const s = surface.current;
       if (!s) return;
-      drawFrame(s.beginFrame(), simObj, fxRef.current, { coarse: coarseRef.current });
+      drawFrame(s.beginFrame(), simObj, fxRef.current, { coarse: coarseRef.current, texts: tRef.current.canvas });
     },
   });
 
@@ -345,27 +351,27 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/spam-breaker`;
     const text = summary.won
-      ? `Qratex Spam Kırıcı'da ${LEVELS} seviyenin hepsini temizledim: ${summary.score} isabet!`
-      : `Qratex Spam Kırıcı'da ${summary.level}. seviyede ${summary.score} isabet yaptım. Sen geçebilir misin?`;
+      ? t.shareWon(LEVELS, summary.score)
+      : t.shareLost(summary.level, summary.score);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Spam Kırıcı', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
   const progress = Math.min(1, hud.score / Math.max(1, threshold));
   const hudSummary = useMemo(
     () =>
-      `Seviye ${hud.level} / ${LEVELS}, ${hud.bricksLeft} tuğla kaldı, ${hud.lives} can. Skor ${hud.score}, ödül eşiği ${threshold}.`,
-    [hud.level, hud.bricksLeft, hud.lives, hud.score, threshold]
+      t.hudSummary(hud.level, LEVELS, hud.bricksLeft, hud.lives, hud.score, threshold),
+    [hud.level, hud.bricksLeft, hud.lives, hud.score, threshold, t]
   );
 
   const holdButton = (side: 'left' | 'right', label: string, Icon: typeof ChevronLeft) => (
@@ -394,23 +400,23 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between text-xs text-white/75">
             <span className="flex items-center gap-1.5">
-              Seviye <b className="tabular-nums text-white">{hud.level}</b>/{LEVELS}
-              <span className="flex items-center gap-0.5" aria-label={`${hud.lives} can`}>
+              {t.level} <b className="tabular-nums text-white">{hud.level}</b>/{LEVELS}
+              <span className="flex items-center gap-0.5" aria-label={t.lives(hud.lives)}>
                 {Array.from({ length: hud.lives }).map((_, i) => (
                   <Heart key={i} className="h-3.5 w-3.5" fill={PALETTE.life} style={{ color: PALETTE.life }} aria-hidden />
                 ))}
               </span>
-              {hud.wide && <Shield className="h-3.5 w-3.5" style={{ color: PALETTE.wide }} aria-label="Geniş kalkan" />}
+              {hud.wide && <Shield className="h-3.5 w-3.5" style={{ color: PALETTE.wide }} aria-label={t.wideShield} />}
             </span>
             <span>
-              Skor <b className="tabular-nums text-white">{hud.score}</b>
-              <span className="text-white/60"> · eşik {threshold}</span>
+              {t.score} <b className="tabular-nums text-white">{hud.score}</b>
+              <span className="text-white/60">{c.thresholdSuffix(threshold)}</span>
             </span>
           </div>
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -422,15 +428,15 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
           </div>
           <p className="mt-1 text-[11px] text-white/70">
             {hud.score >= threshold
-              ? 'Eşik geçildi — top kaçsa da skorun sayılır. Devam et, rekoru büyüt.'
-              : `${threshold} isabetten sonra top kaçsa da ödül hakkın kalır.`}
+              ? t.passedHint
+              : t.safeHint(threshold)}
           </p>
         </div>
         <button
           type="button"
           onClick={onPauseRequest}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -440,15 +446,14 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
         {announce}
       </p>
       <p id="sb-rules" className="sr-only">
-        {hudSummary} Sol ve sağ ok ya da A ve D ile kalkanı sür, Boşluk ile topu fırlat. Dokunmatikte oyun alanında
-        parmağını kaydır, dokunup bırakınca top fırlar. Esc duraklatır.
+        {hudSummary} {t.rules}
       </p>
 
       <div
         ref={boardRef}
         tabIndex={0}
         role="application"
-        aria-label="Spam Kırıcı oyun alanı"
+        aria-label={t.arena}
         aria-describedby="sb-rules"
         className="relative aspect-[3/4] w-full touch-none overflow-hidden rounded-2xl border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         style={{ background: PALETTE.bg }}
@@ -463,14 +468,14 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             className="absolute inset-0 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#0b1020]/92 p-5 text-white"
           >
             <h3 id="sb-tut-title" className="text-center text-xl font-bold">
-              Nasıl oynanır?
+              {c.howTo}
             </h3>
             <ol className="space-y-3 text-sm">
               <li className="flex gap-3">
                 <Shield className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.paddle }} aria-hidden />
                 <span>
-                  <b>Kalkanı kaydır, topu sektir.</b> Topun kalkanın neresine çarptığı açısını belirler: kenar = yatık,
-                  orta = dik.
+                  <b>{t.paddleTitle}</b>
+                  {t.paddleBody}
                 </span>
               </li>
               <li className="flex gap-3">
@@ -478,27 +483,31 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
                   @
                 </span>
                 <span>
-                  <b>Spam tuğlası</b> (turuncu, @) tek vuruşta, <b>bot tuğlası</b> (mavi, iki gözlü) iki vuruşta kırılır.
-                  Her vuruş 1 skor; {LEVELS} seviye, top her seviyede hızlanır.
+                  <b>{t.spamTitle}</b>
+                  {t.spamMid}
+                  <b>{t.botTitle}</b>
+                  {t.botBody(LEVELS)}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Heart className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.life }} aria-hidden />
                 <span>
-                  <b>Kapsülleri yakala:</b> sarı ↔ kalkanı 10 sn genişletir, pembe + bir can verir. 3 canla başlarsın.
+                  <b>{t.capsuleTitle}</b>
+                  {t.capsuleBody}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Trophy className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.good }} aria-hidden />
                 <span>
-                  <b>Ödül eşiği {threshold}.</b> Eşiği geçtikten sonra top kaçsa bile skorun sayılır.
+                  <b>{t.thresholdTitle(threshold)}</b>
+                  {t.thresholdBody}
                 </span>
               </li>
             </ol>
             <p className="text-center text-xs text-white/70">
               {coarse
-                ? 'Oyun alanında parmağını kaydır ya da alttaki düğmeleri kullan; dokunup bırakınca top fırlar.'
-                : '← / → ya da A / D · Boşluk: fırlat · fare ile de sürebilirsin · Esc: duraklat'}
+                ? t.touchKeys
+                : t.keys}
             </p>
             <button
               type="button"
@@ -507,7 +516,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
               className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               style={{ background: PALETTE.paddle }}
             >
-              Anladım, başla
+              {c.gotIt}
             </button>
           </div>
         )}
@@ -520,9 +529,9 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             className="absolute inset-0 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#0b1020]/92 p-5 text-center text-white"
           >
             <h3 id="sb-sum-title" className="text-xl font-bold">
-              {summary.cause ? END_TEXT[summary.cause] : 'Oyun bitti'}
+              {summary.cause ? t.end[summary.cause] : c.gameOver}
             </h3>
-            <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+            <div className="flex gap-1" role="img" aria-label={c.stars(summary.stars)}>
               {[1, 2, 3].map((n) => (
                 <Star
                   key={n}
@@ -536,16 +545,16 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             <p className="text-4xl font-black tabular-nums">{summary.score}</p>
             <p className="text-xs text-white/70">
               {summary.prevBest === null
-                ? 'İlk skorun bu cihazda kaydedildi.'
+                ? c.firstScore
                 : summary.score > summary.prevBest
-                  ? `Yeni kişisel rekor! (önceki ${summary.prevBest})`
-                  : `En iyin: ${summary.prevBest}`}
-              {mode === 'practice' ? ' · Pratik' : ''}
+                  ? c.newBest(summary.prevBest)
+                  : c.best(summary.prevBest)}
+              {mode === 'practice' ? c.practiceSuffix : ''}
             </p>
             <dl className="grid w-full max-w-xs grid-cols-2 gap-2 text-xs">
               {[
-                ['Seviye', `${summary.level}/${LEVELS}`],
-                ['Süre', `${Math.floor(summary.seconds / 60)}:${String(summary.seconds % 60).padStart(2, '0')}`],
+                [t.statLevel, `${summary.level}/${LEVELS}`],
+                [t.statTime, `${Math.floor(summary.seconds / 60)}:${String(summary.seconds % 60).padStart(2, '0')}`],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-white/5 px-2 py-1.5">
                   <dt className="text-white/60">{k}</dt>
@@ -556,9 +565,9 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
             <p className="text-xs text-white/70">
               {summary.score >= threshold
                 ? mode === 'ranked'
-                  ? 'Ödül eşiğini geçtin — sunucu oyunu yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                  : 'Eşiği geçtin. Sıralı modda bu skor ödül getirirdi.'
-                : `Ödül eşiği ${threshold}; ${threshold - summary.score} isabet kaldı.`}
+                  ? t.passedRanked
+                  : c.passedPractice
+                : t.remaining(threshold, threshold - summary.score)}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -566,7 +575,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
                 onClick={share}
                 className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                <Share2 className="h-4 w-4" aria-hidden /> {c.share}
               </button>
               <button
                 type="button"
@@ -576,7 +585,7 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
                 style={{ background: PALETTE.paddle }}
               >
                 <Trophy className="h-4 w-4" aria-hidden />
-                {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                {mode === 'ranked' ? c.save(autoLeft) : c.cont}
               </button>
             </div>
             <p className="min-h-[1rem] text-xs text-white/70" aria-live="polite">
@@ -588,25 +597,25 @@ export function SpamBreakerGame({ mode, seed, config, paused, onPauseRequest, on
 
       {/* Dokunmatik kontroller: ekran genişliğiyle değil işaretçi türüyle gösterilir. */}
       {coarse && stage === 'playing' && (
-        <div className="mt-3 flex gap-2" role="group" aria-label="Kalkan kontrolleri">
-          {holdButton('left', 'Kalkanı sola sür', ChevronLeft)}
+        <div className="mt-3 flex gap-2" role="group" aria-label={t.controls}>
+          {holdButton('left', t.moveLeft, ChevronLeft)}
           <button
             type="button"
-            aria-label="Topu fırlat"
+            aria-label={t.launch}
             disabled={hud.phase !== 'serve'}
             onClick={requestLaunch}
             className="flex h-14 w-20 touch-manipulation items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white active:bg-white/25 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <Rocket className="h-6 w-6" aria-hidden />
           </button>
-          {holdButton('right', 'Kalkanı sağa sür', ChevronRight)}
+          {holdButton('right', t.moveRight, ChevronRight)}
         </div>
       )}
 
       <p className="mt-2 text-center text-xs text-white/70">
         {mode === 'practice'
-          ? 'Pratik: ödülsüz, liderliğe girmez.'
-          : 'Sıralı: skor sunucuda yeniden oynatılarak doğrulanır.'}
+          ? c.footPractice
+          : c.footRanked}
       </p>
     </div>
   );

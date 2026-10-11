@@ -24,7 +24,9 @@ import {
   Trophy,
   Zap,
 } from 'lucide-react';
-import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useReviewStackCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -156,6 +158,10 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
     readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useReviewStackCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
+  const cRef = useLatestRef(c);
   const boardRef = useRef<HTMLDivElement>(null);
   const surface = useCanvasSurface(canvasRef, { width: RS_W, height: RS_H });
   const [simObj] = useState<StackSim>(() => createStackSim(seed, { events: true, threshold, maxScore }));
@@ -174,7 +180,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
   const handleEvents = useCallback(
     (events: SimEvent[]) => {
       if (events.length === 0) return;
-      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px));
+      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px), tRef.current.clearLabels);
       for (const e of events) {
         switch (e.t) {
           case 'count':
@@ -183,7 +189,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
             break;
           case 'go':
             fx.sfx(() => sfxPowerUp());
-            setAnnounce('Başla!');
+            setAnnounce(cRef.current.start);
             break;
           case 'lock':
             if (e.hard) fx.haptic('tap');
@@ -192,16 +198,16 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
             fx.sfx(() => sfxCombo(e.n - 1));
             fx.haptic(e.n >= 4 ? 'big' : 'success');
             if (e.n >= 4) fx.confetti('sides');
-            setAnnounce(`${e.n} satır onaylandı, +${e.gained}. Skor ${e.score}.`);
+            setAnnounce(tRef.current.cleared(e.n, e.gained, e.score));
             break;
           case 'level':
             fx.sfx(() => sfxFanfare());
-            setAnnounce(`Seviye ${e.level}. Bloklar hızlandı.`);
+            setAnnounce(tRef.current.levelAnnounce(e.level));
             break;
           case 'threshold':
             fx.sfx(() => sfxWin());
             fx.haptic('success');
-            setAnnounce(`Ödül eşiği ${threshold} geçildi.`);
+            setAnnounce(tRef.current.thresholdAnnounce(threshold));
             break;
           case 'over':
             if (e.cause === 'topout') {
@@ -241,7 +247,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
     setSummary(s);
     setHud(snapshot(sim));
     setStage('summary');
-    setAnnounce(`${s.cause ? END_TEXT[s.cause] : 'Oyun bitti'}. Skor ${s.score}. ${s.stars} yıldız.`);
+    setAnnounce(tRef.current.endAnnounce(s.cause ? tRef.current.end[s.cause] : cRef.current.gameOver, s.score, s.stars));
   }, [mode, threshold, maxScore, simObj]);
 
   useGameLoop({
@@ -409,27 +415,34 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
   const share = async () => {
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/review-stack`;
-    const text = `Qratex Yorum İstifi'nde ${summary.lines} satır onaylattım: ${summary.score} puan, ${summary.stars} yıldız. Sen geçebilir misin?`;
+    const text = t.share(summary.lines, summary.score, summary.stars);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Yorum İstifi', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
   const progress = Math.min(1, hud.score / Math.max(1, threshold));
   const hudSummary = useMemo(
     () =>
-      `Skor ${hud.score}, ödül eşiği ${threshold}, tavan ${maxScore}. ${hud.lines} satır, seviye ${hud.level}. ` +
-      `Sıradaki: ${hud.next.map((k) => KIND_NAME[k]).join(', ')}. Saklanan: ${hud.hold ? KIND_NAME[hud.hold] : 'yok'}.`,
-    [hud, threshold, maxScore]
+      t.hudSummary(
+        hud.score,
+        threshold,
+        maxScore,
+        hud.lines,
+        hud.level,
+        hud.next.map((k) => t.kind[k] ?? KIND_NAME[k]).join(', '),
+        hud.hold ? t.kind[hud.hold] ?? KIND_NAME[hud.hold] : null
+      ),
+    [hud, threshold, maxScore, t]
   );
 
   /** Dokunmatik tuş: basılı tutma tekrarı motordan (yalnız kaydırma/yumuşak düşürme). */
@@ -469,18 +482,18 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between text-xs text-white/75">
             <span>
-              Seviye <b className="tabular-nums text-white">{hud.level}</b>/{MAX_LEVEL}
-              <span className="text-white/65"> · {hud.lines} satır</span>
+              {t.level} <b className="tabular-nums text-white">{hud.level}</b>/{MAX_LEVEL}
+              <span className="text-white/65">{t.lines(hud.lines)}</span>
             </span>
             <span>
-              Skor <b className="tabular-nums text-white">{hud.score}</b>
-              <span className="text-white/65"> · eşik {threshold}</span>
+              {t.score} <b className="tabular-nums text-white">{hud.score}</b>
+              <span className="text-white/65">{c.thresholdSuffix(threshold)}</span>
             </span>
           </div>
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -495,7 +508,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
           type="button"
           onClick={onPauseRequest}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -505,8 +518,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
         {announce}
       </p>
       <p id="rs-rules" className="sr-only">
-        {hudSummary} Sol ve sağ ok kaydırır, yukarı ok ya da X döndürür, Z ters döndürür, aşağı ok yumuşak düşürür,
-        boşluk sert düşürür, C saklar, Esc duraklatır.
+        {hudSummary} {t.rules}
       </p>
 
       <div className="flex items-start justify-center gap-2">
@@ -514,7 +526,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
           ref={boardRef}
           tabIndex={0}
           role="application"
-          aria-label="Yorum İstifi oyun alanı"
+          aria-label={t.arena}
           aria-describedby="rs-rules"
           className="relative w-full touch-none overflow-hidden rounded-2xl border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           style={{ background: PALETTE.bg, aspectRatio: `${RS_W} / ${RS_H}`, maxWidth: 'min(100%, calc(62vh * 10 / 18))' }}
@@ -529,38 +541,42 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               className="absolute inset-0 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#0b1020]/95 p-4 text-white"
             >
               <h3 id="rs-tut-title" className="text-center text-lg font-bold">
-                Nasıl oynanır?
+                {c.howTo}
               </h3>
               <ol className="space-y-2.5 text-sm">
                 <li className="flex gap-2.5">
                   <Layers className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.accent }} aria-hidden />
                   <span>
-                    <b>Blokları diz.</b> Dolan satır onaylanır ve silinir: 1 satır 1, 2 satır 4, 3 satır 9, 4 satır 16 puan.
+                    <b>{t.stackTitle}</b>
+                    {t.stackBody}
                   </span>
                 </li>
                 <li className="flex gap-2.5">
                   <Zap className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.gold }} aria-hidden />
                   <span>
-                    <b>Her {LINES_PER_LEVEL} satırda seviye atlarsın</b>, bloklar hızlanır. Kesik çizgi, bloğun düşeceği yeri gösterir.
+                    <b>{t.levelTitle(LINES_PER_LEVEL)}</b>
+                    {t.levelBody}
                   </span>
                 </li>
                 <li className="flex gap-2.5">
                   <Archive className="mt-0.5 h-5 w-5 shrink-0" style={{ color: KIND_COLOR.T }} aria-hidden />
                   <span>
-                    <b>Sakla:</b> işine yaramayan bloğu kenara al (blok başına bir kez). Sağda sıradaki 3 blok görünür.
+                    <b>{t.holdTitle}</b>
+                    {t.holdBody}
                   </span>
                 </li>
                 <li className="flex gap-2.5">
                   <Trophy className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.gold }} aria-hidden />
                   <span>
-                    <b>Ödül eşiği {threshold}.</b> İstif tavana değerse oyun biter; {maxScore} puanda tam istif.
+                    <b>{t.thresholdTitle(threshold)}</b>
+                    {t.thresholdBody(maxScore)}
                   </span>
                 </li>
               </ol>
               <p className="text-center text-xs text-white/70">
                 {coarse
-                  ? 'Sürükle: kaydır · dokun: döndür · aşağı fırlat: sert düşür · alttaki tuşlar da çalışır.'
-                  : '← → kaydır · ↑/X döndür · Z ters · ↓ yumuşak · Boşluk sert · C sakla · Esc duraklat'}
+                  ? t.touchKeys
+                  : t.keys}
               </p>
               <button
                 type="button"
@@ -569,7 +585,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
                 className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 style={{ background: PALETTE.accent }}
               >
-                Anladım, başla
+                {c.gotIt}
               </button>
             </div>
           )}
@@ -582,9 +598,9 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               className="absolute inset-0 flex flex-col items-center justify-center [justify-content:safe_center] gap-2 overflow-y-auto bg-[#0b1020]/95 p-4 text-center text-white"
             >
               <h3 id="rs-sum-title" className="text-lg font-bold">
-                {summary.cause ? END_TEXT[summary.cause] : 'Oyun bitti'}
+                {summary.cause ? t.end[summary.cause] : c.gameOver}
               </h3>
-              <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+              <div className="flex gap-1" role="img" aria-label={c.stars(summary.stars)}>
                 {[1, 2, 3].map((n) => (
                   <Star
                     key={n}
@@ -598,18 +614,18 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               <p className="text-4xl font-black tabular-nums">{summary.score}</p>
               <p className="text-xs text-white/75">
                 {summary.prevBest === null
-                  ? 'İlk skorun bu cihazda kaydedildi.'
+                  ? c.firstScore
                   : summary.score > summary.prevBest
-                    ? `Yeni kişisel rekor! (önceki ${summary.prevBest})`
-                    : `En iyin: ${summary.prevBest}`}
-                {mode === 'practice' ? ' · Pratik' : ''}
+                    ? c.newBest(summary.prevBest)
+                    : c.best(summary.prevBest)}
+                {mode === 'practice' ? c.practiceSuffix : ''}
               </p>
               <dl className="grid w-full max-w-[15rem] grid-cols-2 gap-1.5 text-xs">
                 {[
-                  ['Satır', String(summary.lines)],
-                  ['Seviye', `${summary.level}/${MAX_LEVEL}`],
-                  ['Blok', String(summary.pieces)],
-                  ['4 satır', String(summary.tetrises)],
+                  [t.statLines, String(summary.lines)],
+                  [t.statLevel, `${summary.level}/${MAX_LEVEL}`],
+                  [t.statPieces, String(summary.pieces)],
+                  [t.statTetris, String(summary.tetrises)],
                 ].map(([k, v]) => (
                   <div key={k} className="rounded-lg bg-white/5 px-2 py-1">
                     <dt className="text-white/65">{k}</dt>
@@ -620,9 +636,9 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
               <p className="text-xs text-white/75">
                 {summary.score >= threshold
                   ? mode === 'ranked'
-                    ? 'Eşiği geçtin — sunucu oyunu yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                    : 'Eşiği geçtin. Sıralı modda bu skor ödül getirirdi.'
-                  : `Ödül eşiği ${threshold}; ${threshold - summary.score} puan kaldı.`}
+                    ? t.passedRanked
+                    : c.passedPractice
+                  : t.remaining(threshold, threshold - summary.score)}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button
@@ -630,7 +646,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
                   onClick={share}
                   className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
-                  <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                  <Share2 className="h-4 w-4" aria-hidden /> {c.share}
                 </button>
                 <button
                   type="button"
@@ -640,7 +656,7 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
                   style={{ background: PALETTE.accent }}
                 >
                   <Trophy className="h-4 w-4" aria-hidden />
-                  {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                  {mode === 'ranked' ? c.save(autoLeft) : c.cont}
                 </button>
               </div>
               <p className="min-h-[1rem] text-xs text-white/75" aria-live="polite">
@@ -653,13 +669,13 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
         {/* Yan panel: sakla + sıradaki */}
         <aside className="flex w-[4.5rem] shrink-0 flex-col gap-2 text-center text-white" aria-hidden>
           <div className="rounded-xl border border-white/10 bg-white/5 p-1.5">
-            <p className="mb-1 text-[11px] font-semibold text-white/75">Sakla</p>
+            <p className="mb-1 text-[11px] font-semibold text-white/75">{t.hold}</p>
             <div className="flex h-8 items-center justify-center">
               <MiniPiece kind={hud.hold} dim={!hud.canHold} />
             </div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-1.5">
-            <p className="mb-1 text-[11px] font-semibold text-white/75">Sıradaki</p>
+            <p className="mb-1 text-[11px] font-semibold text-white/75">{t.next}</p>
             <div className="flex flex-col items-center gap-2">
               {hud.next.map((k, i) => (
                 <div key={i} className="flex h-7 items-center justify-center">
@@ -673,19 +689,19 @@ export function ReviewStackGame({ mode, seed, config, paused, onPauseRequest, on
 
       {/* Dokunmatik tuşlar: ekran genişliğiyle değil işaretçi türüyle (iPad dahil). */}
       {coarse && stage === 'playing' && (
-        <div className="mt-3 grid grid-cols-4 gap-2" role="group" aria-label="Oyun tuşları">
-          {padButton('Sakla', Archive, { code: CODE.HOLD })}
-          {padButton('Ters döndür', RotateCcw, { code: CODE.ROTATE_CCW })}
-          {padButton('Döndür', RotateCw, { code: CODE.ROTATE_CW })}
-          {padButton('Sert düşür', ChevronsDown, { code: CODE.HARD })}
-          {padButton('Sola kaydır', ArrowLeft, { action: 'left' })}
-          {padButton('Yumuşak düşür', ArrowDown, { action: 'down', wide: true })}
-          {padButton('Sağa kaydır', ArrowRight, { action: 'right' })}
+        <div className="mt-3 grid grid-cols-4 gap-2" role="group" aria-label={t.pad}>
+          {padButton(t.hold, Archive, { code: CODE.HOLD })}
+          {padButton(t.rotateCcw, RotateCcw, { code: CODE.ROTATE_CCW })}
+          {padButton(t.rotate, RotateCw, { code: CODE.ROTATE_CW })}
+          {padButton(t.hardDrop, ChevronsDown, { code: CODE.HARD })}
+          {padButton(t.moveLeft, ArrowLeft, { action: 'left' })}
+          {padButton(t.softDrop, ArrowDown, { action: 'down', wide: true })}
+          {padButton(t.moveRight, ArrowRight, { action: 'right' })}
         </div>
       )}
 
       <p className="mt-2 text-center text-xs text-white/70">
-        {mode === 'practice' ? 'Pratik: ödülsüz, liderliğe girmez.' : 'Sıralı: skor sunucuda yeniden oynatılarak doğrulanır.'}
+        {mode === 'practice' ? c.footPractice : c.footRanked}
       </p>
     </div>
   );
