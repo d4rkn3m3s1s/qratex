@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { Prisma } from '@prisma/client';
@@ -80,6 +82,9 @@ function normalizeRequirement(input: unknown): Prisma.InputJsonObject {
 
 export async function GET(request: NextRequest) {
   try {
+    // Herkese açık katalog okuması: IP başına kötüye kullanım tavanı (oturum isteğe bağlı).
+    const limited = await enforceRouteRateLimit('gamification.badges.read', getClientIdentifier(request), 'read');
+    if (limited) return limited;
     // Oturum isteğe bağlı ama DOĞRULANMIŞ (getOptionalSession, lib/api-auth): ham JWT rolüyle
     // (kapısız/askıdaki) ADMIN yönetim görünümü ya da başkasının profili açılmaz.
     const session = await getOptionalSession();
@@ -320,6 +325,8 @@ export async function POST(request: NextRequest) {
     // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.badges.create', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     // Bulgu 7: doğrulamasız ham yazma kaldırıldı — admin rozet servisiyle aynı zod şeması +

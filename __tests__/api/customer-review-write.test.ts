@@ -28,7 +28,13 @@ jest.mock('@/lib/points-rules', () => ({
     text && text.trim().length >= 50 ? { points: 100, xp: 50 } : { points: 50, xp: 25 },
 }));
 const mockMint = jest.fn();
-jest.mock('@/lib/economy', () => ({ mintPoints: (...a: unknown[]) => mockMint(...a) }));
+const mockDebit = jest.fn();
+const mockLock = jest.fn();
+jest.mock('@/lib/economy', () => ({
+  mintPoints: (...a: unknown[]) => mockMint(...a),
+  debitPoints: (...a: unknown[]) => mockDebit(...a),
+  lockUserForUpdate: (...a: unknown[]) => mockLock(...a),
+}));
 jest.mock('@/lib/ai-engine', () => ({ analyzeWithFallback: jest.fn() }));
 
 const db = {
@@ -36,6 +42,8 @@ const db = {
   consumptionReview: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   notification: { create: jest.fn() },
   analyticsEvent: { create: jest.fn() },
+  pointsLedger: { findUnique: jest.fn() },
+  user: { findUnique: jest.fn() },
 };
 jest.mock('@/lib/prisma', () => ({
   prisma: { ...db, $transaction: (fn: (t: unknown) => unknown) => fn(db) },
@@ -126,5 +134,46 @@ describe('PUT', () => {
     const res = await PUT(json('PUT', {}), ctx);
     expect(res.status).toBe(400);
     expect(db.consumptionReview.update).not.toHaveBeenCalled();
+  });
+
+  describe('ayrıntılı yorum kısaltılınca ayrıntı ödülü farkı geri alınır (denetim Y5 ek)', () => {
+    const longText = 'Kahve çok güzeldi, servis hızlıydı, ortam da sessiz ve rahattı gerçekten.';
+    beforeEach(() => {
+      db.consumptionReview.findFirst.mockResolvedValue({ ...existing, text: longText, characterCategory: null });
+      db.pointsLedger.findUnique.mockResolvedValue({ id: 'led-1', userId: 'cust-1', delta: 100, status: 'posted' });
+      mockDebit.mockResolvedValue({ id: 'cust-1', points: 0, xp: 0, level: 1 });
+    });
+
+    it('metin eşiğin altına inince fark (100 − 50) tek seferlik anahtarla reversal olarak düşülür', async () => {
+      db.user.findUnique.mockResolvedValue({ points: 500 });
+      const res = await PUT(json('PUT', { text: 'Kısa' }), ctx);
+      expect(res.status).toBe(200);
+      expect(db.pointsLedger.findUnique.mock.calls[0][0].where).toEqual({ idempotencyKey: 'consumption_review:c1' });
+      expect(mockLock).toHaveBeenCalledWith(db, 'cust-1');
+      expect(mockDebit).toHaveBeenCalledWith(db, expect.objectContaining({
+        userId: 'cust-1', points: 50, source: 'reversal', idempotencyKey: 'consumption_review_shrink:c1',
+      }));
+      expect(db.consumptionReview.update).toHaveBeenCalled();
+    });
+
+    it('metni silmek (KVKK) engellenmez; bakiye yetmezse bakiye kadar düşülür', async () => {
+      db.user.findUnique.mockResolvedValue({ points: 20 });
+      const res = await PUT(json('PUT', { text: null }), ctx);
+      expect(res.status).toBe(200);
+      expect(mockDebit).toHaveBeenCalledWith(db, expect.objectContaining({ points: 20 }));
+      expect(db.consumptionReview.update.mock.calls[0][0].data).toMatchObject({ text: null });
+    });
+
+    it('ödül zaten temel düzeydeyse (tavan kısmış) geri alma yok', async () => {
+      db.pointsLedger.findUnique.mockResolvedValue({ id: 'led-1', userId: 'cust-1', delta: 40, status: 'posted' });
+      await PUT(json('PUT', { text: 'Kısa' }), ctx);
+      expect(mockDebit).not.toHaveBeenCalled();
+    });
+
+    it('metin yine eşiğin üstündeyse geri alma yok', async () => {
+      await PUT(json('PUT', { text: longText + ' Ek not.' }), ctx);
+      expect(db.pointsLedger.findUnique).not.toHaveBeenCalled();
+      expect(mockDebit).not.toHaveBeenCalled();
+    });
   });
 });

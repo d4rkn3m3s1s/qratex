@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { getOptionalSession } from '@/lib/api-auth';
-import { authOptions } from '@/lib/auth';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { recordInnovationAbEvent } from '@/lib/innovation-ab';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';

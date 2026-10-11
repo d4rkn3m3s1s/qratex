@@ -21,11 +21,18 @@ const prismaMock: Record<string, unknown> = {
 jest.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 const mockGetServerSession = jest.fn();
-jest.mock('next-auth', () => ({
-  __esModule: true,
-  getServerSession: (...a: unknown[]) => mockGetServerSession(...a),
+// requireAuth DB oturum durumunu (askı, oturum sürümü, güncel rol) okur; bu test yalnız uç
+// mantığını sınar → kimlik, taklit oturumdan türetilen requireAuth sonucu ile verilir.
+jest.mock('@/lib/api-auth', () => ({
+  requireAuth: async (roles: string[]) => {
+    const s = (await mockGetServerSession()) as { user?: { id?: string; role?: string } } | null;
+    if (!s?.user?.id) return { error: new Response(JSON.stringify({ error: 'Oturum yok' }), { status: 401 }) };
+    if (!roles.includes(String(s.user.role))) return { error: new Response(JSON.stringify({ error: 'Yetki yok' }), { status: 403 }) };
+    return { session: s };
+  },
 }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
+jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn(async () => ({ ok: true })) }));
 jest.mock('@/lib/api-http', () => ({ PRIVATE_NO_STORE_HEADERS: {} }));
 jest.mock('@/lib/idempotency', () => ({
   checkIdempotency: jest.fn(async () => ({ cached: false, key: null })),

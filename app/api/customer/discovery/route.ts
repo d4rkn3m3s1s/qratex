@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { getDiscoveryConfig } from '@/lib/discovery-config';
 import { computeDiscovery } from '@/lib/discovery/compute.server';
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(['CUSTOMER']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('customer.discovery', auth.session.user.id, 'read');
+    if (limited) return limited;
     const session = auth.session;
     const menuGate = await assertMenuItemVisible('nearby', 'customer', {
       request,

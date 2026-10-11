@@ -13,8 +13,13 @@ const mockTimelineCreate = jest.fn();
 const mockNotificationCreate = jest.fn();
 const mockExecuteRaw = jest.fn();
 
+// İşletme içi (sahip/personel) kişisel teklif kontrolü (lib/remedy-offer-service isDealerInsider):
+// bu senaryolarda müşteri işletme personeli DEĞİL.
+const mockStaffFindFirst = jest.fn(async () => null);
+
 const tx = {
   $executeRaw: (...a: unknown[]) => mockExecuteRaw(...a),
+  dealerStaff: { findFirst: (...a: unknown[]) => (mockStaffFindFirst as (...x: unknown[]) => unknown)(...a) },
   remedyOffer: {
     findFirst: (...a: unknown[]) => mockOfferFindFirst(...a),
     create: (...a: unknown[]) => mockOfferCreate(...a),
@@ -27,6 +32,7 @@ const tx = {
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     $transaction: (fn: (t: unknown) => unknown) => fn(tx),
+    dealerStaff: { findFirst: (...a: unknown[]) => (mockStaffFindFirst as (...x: unknown[]) => unknown)(...a) },
     remedyOffer: {
       findUnique: (...a: unknown[]) => mockOfferFindUnique(...a),
       findFirst: (...a: unknown[]) => mockOfferFindFirst(...a),

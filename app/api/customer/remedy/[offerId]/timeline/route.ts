@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { buildRemedyTimeline, CUSTOMER_HIDDEN_TIMELINE_KINDS } from '@/lib/remedy-timeline';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -21,6 +22,8 @@ export async function GET(
 
   const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('customer.remedy.timeline', auth.session.user.id, 'read');
+  if (limited) return limited;
   const { session } = auth;
 
   const { offerId } = await params;

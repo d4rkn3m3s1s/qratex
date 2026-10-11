@@ -15,6 +15,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
 import { publicDisplayName } from '@/lib/http/dto';
+import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 import { cancelSquadBattle, settleSquadBattle, OPEN_BATTLE_STATUSES } from '@/lib/squad-battle-service';
 import { BATTLE_RESULT_VISIBLE_MS, squadLevel } from './rules';
@@ -460,13 +461,25 @@ export async function getBattleState(
           select: { score: true, squadId: true },
         }),
       ]);
-      topContributors = top.map((p) => ({
-        name: contributorName(p.user.name, p.squadId === squadId),
-        image: p.user.image,
-        score: p.score,
-        side: p.squadId === squadId ? 'mine' : 'theirs',
-        isMe: p.userId === userId,
-      }));
+      // "Liderlikte görün" kapalı RAKİP üye anonim + avatarsız (lig/turnuva ile aynı kural);
+      // kendi klanındakiler klan odasında zaten tam adla görünür.
+      const hiddenRivals = await leaderboardHiddenUserIds(
+        top.filter((p) => p.squadId !== squadId).map((p) => p.userId)
+      );
+      topContributors = top.map((p) => {
+        const sameSquad = p.squadId === squadId;
+        const identity = leaderboardIdentity(
+          { name: contributorName(p.user.name, sameSquad), image: p.user.image },
+          { hidden: !sameSquad && hiddenRivals.has(p.userId), isViewer: p.userId === userId }
+        );
+        return {
+          name: identity.name,
+          image: identity.image,
+          score: p.score,
+          side: sameSquad ? 'mine' : 'theirs',
+          isMe: p.userId === userId,
+        };
+      });
       amParticipant = !!me && me.squadId === squadId;
       myContribution = amParticipant ? me!.score : null;
     }

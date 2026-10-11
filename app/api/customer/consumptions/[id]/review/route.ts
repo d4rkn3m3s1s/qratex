@@ -10,7 +10,8 @@
  *  - Ödül eşiği ve miktarı sunucudan (admin matrisi); istemcinin vaadine güvenilmez.
  *  - AI analizi, karakter rozeti ve rozet işleri `after()` içinde (serverless'ta yarıda kesilmez).
  *  - PUT: yalnız gönderilen alanlar değişir; `text: null` / `dimensions: null` = SİL (KVKK).
- *    Metin değişmediyse AI yeniden çağrılmaz. Düzenleme yeni puan basmaz.
+ *    Metin değişmediyse AI yeniden çağrılmaz. Düzenleme yeni puan basmaz; ayrıntılı yorum
+ *    eşiğin altına kısaltılırsa ayrıntı ödülü farkı tek seferlik `reversal` ile geri alınır.
  *  - Karakter rozeti: bir yorum EN FAZLA BİR KEZ sınıflandırılır (`CHARACTER_MARK_EVENT`);
  *    düzenleme/sil-yeniden-yaz aynı yorumu başka kategoriye taşıyıp rozet açtıramaz.
  */
@@ -19,7 +20,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
-import { mintPoints } from '@/lib/economy';
+import { debitPoints, lockUserForUpdate, mintPoints } from '@/lib/economy';
 import { getConsumptionReviewReward, getPointsMatrix } from '@/lib/points-rules';
 import { analyzeWithFallback } from '@/lib/ai-engine';
 import { INPUT_LIMITS } from '@/lib/input-limits';
@@ -414,12 +415,52 @@ export const PUT = defineRoute(
       data,
       select: { id: true, rating: true, text: true, dimensions: true, updatedAt: true, dealerRepliedAt: true },
     } satisfies Prisma.ConsumptionReviewUpdateArgs;
-    const updated = clearsCategory
-      ? await prisma.$transaction(async (tx) => {
-          await tx.analyticsEvent.create({ data: characterMarkData(user.id, existing.id, 'text_deleted') });
-          return tx.consumptionReview.update(updateArgs);
-        })
-      : await prisma.consumptionReview.update(updateArgs);
+
+    // Ayrıntılı yorum ödülü metin uzunluğundan gelir. Ödül alındıktan sonra metin eşiğin altına
+    // indirilirse (ya da silinirse) ayrıntı farkı GERİ ALINIR (müşteri API denetimi Y5 ek):
+    // eskiden uzun metinle yüksek ödül alıp metni kısaltmak/silmek ödülü korumaya yetiyordu.
+    // Metni silme hakkı (KVKK) engellenmez; yalnız fark defterli `reversal` ile düşülür, bakiye
+    // yetmezse bakiye kadar. Tek seferlik anahtar: yeniden uzatıp kısaltmak ikinci kez düşmez,
+    // ödül de yeniden basılmaz (mint anahtarı `consumption_review:<id>` zaten kullanıldı).
+    const matrix = textChanged ? await getPointsMatrix() : null;
+    const threshold = matrix?.consumptionReview.longTextThreshold ?? Number.POSITIVE_INFINITY;
+    const wasDetailed = !!existing.text && existing.text.trim().length >= threshold;
+    const nowDetailed = !!nextText && nextText.length >= threshold;
+    const mayClawBack = !!matrix && textChanged && wasDetailed && !nowDetailed;
+
+    const updated =
+      clearsCategory || mayClawBack
+        ? await prisma.$transaction(async (tx) => {
+            if (mayClawBack && matrix) {
+              const credit = await tx.pointsLedger.findUnique({
+                where: { idempotencyKey: `consumption_review:${params.id}` },
+                select: { id: true, userId: true, delta: true, status: true },
+              });
+              const credited = credit && credit.userId === user.id && credit.status === 'posted' ? Math.max(0, credit.delta) : 0;
+              const excess = Math.max(0, credited - matrix.consumptionReview.base.points);
+              if (excess > 0) {
+                await lockUserForUpdate(tx, user.id);
+                const wallet = await tx.user.findUnique({ where: { id: user.id }, select: { points: true } });
+                const amount = Math.min(excess, Math.max(0, wallet?.points ?? 0));
+                if (amount > 0) {
+                  await debitPoints(tx, {
+                    userId: user.id,
+                    points: amount,
+                    source: 'reversal',
+                    sourceId: existing.id,
+                    idempotencyKey: `consumption_review_shrink:${params.id}`,
+                    reason: 'Ayrıntılı yorum kısaltıldı: ayrıntı ödülü farkı geri alındı',
+                    meta: { reversesId: credit!.id, consumptionId: params.id, excess, requested: excess, applied: amount },
+                  });
+                }
+              }
+            }
+            if (clearsCategory) {
+              await tx.analyticsEvent.create({ data: characterMarkData(user.id, existing.id, 'text_deleted') });
+            }
+            return tx.consumptionReview.update(updateArgs);
+          })
+        : await prisma.consumptionReview.update(updateArgs);
 
     const ratingChanged = body.rating !== undefined && body.rating !== existing.rating;
     if (textChanged || ratingChanged) {

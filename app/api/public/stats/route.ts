@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { getPublicStats } from '@/lib/landing/public-stats';
 import { PUBLIC_STATS_THRESHOLDS } from '@/lib/landing/public-stats-core';
 
@@ -17,7 +19,9 @@ const CACHE_SECONDS = 300;
  *  - Hata "200 + sıfır/4.9" değil, 503 + yeniden denenebilir hata zarfı.
  * Eski alan adları (`users`, `businesses`, `feedbacks`, `rating`) korunur.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const limited = await enforceRouteRateLimit('public.stats', getClientIdentifier(request), 'read');
+  if (limited) return limited;
   const stats = await getPublicStats();
   if (!stats) {
     return NextResponse.json(

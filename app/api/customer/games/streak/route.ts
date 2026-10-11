@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
@@ -26,6 +27,8 @@ export async function GET() {
   try {
     const auth = await requireAuth(['CUSTOMER']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('customer.games.streak', auth.session.user.id, 'read');
+    if (limited) return limited;
     const session = auth.session;
 
     // Tamamlanmış oturumların benzersiz günleri (son ~120 gün yeterli).

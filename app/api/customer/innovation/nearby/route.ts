@@ -12,7 +12,7 @@ import { EXCLUDE_LEGACY_CHURN_FLASH } from '@/lib/churn-intervention-core';
 export const dynamic = 'force-dynamic';
 
 /**
- * Mutlu saat / flash — yakınımda (tam adres yok, mesafe + işletme adı).
+ * Mutlu saat / flash — yakınımda (tam adres yok, 0,5 km'ye yuvarlanmış mesafe + işletme adı).
  * Yalnız oturumlu MÜŞTERİ; Keşfet kapısı + dakikada 30 istek (denetim: anonim toplu kazıma).
  * Keşfet → Fırsatlar artık `/api/customer/places/deals` kullanır; bu uç geriye uyum içindir.
  */
@@ -117,7 +117,9 @@ export async function GET(request: NextRequest) {
       offerType: o.offerType,
       value: o.value,
       validTo: o.validTo.toISOString(),
-      distanceKm: Math.round(distanceKm * 10) / 10,
+      // 0,5 km kovası (en az 0,5): farklı konumlardan sorguyla üçgenleme hassasiyeti düşer
+      // (müşteri API denetimi O6); "yakınımda" listesi için yeterli çözünürlük.
+      distanceKm: Math.max(0.5, Math.round(distanceKm * 2) / 2),
       venueLabel: o.dealer.businessName || 'İşletme',
       dealerId: o.dealer.id,
     });

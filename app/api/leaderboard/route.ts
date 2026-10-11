@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOptionalSession } from '@/lib/api-auth';
 import { Prisma } from '@prisma/client';
 import { unstable_cache } from 'next/cache';
-import { authOptions } from '@/lib/auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getSuspiciousUserIds } from '@/lib/points-velocity';
@@ -143,6 +143,9 @@ export async function GET(request: NextRequest) {
         { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    // Ağır sıralama okuması (müşteri API denetimi O2): kullanıcı başına kötüye kullanım tavanı.
+    const limited = await enforceRouteRateLimit('leaderboard.read', session.user.id, 'read');
+    if (limited) return limited;
     const viewerIsAdmin = session.user.role === 'ADMIN';
     const optOut = await loadOptOutSet();
     /** Kullanıcı listede görünebilir mi? (kendisi her zaman kendini görür) */

@@ -73,6 +73,8 @@ jest.mock('@/lib/prisma', () => ({
     notification: { create: jest.fn(async () => ({})) },
     analyticsEvent: { create: jest.fn(async () => ({})) },
     miniGameConfig: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => null) },
+    // "Liderlikte görün" tercihi (lib/privacy/leaderboard-optout): kimse gizlenmemiş.
+    settings: { findMany: jest.fn(async () => []) },
     $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
   },
   isPrismaConnectivityError: () => false,

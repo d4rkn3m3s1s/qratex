@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+
+/** Favori üst sınırı: GET bu kadarını okur, POST bu sınırın üstüne eklemez. */
+const FAVORITES_CAP = 500;
 
 const favoritePostSchema = z.object({
   dealerId: z.string().min(1).max(64).transform((s) => s.trim()),
@@ -14,6 +18,8 @@ const favoritePostSchema = z.object({
 export async function GET() {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('customer.favorites.read', auth.session.user.id, 'read');
+  if (limited) return limited;
   const { session } = auth;
 
   try {
@@ -32,7 +38,7 @@ export async function GET() {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: 500,
+      take: FAVORITES_CAP,
     });
 
     const favorites = list.map((f) => ({
@@ -68,6 +74,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('customer.favorites.add', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const { session } = auth;
 
   try {
@@ -81,14 +89,33 @@ export async function POST(request: NextRequest) {
     }
     const dealerId = parsed.data.dealerId;
 
-    const dealer = await prisma.user.findFirst({
-      where: { id: dealerId, role: 'DEALER' },
-    });
+    // Askıdaki ve demo işletmeler favorilenemez (Keşfet bunları zaten göstermez).
+    const [dealer, count] = await Promise.all([
+      prisma.user.findFirst({
+        where: { id: dealerId, role: 'DEALER', isDemo: false, suspendedAt: null },
+        select: { id: true },
+      }),
+      prisma.customerFavoriteDealer.count({ where: { userId: session.user.id } }),
+    ]);
     if (!dealer) {
       return NextResponse.json(
         { error: 'İşletme bulunamadı' },
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
+    }
+    // Liste en fazla FAVORITES_CAP kayıt okur; sınırın üstündeki favori listede görünmeyeceği
+    // için eklenmez (sessizce kaybolan kayıt yerine dürüst hata).
+    if (count >= FAVORITES_CAP) {
+      const already = await prisma.customerFavoriteDealer.findUnique({
+        where: { userId_dealerId: { userId: session.user.id, dealerId } },
+        select: { dealerId: true },
+      });
+      if (!already) {
+        return NextResponse.json(
+          { error: `En fazla ${FAVORITES_CAP} işletmeyi favorilere ekleyebilirsin.`, code: 'FAVORITES_LIMIT' },
+          { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
     }
 
     await prisma.customerFavoriteDealer.upsert({
@@ -115,10 +142,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
+  const limited = await enforceRouteRateLimit('customer.favorites.remove', auth.session.user.id, 'mutation');
+  if (limited) return limited;
   const { session } = auth;
 
-  const dealerId = request.nextUrl.searchParams.get('dealerId');
-  if (!dealerId) {
+  const dealerId = request.nextUrl.searchParams.get('dealerId')?.trim();
+  if (!dealerId || dealerId.length > 64) {
     return NextResponse.json(
       { error: 'dealerId gerekli' },
       { status: 400, headers: PRIVATE_NO_STORE_HEADERS }

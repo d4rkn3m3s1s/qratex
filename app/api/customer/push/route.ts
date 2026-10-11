@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import prisma from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
@@ -12,24 +14,18 @@ const MAX_KEY_LEN = 512;
 /** Hesap başına etkin cihaz aboneliği tavanı (her bildirim hepsine gider → dış istek çoğaltma). */
 const MAX_ACTIVE_SUBSCRIPTIONS = 10;
 
-function isValidSubscription(sub: unknown): sub is {
-  endpoint: string;
-  keys: { p256dh: string; auth: string };
-} {
-  if (!sub || typeof sub !== 'object') return false;
-  const s = sub as Record<string, unknown>;
-  const endpoint = s.endpoint;
-  const keys = s.keys;
-  // Yalnız tarayıcı push servisleri (https + bilinen alan adı): keyfi adres = sunucudan SSRF.
-  if (!isAllowedPushEndpoint(endpoint)) return false;
-  if (!keys || typeof keys !== 'object') return false;
-  const k = keys as Record<string, unknown>;
-  const p256dh = k.p256dh;
-  const auth = k.auth;
-  if (typeof p256dh !== 'string' || p256dh.length === 0 || p256dh.length > MAX_KEY_LEN) return false;
-  if (typeof auth !== 'string' || auth.length === 0 || auth.length > MAX_KEY_LEN) return false;
-  return true;
-}
+/** Abonelik gövdesi (zod): yalnız tarayıcı push servisleri (https + bilinen alan adı) — keyfi adres = sunucudan SSRF. */
+const subscribeSchema = z.object({
+  subscription: z.object({
+    endpoint: z.string().max(MAX_ENDPOINT_LEN).refine((e) => isAllowedPushEndpoint(e)),
+    keys: z.object({
+      p256dh: z.string().min(1).max(MAX_KEY_LEN),
+      auth: z.string().min(1).max(MAX_KEY_LEN),
+    }),
+  }),
+});
+
+const unsubscribeSchema = z.object({ endpoint: z.string().min(1).max(MAX_ENDPOINT_LEN) });
 
 export async function POST(req: Request) {
   try {
@@ -45,15 +41,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { subscription } = body as { subscription?: unknown };
-
-    if (!isValidSubscription(subscription)) {
+    const parsed = subscribeSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
       return NextResponse.json(
         { error: 'Geçersiz bildirim aboneliği.', code: 'VALIDATION' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const { subscription } = parsed.data;
 
     const userId = session.user.id;
     const userAgent = req.headers.get('user-agent') || undefined;
@@ -84,7 +79,7 @@ export async function POST(req: Request) {
       });
       if (n.count === 0) {
         return NextResponse.json(
-          { error: 'Abonelik güncellenemedi' },
+          { error: 'Abonelik güncellenemedi.' },
           { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
@@ -116,7 +111,7 @@ export async function POST(req: Request) {
     if (db) return db;
     console.error('Save Push Error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Bildirim ayarı şu an kaydedilemedi. Lütfen tekrar deneyin.' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
@@ -127,16 +122,17 @@ export async function DELETE(req: Request) {
     const auth = await requireAuth(['CUSTOMER']);
     if ('error' in auth) return auth.error;
     const session = auth.session;
+    const limited = await enforceRouteRateLimit('customer.push.unsubscribe', session.user.id, 'mutation');
+    if (limited) return limited;
 
-    const body = await req.json().catch(() => ({}));
-    const { endpoint } = body as { endpoint?: unknown };
-
-    if (typeof endpoint !== 'string' || endpoint.length === 0 || endpoint.length > MAX_ENDPOINT_LEN) {
+    const parsed = unsubscribeSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing endpoint' },
+        { error: 'Bildirim aboneliği adresi eksik ya da geçersiz.', code: 'VALIDATION' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const { endpoint } = parsed.data;
 
     await prisma.pushSubscription.deleteMany({
       where: {
@@ -151,7 +147,7 @@ export async function DELETE(req: Request) {
     if (db) return db;
     console.error('Delete Push Error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Bildirim aboneliği şu an kaldırılamadı. Lütfen tekrar deneyin.' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

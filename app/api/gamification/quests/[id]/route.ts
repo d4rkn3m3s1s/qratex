@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -14,6 +16,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Herkese açık katalog okuması: IP başına kötüye kullanım tavanı (oturum isteğe bağlı).
+    const limited = await enforceRouteRateLimit('gamification.quests.detail', getClientIdentifier(request), 'read');
+    if (limited) return limited;
     const { id } = await params;
 
     const quest = await prisma.quest.findUnique({
@@ -55,6 +60,8 @@ export async function PATCH(
     // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.quests.update', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;
@@ -122,6 +129,8 @@ export async function DELETE(
     // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.quests.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;

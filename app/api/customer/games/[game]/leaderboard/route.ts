@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
@@ -34,6 +35,8 @@ export async function GET(
   try {
     const auth = await requireAuth(['CUSTOMER']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('customer.games.leaderboard', auth.session.user.id, 'read');
+    if (limited) return limited;
     const userId = auth.session.user.id;
 
     const { game: gameType } = await params;

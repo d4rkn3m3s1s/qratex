@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -25,6 +27,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Herkese açık katalog okuması: IP başına kötüye kullanım tavanı (oturum isteğe bağlı).
+    const limited = await enforceRouteRateLimit('gamification.rewards.detail', getClientIdentifier(request), 'read');
+    if (limited) return limited;
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
     const { id } = await params;
@@ -62,6 +67,8 @@ export async function PATCH(
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.rewards.update', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;
@@ -167,6 +174,8 @@ export async function DELETE(
     if (gate) return gate;
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.rewards.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;

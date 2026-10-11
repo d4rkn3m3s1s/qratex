@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { getPointsMatrix } from '@/lib/points-rules';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -10,6 +11,8 @@ export async function GET() {
   try {
     const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('customer.trends', auth.session.user.id, 'read');
+    if (limited) return limited;
     const { session } = auth;
     const userId = session.user.id;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -22,6 +23,8 @@ export async function GET(
     // Bulgu 3: ham rozet tanımı (gizli/karakter rozetleri dahil) oturumsuz okunuyordu → yalnız ADMIN.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.badges.admin-read', auth.session.user.id, 'read');
+    if (limited) return limited;
     const { id } = await params;
 
     const badge = await prisma.badge.findUnique({
@@ -62,6 +65,8 @@ export async function PATCH(
     const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.badges.update', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;
@@ -145,6 +150,8 @@ export async function DELETE(
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.badges.delete', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const { id } = await params;

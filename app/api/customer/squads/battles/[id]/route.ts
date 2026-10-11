@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
 import { squadError } from '@/lib/squads/errors';
+import { contributorName } from '@/lib/squads/battles';
+import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,19 +51,28 @@ export const GET = defineRoute(
       where: { battleId: battle.id, score: { gt: 0 } },
       orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
       take: 10,
-      select: { score: true, squadId: true, user: { select: { name: true, image: true } } },
+      select: { score: true, squadId: true, userId: true, user: { select: { name: true, image: true } } },
     });
+    // Gizlilik (müşteri API denetimi O5 kalıntısı): rakip klan üyeleri yabancıdır → maskeli ad
+    // ("Ayşe K.", `battles/current` ile aynı kural); "liderlikte görün" kapalı rakip üye anonim
+    // ve avatarsız. Kendi klanındakiler klan odasında zaten tam adla görünür. ADMIN tam görür.
+    const viewerSquadId = membership?.squadId ?? null;
+    const isAdmin = user.role === 'ADMIN';
+    const rivalIds = isAdmin ? [] : top.filter((p) => p.squadId !== viewerSquadId).map((p) => p.userId);
+    const hiddenRivals = await leaderboardHiddenUserIds(rivalIds);
 
     return ok({
       battle: {
         ...battle,
         mySquadId: membership?.squadId ?? null,
-        topParticipants: top.map((p) => ({
-          name: (p.user.name ?? '').trim() || 'Üye',
-          image: p.user.image,
-          score: p.score,
-          squadId: p.squadId,
-        })),
+        topParticipants: top.map((p) => {
+          const sameSquad = isAdmin || p.squadId === viewerSquadId;
+          const identity = leaderboardIdentity(
+            { name: contributorName(p.user.name, sameSquad), image: p.user.image },
+            { hidden: !sameSquad && hiddenRivals.has(p.userId), isViewer: p.userId === user.id }
+          );
+          return { name: identity.name, image: identity.image, score: p.score, squadId: p.squadId };
+        }),
       },
     }, { legacySpread: true });
   }

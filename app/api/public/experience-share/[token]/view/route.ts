@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { getOptionalSession } from '@/lib/api-auth';
-import { authOptions } from '@/lib/auth';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { getUserAgent } from '@/lib/request-metadata';
 import { recordExperienceView } from '@/lib/experience-share/public';

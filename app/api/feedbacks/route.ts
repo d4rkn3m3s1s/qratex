@@ -6,6 +6,7 @@ import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
 import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,9 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(['CUSTOMER', 'DEALER', 'STAFF', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    // Sayfalı toplu okuma (yorum metni + müşteri adı): kazıma tavanı.
+    const limited = await enforceRouteRateLimit('feedbacks.list', session.user.id, 'read');
+    if (limited) return limited;
 
     const { searchParams } = new URL(request.url);
     const parsed = listQueryPageSchema.safeParse({
@@ -47,12 +51,12 @@ export async function GET(request: NextRequest) {
       if (scope.dealerId) where.qrCode = { dealerId: scope.dealerId };
     }
 
-    if (qrCodeId) {
+    if (qrCodeId && qrCodeId.length <= 64) {
       where.qrCodeId = qrCodeId;
     }
 
     // Sentiment filter
-    if (sentiment && sentiment !== 'all') {
+    if (sentiment === 'positive' || sentiment === 'negative' || sentiment === 'neutral') {
       where.sentiment = sentiment;
     }
 

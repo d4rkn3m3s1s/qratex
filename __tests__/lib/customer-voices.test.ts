@@ -45,6 +45,8 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     $transaction: (fn: (t: unknown) => unknown) => fn(tx),
     $queryRaw: (...a: unknown[]) => mockQueryRaw(...a),
+    // Telafi kabulünde işletme içi kişi kontrolü (isDealerInsider): müşteri personel değil.
+    dealerStaff: { findFirst: jest.fn(async () => null) },
     feedback: {
       findMany: (...a: unknown[]) => mockFeedbackFindMany(...a),
       findFirst: (...a: unknown[]) => mockFeedbackFindFirst(...a),

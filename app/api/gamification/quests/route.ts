@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { createQuestSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getPointsMatrix, getQuestReward } from '@/lib/points-rules';
@@ -14,6 +16,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    // Herkese açık katalog okuması: IP başına kötüye kullanım tavanı (oturum isteğe bağlı).
+    const limited = await enforceRouteRateLimit('gamification.quests.read', getClientIdentifier(req), 'read');
+    if (limited) return limited;
     const gate = await assertModuleEnabled('quests');
     if (gate) return gate;
     // Doğrulanmış isteğe bağlı oturum: ADMIN'in `?userId=<başkası>` yetkisi kapı + DB rolüyle.
@@ -124,6 +129,8 @@ export async function POST(req: Request) {
     // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.quests.create', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
     const body = await req.json().catch(() => null);

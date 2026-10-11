@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth, getOptionalSession } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { getClientIdentifier } from '@/lib/rate-limit';
 import { createRewardSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { captureApiError } from '@/lib/capture-api-error';
@@ -18,6 +20,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    // Herkese açık katalog okuması: IP başına kötüye kullanım tavanı (oturum isteğe bağlı).
+    const limited = await enforceRouteRateLimit('gamification.rewards.read', getClientIdentifier(req), 'read');
+    if (limited) return limited;
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
     // Doğrulanmış isteğe bağlı oturum: kendi kuponların ve ADMIN arşiv görünümü ham JWT ile değil
@@ -110,10 +115,20 @@ export async function POST(req: Request) {
     // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('gamification.rewards.create', auth.session.user.id, 'mutation');
+    if (limited) return limited;
     const { session } = auth;
 
-    const body = await req.json();
-    const validatedData = createRewardSchema.parse(body);
+    // Doğrulama hatası 400 + Türkçe mesaj (eskiden `.parse` ZodError fırlatıp 500 dönüyordu).
+    const body: unknown = await req.json().catch(() => null);
+    const parsedReward = createRewardSchema.safeParse(body);
+    if (!parsedReward.success) {
+      return NextResponse.json(
+        { success: false, error: parsedReward.error.errors[0]?.message ?? 'Geçersiz ödül bilgisi', code: 'VALIDATION' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const validatedData = parsedReward.data;
 
     const reward = await prisma.reward.create({
       data: {

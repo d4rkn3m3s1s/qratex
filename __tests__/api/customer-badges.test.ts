@@ -104,6 +104,8 @@ const prismaMock = {
     findMany: jest.fn(async ({ where }: { where: { userId: string } }) => db.events.filter((e) => e.userId === where.userId)),
   },
   userCosmetic: { count: jest.fn(async () => db.cosmeticPins) },
+  // "Liderlikte görün" tercihi (lib/privacy/leaderboard-optout): bu senaryoda kimse kapatmadı.
+  settings: { findMany: jest.fn(async () => []) },
   feedback: { count: jest.fn(async () => 3) },
   consumptionReview: { count: jest.fn(async () => 4) },
   $queryRaw: jest.fn(async () => []),

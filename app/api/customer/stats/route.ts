@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { addDays, istanbulDay } from '@/components/ds/page/date-range';
@@ -17,6 +18,8 @@ export async function GET() {
   try {
     const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
     if ('error' in auth) return auth.error;
+    const limited = await enforceRouteRateLimit('customer.stats', auth.session.user.id, 'read');
+    if (limited) return limited;
     const { session } = auth;
 
     const userId = session.user.id;

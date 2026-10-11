@@ -16,8 +16,13 @@ const mockExecuteRaw = jest.fn();
 const mockLedgerAggregate = jest.fn();
 const mockMint = jest.fn();
 
+// İşletme içi (sahip/personel) kişisel teklif kontrolü (lib/remedy-offer-service isDealerInsider):
+// bu senaryolarda müşteri işletme personeli DEĞİL.
+const mockStaffFindFirst = jest.fn(async () => null);
+
 const tx = {
   $executeRaw: (...a: unknown[]) => mockExecuteRaw(...a),
+  dealerStaff: { findFirst: (...a: unknown[]) => (mockStaffFindFirst as (...x: unknown[]) => unknown)(...a) },
   pointsLedger: { aggregate: (...a: unknown[]) => mockLedgerAggregate(...a) },
   remedyOffer: { updateMany: (...a: unknown[]) => mockOfferUpdateMany(...a) },
   remedyTimelineEvent: { create: (...a: unknown[]) => mockTimelineCreate(...a) },
@@ -27,6 +32,7 @@ const tx = {
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     $transaction: (fn: (t: unknown) => unknown) => fn(tx),
+    dealerStaff: { findFirst: (...a: unknown[]) => (mockStaffFindFirst as (...x: unknown[]) => unknown)(...a) },
     remedyOffer: { findUnique: (...a: unknown[]) => mockOfferFindUnique(...a) },
   },
 }));
@@ -111,6 +117,21 @@ describe('bayi günlük telafi puanı bütçesi', () => {
 });
 
 describe('kimlik ve kaynak geçerliliği', () => {
+  it('SALDIRI: işletme personeli PUAN telafisi alamaz (bütçe aktarımı); puan dışı tür serbest', async () => {
+    mockStaffFindFirst.mockImplementation((async () => ({ id: 'staff-link' })) as never);
+    try {
+      await expect(
+        acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100, now: NOW })
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockMint).not.toHaveBeenCalled();
+      expect(mockOfferUpdateMany).not.toHaveBeenCalled();
+      const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'discount', selectedValue: 10, now: NOW });
+      expect(r.creditedPoints).toBeNull();
+    } finally {
+      mockStaffFindFirst.mockImplementation(async () => null);
+    }
+  });
+
   it('SALDIRI: bayi = müşteri (kendi kendine telafi) → FORBIDDEN, durum değişmez', async () => {
     mockOfferFindUnique.mockResolvedValue({ ...pending, userId: 'd1', dealerId: 'd1' });
     await expect(

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { getOptionalSession } from '@/lib/api-auth';
-import { authOptions } from '@/lib/auth';
 import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { checkPublicActionRateLimit } from '@/lib/rate-limit';
 import { surveySubmissionSchema } from '@/lib/survey-schema';
@@ -17,9 +16,9 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Herkese açık anket doldurma uçları. Sayfa (`/surveys/[id]`) ilk veriyi sunucuda okur;
- * GET aynı okuma modelini API olarak sunar (yan etkisiz). Kimlik YALNIZ oturumdan: NextAuth
- * `jwt` geri çağrısı oturumu DB durumuna karşı doğrular (lib/auth/session-state.ts); oturum
- * okunamazsa yanıt anonimdir — istemciden gelen `userId` hiçbir zaman kabul edilmez.
+ * GET aynı okuma modelini API olarak sunar (yan etkisiz). Kimlik YALNIZ doğrulanmış oturumdan
+ * (`getOptionalSession`: askı/silinme, oturum sürümü, güncel DB rolü, token replay — geçmeyen
+ * oturum anonim sayılır); istemciden gelen `userId` hiçbir zaman kabul edilmez.
  */
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(64) });
 
