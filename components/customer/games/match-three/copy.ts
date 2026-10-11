@@ -176,7 +176,7 @@ const en: Copy = {
   levelDone: (n) => `Level ${n} passed!`,
   levelEndStats: (moves, score) => `${moves} moves to spare · +${score} score`,
   nextUp: (n, goal, moves) => `Next: Level ${n}: ${goal}, ${moves} moves`,
-  nextLevel: 'Next level',
+  nextLevel: 'Keep going',
   routeDone: 'Route complete!',
   outOfMoves: 'Out of moves',
   ended: 'You ended the game',
