@@ -117,6 +117,9 @@ export type AuthCopy = {
   registerFailedTitle: string;
   registerFailedBody: string;
   registerInvalid: string;
+  /** Yönetici yeni kayıtları kapattığında kayıt ekranı (/admin/settings → Kimlik). */
+  registerClosedTitle: string;
+  registerClosedBody: string;
 
   // ── Şifre alanı ──
   passwordRulesTitle: string;
@@ -282,6 +285,10 @@ const TR: AuthCopy = {
       title: 'E-posta paylaşılmadı',
       body: 'Giriş sağlayıcısı e-posta adresini paylaşmadı. E-posta ve şifreyle kayıt olabilir ya da giriş yapabilirsin.',
     },
+    RegistrationClosed: {
+      title: 'Yeni kayıtlar şu an kapalı',
+      body: 'Bu hesapla daha önce kayıt olunmamış ve yeni hesap açılışı geçici olarak durduruldu. Mevcut bir hesabın varsa onunla giriş yapabilirsin.',
+    },
     OAuthSignin: SOCIAL_GENERIC_TR,
     OAuthCallback: SOCIAL_GENERIC_TR,
     OAuthCreateAccount: SOCIAL_GENERIC_TR,
@@ -402,6 +409,8 @@ const TR: AuthCopy = {
   registerFailedTitle: 'Kayıt tamamlanamadı',
   registerFailedBody: 'Beklenmeyen bir sorun oluştu. Lütfen tekrar dene.',
   registerInvalid: 'Bilgilerden biri geçersiz. Alanları kontrol edip tekrar dene.',
+  registerClosedTitle: 'Yeni kayıtlar şu an kapalı',
+  registerClosedBody: 'Yeni hesap açılışı geçici olarak durduruldu. Zaten bir hesabın varsa giriş yapabilirsin.',
 
   passwordRulesTitle: 'Şifren şunları içermeli:',
   passwordRules: { length: 'En az 8 karakter', lower: 'Küçük harf', upper: 'Büyük harf', digit: 'Rakam' },
@@ -540,6 +549,10 @@ const EN: AuthCopy = {
       title: 'No email shared',
       body: 'The provider did not share your email address. You can sign up or sign in with email and password.',
     },
+    RegistrationClosed: {
+      title: 'New sign-ups are paused',
+      body: 'There is no account for this sign-in yet and new accounts are temporarily not being created. If you already have an account, sign in with it.',
+    },
     OAuthSignin: SOCIAL_GENERIC_EN,
     OAuthCallback: SOCIAL_GENERIC_EN,
     OAuthCreateAccount: SOCIAL_GENERIC_EN,
@@ -649,6 +662,8 @@ const EN: AuthCopy = {
   registerFailedTitle: 'Sign-up could not be completed',
   registerFailedBody: 'Something unexpected happened. Please try again.',
   registerInvalid: 'One of the fields is invalid. Check them and try again.',
+  registerClosedTitle: 'New sign-ups are paused',
+  registerClosedBody: 'New accounts are temporarily not being created. If you already have an account, you can sign in.',
 
   passwordRulesTitle: 'Your password needs:',
   passwordRules: { length: 'At least 8 characters', lower: 'A lowercase letter', upper: 'An uppercase letter', digit: 'A number' },

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
-import { Gift, Mail, User, UserPlus } from 'lucide-react';
+import { Gift, Mail, User, UserPlus, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +33,7 @@ type FieldErrors = Partial<Record<Field, string>>;
 type ServerError =
   | { kind: 'taken'; email: string }
   | { kind: 'rate'; sec: number }
+  | { kind: 'closed' }
   | { kind: 'generic'; text?: string };
 
 type VerifyState = { email: string; emailSent?: boolean; devVerifyUrl?: string | null; referralPending?: boolean };
@@ -47,7 +48,8 @@ export function RegisterView({
   rawCallback: string | null;
   refCode: string | null;
   referral: ReferralPreview | null;
-  features: { google: boolean; github: boolean };
+  /** `registrationOpen: false` → yönetici yeni kayıtları kapattı; form hiç gösterilmez. */
+  features: { google: boolean; github: boolean; registrationOpen?: boolean };
   initialRole: SignupRole;
 }) {
   const t = useAppT();
@@ -137,7 +139,10 @@ export function RegisterView({
         });
         return;
       }
-      if (data.code === 'EMAIL_TAKEN' || res.status === 409) {
+      if (data.code === 'REGISTRATION_CLOSED') {
+        // Sayfa açıkken yönetici kaydı kapattı: genel "beklenmeyen hata" yerine gerçek neden.
+        setServerError({ kind: 'closed' });
+      } else if (data.code === 'EMAIL_TAKEN' || res.status === 409) {
         setServerError({ kind: 'taken', email: normalized });
       } else if (res.status === 429) {
         const sec = typeof data.retryAfterSec === 'number' ? data.retryAfterSec : Number(res.headers.get('Retry-After')) || 60;
@@ -187,6 +192,23 @@ export function RegisterView({
     if (refCode && role === 'CUSTOMER') qs.set('ref', refCode);
     void signIn(provider, { callbackUrl: `/auth/complete?${qs.toString()}` });
   };
+
+  // Yönetici yeni kayıtları kapattıysa form, sosyal kayıt ve davet vaadi gösterilmez (eskiden
+  // form doldurulup gönderilince genel "beklenmeyen hata", Google'da "giriş iptal edildi" çıkıyordu).
+  if (features.registrationOpen === false && !verify) {
+    return (
+      <AuthCard
+        tone="warning"
+        icon={<UserX className="h-6 w-6" aria-hidden />}
+        title={copy.registerClosedTitle}
+        description={copy.registerClosedBody}
+      >
+        <Button asChild className="w-full">
+          <Link href={loginHref}>{copy.signInLink}</Link>
+        </Button>
+      </AuthCard>
+    );
+  }
 
   if (verify) {
     return (
@@ -240,6 +262,13 @@ export function RegisterView({
           }
         >
           {copy.emailTakenBody}
+        </AuthNotice>
+      );
+    }
+    if (serverError.kind === 'closed') {
+      return (
+        <AuthNotice tone="warning" title={copy.registerClosedTitle}>
+          {copy.registerClosedBody}
         </AuthNotice>
       );
     }

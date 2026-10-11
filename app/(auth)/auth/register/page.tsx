@@ -40,7 +40,7 @@ export default async function RegisterPage({
       rawCallback={rawCallback}
       refCode={refRaw ? refRaw.trim().toUpperCase().slice(0, 32) : null}
       referral={referral}
-      features={{ google: features.google, github: features.github }}
+      features={{ google: features.google, github: features.github, registrationOpen: features.registrationOpen }}
       initialRole={initialRole}
     />
   );

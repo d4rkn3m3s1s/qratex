@@ -41,7 +41,12 @@ export default async function LoginPage({
       rawCallback={rawCallback}
       errorCode={errorCode}
       initialNotice={initialNotice}
-      features={{ google: features.google, github: features.github, magicLink: features.magicLink }}
+      features={{
+        google: features.google,
+        github: features.github,
+        magicLink: features.magicLink,
+        registrationOpen: features.registrationOpen,
+      }}
       qrPlace={qr?.placeName ?? null}
     />
   );

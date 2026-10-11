@@ -13,6 +13,8 @@ const prismaMock = {
     updateMany: jest.fn(),
   },
   account: { findUnique: jest.fn(), deleteMany: jest.fn() },
+  // Platform bayrakları (`lib/platform-settings/flags`): satır yoksa kayıt defteri varsayılanı (açık).
+  settings: { findUnique: jest.fn() },
   twoFactorRecoveryCode: { deleteMany: jest.fn() },
   authEmailToken: { deleteMany: jest.fn() },
   verificationToken: { deleteMany: jest.fn() },
@@ -349,6 +351,23 @@ describe('P0-08 · OAuth bağlama politikası', () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     const gh = authOptions.providers.find((p) => p.id === 'github') as unknown as { allowDangerousEmailAccountLinking?: boolean } | undefined;
     if (gh) expect(gh.allowDangerousEmailAccountLinking).toBe(false);
+  });
+
+  it('yönetici yeni kayıtları kapattıysa ilk kez gelen OAuth kullanıcısına RegistrationClosed (AccessDenied değil) döner', async () => {
+    prismaMock.account.findUnique.mockResolvedValue(null);
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.settings.findUnique.mockResolvedValueOnce({ value: false });
+    const out = await resolveOAuthSignIn({ user: null, account: github, profile: { email: 'yeni@x.com' } });
+    expect(out).toBe('https://app.qratex.com/auth/login?error=RegistrationClosed');
+    // Kod bilinen bir hata olarak çözülür → giriş ekranı "tekrar dene" yerine gerçek nedeni yazar.
+    expect(parseAuthError('RegistrationClosed')).toEqual({ code: 'RegistrationClosed' });
+  });
+
+  it('kayıt açıkken (varsayılan) ilk kez gelen OAuth kullanıcısı devam eder', async () => {
+    prismaMock.account.findUnique.mockResolvedValue(null);
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    const out = await resolveOAuthSignIn({ user: null, account: github, profile: { email: 'yeni@x.com' } });
+    expect(out).toBe(true);
   });
 
   it('askıya alınmış hesap OAuth ile de giremez', async () => {

@@ -52,7 +52,8 @@ export function LoginView({
   rawCallback: string | null;
   errorCode: string | null;
   initialNotice: LoginNoticeKind;
-  features: { google: boolean; github: boolean; magicLink: boolean };
+  /** `registrationOpen: false` → "Kayıt ol" bağlantısı gizlenir (kapalı kayda çıkmaz yol yok). */
+  features: { google: boolean; github: boolean; magicLink: boolean; registrationOpen?: boolean };
   qrPlace: string | null;
 }) {
   const copy = useAuthCopy();
@@ -297,7 +298,7 @@ export function LoginView({
         title={qrPlace ? copy.loginQrTitle(qrPlace) : copy.loginTitle}
         description={qrPlace ? copy.loginQrBody : copy.loginSubtitle}
         footer={
-          !pendingCreds ? (
+          !pendingCreds && features.registrationOpen !== false ? (
             <p className="qx-small text-fg-muted">
               {copy.noAccount}{' '}
               <Link href={withCallback('/auth/register')} onClick={() => rememberAuthEmail(email)} className={authLinkClass}>

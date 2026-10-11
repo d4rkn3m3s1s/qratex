@@ -45,6 +45,12 @@ export const OAUTH_ERROR = {
   NO_EMAIL: 'OAuthNoEmail',
   /** Hesap askıda (OAuth yolunda). */
   ACCOUNT_SUSPENDED: 'AccountSuspended',
+  /**
+   * Yönetici yeni kayıtları kapattı; sağlayıcıyla İLK KEZ gelen kişiye hesap açılmaz.
+   * Eskiden `AccessDenied` dönüyordu → ekranda "Giriş iptal edildi, tekrar deneyebilirsin"
+   * yazıyordu (tekrar denemek hiçbir şey değiştirmez; yanıltıcı).
+   */
+  REGISTRATION_CLOSED: 'RegistrationClosed',
 } as const;
 
 export type AuthErrorKind =

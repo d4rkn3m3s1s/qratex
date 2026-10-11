@@ -322,7 +322,7 @@ export async function resolveOAuthSignIn(params: {
   }
   if (!existing) {
     // Yeni kullanıcı → authAdapter.createUser; yönetici yeni kayıtları kapattıysa hesap açılmaz.
-    if (!(await isRegistrationOpen())) return fail('AccessDenied');
+    if (!(await isRegistrationOpen())) return fail(OAUTH_ERROR.REGISTRATION_CLOSED);
     return true;
   }
 

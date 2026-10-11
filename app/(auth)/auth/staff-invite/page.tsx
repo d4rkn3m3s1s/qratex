@@ -7,19 +7,25 @@
  *  - hesap yoksa: ad + KENDİ şifresini belirleyip hesabını açar;
  *  - hesap varsa: giriş yapar (aynı ekrana geri döner) ve daveti KENDİSİ onaylar.
  * Bayi hiçbir aşamada şifre belirlemez ve var olan hesaba dokunamaz.
+ *
+ * Kimlik yüzeyinin ortak kiti kullanılır (AuthCard tek h1 + CSS giriş hareketi, AuthNotice,
+ * PasswordField göster/gizle + canlı kural listesi): eskiden bu ekran ayrı bir shadcn kart
+ * iskeleti (h3 başlık), kabuğun üstüne ikinci dolgu, framer sarmalayıcı ve kayıttan farklı
+ * yerel şifre kuralı kullanıyordu; alan hataları da alana bağlı değildi.
  */
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { signIn, signOut, useSession } from 'next-auth/react';
-import { m as Motion } from 'framer-motion';
-import { Building2, CheckCircle2, Loader2, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
+import { Building2, CheckCircle2, LogIn, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ErrorState, InlineError, SkeletonForm, TONE_CALLOUT, TONE_CHIP } from '@/components/states';
-import { cn } from '@/lib/utils';
+import { ErrorState, InlineError, SkeletonForm } from '@/components/states';
+import { AuthCard } from '@/components/auth/p-auth/auth-card';
+import { AuthNotice } from '@/components/auth/p-auth/auth-notice';
+import { PasswordField, PasswordMatchHint } from '@/components/auth/p-auth/password-field';
+import { validateInviteSignup, type FieldErrors } from './validate';
 
 type Preview = {
   businessName: string;
@@ -36,8 +42,6 @@ type LoadState =
   | { kind: 'ready'; preview: Preview }
   | { kind: 'done'; message: string; createdAccount: boolean };
 
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
-
 function StaffInviteInner() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
@@ -46,6 +50,8 @@ function StaffInviteInner() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -79,15 +85,18 @@ function StaffInviteInner() {
 
   const accept = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (state.kind !== 'ready' || submitting) return;
     setFormError(null);
-    if (state.kind !== 'ready') return;
+    setFieldErrors({});
     const needsSignup = !session?.user && !state.preview.accountExists;
     if (needsSignup) {
-      if (name.trim().length < 2) return setFormError('Adınızı yazın (en az 2 karakter).');
-      if (password.length < 8 || !PASSWORD_RULE.test(password)) {
-        return setFormError('Şifre en az 8 karakter olmalı; küçük harf, büyük harf ve rakam içermeli.');
+      const errs = validateInviteSignup({ name, password, confirm });
+      if (errs.name || errs.password || errs.confirm) {
+        setFieldErrors(errs);
+        const first = errs.name ? 'invite-name' : errs.password ? 'invite-password' : 'invite-confirm';
+        document.getElementById(first)?.focus();
+        return;
       }
-      if (password !== confirm) return setFormError('Şifreler eşleşmiyor.');
     }
     setSubmitting(true);
     try {
@@ -117,7 +126,7 @@ function StaffInviteInner() {
 
   if (state.kind === 'loading' || sessionStatus === 'loading') {
     return (
-      <div role="status" aria-label="Davet yükleniyor" className="w-full">
+      <div role="status" aria-label="Davet yükleniyor" className="w-full max-w-md">
         <SkeletonForm fields={3} />
       </div>
     );
@@ -126,44 +135,43 @@ function StaffInviteInner() {
   if (state.kind === 'error') {
     const terminal = ['INVITE_USED', 'INVITE_REVOKED', 'INVITE_EXPIRED', 'INVITE_NOT_FOUND'].includes(state.code ?? '');
     return (
-      <ErrorState
-        kind={terminal ? 'notFound' : 'generic'}
-        title={terminal ? 'Davet kullanılamıyor' : 'Davet açılamadı'}
-        description={state.message}
-        onRetry={terminal ? undefined : load}
-        action={
-          <Button variant="outline" asChild>
-            <Link href="/">Ana sayfaya dön</Link>
-          </Button>
-        }
-      />
+      <div className="w-full max-w-md">
+        <ErrorState
+          kind={terminal ? 'notFound' : 'generic'}
+          title={terminal ? 'Davet kullanılamıyor' : 'Davet açılamadı'}
+          description={state.message}
+          onRetry={terminal ? undefined : load}
+          action={
+            <Button variant="outline" asChild>
+              <Link href="/">Ana sayfaya dön</Link>
+            </Button>
+          }
+        />
+      </div>
     );
   }
 
   if (state.kind === 'done') {
     return (
-      <Card className="border-border bg-surface-1">
-        <CardHeader className="text-center">
-          <div className={cn('mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full', TONE_CHIP.success)}>
-            <CheckCircle2 className="h-7 w-7" aria-hidden />
-          </div>
-          <CardTitle className="text-xl">Ekibe katıldınız</CardTitle>
-          <CardDescription>{state.message}</CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <Button
-            className="w-full"
-            onClick={() => {
-              // Rol değişti: eski oturum geçersiz → temiz giriş.
-              if (session?.user) void signOut({ callbackUrl: '/auth/login?callbackUrl=%2Fstaff' });
-              else void signIn(undefined, { callbackUrl: '/staff' });
-            }}
-          >
-            <LogIn className="mr-2 h-4 w-4" aria-hidden />
-            Personel olarak giriş yap
-          </Button>
-        </CardFooter>
-      </Card>
+      <AuthCard
+        tone="success"
+        icon={<CheckCircle2 className="h-6 w-6" aria-hidden />}
+        title="Ekibe katıldınız"
+        description={state.message}
+        live="polite"
+      >
+        <Button
+          className="w-full"
+          onClick={() => {
+            // Rol değişti: eski oturum geçersiz → temiz giriş.
+            if (session?.user) void signOut({ callbackUrl: '/auth/login?callbackUrl=%2Fstaff' });
+            else void signIn(undefined, { callbackUrl: '/staff' });
+          }}
+        >
+          <LogIn className="h-4 w-4" aria-hidden />
+          Personel olarak giriş yap
+        </Button>
+      </AuthCard>
     );
   }
 
@@ -175,136 +183,132 @@ function StaffInviteInner() {
   const expires = new Date(preview.expiresAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <Card className="border-border bg-surface-1">
-      <CardHeader>
-        <div className={cn('mb-3 flex h-12 w-12 items-center justify-center rounded-full', TONE_CHIP.brand)}>
-          <Building2 className="h-6 w-6" aria-hidden />
-        </div>
-        <CardTitle className="text-xl">{preview.businessName} sizi ekibine davet ediyor</CardTitle>
-        <CardDescription>
+    <AuthCard
+      icon={<Building2 className="h-6 w-6" aria-hidden />}
+      title={`${preview.businessName} sizi ekibine davet ediyor`}
+      description={
+        <>
           Davet <span className="font-medium text-fg">{preview.emailMasked}</span> adresine gönderildi
-          {preview.jobTitle ? <> · Görev: <span className="font-medium text-fg">{preview.jobTitle}</span></> : null}. Son geçerlilik: {expires}.
-        </CardDescription>
-      </CardHeader>
-
-      <form onSubmit={accept} noValidate>
-        <CardContent className="space-y-4">
-          {wrongAccount ? (
-            <div role="alert" className={cn('rounded-lg border p-3 text-sm', TONE_CALLOUT.warning)}>
-              Şu an başka bir hesapla giriş yaptınız. Daveti kabul etmek için davet edilen e-posta adresinin hesabıyla
-              giriş yapın.
-            </div>
+          {preview.jobTitle ? (
+            <>
+              {' '}
+              · Görev: <span className="font-medium text-fg">{preview.jobTitle}</span>
+            </>
           ) : null}
+          . Son geçerlilik: {expires}.
+        </>
+      }
+      footer={
+        <p className="qx-small text-fg-muted text-pretty">
+          Bu daveti beklemiyorsanız sayfayı kapatabilirsiniz; hesabınızda hiçbir değişiklik yapılmaz.
+        </p>
+      }
+    >
+      {wrongAccount ? (
+        <AuthNotice tone="warning">
+          Şu an başka bir hesapla giriş yaptınız. Daveti kabul etmek için davet edilen e-posta adresinin hesabıyla giriş yapın.
+        </AuthNotice>
+      ) : null}
 
-          {needsLogin ? (
-            <div className={cn('rounded-lg border p-3 text-sm', TONE_CALLOUT.info)}>
-              Bu e-posta ile zaten bir hesabınız var. Daveti kabul etmek için önce giriş yapın; bu sayfaya geri
-              döneceksiniz.
-            </div>
-          ) : null}
+      {needsLogin ? (
+        <AuthNotice tone="info">
+          Bu e-posta ile zaten bir hesabınız var. Daveti kabul etmek için önce giriş yapın; bu sayfaya geri döneceksiniz.
+        </AuthNotice>
+      ) : null}
 
-          {signedIn && preview.signedInAsInvitee ? (
-            <div className={cn('flex gap-2 rounded-lg border p-3 text-sm', TONE_CALLOUT.warning)}>
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <span>
-                Kabul ettiğinizde hesabınız <strong>personel hesabına</strong> dönüşür ve müşteri paneline erişiminiz
-                kapanır. Şifreniz ve kişisel bilgileriniz değişmez. Kabulden sonra yeniden giriş yapmanız gerekir.
-              </span>
-            </div>
-          ) : null}
+      {signedIn && preview.signedInAsInvitee ? (
+        <AuthNotice tone="warning">
+          Kabul ettiğinizde hesabınız <strong>personel hesabına</strong> dönüşür ve müşteri paneline erişiminiz kapanır.
+          Şifreniz ve kişisel bilgileriniz değişmez. Kabulden sonra yeniden giriş yapmanız gerekir.
+        </AuthNotice>
+      ) : null}
 
+      {formError ? <AuthNotice tone="danger">{formError}</AuthNotice> : null}
+
+      {needsLogin || wrongAccount ? (
+        <Button
+          type="button"
+          className="w-full"
+          onClick={() =>
+            wrongAccount
+              ? void signOut({ callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(selfHref)}` })
+              : void signIn(undefined, { callbackUrl: selfHref })
+          }
+        >
+          <LogIn className="h-4 w-4" aria-hidden />
+          {wrongAccount ? 'Çıkış yap ve doğru hesapla giriş yap' : 'Giriş yap'}
+        </Button>
+      ) : (
+        <form onSubmit={accept} noValidate className="space-y-4">
           {needsSignup ? (
             <>
-              <p className="qx-small text-fg-muted">
+              <p className="qx-small text-fg-muted text-pretty">
                 Hesabınızı oluşturun. Şifrenizi yalnızca siz belirlersiniz; işletme şifrenizi göremez.
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="invite-name">Adınız soyadınız</Label>
                 <Input
                   id="invite-name"
+                  name="name"
                   autoComplete="name"
                   value={name}
                   maxLength={50}
                   onChange={(e) => setName(e.target.value)}
+                  error={!!fieldErrors.name}
+                  errorId="invite-name-error"
                 />
+                <InlineError id="invite-name-error">{fieldErrors.name}</InlineError>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-password">Şifre</Label>
-                <Input
-                  id="invite-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  aria-describedby="invite-password-hint"
-                />
-                <p id="invite-password-hint" className="qx-small text-fg-muted">
-                  En az 8 karakter; küçük harf, büyük harf ve rakam içermeli.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-confirm">Şifre (tekrar)</Label>
-                <Input
+              <PasswordField
+                id="invite-password"
+                name="new-password"
+                label="Şifre"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                error={fieldErrors.password}
+                showStrength
+                visible={showPw}
+                onVisibleChange={setShowPw}
+              />
+              <div className="space-y-1.5">
+                <PasswordField
                   id="invite-confirm"
-                  type="password"
-                  autoComplete="new-password"
+                  name="confirm-password"
+                  label="Şifre (tekrar)"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  error={fieldErrors.confirm}
+                  visible={showPw}
+                  onVisibleChange={setShowPw}
                 />
+                {!fieldErrors.confirm ? <PasswordMatchHint password={password} confirm={confirm} /> : null}
               </div>
             </>
           ) : null}
-
-          <InlineError id="invite-form-error">{formError}</InlineError>
-        </CardContent>
-
-        <CardFooter className="flex-col gap-2">
-          {needsLogin || wrongAccount ? (
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() =>
-                wrongAccount
-                  ? void signOut({ callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(selfHref)}` })
-                  : void signIn(undefined, { callbackUrl: selfHref })
-              }
-            >
-              <LogIn className="mr-2 h-4 w-4" aria-hidden />
-              {wrongAccount ? 'Çıkış yap ve doğru hesapla giriş yap' : 'Giriş yap'}
-            </Button>
-          ) : (
-            <Button type="submit" className="w-full" disabled={submitting} aria-busy={submitting}>
-              {submitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <UserPlus className="mr-2 h-4 w-4" aria-hidden />
-              )}
-              {needsSignup ? 'Hesabımı oluştur ve katıl' : 'Daveti kabul et'}
-            </Button>
-          )}
-          <p className="qx-small text-center text-fg-muted">
-            Bu daveti beklemiyorsanız sayfayı kapatabilirsiniz; hesabınızda hiçbir değişiklik yapılmaz.
-          </p>
-        </CardFooter>
-      </form>
-    </Card>
+          <Button type="submit" className="w-full" loading={submitting}>
+            {!submitting ? <UserPlus className="h-4 w-4" aria-hidden /> : null}
+            {needsSignup ? 'Hesabımı oluştur ve katıl' : 'Daveti kabul et'}
+          </Button>
+        </form>
+      )}
+    </AuthCard>
   );
 }
 
 export default function StaffInvitePage() {
+  // Kenar boşluğu ve ortalama kabuktan (AuthShell) gelir; giriş hareketi AuthCard'ın CSS'inde
+  // (`qx-enter`, azaltılmış harekette kapalı).
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-10">
-      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-        <Suspense
-          fallback={
-            <div role="status" aria-label="Davet yükleniyor">
-              <SkeletonForm fields={3} />
-            </div>
-          }
-        >
-          <StaffInviteInner />
-        </Suspense>
-      </Motion.div>
-    </div>
+    <Suspense
+      fallback={
+        <div role="status" aria-label="Davet yükleniyor" className="w-full max-w-md">
+          <SkeletonForm fields={3} />
+        </div>
+      }
+    >
+      <StaffInviteInner />
+    </Suspense>
   );
 }

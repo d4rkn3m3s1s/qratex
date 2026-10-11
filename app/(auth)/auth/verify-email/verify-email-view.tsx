@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { track } from '@/lib/analytics';
 import { AuthCard, authLinkClass } from '@/components/auth/p-auth/auth-card';
 import { AuthNotice } from '@/components/auth/p-auth/auth-notice';
-import { useAuthCopy } from '@/components/auth/p-auth/copy';
+import { resolveErrorCopy, useAuthCopy } from '@/components/auth/p-auth/copy';
 import { VerifyPending } from '@/components/auth/p-auth/verify-pending';
 import { useResendVerification } from '@/components/auth/p-auth/use-resend-verification';
 
@@ -16,6 +16,7 @@ type View =
   | { status: 'verified' | 'already_verified' }
   | { status: 'expired'; maskedEmail: string }
   | { status: 'invalid' }
+  | { status: 'rate_limited'; retryAfterSec: number }
   | { status: 'network' };
 
 /**
@@ -49,6 +50,9 @@ export function VerifyEmailView({ token }: { token: string }) {
       if (data.status === 'verified' || data.status === 'already_verified') setView({ status: data.status });
       else if (data.status === 'expired') setView({ status: 'expired', maskedEmail: data.maskedEmail || '***' });
       else if (data.status === 'invalid') setView({ status: 'invalid' });
+      // Oran sınırı: "bağlantını kontrol et" yanlış yönlendirir (hemen yeniden denemek yine 429).
+      else if (data.status === 'rate_limited' || res.status === 429)
+        setView({ status: 'rate_limited', retryAfterSec: Number(res.headers.get('Retry-After')) || 60 });
       else setView({ status: 'network' });
       track('email_verified', { outcome: data.status ?? `http_${res.status}` });
     } catch {
@@ -142,6 +146,20 @@ export function VerifyEmailView({ token }: { token: string }) {
           <AuthNotice tone="warning">{copy.resendFailed}</AuthNotice>
         ) : null}
       </AuthCard>
+    );
+  }
+
+  if (view.status === 'rate_limited') {
+    const msg = resolveErrorCopy(copy, 'RATE_LIMITED', view.retryAfterSec);
+    return (
+      <AuthCard
+        tone="warning"
+        icon={<Clock className="h-6 w-6" aria-hidden />}
+        title={msg.title}
+        description={msg.body}
+        headingRef={headingRef}
+        footer={backLink}
+      />
     );
   }
 
