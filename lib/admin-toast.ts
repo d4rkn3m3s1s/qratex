@@ -14,7 +14,7 @@ export const toast = Object.assign(
   sonnerToast,
   {
     success: (message: ToastMessage, options?: ToastOptions) =>
-      sonnerToast.success(formatWithPrefix('Basarili: ', message), options),
+      sonnerToast.success(formatWithPrefix('Başarılı: ', message), options),
     error: (message: ToastMessage, options?: ToastOptions) =>
       sonnerToast.error(formatWithPrefix('Dikkat: ', message), options),
   }
