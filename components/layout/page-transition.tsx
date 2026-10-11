@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface PageTransitionProps {
   children: ReactNode;
@@ -8,22 +8,16 @@ interface PageTransitionProps {
  * Qratex sayfa kabı.
  *
  * Not: Buradaki eski sayfa-geçiş animasyonu (framer-motion → styled-jsx → key'li CSS)
- * her seferinde HYDRATION uyuşmazlığı çıkardı:
- *  - `motion.div` SSR'da inline style enjekte ediyordu,
- *  - `<style jsx>` SSR'da farklı hash üretiyordu,
- *  - `usePathname()` + `key={pathname}` sunucuda <Suspense>, istemcide <div> farkı yaratıyordu.
- * Bu yüzden bileşen artık SERVER component (client hook YOK, animasyon YOK) ve DOM'a
- * sunucu/istemci birebir aynı sabit bir sarmalayıcı üretir.
+ * her seferinde HYDRATION uyuşmazlığı çıkardı; bileşen bu yüzden SERVER component
+ * (client hook YOK, animasyon YOK) ve sunucu/istemci birebir aynı sabit bir sarmalayıcı üretir.
  *
- * Ek olarak: route segment'lerinin `loading.tsx`'i (Next otomatik <Suspense> sınırı)
- * streaming sırasında sunucuda <Suspense>, istemcide <div> farkı yaratıp "recoverable"
- * hidrasyon uyarısı çıkarıyordu. Çocukları AÇIKÇA bir <Suspense> ile sarmalayınca
- * sunucu ve istemci aynı ağaç yapısını görür → uyarı biter.
+ * Burada bilerek <Suspense> YOK (perf-bundle kapısı, LCP kök nedeni): React 19.2 akışında
+ * her bekleyen Suspense sınırı ayrı "reveal" ile açılır ve ardışık açılışlar en az 300 ms
+ * aralıkla kısıtlanır ($RT+300). Kök sarmalayıcıda bir sınır + segment `loading.tsx` sınırı
+ * iç içe olunca sayfa içeriği (LCP öğesi) ilk HTML'de hazır olduğu hâlde ikinci açılışa
+ * kalıp tüm JS indikten sonra boyanıyordu (/ gözlenen LCP 660 ms, Lighthouse 6.9 sn).
+ * Artık async layout'lar kabuğu bekletir; tek akış sınırı rotanın kendi `loading.tsx`'idir.
  */
 export const PageTransition = ({ children }: PageTransitionProps) => {
-  return (
-    <div className="w-full h-full min-h-dvh">
-      <Suspense fallback={null}>{children}</Suspense>
-    </div>
-  );
+  return <div className="w-full h-full min-h-dvh">{children}</div>;
 };

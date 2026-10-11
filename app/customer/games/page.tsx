@@ -55,31 +55,16 @@ function enabledNavIds(shell: ShellConfig): Set<string> {
 }
 
 export default async function PlayHubPage({ searchParams }: PageProps) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
-  if (session.user.role !== 'CUSTOMER') redirect(roleHome(session.user.role));
-
+  // Başlık + sekme çubuğu yalnız hızlı (DB'siz/önbellekli) girdilerle ANINDA basılır; oturum ve
+  // DB yetki kararı veri bölümüyle birlikte iç Suspense'te beklenir (perf-bundle kapısı: başlık
+  // açıklaması bu rotanın LCP öğesi — yetki gidiş-dönüşünü beklediğinde LCP 2.8 sn'ye kayıyordu).
+  // Veri ve oyuncu kimliği hâlâ yalnız yetki kararından SONRA üretilir.
   const [sp, locale, shell] = await Promise.all([
     searchParams,
     getServerLocale() as Promise<PlayLocale>,
     getShellConfig('customer').catch(() => null),
   ]);
   const c = playHubCopy(locale);
-
-  // Yetki kararı DB'den (oturum iptali, rol değişimi, ban) — JWT tek başına yetmez (§4.4/2).
-  const auth = await requireAuth(['CUSTOMER']);
-  if ('error' in auth) {
-    const status = auth.error.status;
-    if (status === 503) {
-      return (
-        <PanelPage register="play" header={<PageHeader title={c.pageTitle} />}>
-          <ErrorState kind="offline" variant="section" title={c.sectionErrorTitle} description={c.sectionUnavailable} />
-        </PanelPage>
-      );
-    }
-    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
-  }
-  const userId = auth.session.user.id;
 
   const tab = first(sp.tab) === 'tournament' ? 'tournament' : 'games';
   const mode = first(sp.kip) === 'pratik' ? 'practice' : 'ranked';
@@ -98,12 +83,39 @@ export default async function PlayHubPage({ searchParams }: PageProps) {
     >
       {notice && <RetiredNotice locale={locale} notice={notice} />}
       <Suspense key={`${tab}:${mode}`} fallback={<HubSkeleton tab={tab} label={locale === 'en' ? 'Loading…' : 'Yükleniyor…'} />}>
-        {tab === 'tournament' ? (
-          <TournamentTab userId={userId} locale={locale} />
-        ) : (
-          <GamesTab userId={userId} locale={locale} mode={mode} />
-        )}
+        <PlayHubBody tab={tab} mode={mode} locale={locale} />
       </Suspense>
     </PanelPage>
+  );
+}
+
+async function PlayHubBody({
+  tab,
+  mode,
+  locale,
+}: {
+  tab: 'games' | 'tournament';
+  mode: 'practice' | 'ranked';
+  locale: PlayLocale;
+}) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
+  if (session.user.role !== 'CUSTOMER') redirect(roleHome(session.user.role));
+
+  // Yetki kararı DB'den (oturum iptali, rol değişimi, ban) — JWT tek başına yetmez (§4.4/2).
+  const auth = await requireAuth(['CUSTOMER']);
+  if ('error' in auth) {
+    if (auth.error.status === 503) {
+      const c = playHubCopy(locale);
+      return <ErrorState kind="offline" variant="section" title={c.sectionErrorTitle} description={c.sectionUnavailable} />;
+    }
+    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fgames');
+  }
+  const userId = auth.session.user.id;
+
+  return tab === 'tournament' ? (
+    <TournamentTab userId={userId} locale={locale} />
+  ) : (
+    <GamesTab userId={userId} locale={locale} mode={mode} />
   );
 }
