@@ -57,7 +57,7 @@ const defaults: SeoGlobalSettings = {
   websiteDescription: 'Müşteri geri bildirimlerini QR kodlar üzerinden toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın.',
   robotsIndex: true,
   robotsFollow: true,
-  robotsDisallow: ['/admin/', '/dealer/', '/customer/', '/auth/'],
+  robotsDisallow: ['/admin/', '/dealer/', '/customer/', '/staff/', '/auth/', '/api/'],
   sitemapEnabled: true,
   canonicalBase: '',
   extraSitemapUrls: [],

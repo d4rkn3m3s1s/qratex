@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getSeoSettings } from '@/lib/seo-settings';
+import { DEFAULT_DISALLOW } from '@/lib/admin-seo/contract';
 
 /**
  * Robots.txt: Admin SEO ayarlarından disallow listesi ve sitemap kullanılır.
@@ -17,7 +18,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     };
   }
 
-  const disallow = seo.robotsDisallow?.length ? seo.robotsDisallow : ['/admin/', '/dealer/', '/customer/', '/auth/'];
+  const disallow = seo.robotsDisallow?.length ? seo.robotsDisallow : [...DEFAULT_DISALLOW];
   // Giriş/kayıt herkese açık giriş kapılarıdır (marka araması "qratex giriş"): /auth/ altı
   // kapalı kalırken bu ikisi açıkça izinli — en uzun eşleşme kuralı Allow'u kazandırır.
   return {

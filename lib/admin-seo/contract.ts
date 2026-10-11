@@ -41,7 +41,7 @@ export const CHANGE_FREQUENCY_LABEL: Record<(typeof CHANGE_FREQUENCIES)[number],
 };
 
 /** robots.ts'nin listesi boşken kullandığı varsayılan (UI bunu gösterir). */
-export const DEFAULT_DISALLOW = ['/admin/', '/dealer/', '/customer/', '/auth/'] as const;
+export const DEFAULT_DISALLOW = ['/admin/', '/dealer/', '/customer/', '/staff/', '/auth/', '/api/'] as const;
 
 // ───────────────────────────── Şemalar ─────────────────────────────
 

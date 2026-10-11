@@ -18,6 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
   const adminLabel = t(locale, 'layoutMetadata.admin');
   return {
+    // Panel sayfaları asla dizine girmez (admin robots listesini değiştirse bile).
+    robots: { index: false, follow: false },
     title: {
       default: adminLabel,
       template: `%s | ${adminLabel}`,
