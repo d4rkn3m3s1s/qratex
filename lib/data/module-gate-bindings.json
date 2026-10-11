@@ -1,0 +1,1385 @@
+{
+  "version": 1,
+  "keys": {
+    "ab_testing": {
+      "api": [
+        {
+          "endpoint": "/api/customer/innovation/ab/event",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/innovation/ab/event/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/innovation/ab/variant",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/innovation/ab/variant/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "action_items": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/queues/tasks",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/tasks/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/tasks/[id]",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/queues/tasks/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/work",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/queues/work/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/work/suggestions",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/work/suggestions/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "ai_features": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/assistant",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/assistant/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/assistant/chat",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/assistant/chat/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/assistant/conversations",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/assistant/conversations/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/assistant/conversations/[id]",
+          "methods": [
+            "DELETE",
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/assistant/conversations/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/insights",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/insights/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/insights/actions",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/insights/actions/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/insights/corrections",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/insights/corrections/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/insights/evidence",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/insights/evidence/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/insights/narrative",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/insights/narrative/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/settings/ai",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/settings/ai/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/settings/ai/retrain",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/settings/ai/retrain/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/today/weekly/narrative",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/today/weekly/narrative/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [
+        "lib/dealer-insights/narrative.ts",
+        "lib/dealer-today/narrative.ts"
+      ],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "api_keys": {
+      "api": [],
+      "pages": [],
+      "server": [
+        "lib/integrations/server.ts",
+        "lib/partner-api-auth.ts"
+      ],
+      "landing": [],
+      "menu": []
+    },
+    "benchmark": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/analytics/benchmark",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/analytics/benchmark/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/analytics/benchmark/segment",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/analytics/benchmark/segment/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/benchmark",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/benchmark/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "campaigns": {
+      "api": [],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "churn_risk": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/churn-intervention",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/churn-intervention/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/customers/risk",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/customers/risk/route.ts"
+        },
+        {
+          "endpoint": "/api/internal/inngest/churn-intervention",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/internal/inngest/churn-intervention/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "customer_ai_insights": {
+      "api": [
+        {
+          "endpoint": "/api/customer/ai-recommendations",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/ai-recommendations/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "customer_campaigns": {
+      "api": [
+        {
+          "endpoint": "/api/customer/innovation/nearby",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/innovation/nearby/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/innovation/radar",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/innovation/radar/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/deals",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/deals/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/nearby",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/nearby/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/saved",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/saved/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/saved/[dealerId]",
+          "methods": [
+            "DELETE",
+            "PUT"
+          ],
+          "file": "app/api/customer/places/saved/[dealerId]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/top",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/top/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/seasonal-event",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/customer/seasonal-event/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "customer_radar": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/customers/winback",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/customers/winback/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "dealer_surveys": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/surveys",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/surveys/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]",
+          "methods": [
+            "DELETE",
+            "GET",
+            "PATCH",
+            "PUT"
+          ],
+          "file": "app/api/dealer/surveys/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]/duplicate",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/surveys/[id]/duplicate/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]/export",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/surveys/[id]/export/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]/responses",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/surveys/[id]/responses/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]/results",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/surveys/[id]/results/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/surveys/[id]/texts",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/surveys/[id]/texts/route.ts"
+        }
+      ],
+      "pages": [
+        "app/dealer/surveys/[id]/edit/page.tsx",
+        "app/dealer/surveys/[id]/results/page.tsx",
+        "app/dealer/surveys/create/page.tsx",
+        "app/dealer/surveys/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "discovery": {
+      "api": [
+        {
+          "endpoint": "/api/customer/discovery",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/discovery/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/innovation/nearby",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/innovation/nearby/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/innovation/radar",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/innovation/radar/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/deals",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/deals/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/nearby",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/nearby/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/saved",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/saved/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/saved/[dealerId]",
+          "methods": [
+            "DELETE",
+            "PUT"
+          ],
+          "file": "app/api/customer/places/saved/[dealerId]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/places/top",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/places/top/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/seasonal-event",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/customer/seasonal-event/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/venue-detail/[dealerId]/history",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/venue-detail/[dealerId]/history/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "donations": {
+      "api": [
+        {
+          "endpoint": "/api/customer/wallet/donate",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/customer/wallet/donate/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/wallet/donate/community",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/wallet/donate/community/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/wallet/donate/page.tsx"
+      ],
+      "server": [
+        "lib/admin-donations/server.ts"
+      ],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "experiences": {
+      "api": [
+        {
+          "endpoint": "/api/customer/experience-share",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/experience-share/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/experience-share/[token]",
+          "methods": [
+            "DELETE"
+          ],
+          "file": "app/api/customer/experience-share/[token]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/improvement-request",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/improvement-request/route.ts"
+        },
+        {
+          "endpoint": "/api/public/experience-share/[token]/view",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/public/experience-share/[token]/view/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "feature_flags": {
+      "api": [],
+      "pages": [],
+      "server": [
+        "lib/admin-flags/rollout.server.ts"
+      ],
+      "landing": [],
+      "menu": []
+    },
+    "heatmap": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/heatmap",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/heatmap/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "incidents": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/queues/incidents",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/incidents/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/incidents/[id]",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/queues/incidents/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/incidents/[id]/tasks",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/incidents/[id]/tasks/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/incidents/radar",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/incidents/radar/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/work",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/queues/work/route.ts"
+        }
+      ],
+      "pages": [
+        "app/dealer/inbox/assigned/page.tsx"
+      ],
+      "server": [
+        "lib/dealer-queues/maintenance.ts",
+        "lib/table-signal/venue.ts"
+      ],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "insights_global": {
+      "api": [
+        {
+          "endpoint": "/api/admin/analytics/[section]",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/admin/analytics/[section]/route.ts"
+        },
+        {
+          "endpoint": "/api/admin/insights",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/admin/insights/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "journey_score": {
+      "api": [
+        {
+          "endpoint": "/api/customer/me/progress/journey",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/me/progress/journey/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/me/progress/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "landing_pricing": {
+      "api": [],
+      "pages": [],
+      "server": [],
+      "landing": [
+        "app/(public)/neden-qratex/page.tsx",
+        "app/(public)/page.tsx"
+      ],
+      "menu": []
+    },
+    "progress_hub": {
+      "api": [
+        {
+          "endpoint": "/api/customer/me/progress/trends",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/me/progress/trends/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/me/progress/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "quests": {
+      "api": [
+        {
+          "endpoint": "/api/customer/quests",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/quests/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/quests/claim",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/quests/claim/route.ts"
+        },
+        {
+          "endpoint": "/api/gamification/quests",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/gamification/quests/route.ts"
+        },
+        {
+          "endpoint": "/api/gamification/quests/[id]",
+          "methods": [
+            "DELETE",
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/gamification/quests/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/gamification/quests/[id]/claim",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/gamification/quests/[id]/claim/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/quests/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "referrals": {
+      "api": [
+        {
+          "endpoint": "/api/customer/me/invite",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/me/invite/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/me/invite/apply",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/me/invite/apply/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/me/invite/code",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/me/invite/code/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/me/invite/milestones/claim",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/me/invite/milestones/claim/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/me/invite/referrals",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/me/invite/referrals/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/me/invite/referrals/[id]/nudge",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/me/invite/referrals/[id]/nudge/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/me/invite/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "remedy_offers": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/automation/remedy",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/automation/remedy/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/automation/remedy/scan",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/automation/remedy/scan/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/automation/remedy/templates",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/automation/remedy/templates/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/automation/remedy/templates/[id]",
+          "methods": [
+            "DELETE",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/automation/remedy/templates/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/consumption-reviews/[id]/remedy",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/consumption-reviews/[id]/remedy/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/feedbacks/[id]/remedy",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/feedbacks/[id]/remedy/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/offers/personal",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/offers/personal/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/offers/personal/candidates",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/offers/personal/candidates/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/remedy",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/queues/remedy/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/remedy/[id]",
+          "methods": [
+            "GET",
+            "PATCH",
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/remedy/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/queues/remedy/bulk",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/queues/remedy/bulk/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/remedy-offers/[id]",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/remedy-offers/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/remedy-queue",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/remedy-queue/route.ts"
+        }
+      ],
+      "pages": [
+        "app/dealer/automation/remedy/page.tsx"
+      ],
+      "server": [
+        "lib/dealer-inbox/server.ts",
+        "lib/dealer-queues/maintenance.ts",
+        "lib/dealer-queues/remedy-server.ts"
+      ],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "rewards": {
+      "api": [
+        {
+          "endpoint": "/api/customer/league",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/league/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/wallet/rewards/claim",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/wallet/rewards/claim/route.ts"
+        },
+        {
+          "endpoint": "/api/gamification/rewards",
+          "methods": [
+            "GET",
+            "PATCH",
+            "POST"
+          ],
+          "file": "app/api/gamification/rewards/route.ts"
+        },
+        {
+          "endpoint": "/api/gamification/rewards/[id]",
+          "methods": [
+            "DELETE",
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/gamification/rewards/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/leaderboard",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/leaderboard/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/leaderboard/page.tsx",
+        "app/customer/wallet/rewards/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "roi": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/analytics/impact",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/analytics/impact/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/analytics/impact/settings",
+          "methods": [
+            "PUT"
+          ],
+          "file": "app/api/dealer/analytics/impact/settings/route.ts"
+        }
+      ],
+      "pages": [],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "spending_overview": {
+      "api": [
+        {
+          "endpoint": "/api/customer/wallet/activity/export",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/wallet/activity/export/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/wallet/activity/summary",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/wallet/activity/summary/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/wallet/activity/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "squads": {
+      "api": [
+        {
+          "endpoint": "/api/customer/squads",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/customer/squads/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/customer/squads/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/[id]/invite-code",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/[id]/invite-code/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/[id]/leave",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/[id]/leave/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/[id]/members/[userId]",
+          "methods": [
+            "DELETE"
+          ],
+          "file": "app/api/customer/squads/[id]/members/[userId]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/[id]/transfer",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/[id]/transfer/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/battles",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/battles/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/battles/[id]",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/battles/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/battles/[id]/respond",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/customer/squads/battles/[id]/respond/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/battles/[id]/withdraw",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/battles/[id]/withdraw/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/battles/current",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/battles/current/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/challenge",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/challenge/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/join",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/join/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/name-check",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/name-check/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/overview",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/overview/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/search",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/search/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/weekly-goal",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/customer/squads/weekly-goal/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/squads/weekly-goal/claim",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/squads/weekly-goal/claim/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/squads/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "staff_management": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/staff",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/checklists",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/checklists/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/checklists/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/checklists/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/field-reports/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/field-reports/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/hub",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/staff/hub/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/invitations",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/staff/invitations/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/invitations/[id]",
+          "methods": [
+            "DELETE"
+          ],
+          "file": "app/api/dealer/staff/invitations/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/leave",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/leave/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/shifts",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/shifts/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/shifts/[id]",
+          "methods": [
+            "DELETE",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/shifts/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/shifts/copy-week",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/shifts/copy-week/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/tasks",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/tasks/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/tasks/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/tasks/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/training",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/staff/training/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/staff/training/[id]",
+          "methods": [
+            "GET",
+            "PATCH"
+          ],
+          "file": "app/api/dealer/staff/training/[id]/route.ts"
+        }
+      ],
+      "pages": [
+        "app/dealer/team/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    },
+    "surprise_boxes": {
+      "api": [
+        {
+          "endpoint": "/api/admin/surprise-box/send",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/admin/surprise-box/send/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/wallet/boxes/[id]/open",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/wallet/boxes/[id]/open/route.ts"
+        },
+        {
+          "endpoint": "/api/customer/wallet/boxes/daily",
+          "methods": [
+            "POST"
+          ],
+          "file": "app/api/customer/wallet/boxes/daily/route.ts"
+        }
+      ],
+      "pages": [
+        "app/customer/wallet/owned/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": []
+    },
+    "voc_wall": {
+      "api": [
+        {
+          "endpoint": "/api/dealer/voc-wall",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/voc-wall/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/displays",
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "file": "app/api/dealer/voc-wall/displays/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/displays/[id]",
+          "methods": [
+            "DELETE"
+          ],
+          "file": "app/api/dealer/voc-wall/displays/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/items",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/voc-wall/items/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/items/[id]",
+          "methods": [
+            "PATCH"
+          ],
+          "file": "app/api/dealer/voc-wall/items/[id]/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/preview",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/dealer/voc-wall/preview/route.ts"
+        },
+        {
+          "endpoint": "/api/dealer/voc-wall/rules",
+          "methods": [
+            "PUT"
+          ],
+          "file": "app/api/dealer/voc-wall/rules/route.ts"
+        },
+        {
+          "endpoint": "/api/wall/[token]",
+          "methods": [
+            "GET"
+          ],
+          "file": "app/api/wall/[token]/route.ts"
+        }
+      ],
+      "pages": [
+        "app/dealer/voc-wall/page.tsx",
+        "app/wall/[token]/page.tsx"
+      ],
+      "server": [],
+      "landing": [],
+      "menu": [
+        "lib/navigation/registry.ts"
+      ]
+    }
+  },
+  "unknownKeys": {}
+}

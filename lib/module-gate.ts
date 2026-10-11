@@ -13,6 +13,7 @@ import {
   type VisibilityRole,
 } from '@/lib/visibility-controls';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { checkModuleRollout } from '@/lib/admin-flags/rollout.server';
 
 /** Cache invalidation tag — admin settings yazınca revalidateTag(MODULE_GATE_CACHE_TAG). */
 export const MODULE_GATE_CACHE_TAG = 'module-gate-settings';
@@ -99,27 +100,43 @@ export async function assertModuleEnabled(moduleKey: string, options: ModuleGate
 
   const blockedByGlobalControl = controls[moduleKey] === false;
   const blockedByRoleVisibility = role ? visibility.featureVisibility[role]?.[moduleKey] === false : false;
+  // Kademeli açılış (Özellik ve Deney Kontrolü): modül açıkken yüzdesel/allowlist kuralı.
+  // Kural yoksa ya da `feature_flags` anahtarı kapalıysa davranış eskisiyle aynı.
+  const blockedByRollout =
+    !blockedByGlobalControl && !blockedByRoleVisibility
+      ? (await checkModuleRollout(moduleKey, options.userId ?? null, controls)) === 'excluded'
+      : false;
 
-  if (blockedByGlobalControl || blockedByRoleVisibility) {
-    const reason = blockedByGlobalControl ? 'module_disabled_globally' : 'module_disabled_for_role';
-    await prisma.analyticsEvent.create({
-      data: {
-        userId: options.userId || null,
-        event: 'module_gate_blocked',
-        category: 'module_gate',
+  if (blockedByGlobalControl || blockedByRoleVisibility || blockedByRollout) {
+    const reason = blockedByGlobalControl
+      ? 'module_disabled_globally'
+      : blockedByRoleVisibility
+        ? 'module_disabled_for_role'
+        : 'module_rollout_excluded';
+    // Oturumsuz engellemeler kaydedilmez: kapalı modüle döngüyle istek atan kimliksiz istemci
+    // AnalyticsEvent tablosuna sınırsız satır yazdıramaz (denetim raporu modules B5).
+    if (options.userId) {
+      await prisma.analyticsEvent.create({
         data: {
-          moduleKey,
-          reason,
-          role: role ?? null,
-          routeKey: options.routeKey ?? null,
-          ...getAuditRequestMeta(options.request ?? { headers: { get: () => null } }),
-        } as object,
-      },
-    });
+          userId: options.userId,
+          event: 'module_gate_blocked',
+          category: 'module_gate',
+          data: {
+            moduleKey,
+            reason,
+            role: role ?? null,
+            routeKey: options.routeKey ?? null,
+            ...getAuditRequestMeta(options.request ?? { headers: { get: () => null } }),
+          } as object,
+        },
+      });
+    }
     return NextResponse.json(
       {
         success: false,
-        error: 'Bu modül yönetici tarafından geçici olarak devre dışı bırakıldı.',
+        error: blockedByRollout
+          ? 'Bu özellik henüz hesabınız için açılmadı.'
+          : 'Bu modül yönetici tarafından geçici olarak devre dışı bırakıldı.',
         moduleKey,
         reason,
       },
