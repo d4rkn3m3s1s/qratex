@@ -84,7 +84,12 @@ export function fmtMinutes(min: number | null | undefined, locale: string): stri
 }
 
 export function initials(name: string | null | undefined, fallback = '?'): string {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  // Harf/rakam dışı karakterler ("[", "(", "-", emoji) baş harf olmaz — "[Ali] Veli" → "AV".
+  const parts = (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean);
   if (!parts.length) return fallback;
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toLocaleUpperCase('tr-TR');
 }

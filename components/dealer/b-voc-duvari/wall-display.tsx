@@ -114,6 +114,7 @@ export function WallDisplay({ feed, variant, status, controlsVisible = true, ext
 
   const current: WallItemDto | undefined = items[index];
   const tv = variant === 'tv';
+  const Body = tv ? 'main' : 'div';
   const transition = policy.transition({ duration: 0.4, ease: [0.22, 1, 0.36, 1] });
   const updatedLabel = useMemo(() => {
     if (!status) return null;
@@ -145,7 +146,8 @@ export function WallDisplay({ feed, variant, status, controlsVisible = true, ext
         </div>
       </header>
 
-      <main className={cn('flex flex-1 items-center', tv ? 'px-[6vw] py-[4vh]' : 'px-[6cqw] py-[3cqw]')}>
+      {/* Ana içerik yer imi yalnız TV sayfasında; panel önizlemesinde iç içe ikinci <main> olmaz. */}
+      <Body className={cn('flex flex-1 items-center', tv ? 'px-[6vw] py-[4vh]' : 'px-[6cqw] py-[3cqw]')}>
         {current ? (
           <AnimatePresence mode="wait" initial={false}>
             <m.figure
@@ -203,7 +205,7 @@ export function WallDisplay({ feed, variant, status, controlsVisible = true, ext
             </p>
           </div>
         )}
-      </main>
+      </Body>
 
       <footer
         className={cn(

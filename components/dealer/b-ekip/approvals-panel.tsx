@@ -71,7 +71,7 @@ function RangeText({ leave }: { leave: LeaveDto }) {
   const s = fmtDay(leave.startDate, locale);
   const e = fmtDay(leave.endDate, locale);
   return (
-    <span className="qx-caption qx-num text-fg-muted">
+    <span className="qx-caption qx-num block text-fg-muted">
       {leave.startDate === leave.endDate ? s : `${s} – ${e}`} · {copy.approvals.days(leave.days)}
     </span>
   );
@@ -99,7 +99,7 @@ function LeaveCard({ leave }: { leave: LeaveDto }) {
             {leave.reason}
           </p>
         )}
-        <p className={`qx-caption inline-flex items-center gap-1 ${leave.conflictingShifts ? 'font-medium text-warning' : 'text-fg-muted'}`}>
+        <p className={`qx-caption flex items-center gap-1 ${leave.conflictingShifts ? 'font-medium text-warning' : 'text-fg-muted'}`}>
           {leave.conflictingShifts ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> : null}
           {leave.conflictingShifts ? c.conflicts(leave.conflictingShifts) : c.noConflicts}
         </p>

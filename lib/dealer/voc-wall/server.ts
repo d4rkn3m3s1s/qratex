@@ -179,7 +179,7 @@ async function buildWallFeed(dealerId: string, config: WallConfig, qr: string | 
   const [rows, agg, count24h, qrRow, dealer] = await Promise.all([
     prisma.feedback.findMany({
       where: liveWhere(dealerId, config, qr),
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: WALL_FEED_SIZE * 2,
       select: ITEM_SELECT,
     }),
@@ -348,7 +348,7 @@ export async function loadCurationPage(
   const page = Math.max(1, opts.page);
   const rows = await prisma.feedback.findMany({
     where,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], // id: eşit createdAt (toplu içe aktarma) sayfalarda tekrar/atlama yapmasın
     skip: (page - 1) * CURATION_PAGE_SIZE,
     take: CURATION_PAGE_SIZE + 1,
     select: CURATION_SELECT,
