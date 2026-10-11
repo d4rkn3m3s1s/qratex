@@ -80,6 +80,42 @@ export function isInitiativePhase(v: unknown): v is InitiativePhase {
   return typeof v === 'string' && (INITIATIVE_PHASES as readonly string[]).includes(v);
 }
 
+// ───────────────────────────── Yerelleştirilmiş sözlük (arayüz) ─────────────────────────────
+
+const STATUS_EN: Record<TaskStatus, { label: string; short: string; description: string }> = {
+  todo: { label: 'To do', short: 'To do', description: 'Not started yet' },
+  in_progress: { label: 'In progress', short: 'In progress', description: 'Being worked on' },
+  review: { label: 'In review', short: 'In review', description: 'Waiting for manager approval' },
+  done: { label: 'Done', short: 'Done', description: 'Approved and completed' },
+};
+const PRIORITY_EN: Record<TaskPriority, string> = { high: 'High', medium: 'Medium', low: 'Low' };
+const PHASE_EN: Record<InitiativePhase, { label: string; description: string }> = {
+  later: { label: 'Later', description: 'Idea still taking shape; not scheduled' },
+  next: { label: 'Next', description: 'Starts in the next cycle' },
+  now: { label: 'Now', description: 'The team is working on it now' },
+  shipped: { label: 'Shipped', description: 'Done and available to use' },
+  dropped: { label: 'Dropped', description: 'Deliberately stopped' },
+};
+const RECURRENCE_EN: Record<string, string> = { weekly: 'Every week', monthly: 'Every month', daily: 'Every week' };
+
+/** Arayüz dili için durum/öncelik/aşama/tekrar sözlüğü (ton ve sıra aynı kalır). */
+export function teamMeta(locale: 'tr' | 'en') {
+  if (locale !== 'en') {
+    return { STATUS_META, PRIORITY_META, PHASE_META, RECURRENCE_LABEL, statusMeta, priorityMeta };
+  }
+  const S = Object.fromEntries(TASK_STATUSES.map((k) => [k, { ...STATUS_META[k], ...STATUS_EN[k] }])) as typeof STATUS_META;
+  const P = Object.fromEntries(TASK_PRIORITIES.map((k) => [k, { ...PRIORITY_META[k], label: PRIORITY_EN[k] }])) as typeof PRIORITY_META;
+  const PH = Object.fromEntries(INITIATIVE_PHASES.map((k) => [k, { ...PHASE_META[k], ...PHASE_EN[k] }])) as typeof PHASE_META;
+  return {
+    STATUS_META: S,
+    PRIORITY_META: P,
+    PHASE_META: PH,
+    RECURRENCE_LABEL: RECURRENCE_EN,
+    statusMeta: (s: string | null | undefined) => (isTaskStatus(s) ? S[s] : S.todo),
+    priorityMeta: (p: string | null | undefined) => (isTaskPriority(p) ? P[p] : P.medium),
+  };
+}
+
 // ───────────────────────────── Dosya ekleri ─────────────────────────────
 
 /**

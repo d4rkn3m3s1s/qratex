@@ -1,5 +1,11 @@
 'use client';
 
+import { readLocaleCookieClient } from '@/lib/locale-shared';
+
+const isEn = () => readLocaleCookieClient() === 'en';
+const OFFLINE_MSG = () => (isEn() ? 'Couldn’t connect. Check your internet connection and try again.' : 'Bağlantı kurulamadı. İnternetini kontrol edip tekrar dene.');
+const FAILED_MSG = () => (isEn() ? 'Something went wrong. Please try again.' : 'İşlem tamamlanamadı. Lütfen tekrar dene.');
+
 /**
  * Ekip modülü istemci veri katmanı. Tüm istekler buradan geçer (denetim O1/Bulgu 18: işlemler
  * `res.ok`'a bakmadan sessizce başarısız oluyordu). Hata, sunucunun Türkçe mesajı ve koduyla
@@ -40,7 +46,7 @@ export async function teamFetch<T>(url: string, init: RequestInit & { json?: unk
       ...(json !== undefined ? { body: JSON.stringify(json) } : {}),
     });
   } catch {
-    throw new TeamApiError(0, 'OFFLINE', 'Bağlantı kurulamadı. İnternetini kontrol edip tekrar dene.');
+    throw new TeamApiError(0, 'OFFLINE', OFFLINE_MSG());
   }
   let body: Envelope<T> | null = null;
   try {
@@ -50,7 +56,7 @@ export async function teamFetch<T>(url: string, init: RequestInit & { json?: unk
   }
   if (!res.ok || !body || body.success === false) {
     const detail = firstDetailMessage(body?.details);
-    const msg = body?.code === 'VALIDATION' && detail ? detail : body?.error || 'İşlem tamamlanamadı. Lütfen tekrar dene.';
+    const msg = body?.code === 'VALIDATION' && detail ? detail : body?.error || FAILED_MSG();
     throw new TeamApiError(res.status, body?.code ?? 'ERROR', msg, body?.details);
   }
   return (body.data ?? (body as unknown as T)) as T;
@@ -69,5 +75,5 @@ export function qs(params: Record<string, string | number | boolean | null | und
 export function errorMessage(err: unknown): string {
   if (err instanceof TeamApiError) return err.message;
   if (err instanceof Error && err.message) return err.message;
-  return 'İşlem tamamlanamadı. Lütfen tekrar dene.';
+  return FAILED_MSG();
 }

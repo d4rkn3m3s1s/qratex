@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { IconButton } from '@/components/ds/a11y';
-import { PRIORITY_META, RECURRENCE_LABEL, STATUS_META, TASK_PRIORITIES, isTaskStatus, type TaskStatus } from '@/lib/team/constants';
+import { TASK_PRIORITIES, isTaskStatus, type TaskStatus } from '@/lib/team/constants';
 import { formatMinutes, formatTeamDate } from '@/lib/team/dates';
 import { shiftWeekKey, weekKeyLabel } from '@/lib/team-week';
 import { errorMessage, qs, teamFetch } from '../lib/api';
@@ -18,7 +18,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
 import type { TaskDetailPayload, TaskList } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 function Row({ label, children, htmlFor }: { label: string; children: React.ReactNode; htmlFor?: string }) {
   return (
@@ -41,6 +41,7 @@ function Row({ label, children, htmlFor }: { label: string; children: React.Reac
  * durum ve süre kaydı kendi görevinde açıktır.
  */
 export function TaskProperties({ data }: { data: TaskDetailPayload }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -84,7 +85,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
             <SelectContent>
               {statusOptions.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {isTaskStatus(s) ? STATUS_META[s].label : s}
+                  {isTaskStatus(s) ? tm.STATUS_META[s].label : s}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -102,7 +103,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
             <SelectContent>
               {TASK_PRIORITIES.map((p) => (
                 <SelectItem key={p} value={p}>
-                  {PRIORITY_META[p].label}
+                  {tm.PRIORITY_META[p].label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -253,7 +254,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
             </SelectContent>
           </Select>
         ) : (
-          <span className="qx-small text-fg">{task.recurrence ? RECURRENCE_LABEL[task.recurrence] : 'Tekrarlanmaz'}</span>
+          <span className="qx-small text-fg">{task.recurrence ? tm.RECURRENCE_LABEL[task.recurrence] : 'Tekrarlanmaz'}</span>
         )}
       </Row>
       <Row label={tu.etiketler} htmlFor={edit ? ids.tags : undefined}>

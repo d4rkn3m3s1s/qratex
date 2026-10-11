@@ -4,7 +4,8 @@ import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { announce } from '@/components/ds/a11y';
-import { STATUS_META, isTaskStatus, type TaskStatus } from '@/lib/team/constants';
+import { isTaskStatus, type TaskStatus } from '@/lib/team/constants';
+import { useTeamCopy, useTeamLabels } from '../copy';
 import { TeamApiError, errorMessage, teamFetch } from './api';
 import { API, invalidateTasks, teamKeys } from './queries';
 import type { TaskDetailPayload, TaskDto, TaskList } from './types';
@@ -17,6 +18,8 @@ type Patch = Partial<Pick<TaskDto, 'status' | 'archivedAt'>>;
  */
 export function useTaskActions(opts: { onProofRequired?: (taskId: string) => void; weekKey?: string } = {}) {
   const qc = useQueryClient();
+  const tf = useTeamCopy().fx;
+  const tm = useTeamLabels();
 
   const patchCaches = useCallback(
     (taskId: string, patch: Patch | null) => {
@@ -41,18 +44,18 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
       const rollback = patchCaches(task.id, { status: to });
       try {
         await teamFetch(`${API}/tasks?id=${encodeURIComponent(task.id)}`, { method: 'PUT', json: { status: to, note: note ?? undefined } });
-        const label = isTaskStatus(to) ? STATUS_META[to].label : to;
-        if (to === 'review') toast.success('Onaya gönderildi', { description: task.title });
-        else if (to === 'done') toast.success('Onaylandı', { description: task.title });
-        else if (task.status === 'review' && to === 'in_progress') toast('Revizyon istendi', { description: task.title });
-        else toast.success(`Durum: ${label}`, { description: task.title });
+        const label = isTaskStatus(to) ? tm.STATUS_META[to].label : to;
+        if (to === 'review') toast.success(tf.sentForApproval, { description: task.title });
+        else if (to === 'done') toast.success(tf.approvedToast, { description: task.title });
+        else if (task.status === 'review' && to === 'in_progress') toast(tf.revisionRequested, { description: task.title });
+        else toast.success(tf.statusSet(label), { description: task.title });
         announce(`${task.title}: ${label}`);
         invalidateTasks(qc, task.id);
         return true;
       } catch (err) {
         rollback();
         if (err instanceof TeamApiError && err.code === 'PROOF_REQUIRED') {
-          toast.error(err.message, { description: 'Görevi açıp not ya da dosya ekleyebilirsin.' });
+          toast.error(err.message, { description: tf.proofHint });
           opts.onProofRequired?.(task.id);
         } else {
           toast.error(errorMessage(err));
@@ -60,7 +63,7 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
         return false;
       }
     },
-    [patchCaches, qc, opts]
+    [patchCaches, qc, opts, tf, tm]
   );
 
   const update = useCallback(
@@ -85,11 +88,11 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
       try {
         await teamFetch(`${API}/tasks?id=${encodeURIComponent(task.id)}`, { method: 'PUT', json: { archived } });
         invalidateTasks(qc, task.id);
-        toast.success(archived ? 'Görev arşivlendi' : 'Görev arşivden çıkarıldı', {
+        toast.success(archived ? tf.taskArchived : tf.taskUnarchived, {
           description: task.title,
           duration: 6000,
           action: {
-            label: 'Geri al',
+            label: tf.undo,
             onClick: () => {
               void teamFetch(`${API}/tasks?id=${encodeURIComponent(task.id)}`, { method: 'PUT', json: { archived: !archived } })
                 .then(() => invalidateTasks(qc, task.id))
@@ -104,14 +107,14 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
         return false;
       }
     },
-    [patchCaches, qc]
+    [patchCaches, qc, tf]
   );
 
   const duplicate = useCallback(
     async (task: Pick<TaskDto, 'id' | 'title'>) => {
       try {
         await teamFetch(`${API}/tasks/${encodeURIComponent(task.id)}/duplicate`, { method: 'POST', json: { weekKey: opts.weekKey } });
-        toast.success('Görev kopyalandı', { description: task.title });
+        toast.success(tf.taskDuplicated, { description: task.title });
         invalidateTasks(qc);
         return true;
       } catch (err) {
@@ -119,7 +122,7 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
         return false;
       }
     },
-    [qc, opts.weekKey]
+    [qc, opts.weekKey, tf]
   );
 
   const hardDelete = useCallback(
@@ -128,9 +131,9 @@ export function useTaskActions(opts: { onProofRequired?: (taskId: string) => voi
       patchCaches(task.id, null);
       qc.removeQueries({ queryKey: teamKeys.task(task.id) });
       invalidateTasks(qc);
-      toast.success('Görev kalıcı olarak silindi', { description: task.title });
+      toast.success(tf.taskDeleted, { description: task.title });
     },
-    [patchCaches, qc]
+    [patchCaches, qc, tf]
   );
 
   /** Detay alt işlemi — yanıt güncel detaydır; önbelleğe doğrudan yazılır. */

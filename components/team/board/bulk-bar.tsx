@@ -9,12 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmAction } from '@/components/states';
-import { PRIORITY_META, STATUS_META, TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
+import { TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Result = { affected: number; skipped: Array<{ id: string; title: string; reason: string }> };
 
@@ -24,6 +24,7 @@ type Result = { affected: number; skipped: Array<{ id: string; title: string; re
  * arşiv görünümünde ve tipli onayla (denetim Bulgu 41: onaysız 200 göreve kadar siliyordu).
  */
 export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveView: boolean; onDone: () => void }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -79,7 +80,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             <SelectContent>
               {TASK_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {STATUS_META[s].label}
+                  {tm.STATUS_META[s].label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -91,7 +92,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
             <SelectContent>
               {TASK_PRIORITIES.map((p) => (
                 <SelectItem key={p} value={p}>
-                  {PRIORITY_META[p].label}
+                  {tm.PRIORITY_META[p].label}
                 </SelectItem>
               ))}
             </SelectContent>

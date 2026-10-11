@@ -15,20 +15,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { IconButton } from '@/components/ds/a11y';
 import { ConfirmAction } from '@/components/states';
-import { STATUS_META, type TaskStatus } from '@/lib/team/constants';
+import { type TaskStatus } from '@/lib/team/constants';
 import { moveTargetsFor } from '@/lib/team/permissions';
 import { useWorkspace } from '../workspace-context';
 import { useTaskActions } from '../lib/use-task-actions';
 import { NoteDialog } from '../note-dialog';
 import { STATUS_ICON } from '../shared';
 import type { TaskDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 /**
  * Kart menüsü — her ekranda ve klavyeyle erişilir ("Taşı" artık yalnız mobilde değil; denetim
  * Y7/Bulgu 14: kopyala/arşivle/sil yalnız hover ile görünüyordu, masaüstünde klavye taşıması yoktu).
  */
 export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequired?: (id: string) => void }) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { teamViewer, can, openTask, weekKey } = useWorkspace();
@@ -66,7 +67,7 @@ export function TaskMenu({ task, onProofRequired }: { task: TaskDto; onProofRequ
                         else void actions.move(task, s as TaskStatus);
                       }}
                     >
-                      <Icon className="mr-2 h-4 w-4" aria-hidden /> {STATUS_META[s].label}
+                      <Icon className="mr-2 h-4 w-4" aria-hidden /> {tm.STATUS_META[s].label}
                     </DropdownMenuItem>
                   );
                 })}

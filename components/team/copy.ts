@@ -1,6 +1,7 @@
 'use client';
 
 import { useDsLocale } from '@/components/ds/a11y/copy';
+import { teamMeta } from '@/lib/team/constants';
 
 /** Ekip modülü (yönetim + müşteri paneli ortak) — arayüz metinleri (TR/EN). */
 const tr = {
@@ -560,6 +561,16 @@ const tr = {
     milestonesTitle: 'Kilometre taşları',
     subtasksTitle: 'Alt görevler',
     aiGroup: 'Yapay zekâ',
+    sentForApproval: 'Onaya gönderildi',
+    approvedToast: 'Onaylandı',
+    revisionRequested: 'Revizyon istendi',
+    statusSet: (l: string) => `Durum: ${l}`,
+    proofHint: 'Görevi açıp not ya da dosya ekleyebilirsin.',
+    taskArchived: 'Görev arşivlendi',
+    taskUnarchived: 'Görev arşivden çıkarıldı',
+    undo: 'Geri al',
+    taskDuplicated: 'Görev kopyalandı',
+    taskDeleted: 'Görev kalıcı olarak silindi',
   },
   ui2: {
     ekle: 'Ekle',
@@ -1145,6 +1156,16 @@ const en: Copy = {
     milestonesTitle: 'Milestones',
     subtasksTitle: 'Subtasks',
     aiGroup: 'AI',
+    sentForApproval: 'Sent for approval',
+    approvedToast: 'Approved',
+    revisionRequested: 'Changes requested',
+    statusSet: (l) => `Status: ${l}`,
+    proofHint: 'Open the task to add a note or a file.',
+    taskArchived: 'Task archived',
+    taskUnarchived: 'Task unarchived',
+    undo: 'Undo',
+    taskDuplicated: 'Task duplicated',
+    taskDeleted: 'Task permanently deleted',
   },
   ui2: {
     ekle: 'Add',
@@ -1184,4 +1205,9 @@ export const TEAM_COPY = { tr, en } as const;
 
 export function useTeamCopy(): Copy {
   return TEAM_COPY[useDsLocale()];
+}
+
+/** Durum/öncelik/aşama/tekrar etiketleri arayüz dilinde. */
+export function useTeamLabels() {
+  return teamMeta(useDsLocale());
 }

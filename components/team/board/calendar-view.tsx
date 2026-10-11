@@ -3,13 +3,13 @@
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { istanbulDayOf, shortDayLabel } from '@/lib/team/dates';
-import { STATUS_META, isTaskStatus } from '@/lib/team/constants';
+import { isTaskStatus } from '@/lib/team/constants';
 import { weekDays } from '@/lib/team-week';
 import { useWorkspace } from '../workspace-context';
 import { useTaskActions } from '../lib/use-task-actions';
 import { STATUS_ICON, PriorityBadge, MemberAvatar } from '../shared';
 import type { TaskDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 
 /**
@@ -18,6 +18,7 @@ import { useTeamCopy } from '../copy';
  * panelindeki tarih alanıyla klavyeyle de yapılır.
  */
 export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -63,7 +64,7 @@ export function CalendarView({ tasks }: { tasks: TaskDto[] }) {
           )}
         >
           <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-muted" aria-hidden />
-          <span className="sr-only">{isTaskStatus(t.status) ? STATUS_META[t.status].label : ''}: </span>
+          <span className="sr-only">{isTaskStatus(t.status) ? tm.STATUS_META[t.status].label : ''}: </span>
           <span className="min-w-0 flex-1">
             <span className={cn('qx-small line-clamp-2 font-medium text-fg', t.status === 'done' && 'line-through')}>{t.title}</span>
             <span className="mt-1 flex items-center gap-1">

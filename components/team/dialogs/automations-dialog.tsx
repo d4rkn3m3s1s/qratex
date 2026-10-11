@@ -12,13 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { IconButton } from '@/components/ds/a11y';
 import { StatusBadge } from '@/components/ds/data';
 import { ConfirmAction, InlineError, QueryState } from '@/components/states';
-import { PRIORITY_META, STATUS_META, TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
+import { TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
 import { relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Rule = {
   id: string;
@@ -46,6 +46,7 @@ const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '
  * görevi "Bitti"ye geçiremez — onay yöneticidedir. Son 30 günün çalışma/hata sayısı görünür.
  */
 export default function AutomationsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -61,8 +62,8 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
 
   const valueLabel = (type: string, value: string | null) => {
     if (!value) return '';
-    if (type === 'status_changed' || type === 'set_status') return STATUS_META[value as keyof typeof STATUS_META]?.label ?? value;
-    if (type === 'set_priority') return PRIORITY_META[value as keyof typeof PRIORITY_META]?.label ?? value;
+    if (type === 'status_changed' || type === 'set_status') return tm.STATUS_META[value as keyof typeof tm.STATUS_META]?.label ?? value;
+    if (type === 'set_priority') return tm.PRIORITY_META[value as keyof typeof tm.PRIORITY_META]?.label ?? value;
     if (type === 'assign' || type === 'assigned') return displayName(members.find((m) => m.id === value) ?? null, tu.ayrilmisUye);
     return value;
   };
@@ -119,7 +120,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           <SelectItem value="__any">{tv.herhangiBirDuruma}</SelectItem>
           {TASK_STATUSES.map((s) => (
             <SelectItem key={s} value={s}>
-              {STATUS_META[s].label}
+              {tm.STATUS_META[s].label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -151,7 +152,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
         <SelectContent>
           {TASK_PRIORITIES.map((p) => (
             <SelectItem key={p} value={p}>
-              {PRIORITY_META[p].label}
+              {tm.PRIORITY_META[p].label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -177,7 +178,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
         <SelectContent>
           {SET_STATUS_TARGETS.map((s) => (
             <SelectItem key={s} value={s}>
-              {STATUS_META[s].label}
+              {tm.STATUS_META[s].label}
             </SelectItem>
           ))}
         </SelectContent>

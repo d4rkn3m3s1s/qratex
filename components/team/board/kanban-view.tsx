@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type DragEvent } from 'react';
-import { TASK_STATUSES, STATUS_META, type TaskStatus } from '@/lib/team/constants';
+import { TASK_STATUSES, type TaskStatus } from '@/lib/team/constants';
 import { checkTransition, canMoveTask } from '@/lib/team/permissions';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '../workspace-context';
@@ -9,7 +9,7 @@ import { useTaskActions } from '../lib/use-task-actions';
 import { STATUS_ICON } from '../shared';
 import { TaskCard } from './task-card';
 import type { TaskDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 /**
  * Kanban — 4 kolon (Yapılacak · Devam · Onayda · Bitti). Masaüstünde sürükle-bırak; aynı geçiş
@@ -29,6 +29,7 @@ export function KanbanView({
   onToggleSelect: (id: string) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { teamViewer, openTask, weekKey } = useWorkspace();
@@ -92,7 +93,7 @@ export function KanbanView({
             <header className="flex items-center justify-between gap-2 px-1.5 pb-2 pt-1">
               <h3 id={`col-${col}`} className="qx-small flex items-center gap-1.5 font-semibold text-fg">
                 <Icon className="h-4 w-4 text-fg-muted" aria-hidden />
-                {STATUS_META[col].label}
+                {tm.STATUS_META[col].label}
               </h3>
               <span className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted" aria-label={tf.taskCount(items.length)}>
                 {items.length}

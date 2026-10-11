@@ -19,7 +19,7 @@ import { IconButton } from '@/components/ds/a11y';
 import { DetailSheet, useDetailSheet } from '@/components/ds/data';
 import { QueryState } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { INITIATIVE_BOARD_PHASES, INITIATIVE_PHASES, PHASE_META, type InitiativePhase } from '@/lib/team/constants';
+import { INITIATIVE_BOARD_PHASES, INITIATIVE_PHASES, type InitiativePhase } from '@/lib/team/constants';
 import { shortDayLabel } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys, useInitiatives } from '../lib/queries';
@@ -27,7 +27,7 @@ import { useWorkspace } from '../workspace-context';
 import { DeptChip, MemberAvatar, displayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
 import { InitiativeDetail, InitiativeTitle } from './initiative-detail';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: false });
 
@@ -38,6 +38,7 @@ const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: fal
  * yönetici düzenler. Aşama değişikliği menüden (klavye) ya da masaüstünde sürükleyerek.
  */
 export function InitiativesView() {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -94,8 +95,8 @@ export function InitiativesView() {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel>{tx.moveToStage}</DropdownMenuLabel>
                 {INITIATIVE_PHASES.filter((p) => p !== i.phase).map((p) => (
-                  <DropdownMenuItem key={p} onSelect={() => void patch(i, { phase: p }, tf.stageSet(PHASE_META[p].label))}>
-                    {PHASE_META[p].label}
+                  <DropdownMenuItem key={p} onSelect={() => void patch(i, { phase: p }, tf.stageSet(tm.PHASE_META[p].label))}>
+                    {tm.PHASE_META[p].label}
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
@@ -187,15 +188,15 @@ export function InitiativesView() {
                       const item = items.find((x) => x.id === dragId);
                       setDragId(null);
                       setOver(null);
-                      if (item && item.phase !== p) void patch(item, { phase: p }, tf.stageSet(PHASE_META[p].label));
+                      if (item && item.phase !== p) void patch(item, { phase: p }, tf.stageSet(tm.PHASE_META[p].label));
                     }}
                   >
                     <header className="px-1.5 pb-2 pt-1">
                       <h3 id={`phase-${p}`} className="qx-small flex items-center justify-between font-semibold text-fg">
-                        {PHASE_META[p].label}
+                        {tm.PHASE_META[p].label}
                         <span className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted">{list.length}</span>
                       </h3>
-                      <p className="qx-caption text-fg-muted">{PHASE_META[p].description}</p>
+                      <p className="qx-caption text-fg-muted">{tm.PHASE_META[p].description}</p>
                     </header>
                     <ul className="flex min-h-[5rem] flex-col gap-2">
                       {list.map(card)}

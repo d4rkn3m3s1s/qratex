@@ -8,7 +8,7 @@ import { SectionTabs } from '@/components/ds/page';
 import { MetricGrid, MetricTile, Timeline } from '@/components/ds/data';
 import { QueryState, SectionCard } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { STATUS_META, TASK_STATUSES } from '@/lib/team/constants';
+import { TASK_STATUSES } from '@/lib/team/constants';
 import { formatMinutes } from '@/lib/team/dates';
 import { weekKeyLabel } from '@/lib/team-week';
 import { qs, teamFetch } from './lib/api';
@@ -16,7 +16,7 @@ import { API, useCursorList } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { MemberAvatar, displayName } from './shared';
 import type { TaskDto } from './lib/types';
-import { useTeamCopy } from './copy';
+import { useTeamCopy, useTeamLabels } from './copy';
 
 /** Rapor (yönetici): Kişiler · Performans · Akış. Grafikler panodan buraya taşındı (denetim vizyonu). */
 export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
@@ -41,6 +41,7 @@ export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
 
 /** Kişi başı iş yükü — panodaki (filtreli) görevlerden; durum dağılımı yalnız renge dayanmaz. */
 function PeopleView({ tasks }: { tasks: TaskDto[] }) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -65,7 +66,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
   return (
     <div className="space-y-3">
       <SectionCard title={tu.durumDagilimi} density="compact">
-        <div className="flex h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={TASK_STATUSES.map((s) => `${STATUS_META[s].label} ${tasks.filter((t) => t.status === s).length}`).join(', ')}>
+        <div className="flex h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={TASK_STATUSES.map((s) => `${tm.STATUS_META[s].label} ${tasks.filter((t) => t.status === s).length}`).join(', ')}>
           {TASK_STATUSES.map((s) => {
             const n = tasks.filter((t) => t.status === s).length;
             return n ? <span key={s} className={cn('h-full', STATUS_BAR[s])} style={{ width: `${(n / total) * 100}%` }} /> : null;
@@ -74,7 +75,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
         <ul className="mt-2 flex flex-wrap gap-3">
           {TASK_STATUSES.map((s) => (
             <li key={s} className="qx-caption flex items-center gap-1.5 text-fg-muted">
-              <span aria-hidden className={cn('h-2.5 w-2.5 rounded-sm', STATUS_BAR[s])} /> {STATUS_META[s].label}: <span className="qx-num text-fg">{tasks.filter((t) => t.status === s).length}</span>
+              <span aria-hidden className={cn('h-2.5 w-2.5 rounded-sm', STATUS_BAR[s])} /> {tm.STATUS_META[s].label}: <span className="qx-num text-fg">{tasks.filter((t) => t.status === s).length}</span>
             </li>
           ))}
         </ul>
@@ -95,7 +96,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {TASK_STATUSES.map((s) => (
                 <li key={s} className="qx-caption rounded-chip bg-surface-2 px-1.5 py-0.5 text-fg-muted">
-                  {STATUS_META[s].short}: <span className="qx-num text-fg">{r.counts[s] ?? 0}</span>
+                  {tm.STATUS_META[s].short}: <span className="qx-num text-fg">{r.counts[s] ?? 0}</span>
                 </li>
               ))}
             </ul>

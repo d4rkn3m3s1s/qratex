@@ -14,14 +14,14 @@ import { SectionTabs } from '@/components/ds/page';
 import { StatusBadge } from '@/components/ds/data';
 import { ConfirmAction, QueryState } from '@/components/states';
 import { PRESET_CATEGORY_META, TEAM_TASK_PRESETS } from '@/lib/team-task-presets';
-import { PRIORITY_META, TASK_PRIORITIES, type TaskPriority } from '@/lib/team/constants';
+import { TASK_PRIORITIES, type TaskPriority } from '@/lib/team/constants';
 import { formatMinutes } from '@/lib/team/dates';
 import { weekKeyLabel } from '@/lib/team-week';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { PriorityBadge, displayName } from '../shared';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Template = {
   id: string;
@@ -42,6 +42,7 @@ type Template = {
  * denetim kaydı ve atama bildirimi alır.
  */
 export default function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -213,7 +214,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
                     <SelectContent>
                       {TASK_PRIORITIES.map((p) => (
                         <SelectItem key={p} value={p}>
-                          {PRIORITY_META[p].label}
+                          {tm.PRIORITY_META[p].label}
                         </SelectItem>
                       ))}
                     </SelectContent>

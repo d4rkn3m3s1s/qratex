@@ -9,15 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InlineError } from '@/components/states';
-import { INITIATIVE_BOARD_PHASES, PHASE_META } from '@/lib/team/constants';
+import { INITIATIVE_BOARD_PHASES } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { displayName } from '../shared';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 /** Yeni girişim (yönetici). Kilometre taşları satır satır; ilerleme bunlardan hesaplanır. */
 export default function InitiativeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -81,7 +82,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
               <SelectContent>
                 {INITIATIVE_BOARD_PHASES.map((p) => (
                   <SelectItem key={p} value={p}>
-                    {PHASE_META[p].label}
+                    {tm.PHASE_META[p].label}
                   </SelectItem>
                 ))}
               </SelectContent>

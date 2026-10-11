@@ -3,13 +3,13 @@
 import { useMemo } from 'react';
 import { RefreshCcw, Undo2 } from 'lucide-react';
 import { SelectionCheckbox, StatusBadge } from '@/components/ds/data';
-import { PRIORITY_META, STATUS_META, isTaskPriority, isTaskStatus, priorityRank } from '@/lib/team/constants';
+import { isTaskPriority, isTaskStatus, priorityRank } from '@/lib/team/constants';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '../workspace-context';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 export type GroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'department';
 
@@ -37,6 +37,7 @@ export function ListView({
   onToggleAll: (ids: string[], on: boolean) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -52,7 +53,7 @@ export function ListView({
       let order = 99;
       if (groupBy === 'status') {
         key = t.status;
-        label = isTaskStatus(t.status) ? STATUS_META[t.status].label : t.status;
+        label = isTaskStatus(t.status) ? tm.STATUS_META[t.status].label : t.status;
         order = ['todo', 'in_progress', 'review', 'done'].indexOf(t.status);
       } else if (groupBy === 'assignee') {
         key = t.assignedTo?.id ?? 'none';
@@ -60,7 +61,7 @@ export function ListView({
         order = t.assignedTo ? 0 : 1;
       } else if (groupBy === 'priority') {
         key = t.priority;
-        label = isTaskPriority(t.priority) ? tf.priorityLabel(PRIORITY_META[t.priority].label) : t.priority;
+        label = isTaskPriority(t.priority) ? tf.priorityLabel(tm.PRIORITY_META[t.priority].label) : t.priority;
         order = -priorityRank(t.priority);
       } else if (groupBy === 'department') {
         key = t.department ?? 'none';

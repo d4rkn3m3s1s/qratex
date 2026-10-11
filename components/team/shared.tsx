@@ -14,10 +14,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ds/data';
 import { cn, getInitials } from '@/lib/utils';
-import { PHASE_META, PRIORITY_META, STATUS_META, isInitiativePhase, isTaskPriority, isTaskStatus, parseTags } from '@/lib/team/constants';
+import { isInitiativePhase, isTaskPriority, isTaskStatus, parseTags } from '@/lib/team/constants';
 import { dueInfo } from '@/lib/team/dates';
 import type { TeamDepartment, TeamTag } from './lib/types';
-import { useTeamCopy } from './copy';
+import { useTeamCopy, useTeamLabels } from './copy';
 
 export const STATUS_ICON: Record<string, LucideIcon> = {
   todo: Circle,
@@ -29,22 +29,25 @@ export const STATUS_ICON: Record<string, LucideIcon> = {
 export const PRIORITY_ICON: Record<string, LucideIcon> = { high: ArrowUp, medium: Minus, low: ArrowDown };
 
 export function TaskStatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' }) {
-  const meta = isTaskStatus(status) ? STATUS_META[status] : STATUS_META.todo;
+  const tm = useTeamLabels();
+  const meta = isTaskStatus(status) ? tm.STATUS_META[status] : tm.STATUS_META.todo;
   return <StatusBadge label={meta.label} tone={meta.tone} icon={STATUS_ICON[status] ?? Circle} size={size} srPrefix="Durum" />;
 }
 
 export function PriorityBadge({ priority, size = 'sm', hideLow = false }: { priority: string; size?: 'sm' | 'md'; hideLow?: boolean }) {
+  const tm = useTeamLabels();
   const tu = useTeamCopy().ui;
   if (!isTaskPriority(priority)) return null;
   if (hideLow && priority === 'low') return null;
-  const meta = PRIORITY_META[priority];
+  const meta = tm.PRIORITY_META[priority];
   return <StatusBadge label={meta.label} tone={meta.tone} icon={PRIORITY_ICON[priority]} size={size} srPrefix={tu.oncelik} />;
 }
 
 export function PhaseBadge({ phase, size = 'sm' }: { phase: string; size?: 'sm' | 'md' }) {
+  const tm = useTeamLabels();
   const tu = useTeamCopy().ui;
   const p = isInitiativePhase(phase) ? phase : 'later';
-  const meta = PHASE_META[p];
+  const meta = tm.PHASE_META[p];
   return <StatusBadge label={meta.label} tone={meta.tone} size={size} srPrefix={tu.asama} />;
 }
 

@@ -11,14 +11,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChoiceChips, IconButton } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
-import { PRIORITY_META, TASK_PRIORITIES, type TaskPriority } from '@/lib/team/constants';
+import { TASK_PRIORITIES, type TaskPriority } from '@/lib/team/constants';
 import { weekKeyLabel, shiftWeekKey } from '@/lib/team-week';
 import { errorMessage, qs, teamFetch } from './lib/api';
 import { API, invalidateTasks } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { displayName } from './shared';
 import type { TaskList } from './lib/types';
-import { useTeamCopy } from './copy';
+import { useTeamCopy, useTeamLabels } from './copy';
 
 const EMPTY = {
   title: '',
@@ -40,6 +40,7 @@ const EMPTY = {
  * (denetim #83). "Bana ata" ADMIN'in ekip rolü olmasa da çalışır (denetim #76).
  */
 export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -171,7 +172,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
             </span>
             <ChoiceChips
               aria-labelledby={`${ids.title}-p`}
-              options={TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label }))}
+              options={TASK_PRIORITIES.map((p) => ({ value: p, label: tm.PRIORITY_META[p].label }))}
               value={form.priority}
               onChange={(v) => v && set('priority', v as TaskPriority)}
               size="sm"

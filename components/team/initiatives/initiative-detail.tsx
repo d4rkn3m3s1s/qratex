@@ -14,14 +14,14 @@ import { IconButton } from '@/components/ds/a11y';
 import { Timeline } from '@/components/ds/data';
 import { QueryState } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { INITIATIVE_PHASES, PHASE_META } from '@/lib/team/constants';
+import { INITIATIVE_PHASES } from '@/lib/team/constants';
 import { relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
 import { MemberAvatar, PhaseBadge, displayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Detail = {
   item: InitiativeDto;
@@ -61,6 +61,7 @@ export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => v
 }
 
 function Body({ d }: { d: Detail }) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -129,7 +130,7 @@ function Body({ d }: { d: Detail }) {
               <SelectContent>
                 {INITIATIVE_PHASES.map((p) => (
                   <SelectItem key={p} value={p}>
-                    {PHASE_META[p].label}
+                    {tm.PHASE_META[p].label}
                   </SelectItem>
                 ))}
               </SelectContent>

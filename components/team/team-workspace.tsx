@@ -40,7 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FilterBar, PanelPage, PageHeader, SectionTabs, useFilterState, useUrlState, type FilterField } from '@/components/ds/page';
 import { DetailSheet } from '@/components/ds/data';
 import { ConfirmAction, QueryState, SkeletonCards } from '@/components/states';
-import { PRIORITY_META, STATUS_META, TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
+import { TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
 import { isWeekKey } from '@/lib/team-week';
 import { errorMessage, teamFetch } from './lib/api';
 import { API, invalidateTasks, useSummary, useTags, useTasks, useTeamMeta, type TaskQuery } from './lib/queries';
@@ -56,7 +56,7 @@ import { SavedViews, VIEW_KEYS } from './saved-views';
 import { TaskDetail, TaskDetailTitle } from './task-detail/task-detail';
 import { displayName } from './shared';
 import type { ClientViewer, TeamMeta } from './lib/types';
-import { useTeamCopy } from './copy';
+import { useTeamCopy, useTeamLabels } from './copy';
 
 const NewTaskDialog = dynamic(() => import('./new-task-dialog'), { ssr: false });
 const TemplatesDialog = dynamic(() => import('./dialogs/templates-dialog'), { ssr: false });
@@ -96,6 +96,7 @@ export function TeamWorkspace(props: TeamWorkspaceProps) {
 }
 
 function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamWorkspaceProps) {
+  const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -130,8 +131,8 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
   const fields: FilterField[] = useMemo(
     () => [
       { type: 'search', key: 'q', label: tu.ara, placeholder: tu.gorevAciklamaYaDa },
-      { type: 'select', key: 'status', label: tu.durum, allLabel: tu.tumDurumlar, options: TASK_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].label })) },
-      { type: 'select', key: 'priority', label: tu.oncelik, allLabel: tu.tumOncelikler, options: TASK_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label })) },
+      { type: 'select', key: 'status', label: tu.durum, allLabel: tu.tumDurumlar, options: TASK_STATUSES.map((s) => ({ value: s, label: tm.STATUS_META[s].label })) },
+      { type: 'select', key: 'priority', label: tu.oncelik, allLabel: tu.tumOncelikler, options: TASK_PRIORITIES.map((p) => ({ value: p, label: tm.PRIORITY_META[p].label })) },
       { type: 'select', key: 'mine', label: tu.kapsam, allLabel: tu.tumGorevler, options: [{ value: '1', label: tu.yalnizBanaAtananlar }] },
       {
         type: 'select',

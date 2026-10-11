@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { SelectionCheckbox, StatusBadge } from '@/components/ds/data';
 import { cn } from '@/lib/utils';
 import { formatMinutes } from '@/lib/team/dates';
-import { RECURRENCE_LABEL, STATUS_META, isTaskStatus } from '@/lib/team/constants';
+import { isTaskStatus } from '@/lib/team/constants';
 import { canMoveTask, isAssignee } from '@/lib/team/permissions';
 import { useWorkspace } from '../workspace-context';
 import { useTaskActions } from '../lib/use-task-actions';
@@ -15,7 +15,7 @@ import { NoteDialog } from '../note-dialog';
 import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, displayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
-import { useTeamCopy } from '../copy';
+import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Props = {
   task: TaskDto;
@@ -34,6 +34,7 @@ type Props = {
  * Onaya gönder, yönetici için Onayla / Revizyon iste.
  */
 export const TaskCard = memo(function TaskCard({ task, selectable, selected, onToggleSelect, draggable, onDragStart, onPickTag, compact }: Props) {
+  const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -112,7 +113,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
             <PriorityBadge priority={task.priority} hideLow />
             {task.revisionRequested && <StatusBadge label={tu.revizyonIstendi} tone="warning" icon={Undo2} size="sm" />}
             {task.carriedOver && <StatusBadge label={`Devreden · ${task.weekKey?.split('-W')[1] ?? ''}. hafta`} tone="neutral" icon={RefreshCcw} size="sm" />}
-            {compact && isTaskStatus(task.status) && <span className="qx-caption text-fg-muted">{STATUS_META[task.status].label}</span>}
+            {compact && isTaskStatus(task.status) && <span className="qx-caption text-fg-muted">{tm.STATUS_META[task.status].label}</span>}
           </div>
           <button
             type="button"
@@ -143,7 +144,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <DueBadge dueAt={task.dueAt} done={done} />
         <DeptChip slug={task.department} departments={departments} />
-        {task.recurrence && <StatusBadge label={RECURRENCE_LABEL[task.recurrence] ?? tu.tekrarli} tone="neutral" icon={RefreshCcw} size="sm" />}
+        {task.recurrence && <StatusBadge label={tm.RECURRENCE_LABEL[task.recurrence] ?? tu.tekrarli} tone="neutral" icon={RefreshCcw} size="sm" />}
         <TagChips csv={task.tags} pool={tags} onPick={onPickTag} max={2} />
       </div>
 
