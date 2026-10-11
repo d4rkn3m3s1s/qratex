@@ -43,6 +43,7 @@ import {
 import { createQuest, fetchOptions, fetchQuest, questsKeys, updateQuest } from './api';
 import { QuestPreview } from './quest-preview';
 import { fmtNumber } from './format';
+import { AdminGorevlerText } from './copy';
 
 const ANY_CATEGORY = '__any__';
 
@@ -210,7 +211,7 @@ export function QuestEditor({
         <div className="min-w-0 space-y-5">
           {/* 1. Mekanik */}
           <fieldset className="space-y-4">
-            <legend className="qx-small mb-2 font-semibold text-fg">1 · Ne yapılınca ilerler?</legend>
+            <legend className="qx-small mb-2 font-semibold text-fg"><AdminGorevlerText k="step1" /></legend>
             {isAch ? (
               <p className="qx-small flex items-start gap-2 rounded-md border border-subtle bg-surface-1 px-3 py-2 text-fg-muted">
                 <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -320,7 +321,7 @@ export function QuestEditor({
 
           {/* 3. Ödül */}
           <fieldset className="space-y-4">
-            <legend className="qx-small mb-2 font-semibold text-fg">3 · Ödül</legend>
+            <legend className="qx-small mb-2 font-semibold text-fg"><AdminGorevlerText k="step3" /></legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <NumberField control={form.control} name="points" label="Puan" required min={0} max={QUEST_MAX_POINTS} unit="puan" step={5} />
               <NumberField control={form.control} name="xp" label="XP" required min={0} max={QUEST_MAX_XP} unit="XP" step={5} />
@@ -360,7 +361,7 @@ export function QuestEditor({
 
           {/* 4. Görünüm */}
           <fieldset className="space-y-4">
-            <legend className="qx-small mb-2 font-semibold text-fg">4 · Müşterinin göreceği</legend>
+            <legend className="qx-small mb-2 font-semibold text-fg"><AdminGorevlerText k="step4" /></legend>
             <TextField control={form.control} name="name" label="Görev adı" required maxLength={50} placeholder="Örn: Haftanın Eleştirmeni" />
             <TextareaField control={form.control} name="description" label="Açıklama" required maxLength={200} rows={2} placeholder="Müşteriye ne yapması gerektiğini tek cümlede anlatın." />
             <Controller

@@ -43,6 +43,7 @@ import { QuestActions } from './quest-actions';
 import { QuestDetailBody } from './quest-detail';
 import { QuestEditor, templateValues, type EditorTarget } from './quest-editor';
 import { QUEST_STATUS_MAP, fmtDateTime, fmtNumber, fmtRemaining, pct } from './format';
+import { AdminGorevlerText } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -222,13 +223,13 @@ export function QuestsCenter({ initial }: { initial: QuestsInitial }) {
               <span className={q.warnings.includes('expiring_soon') ? 'text-xs text-warning' : 'text-xs text-fg-muted'}>{fmtRemaining(q.expiresAt)}</span>
             </div>
           ) : (
-            <span className="text-sm text-fg-muted">Süresiz</span>
+            <span className="text-sm text-fg-muted"><AdminGorevlerText k="noExpiry" /></span>
           );
         },
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">İşlemler</span>,
+        header: () => <span className="sr-only"><AdminGorevlerText k="actions" /></span>,
         enableSorting: false,
         enableHiding: false,
         meta: { mobile: 'actions', interactive: true, align: 'end', label: 'İşlemler' } satisfies DataTableColumnMeta,
@@ -284,7 +285,7 @@ export function QuestsCenter({ initial }: { initial: QuestsInitial }) {
       {s && !s.moduleEnabled ? (
         <div role="status" className="qx-small flex flex-wrap items-start gap-2 rounded-card border border-warning-border bg-warning-subtle px-4 py-3 text-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          <span className="min-w-0 flex-1">Görevler modülü şu an müşterilere kapalı: görevleri yönetebilirsiniz ama müşteriler göremez ve ödül alamaz.</span>
+          <span className="min-w-0 flex-1"><AdminGorevlerText k="moduleOff" /></span>
           <Link href="/admin/settings?tab=modules" className="font-medium underline underline-offset-4">
             Modüller’den aç
           </Link>
@@ -405,8 +406,8 @@ export function QuestsCenter({ initial }: { initial: QuestsInitial }) {
       <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Şablondan görev</DialogTitle>
-            <DialogDescription>Hepsi motoru olan mekaniklerdir; ödül Puan Matrisi varsayılanından türetilir. Seçtiğiniz şablon düzenleyicide açılır, kaydetmeden yayına çıkmaz.</DialogDescription>
+            <DialogTitle><AdminGorevlerText k="fromTemplate" /></DialogTitle>
+            <DialogDescription><AdminGorevlerText k="templateHint" /></DialogDescription>
           </DialogHeader>
           <ul className="grid gap-2 sm:grid-cols-2">
             {QUEST_TEMPLATES.map((t) => (

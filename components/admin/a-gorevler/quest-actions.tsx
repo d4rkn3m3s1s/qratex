@@ -18,6 +18,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { QuestActionInput, QuestListItem } from '@/lib/admin-quests/contract';
 import { QuestsApiError, errorText, questAction, questsKeys } from './api';
+import { AdminGorevlerText } from './copy';
 
 type Dlg = null | 'archive' | 'manual';
 
@@ -209,7 +210,7 @@ function ArchiveDialog({
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Görev arşivlensin mi?</DialogTitle>
+          <DialogTitle><AdminGorevlerText k="archiveQ" /></DialogTitle>
           <DialogDescription>
             “{quest.name}” müşterilerden kalkar ve yeni ilerleme/ödeme almaz. Silme yapılmaz: {quest.metrics.participants.toLocaleString('tr-TR')} kullanıcının ilerlemesi ve ödeme kayıtları korunur; görevi arşivden geri çıkarabilirsiniz.
           </DialogDescription>
@@ -221,7 +222,7 @@ function ArchiveDialog({
             if (valid && !busy) void onConfirm(reason.trim());
           }}
         >
-          <Label htmlFor={`${id}-reason`}>Gerekçe</Label>
+          <Label htmlFor={`${id}-reason`}><AdminGorevlerText k="reason" /></Label>
           <Textarea id={`${id}-reason`} value={reason} maxLength={300} rows={3} onChange={(e) => setReason(e.target.value)} placeholder="Örn: Kampanya dönemi bitti" aria-describedby={`${id}-hint`} />
           <p id={`${id}-hint`} className="qx-caption text-fg-muted">
             Denetim geçmişine yazılır (en az 3 karakter).
@@ -263,7 +264,7 @@ function ManualCompleteDialog({
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Kullanıcı için tamamlandı işaretle</DialogTitle>
+          <DialogTitle><AdminGorevlerText k="markComplete" /></DialogTitle>
           <DialogDescription>
             “{quest.name}” bu kullanıcı için bu dönemde tamamlanmış sayılır. Puan burada verilmez: müşteri bildirimi alır ve ödülü Görevler sayfasından kendisi alır (tek seferlik defter kaydı).
           </DialogDescription>
@@ -284,7 +285,7 @@ function ManualCompleteDialog({
           }}
         >
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-user`}>Müşteri e-postası ya da kullanıcı kimliği</Label>
+            <Label htmlFor={`${id}-user`}><AdminGorevlerText k="userLookup" /></Label>
             <Input
               id={`${id}-user`}
               value={user}
@@ -301,7 +302,7 @@ function ManualCompleteDialog({
             ) : null}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-reason`}>Gerekçe</Label>
+            <Label htmlFor={`${id}-reason`}><AdminGorevlerText k="reason" /></Label>
             <Textarea id={`${id}-reason`} value={reason} maxLength={300} rows={2} onChange={(e) => setReason(e.target.value)} placeholder="Örn: 12 Ekim tadım etkinliğine katıldı" />
           </div>
           <DialogFooter>

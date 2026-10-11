@@ -15,6 +15,7 @@ import {
 import { fetchQuest, questsKeys } from './api';
 import { QuestActions } from './quest-actions';
 import { QUEST_STATUS_MAP, fmtDate, fmtDateTime, fmtNumber, fmtRemaining, pct } from './format';
+import { AdminGorevlerText } from './copy';
 
 function Funnel({ steps }: { steps: Array<{ label: string; value: number }> }) {
   const max = Math.max(1, ...steps.map((s) => s.value));
@@ -84,7 +85,7 @@ export function QuestDetailBody({ id, onEdit, onOpen }: { id: string; onEdit: (i
             ) : null}
 
             <section aria-labelledby={`qd-def-${id}`} className="space-y-2">
-              <h3 id={`qd-def-${id}`} className="qx-small font-semibold text-fg">Tanım</h3>
+              <h3 id={`qd-def-${id}`} className="qx-small font-semibold text-fg"><AdminGorevlerText k="definition" /></h3>
               <KeyValueList
                 items={[
                   { label: 'Mekanik', value: meta.label, hint: meta.description },
@@ -110,11 +111,11 @@ export function QuestDetailBody({ id, onEdit, onOpen }: { id: string; onEdit: (i
                 ]}
               />
               {quest.tracking === 'live' ? (
-                <p className="qx-caption text-fg-muted">Canlı sayılan görevlerde ilerleme kaydı ilk ödül alımında açılır; ilerleyip henüz almamış kullanıcılar burada görünmez.</p>
+                <p className="qx-caption text-fg-muted"><AdminGorevlerText k="progressNote" /></p>
               ) : null}
               <div className="rounded-card border border-subtle p-3">
                 <div className="qx-small mb-2 flex items-baseline justify-between gap-2">
-                  <span className="text-fg">Son 14 gün ödeme</span>
+                  <span className="text-fg"><AdminGorevlerText k="payouts14d" /></span>
                   <span className="qx-num font-semibold text-fg">{fmtNumber(payouts14)}</span>
                 </div>
                 <Sparkline data={d.dailyPayouts14d} height={40} area zeroBased label={`Son 14 günde toplam ${fmtNumber(payouts14)} ödeme`} />
@@ -127,7 +128,7 @@ export function QuestDetailBody({ id, onEdit, onOpen }: { id: string; onEdit: (i
             <section aria-labelledby={`qd-rec-${id}`} className="space-y-2">
               <h3 id={`qd-rec-${id}`} className="qx-small font-semibold text-fg">Son tamamlayanlar</h3>
               {d.recent.length === 0 ? (
-                <p className="qx-small text-fg-muted">Henüz tamamlayan yok.</p>
+                <p className="qx-small text-fg-muted"><AdminGorevlerText k="noCompletions" /></p>
               ) : (
                 <ul className="divide-y divide-subtle rounded-card border border-subtle">
                   {d.recent.map((r) => (
@@ -145,8 +146,8 @@ export function QuestDetailBody({ id, onEdit, onOpen }: { id: string; onEdit: (i
             </section>
 
             <section aria-labelledby={`qd-aud-${id}`} className="space-y-2">
-              <h3 id={`qd-aud-${id}`} className="qx-small font-semibold text-fg">Değişiklik geçmişi</h3>
-              {events.length ? <Timeline events={events} timeStyle="datetime" ariaLabel="Görev değişiklik geçmişi" /> : <p className="qx-small text-fg-muted">Kayıt yok.</p>}
+              <h3 id={`qd-aud-${id}`} className="qx-small font-semibold text-fg"><AdminGorevlerText k="changeHistory" /></h3>
+              {events.length ? <Timeline events={events} timeStyle="datetime" ariaLabel="Görev değişiklik geçmişi" /> : <p className="qx-small text-fg-muted"><AdminGorevlerText k="noRecords" /></p>}
             </section>
           </div>
         );
