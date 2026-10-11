@@ -1,11 +1,9 @@
 /**
  * Zihin Hırsızı — kayıt defteri girdisi (istemci güvenli).
  *
- * KORU + cila (§7.3 #5). Bugün eski sözleşmeyle (kendi GameShell'i) canlı; v2'ye taşınınca
- * state updater yan etkisi ve Boss3D yeniden kurulumu temizlenir.
- *
- * OYUN AJANI: v2'ye taşırken `component`'i `{ contract: 'v2', load }` yap, doğrulayıcıyı
- * `./mind-thief.server.ts`'e yaz. Sözleşme: lib/games/README.md
+ * KORU + cila (§7.3 #5) — v2 sözleşmesi: saf tohumlu simülasyon (`components/customer/games/
+ * mind-thief/sim.ts`), 2D canvas oynanış, dekoratif Boss3D (öfkede WebGL yeniden kurulmaz),
+ * Pratik/Sıralı mod. Sunucu skoru girdi kaydını yeniden oynatarak hesaplar (`./mind-thief.server.ts`).
  */
 import { defineGame } from './types';
 
@@ -19,12 +17,12 @@ export const mindThiefGame = defineGame({
   accent: '#a855f7',
   status: 'live',
   role: 'action',
-  verification: 'action',
-  // Eski sözleşmeli bileşen pratik modunu bilmiyor; v2'ye taşınınca true.
-  modes: { practice: false, ranked: { attemptsPerDay: 1 } },
+  verification: 'deterministic',
+  modes: { practice: true, ranked: { attemptsPerDay: 1 } },
   component: {
-    contract: 'legacy',
-    load: () => import('@/components/customer/games/mind-thief-game').then((m) => m.MindThiefGame),
+    contract: 'v2',
+    load: () => import('@/components/customer/games/mind-thief/mind-thief-game').then((m) => m.MindThiefGame),
   },
-  controls: 'Dokun ya da tıkla: bozulmuş yorumu yok et.',
+  controls:
+    'Dokun ya da tıkla: bozuk yorumu (turuncu, ✕) yok et; gerçek yoruma (mavi, ✓) dokunma; sarı güçleri topla. Klavye: ← → kart seç, Boşluk/Enter yok et, Esc duraklat.',
 });

@@ -117,7 +117,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardXp: 80,
     minDurationSec: 8,
     maxScorePerSec: 2.7,
-    maxDurationSec: 135,
+    // 45 sn tur + ilk oynayış öğreticisi + duraklatma payı (deneme penceresi). Skor sunucuda replay ile.
+    maxDurationSec: 240,
   },
   {
     gameType: 'truth-vs-fake',

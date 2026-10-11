@@ -1,11 +1,18 @@
 /**
- * Zihin Hırsızı — SUNUCU modülü (doğrulayıcı). Yalnız `registry/server.ts` içe aktarır; istemci
- * paketine girmez. Etiketli içerik (`lib/games/content/mind-thief.ts`) yalnız buradan import edilir.
+ * Zihin Hırsızı — SUNUCU modülü (doğrulayıcı). Yalnız `registry/server.ts` içe aktarır.
  *
- * null → bu oyun için kanıt istenmez; `lib/game-session.ts` yalnız ortak makullük
- * kurallarını uygular (süre, saniye başına skor, tavan). Hedef aile: 'action'.
- * Örnek: `export const serverModule: GameServerModule = { verifier: actionVerifier({ … }) };`
+ * Aile: deterministic. İstemcinin oynadığı SAF simülasyon (`sim.ts`) start'ta verilen tohum +
+ * girdi kaydı `[adım, 16, varlıkId]` ile yeniden oynatılır; skor sunucunundur. Kural dışı kayıt
+ * (olmayan/bitmiş varlığa dokunuş, insanüstü tepki < 117 ms, > 14 dokunuş/sn, oyun sonrası girdi,
+ * adım sayısı uyuşmazlığı) → `proof_invalid`; simülasyon süresi sunucu süresini aşarsa `implausible`.
+ * Tavan skor etkin yapılandırmadan (`rules.maxScore`, admin override'ı dahil).
  */
+import { deterministicVerifier } from '@/lib/games/verify';
 import type { GameServerModule } from '@/lib/games/verify/types';
+import { replayMindThief } from '@/components/customer/games/mind-thief/sim';
 
-export const serverModule: GameServerModule | null = null;
+export const serverModule: GameServerModule = {
+  verifier: deterministicVerifier({
+    simulate: (seed, log, steps, rules) => replayMindThief(seed, log, steps, rules.maxScore),
+  }),
+};

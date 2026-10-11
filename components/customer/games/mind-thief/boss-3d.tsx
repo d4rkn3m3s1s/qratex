@@ -2,35 +2,50 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
 
 /**
- * Gerçek 3D (Three.js) düşman/boss çekirdeği. Merkezde dönen ikozahedron + tel
- * kafes kabuk + içten ışıyan çekirdek + yörüngedeki parçacık halkası. "angry"
- * prop'u true olunca renk kızarır ve sarsılır (can kaybı geri bildirimi).
+ * Zihin Hırsızı patronu — gerçek 3D (Three.js) çekirdek: dönen ikozahedron + tel kafes kabuk +
+ * içten ışıyan çekirdek + yörünge parçacık halkası. Dekoratif (aria-hidden); oynanış 2D canvas'ta.
  *
- * Hafif: tek sahne, düşük poligon, WebGL yoksa / reduce-animations'ta sessizce
- * boş döner. Kendi animasyon döngüsü var (oyun döngüsünden bağımsız).
+ * Cila (§7.3 #5): WebGL bağlamı YALNIZ bir kez kurulur. `color` / `rage` / `hurt` / `paused`
+ * ref'lerden okunur — öfke geçişinde renderer, sahne ve geometri yeniden KURULMAZ (eskiden
+ * `color` efekt bağımlılığıydı → her öfkede WebGL dispose + yeniden oluşturma, kare düşüşü ve
+ * bağlam sızıntısı riski). Duraklatılınca / sekme gizlenince kare çizilmez. Azaltılmış harekette
+ * tek statik kare çizilir (boş kutu değil). WebGL yoksa sessizce boş kalır.
  */
 export function Boss3D({
   color = '#a855f7',
-  angry = false,
+  rage = false,
+  hurt = 0,
+  paused = false,
   size = 220,
 }: {
   color?: string;
-  angry?: boolean;
+  /** Öfke modu: kırmızıya döner, hızlanır. */
+  rage?: boolean;
+  /** Her artışta kısa sarsıntı (can kaybı). */
+  hurt?: number;
+  paused?: boolean;
   size?: number;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const angryRef = useRef(angry);
-  // Prop'u render dışında (commit fazında) ref'e yansıt; animasyon döngüsü okur.
+  const colorRef = useRef(color);
+  const rageRef = useRef(rage);
+  const hurtRef = useRef(hurt);
+  const pausedRef = useRef(paused);
+  const reduce = useReducedMotionPref();
+  // Prop'ları commit fazında ref'e yansıt; animasyon döngüsü okur (yeniden kurulum yok).
   useEffect(() => {
-    angryRef.current = angry;
-  }, [angry]);
+    colorRef.current = color;
+    rageRef.current = rage;
+    hurtRef.current = hurt;
+    pausedRef.current = paused;
+  }, [color, rage, hurt, paused]);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    if (document.documentElement.classList.contains('reduce-animations')) return;
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -47,8 +62,8 @@ export function Boss3D({
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.z = 5;
 
-    const base = new THREE.Color(color);
-    const angryColor = new THREE.Color('#ff2d55');
+    const base = new THREE.Color(colorRef.current);
+    const angryColor = new THREE.Color('#ff3b30');
 
     // Çekirdek — içten ışıyan düşük-poli küre
     const coreGeo = new THREE.IcosahedronGeometry(1.15, 1);
@@ -119,29 +134,35 @@ export function Boss3D({
     let raf = 0;
     let t = 0;
     let shake = 0;
-    let prevAngry = false;
+    let lastHurt = hurtRef.current;
+    let lastColor = colorRef.current;
     const tmp = new THREE.Color();
 
-    const animate = () => {
+    const draw = () => {
+      if (colorRef.current !== lastColor) {
+        lastColor = colorRef.current;
+        base.set(lastColor);
+      }
+      const a = rageRef.current;
+      if (hurtRef.current !== lastHurt) {
+        lastHurt = hurtRef.current;
+        shake = 1;
+      }
       t += 0.016;
-      const a = angryRef.current;
-      if (a && !prevAngry) shake = 1; // kızgınlığa yeni geçiş → sars
-      prevAngry = a;
       shake *= 0.88;
 
       core.rotation.y += a ? 0.05 : 0.012;
       core.rotation.x = Math.sin(t * 0.6) * 0.2;
-      shell.rotation.y -= 0.008;
+      shell.rotation.y -= a ? 0.02 : 0.008;
       shell.rotation.z += 0.004;
-      ring.rotation.z += 0.01;
+      ring.rotation.z += a ? 0.025 : 0.01;
 
-      // Nefes alma + sars
-      const breathe = 1 + Math.sin(t * 1.6) * 0.05;
+      const breathe = 1 + Math.sin(t * (a ? 4 : 1.6)) * 0.05;
       core.scale.setScalar(breathe + shake * 0.15);
+      // Kozmetik sarsıntı (oyun mantığına etkisi yok).
       core.position.x = (Math.random() - 0.5) * shake * 0.4;
       core.position.y = (Math.random() - 0.5) * shake * 0.4;
 
-      // Renk geçişi (sakin ↔ kızgın)
       const target = a ? angryColor : base;
       tmp.copy(coreMat.color).lerp(target, 0.15);
       coreMat.color.copy(tmp);
@@ -152,9 +173,20 @@ export function Boss3D({
       key.color.copy(tmp);
 
       renderer.render(scene, camera);
-      raf = requestAnimationFrame(animate);
     };
-    animate();
+
+    if (reduce) {
+      // Azaltılmış hareket: tek statik kare.
+      coreMat.color.copy(base);
+      draw();
+    } else {
+      const animate = () => {
+        raf = requestAnimationFrame(animate);
+        if (pausedRef.current || document.hidden) return;
+        draw();
+      };
+      animate();
+    }
 
     return () => {
       cancelAnimationFrame(raf);
@@ -171,7 +203,7 @@ export function Boss3D({
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [color, size]);
+  }, [size, reduce]);
 
-  return <div ref={mountRef} style={{ width: size, height: size }} className="select-none" />;
+  return <div ref={mountRef} aria-hidden style={{ width: size, height: size }} className="pointer-events-none select-none" />;
 }

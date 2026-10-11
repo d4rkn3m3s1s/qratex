@@ -265,3 +265,23 @@ Salt okunur inceleme; kod çalıştırılmadı, veritabanına dokunulmadı. Okun
 - Yeniden üretim (eşik 15→10): Oyuncu süre sonunda 12 skor yapar. İstemci `won=false` gönderir, sunucuda `eligible=false` olur ve oturum `failed`'e düşer (`:101`). Sunucu eşiğini geçtiği hâlde ödül alamaz. Üstelik iddia 2 yüzünden günün hakkı da yanar.
 - Yeniden üretim (eşik 15→20): Oyuncu 16 yapar. İstemci `won=true` gönderir, sunucu 0 puan verir ve oturumu `completed` yapar. Ekranda "Kazandın" başlığı, "Kazandın ama ödül eşiğini geçemedin" toast'ı (`use-mini-game.ts:115`) ve yanlış "Ödül için 15 skor gerekiyordu" notu (statik `DEF` değeri) görünür.
 - Öneri: Bileşen `game.config` (sunucunun effective `rewardThreshold`/`maxScore` değerleri) yüklenmeden oyunu başlatmamalı ve bütün eşik/tavan karşılaştırmalarını ve GameShell prop'unu buradan beslemeli. Daha sağlamı, `won` kararını sunucuya taşımak: istemci yalnızca skoru göndersin, sunucu `won`/`status`'ü effective eşikle türetsin. Aynı statik `DEF` deseni diğer registry oyunlarında da varsa ortak hook düzeyinde (`useMiniGame` `threshold`/`maxScore` döndürür) çözülmeli. Bu doğrulamada diğer oyun bileşenleri tek tek okunmadı.
+
+## Uygulama (Dalga 2)
+
+Rota: `/customer/games/mind-thief` artık tek dinamik oyun rotasından (`app/customer/games/[game]`) v2 sözleşmesiyle sunuluyor; gölgeleyen statik `app/customer/games/mind-thief/page.tsx` silindi (README §6: aynı kimlik). Eski bileşen `components/customer/games/mind-thief-game.tsx` silindi, yerine `components/customer/games/mind-thief/` (`sim.ts`, `mind-thief-game.tsx`, `boss-3d.tsx`, `texts.ts`).
+
+Kapatılanlar:
+- **B1 / Doğrulama 1 (sunucu otoritesi):** saf tohumlu simülasyon (`sim.ts`, `createRng(seed).fork(...)`), girdi kaydı `[adım, 16, varlıkId]`; sunucu `deterministicVerifier` ile yeniden oynatıp skoru kendisi hesaplıyor (`lib/games/registry/mind-thief.server.ts`). Olmayan/bitmiş varlık, < 117 ms tepki, > 14 dokunuş/sn, oyun sonrası girdi, adım uyuşmazlığı → `proof_invalid`; simülasyon süresi > sunucu süresi → `implausible`; kanıtsız → `proof_missing`. Test: `__tests__/lib/mind-thief-sim.test.ts` (16 test: dürüst oyun birebir doğrulanıyor, 7 hile senaryosu reddediliyor).
+- **B3 / Doğrulama 3:** eşik ve tavan `config` (etkin, admin override) üzerinden; `won` kozmetik, karar sunucuda. Tavan sim'e verilir, sunucu `rules.maxScore` ile aynı kuralı oynatır.
+- **B4:** state updater içindeki yan etki kaldırıldı; mantık 60 Hz `tick()` içinde, olaylar dönüş değerinden işleniyor; React'e ≤ 10 Hz HUD özeti.
+- **B5:** framer inline transform çakışması yok; kartlar canvas'ta çiziliyor (mobilde kırpma yok, `aspect-ratio` 3:4, `maxHeight: 68vh`).
+- **B6:** `Boss3D` WebGL bağlamını bir kez kurar; renk/öfke/sarsıntı/duraklatma ref'ten okunur (efekt bağımlılığı yalnız `size` + azaltılmış hareket).
+- **B7:** duraklat/devam kabukta (`GameHost`), döngü sekme gizlenince/odak kaybında otomatik duraklıyor; Esc/P duraklatır; patron da duraklatmada çizmez.
+- **B11:** tek politika: `useReducedMotionPref` (OS + uygulama). Azaltılmışta ses/titreşim/sarsıntı/parçacık `fx` ile no-op, Boss3D tek statik kare, kart sallanması yok.
+- **B12:** Okabe–Ito palet + ikinci kanal (bozuk: turuncu ✕ + çapraz desen + kalın kenar; gerçek: mavi ✓ düz; güç: sarı kesikli kenar + simge); dokunma hedefi 150×50 mantıksal (+ pay); klavye ile tam oynanış (← → seç, Boşluk/Enter vur, odak halkası); `aria-live` HUD özeti.
+- **B13:** gerçek seviye sistemi (3 seviye × 15 sn: sıklaşan doğuş, kısalan ömür, artan bozuk oranı) + 12 sn'de bir 4 sn öfke; "Dondur" gücü adıyla birebir (kart yaşlanması durur, doğuş yavaşlar).
+- **B14:** ölü kod, `DEF!` assertion, modül düzeyi `_seq` gitti.
+- Ek: ilk oynayışta öğretici (yerel tercih, try/catch), Pratik/Sıralı mod (`modes.practice: true`), ölçülü sarsıntı + parçacık + ses + haptik `fx` üzerinden, ömür çubuğu, kombo/güç rozetleri.
+- `lib/minigame-config.ts` mind-thief satırı: `maxDurationSec` 135 → 240 (öğretici + duraklatma payı; skor zaten replay ile doğrulanıyor).
+
+Kalan açıklar (sahiplik dışı): B2 (failed oturum / deneme sayımı — `lib/game-session.ts`), B8 (turnuva eşitlik bozucu), B9 (turnuva bloğu teması), B10 (başarım çift hesap), sonuç ekranındaki en iyi skor / yıldız / paylaş (ortak `GameShell`), "erişilebilir mod" (ekran okuyucu için sıralı ikili karar) yapılmadı.
