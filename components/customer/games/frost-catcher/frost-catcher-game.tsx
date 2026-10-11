@@ -18,7 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Heart, Shield, Snowflake } from 'lucide-react';
 import type { GameComponentProps, GameFinish } from '@/lib/games/registry/types';
 import type { DeterministicProof } from '@/lib/games/verify';
-import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useFrostCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import { sfxCollectStar, sfxCombo, sfxFanfare, sfxHit, sfxPowerUp, sfxWarn, sfxWin } from '@/lib/game-sounds';
 import {
@@ -222,6 +223,8 @@ function drawShieldItem(ctx: CanvasRenderingContext2D, x: number, y: number, r: 
 
 export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, onFinish, fx, accent }: GameComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useFrostCopy();
+  const tRef = useLatestRef(t);
   const surface = useCanvasSurface(canvasRef, { width: ARENA_W, height: ARENA_H, alpha: false });
   const [sim] = useState(() => createSim(seed, { maxScore: config.maxScore }));
   const rec = useRef(createInputRecorder());
@@ -286,7 +289,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
             fx.sfx(() => (gold ? sfxCollectStar() : sfxCombo(Math.min(1 + Math.floor(ev.combo / 3), 8))));
             fx.haptic('tap');
             if (ev.milestone) {
-              floatText(ARENA_W / 2, ARENA_H / 2, `${ev.combo}× KOMBO!`, C.gold);
+              floatText(ARENA_W / 2, ARENA_H / 2, tRef.current.combo(ev.combo), C.gold);
               fx.sfx(() => sfxFanfare());
               shakeRef.current = Math.max(shakeRef.current, fx.shake(3));
             }
@@ -301,7 +304,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
               fx.haptic([10, 30]);
             } else {
               burst(x, GLOVE_Y - 10, C.shard, 16);
-              floatText(x, GLOVE_Y - 28, 'Kara buz! −1 can', '#ffb27a');
+              floatText(x, GLOVE_Y - 28, tRef.current.blackIce, '#ffb27a');
               fx.sfx(() => sfxHit());
               fx.haptic([20, 40, 20]);
               shakeRef.current = Math.max(shakeRef.current, fx.shake(6));
@@ -311,18 +314,18 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
           }
           case 'shield':
             burst(sim.gloveX, GLOVE_Y - 10, C.shieldLight, 14);
-            floatText(sim.gloveX, GLOVE_Y - 28, 'Güven Kalkanı', C.shieldLight);
+            floatText(sim.gloveX, GLOVE_Y - 28, tRef.current.shield, C.shieldLight);
             fx.sfx(() => sfxPowerUp());
             fx.haptic([10, 30]);
             break;
           case 'miss':
             if (ev.comboLost >= 5) {
-              floatText(itemDrawX(ev.item, sim.ticks), ARENA_H - 16, 'Kombo bitti', '#c7d2fe');
+              floatText(itemDrawX(ev.item, sim.ticks), ARENA_H - 16, tRef.current.comboLost, '#c7d2fe');
               fx.sfx(() => sfxWarn());
             }
             break;
           case 'phase':
-            floatText(ARENA_W / 2, ARENA_H / 2 - 30, `Seviye ${ev.phase + 1} — kar hızlanıyor`, '#ffffff');
+            floatText(ARENA_W / 2, ARENA_H / 2 - 30, tRef.current.level(ev.phase + 1), '#ffffff');
             fx.sfx(() => sfxPowerUp());
             break;
           case 'end':
@@ -600,8 +603,8 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
   };
 
   const hudSummary = useMemo(
-    () => `Skor ${hud.score}, can ${hud.lives}, kalan ${hud.timeLeft} saniye, seviye ${hud.phase + 1}${hud.shield ? ', kalkan açık' : ''}`,
-    [hud]
+    () => t.hudSummary(hud.score, hud.lives, hud.timeLeft, hud.phase + 1, hud.shield),
+    [hud, t]
   );
 
   const pressVirtual = (dir: 'left' | 'right', down: boolean) => {
@@ -613,7 +616,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
   return (
     <div className="mx-auto w-full max-w-[420px] select-none">
       <div className="mb-2 flex items-center justify-between gap-2 text-sm font-semibold text-white">
-        <div className="flex items-center gap-0.5" aria-label={`Can: ${hud.lives} / ${MAX_LIVES}`}>
+        <div className="flex items-center gap-0.5" aria-label={t.lives(hud.lives, MAX_LIVES)}>
           {Array.from({ length: MAX_LIVES }).map((_, i) => (
             <Heart
               key={i}
@@ -622,7 +625,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
               style={{ color: i < hud.lives ? '#ff8a8a' : '#52525b', fill: i < hud.lives ? '#ff8a8a' : 'transparent' }}
             />
           ))}
-          {hud.shield && <Shield aria-label="Kalkan açık" className="ml-1 h-5 w-5 text-[#9fd3f5]" />}
+          {hud.shield && <Shield aria-label={t.shieldOn} className="ml-1 h-5 w-5 text-[#9fd3f5]" />}
         </div>
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 tabular-nums" style={{ color: accent }}>
@@ -637,17 +640,17 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/80">Sv {hud.phase + 1}</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums text-white/90">{hud.timeLeft} sn</span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/80">{t.levelShort(hud.phase + 1)}</span>
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums text-white/90">{t.seconds(hud.timeLeft)}</span>
         </div>
       </div>
       <div className="mb-2 flex h-5 items-center justify-center gap-2 text-[11px] font-bold">
         {hud.combo >= 10 && (
           <span className="rounded-full bg-[#F0E442]/20 px-2 py-0.5 text-[#fff9c4]">
-            Kombo bonusu +{hud.combo >= 20 ? 2 : 1}
+            {t.comboBonus(hud.combo >= 20 ? 2 : 1)}
           </span>
         )}
-        {mode === 'practice' && <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/75">Pratik — ödülsüz</span>}
+        {mode === 'practice' && <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/75">{t.practiceBadge}</span>}
       </div>
       <p className="sr-only" aria-live="polite">
         {hudSummary}
@@ -658,8 +661,8 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
           ref={canvasRef}
           className="absolute inset-0 h-full w-full touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white"
           role="application"
-          aria-roledescription="oyun alanı"
-          aria-label="Kar Tanesi Yakala oyun alanı. Sol ve sağ ok tuşlarıyla eldiveni hareket ettir, Esc ile duraklat."
+          aria-roledescription={t.roleArena}
+          aria-label={t.arenaLabel}
           tabIndex={0}
         />
 
@@ -671,31 +674,31 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
             className="absolute inset-0 z-10 flex flex-col justify-center gap-3 overflow-y-auto bg-black/80 p-5 text-white backdrop-blur-sm"
           >
             <h3 id="fc-intro-title" className="text-lg font-bold">
-              Nasıl oynanır?
+              {t.howTo}
             </h3>
             <ul className="space-y-2.5 text-sm">
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F5FAFF] text-sm font-black text-[#0b1a33]">❄</span>
-                <span><strong>Kar tanesini yakala:</strong> +1. Arka arkaya 10 yakalamada +1, 20&apos;de +2 bonus. Kaçırırsan kombo sıfırlanır.</span>
+                <span><strong>{t.flakeTitle}</strong>{t.flakeBody}</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F0E442] text-xs font-black text-black">★</span>
-                <span><strong>Altın kristal:</strong> +3. Nadir ve hızlı düşer.</span>
+                <span><strong>{t.goldTitle}</strong>{t.goldBody}</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E69F00] text-xs font-black text-black">✕</span>
-                <span><strong>Kara buzdan kaç</strong> (sahte yorum): yakalarsan −1 can. 3 can var.</span>
+                <span><strong>{t.iceTitle}</strong>{t.iceBody}</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0072B2] text-xs font-black text-white">⛨</span>
-                <span><strong>Güven Kalkanı:</strong> bir sonraki kara buzu emer.</span>
+                <span><strong>{t.shieldTitle}</strong>{t.shieldBody}</span>
               </li>
               <li className="text-white/80">
-                45 saniye, 3 seviye; her seviyede kar hızlanır ve kara buz artar.{' '}
-                {mode === 'ranked' ? `Ödül için en az ${config.rewardThreshold} skor; skor sunucuda doğrulanır.` : 'Pratik turu ödülsüzdür ve günlük hakkını harcamaz.'}
+                {t.rounds}{' '}
+                {mode === 'ranked' ? t.rankedRule(config.rewardThreshold) : t.practiceRule}
               </li>
               <li className="text-xs text-white/65">
-                {coarse ? 'Parmağını oyun alanının herhangi bir yerinde yatay kaydır ya da alttaki düğmeleri basılı tut.' : 'Fareyi yatay gezdir ya da ← / → (A / D) tuşlarını basılı tut.'} Esc duraklatır.
+                {coarse ? t.touchHelp : t.mouseHelp} {t.escPauses}
               </li>
             </ul>
             <button
@@ -705,7 +708,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
               className="mt-1 h-11 rounded-xl font-bold text-[#0b1a33] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               style={{ background: accent }}
             >
-              Anladım, başla
+              {t.gotIt}
             </button>
           </div>
         )}
@@ -717,7 +720,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
             <button
               key={d}
               type="button"
-              aria-label={d === 'left' ? 'Sola' : 'Sağa'}
+              aria-label={d === 'left' ? t.left : t.right}
               disabled={!running}
               onPointerDown={(e) => {
                 e.preventDefault();
@@ -734,7 +737,7 @@ export function FrostCatcherGame({ seed, config, mode, paused, onPauseRequest, o
         </div>
       )}
 
-      <p className="mt-2 text-center text-[11px] text-white/65">❄ Kar +1 · ★ Altın +3 · ✕ Kara buz: kaç · ⛨ Kalkan: topla</p>
+      <p className="mt-2 text-center text-[11px] text-white/65">{t.legend}</p>
     </div>
   );
 }

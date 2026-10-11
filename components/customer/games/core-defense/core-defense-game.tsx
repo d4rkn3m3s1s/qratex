@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Crosshair, Pause, Share2, Shield, Sparkles, Star, Trophy } from 'lucide-react';
-import { useCanvasSurface, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useCoreDefenseCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -108,6 +109,8 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
     readLs(TUTORIAL_KEY) ? 'playing' : 'tutorial'
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useCoreDefenseCopy();
+  const tRef = useLatestRef(t);
   const surface = useCanvasSurface(canvasRef, { width: CD_W, height: CD_H });
   // Değişken nesne (useState yalnız bir kez kurar); mantık onu yerinde ilerletir.
   const [simObj] = useState<CoreSim>(() => createCoreSim(seed, { events: true, threshold }));
@@ -125,7 +128,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
   const handleEvents = useCallback(
     (events: SimEvent[]) => {
       if (events.length === 0) return;
-      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px));
+      applyEventsToFx(fxRef.current, events, rich, (px) => fx.shake(px), tRef.current.fx);
       const sim = simObj;
       for (const e of events) {
         switch (e.t) {
@@ -138,7 +141,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
             fx.haptic(e.dmg >= 4 ? 'big' : 'tap');
             if (sim.tick - lastHpAnnounce.current > HZ) {
               lastHpAnnounce.current = sim.tick;
-              setAnnounce(`Çekirdek hasar aldı: ${sim.coreHp} / ${sim.coreMaxHp} can.`);
+              setAnnounce(tRef.current.coreHit(sim.coreHp, sim.coreMaxHp));
             }
             break;
           case 'pulse':
@@ -149,19 +152,17 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
           case 'cooldown':
             break;
           case 'wave-start':
-            setAnnounce(`Dalga ${e.wave} / ${TOTAL_WAVES} başladı${e.boss ? ', boss geliyor' : ''}.`);
+            setAnnounce(tRef.current.waveStart(e.wave, TOTAL_WAVES, !!e.boss));
             if (e.boss) fx.sfx(() => sfxWarn());
             break;
           case 'wave-clear':
             fx.sfx(() => sfxCombo(2));
-            setAnnounce(
-              `Dalga ${e.wave} temizlendi, ${e.bonus} bonus.${e.wave < TOTAL_WAVES ? ' Bir yükseltme seç: 1, 2 ya da 3.' : ''}`
-            );
+            setAnnounce(tRef.current.waveClear(e.wave, e.bonus, e.wave < TOTAL_WAVES));
             break;
           case 'threshold':
             fx.sfx(() => sfxWin());
             fx.haptic('success');
-            setAnnounce('Ödül eşiği geçildi.');
+            setAnnounce(tRef.current.thresholdAnnounce);
             break;
           case 'upgrade':
             fx.sfx(() => sfxClick());
@@ -194,9 +195,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
     };
     setSummary(s);
     setStage('summary');
-    setAnnounce(
-      `${s.won ? 'Tüm dalgalar püskürtüldü' : `Çekirdek düştü, dalga ${s.wave}`}. Skor ${s.score}. ${s.stars} yıldız.`
-    );
+    setAnnounce(tRef.current.endAnnounce(s.won, s.wave, s.score, s.stars));
   }, [mode, threshold, simObj]);
 
   useGameLoop({
@@ -328,19 +327,19 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/core-defense`;
     const text = summary.won
-      ? `Qratex Çekirdek Savunması'nda ${TOTAL_WAVES} dalganın hepsini püskürttüm: ${summary.score} skor, ${summary.stars} yıldız!`
-      : `Qratex Çekirdek Savunması'nda ${summary.wave}. dalgaya kadar dayandım: ${summary.score} skor. Sen geçebilir misin?`;
+      ? t.shareWon(TOTAL_WAVES, summary.score, summary.stars)
+      : t.shareLost(summary.wave, summary.score);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Çekirdek Savunması', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(t.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(t.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(t.shareFailed);
     }
   };
 
@@ -348,8 +347,8 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
   const chargeReady = hud.charge >= 1;
   const hpLabel = `${hud.hp} / ${hud.maxHp}`;
   const hudSummary = useMemo(
-    () => `Dalga ${hud.wave} / ${TOTAL_WAVES}. Skor ${hud.score}, ödül eşiği ${threshold}. Çekirdek canı ${hpLabel}.`,
-    [hud.wave, hud.score, threshold, hpLabel]
+    () => t.hudSummary(hud.wave, TOTAL_WAVES, hud.score, threshold, hpLabel),
+    [hud.wave, hud.score, threshold, hpLabel, t]
   );
 
   return (
@@ -359,17 +358,17 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between text-xs text-white/75">
             <span>
-              Dalga <b className="tabular-nums text-white">{hud.wave}</b>/{TOTAL_WAVES}
+              {t.wave} <b className="tabular-nums text-white">{hud.wave}</b>/{TOTAL_WAVES}
             </span>
             <span>
-              Skor <b className="tabular-nums text-white">{hud.score}</b>
-              <span className="text-white/60"> · eşik {threshold}</span>
+              {t.score} <b className="tabular-nums text-white">{hud.score}</b>
+              <span className="text-white/60">{t.threshold(threshold)}</span>
             </span>
           </div>
           <div
             className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={t.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -381,11 +380,11 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
           </div>
           <div className="mt-1 flex items-center justify-between text-xs text-white/75">
             <span>
-              Çekirdek <b className="tabular-nums text-white">{hpLabel}</b>
+              {t.core} <b className="tabular-nums text-white">{hpLabel}</b>
             </span>
             {hud.combo >= 2 && (
               <span className="font-semibold" style={{ color: PALETTE.pulse }}>
-                Kombo ×{hud.combo}
+                {t.combo(hud.combo)}
               </span>
             )}
           </div>
@@ -394,7 +393,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
           type="button"
           onClick={onPauseRequest}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={t.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -404,8 +403,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
         {announce}
       </p>
       <p id="cd-rules" className="sr-only">
-        {hudSummary} Düşmanlara dokunarak ateş et. Klavyede Boşluk en tehlikeli düşmana ateş eder, Q kalkan darbesini
-        patlatır, 1-3 yükseltme seçer, Esc duraklatır.
+        {hudSummary} {t.rules}
       </p>
 
       <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-white/10" style={{ background: PALETTE.bg }}>
@@ -413,7 +411,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
           ref={canvasRef}
           tabIndex={0}
           role="application"
-          aria-label="Çekirdek Savunması oyun alanı"
+          aria-label={t.arena}
           aria-describedby="cd-rules"
           className="absolute inset-0 h-full w-full touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70"
         />
@@ -427,13 +425,13 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
             className="absolute inset-0 flex flex-col justify-center gap-2 bg-[#0b1020]/85 p-4"
           >
             <h3 id="cd-pick-title" className="text-center text-lg font-bold text-white">
-              Dalga {hud.wave} temizlendi — yükseltme seç
+              {t.pickTitle(hud.wave)}
             </h3>
             <p className="text-center text-xs text-white/70">
-              {hud.pickLeft} sn içinde seçmezsen ilki seçilir. Tuşlar: 1 · 2 · 3
+              {t.pickHint(hud.pickLeft)}
             </p>
             {hud.choices.map((id, i) => {
-              const u = UPGRADES[id];
+              const u = { ...UPGRADES[id], ...t.upgrades?.[id] };
               const lvl = hud.levels[id];
               return (
                 <button
@@ -452,7 +450,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
                   </span>
                   {u.max < 99 && (
                     <span className="text-xs tabular-nums text-white/60">
-                      Sv {lvl}/{u.max}
+                      {t.upgradeLevel(lvl, u.max)}
                     </span>
                   )}
                 </button>
@@ -468,33 +466,33 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
         {stage === 'tutorial' && (
           <div role="dialog" aria-modal="true" aria-labelledby="cd-tut-title" className="absolute inset-0 flex flex-col justify-center gap-3 bg-[#0b1020]/92 p-5 text-white">
             <h3 id="cd-tut-title" className="text-center text-xl font-bold">
-              Nasıl oynanır?
+              {t.howTo}
             </h3>
             <ol className="space-y-3 text-sm">
               <li className="flex gap-3">
                 <Crosshair className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.core }} aria-hidden />
                 <span>
-                  <b>Düşmana dokun, vur.</b> Turuncu elmaslar (spam) hızlı ve tek vuruşluk; pembe boynuzlu kareler (trol)
-                  3 vuruş ister. Altıgen dev = boss.
+                  <b>{t.tapTitle}</b>
+                  {t.tapBody}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Shield className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.pulse }} aria-hidden />
                 <span>
-                  <b>Kalkan darbesi.</b> Öldürdükçe dolar; dolunca sağ alttaki düğmeyle (ya da Q) çevredeki herkese hasar
-                  ver ve geri it.
+                  <b>{t.pulseTitle}</b>
+                  {t.pulseBody}
                 </span>
               </li>
               <li className="flex gap-3">
                 <Sparkles className="mt-0.5 h-5 w-5 shrink-0" style={{ color: PALETTE.troll }} aria-hidden />
                 <span>
-                  <b>Çekirdeğin canı biterse oyun biter.</b> {TOTAL_WAVES} dalga var; aralarda bir yükseltme seç. Seri
-                  vuruş kombo, hasarsız dalga bonus verir.
+                  <b>{t.coreTitle}</b>
+                  {t.coreBody(TOTAL_WAVES)}
                 </span>
               </li>
             </ol>
             <p className="text-center text-xs text-white/65">
-              Klavye: Boşluk ateş · Q kalkan · 1-3 yükseltme · Esc duraklat
+              {t.keys}
             </p>
             <button
               type="button"
@@ -503,7 +501,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
               className="mx-auto h-12 rounded-xl px-8 font-bold text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               style={{ background: PALETTE.core }}
             >
-              Anladım, başla
+              {t.gotIt}
             </button>
           </div>
         )}
@@ -512,9 +510,9 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
         {stage === 'summary' && summary && (
           <div role="dialog" aria-modal="true" aria-labelledby="cd-sum-title" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0b1020]/92 p-5 text-center text-white">
             <h3 id="cd-sum-title" className="text-xl font-bold">
-              {summary.won ? 'Tüm dalgalar püskürtüldü!' : `Çekirdek ${summary.wave}. dalgada düştü`}
+              {summary.won ? t.won : t.lost(summary.wave)}
             </h3>
-            <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+            <div className="flex gap-1" role="img" aria-label={t.stars(summary.stars)}>
               {[1, 2, 3].map((n) => (
                 <Star
                   key={n}
@@ -528,18 +526,18 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
             <p className="text-4xl font-black tabular-nums">{summary.score}</p>
             <p className="text-xs text-white/70">
               {summary.prevBest === null
-                ? 'İlk skorun bu cihazda kaydedildi.'
+                ? t.firstScore
                 : summary.score > summary.prevBest
-                  ? `Yeni kişisel rekor! (önceki ${summary.prevBest})`
-                  : `En iyin: ${summary.prevBest}`}
-              {mode === 'practice' ? ' · Pratik' : ''}
+                  ? t.newBest(summary.prevBest)
+                  : t.best(summary.prevBest)}
+              {mode === 'practice' ? t.practiceSuffix : ''}
             </p>
             <dl className="grid w-full max-w-xs grid-cols-2 gap-2 text-xs">
               {[
-                ['Dalga', `${summary.won ? TOTAL_WAVES : summary.wave}/${TOTAL_WAVES}`],
-                ['Devrilen', String(summary.kills)],
-                ['İsabet', `%${summary.accuracy}`],
-                ['En iyi kombo', `×${summary.bestCombo}`],
+                [t.statWave, `${summary.won ? TOTAL_WAVES : summary.wave}/${TOTAL_WAVES}`],
+                [t.statKills, String(summary.kills)],
+                [t.statAccuracy, t.statAccuracyValue(summary.accuracy)],
+                [t.statCombo, `×${summary.bestCombo}`],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-white/5 px-2 py-1.5">
                   <dt className="text-white/60">{k}</dt>
@@ -550,9 +548,9 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
             <p className="text-xs text-white/70">
               {summary.score >= threshold
                 ? mode === 'ranked'
-                  ? 'Ödül eşiğini geçtin — sunucu doğrulaması sonrası ödül hesaplanır.'
-                  : 'Eşiği geçtin. Sıralı modda bu skor ödül getirirdi.'
-                : `Ödül eşiği ${threshold}; ${threshold - summary.score} skor kaldı.`}
+                  ? t.passedRanked
+                  : t.passedPractice
+                : t.remaining(threshold, threshold - summary.score)}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
@@ -560,7 +558,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
                 onClick={share}
                 className="flex h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                <Share2 className="h-4 w-4" aria-hidden /> {t.share}
               </button>
               <button
                 type="button"
@@ -570,7 +568,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
                 style={{ background: PALETTE.core }}
               >
                 <Trophy className="h-4 w-4" aria-hidden />
-                {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                {mode === 'ranked' ? t.save(autoLeft) : t.cont}
               </button>
             </div>
             <p className="min-h-[1rem] text-xs text-white/70" aria-live="polite">
@@ -584,7 +582,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
           <button
             type="button"
             onClick={pulse}
-            aria-label={chargeReady ? 'Kalkan darbesi hazır — patlat' : `Kalkan doluyor, yüzde ${Math.floor(hud.charge * 100)}`}
+            aria-label={chargeReady ? t.pulseReady : t.pulseCharging(Math.floor(hud.charge * 100))}
             aria-disabled={!chargeReady}
             className="absolute bottom-3 right-3 flex h-16 w-16 items-center justify-center rounded-full border-2 text-[#0b1020] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             style={{
@@ -601,7 +599,7 @@ export function CoreDefenseGame({ mode, seed, config, paused, onPauseRequest, on
         )}
       </div>
       <p className="mt-2 text-center text-xs text-white/65">
-        {mode === 'practice' ? 'Pratik: ödülsüz, liderliğe girmez.' : 'Sıralı: skor sunucuda yeniden oynatılarak doğrulanır.'}
+        {mode === 'practice' ? t.footPractice : t.footRanked}
       </p>
     </div>
   );

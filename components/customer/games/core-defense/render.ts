@@ -7,6 +7,7 @@
  * katmanlarla. Kozmetik rastgelelik (`Math.random`) skoru ETKİLEMEZ — sim tohumludur.
  */
 import { CD_H, CD_W, CORE_R, CORE_X, CORE_Y, type CoreSim, type Enemy, type SimEvent } from './sim';
+import { CORE_FX_TEXTS_TR, type CoreFxTexts } from './copy';
 
 export const PALETTE = {
   bg: '#0b1020',
@@ -74,7 +75,13 @@ export function createFxState(): FxState {
 const KIND_COLOR = { spam: PALETTE.spam, troll: PALETTE.troll, boss: PALETTE.boss } as const;
 
 /** Sim olaylarını görsel efekte çevirir. `rich=false` (azaltılmış hareket) → parçacık/sarsıntı yok. */
-export function applyEventsToFx(fx: FxState, events: readonly SimEvent[], rich: boolean, shakeAmp: (px: number) => number) {
+export function applyEventsToFx(
+  fx: FxState,
+  events: readonly SimEvent[],
+  rich: boolean,
+  shakeAmp: (px: number) => number,
+  texts: CoreFxTexts = CORE_FX_TEXTS_TR
+) {
   for (const e of events) {
     switch (e.t) {
       case 'shot':
@@ -107,7 +114,7 @@ export function applyEventsToFx(fx: FxState, events: readonly SimEvent[], rich: 
       }
       case 'miss':
         fx.rings.push({ r: 4, max: 16, life: 14, color: 'rgba(248,250,252,0.5)' });
-        fx.floats.push({ x: e.x, y: e.y, text: 'ıska', life: 24, color: PALETTE.muted });
+        fx.floats.push({ x: e.x, y: e.y, text: texts.miss, life: 24, color: PALETTE.muted });
         break;
       case 'core':
         fx.coreFlash = 18;
@@ -117,13 +124,13 @@ export function applyEventsToFx(fx: FxState, events: readonly SimEvent[], rich: 
         fx.rings.push({ r: CORE_R, max: e.r, life: 24, color: PALETTE.pulse });
         break;
       case 'wave-start':
-        fx.banner = { text: e.boss ? `Dalga ${e.wave} · BOSS` : `Dalga ${e.wave}`, sub: e.boss ? 'Altıgen dev geliyor' : undefined, life: 80 };
+        fx.banner = { text: e.boss ? texts.bossWave(e.wave) : texts.wave(e.wave), sub: e.boss ? texts.bossSub : undefined, life: 80 };
         break;
       case 'wave-clear':
-        fx.banner = { text: e.perfect ? 'Kusursuz dalga!' : 'Dalga temizlendi', sub: `+${e.bonus} bonus`, life: 70 };
+        fx.banner = { text: e.perfect ? texts.perfect : texts.cleared, sub: texts.bonus(e.bonus), life: 70 };
         break;
       case 'threshold':
-        fx.floats.push({ x: CORE_X, y: CORE_Y - 54, text: 'Ödül eşiği geçildi!', life: 90, color: PALETTE.pulse });
+        fx.floats.push({ x: CORE_X, y: CORE_Y - 54, text: texts.threshold, life: 90, color: PALETTE.pulse });
         break;
       default:
         break;

@@ -18,7 +18,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Heart, Snowflake, Star, Zap } from 'lucide-react';
 import type { GameComponentProps, GameFinish } from '@/lib/games/registry/types';
 import type { DeterministicProof } from '@/lib/games/verify';
-import { useCanvasSurface, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCanvasSurface, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useMindThiefCopy } from './copy';
 import { createInputRecorder } from '@/lib/games/engine/record';
 import { sfxCombo, sfxFanfare, sfxHit, sfxPowerUp, sfxWarn, sfxWin } from '@/lib/game-sounds';
 import {
@@ -149,6 +151,9 @@ function markTutorialSeen() {
 
 export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFinish, fx, accent }: GameComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useMindThiefCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
   const surface = useCanvasSurface(canvasRef, { width: ARENA_W, height: ARENA_H, alpha: true });
   const [sim] = useState(() => createSim(seed, { maxScore: config.maxScore }));
   const rec = useRef(createInputRecorder());
@@ -219,7 +224,7 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
           case 'leak': {
             const { x, y } = ev.entity;
             burst(x, y, ev.type === 'wrong' ? KIND_STYLE.genuine.stroke : '#ff6b6b', 14);
-            floatText(x, y, ev.type === 'wrong' ? 'Gerçek yorumdu! −1 can' : 'Sızdı! −1 can', '#ff8a8a');
+            floatText(x, y, ev.type === 'wrong' ? tRef.current.wrong : tRef.current.leak, '#ff8a8a');
             fx.sfx(() => sfxHit());
             fx.haptic([20, 40, 20]);
             shakeRef.current = Math.max(shakeRef.current, fx.shake(6));
@@ -241,7 +246,7 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
             if (ev.on) {
               fx.sfx(() => sfxWarn());
               shakeRef.current = Math.max(shakeRef.current, fx.shake(4));
-              floatText(ARENA_W / 2, ARENA_H / 2, 'PATRON ÖFKELENDİ!', '#ff8a8a');
+              floatText(ARENA_W / 2, ARENA_H / 2, tRef.current.rage, '#ff8a8a');
             }
             break;
           case 'phase':
@@ -527,15 +532,15 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
 
   const hudSummary = useMemo(
     () =>
-      `Skor ${hud.score}, can ${hud.lives}, kalan ${hud.timeLeft} saniye, seviye ${hud.phase + 1}${hud.rage ? ', patron öfkeli' : ''}`,
-    [hud]
+      t.hudSummary(hud.score, hud.lives, hud.timeLeft, hud.phase + 1, hud.rage),
+    [hud, t]
   );
 
   return (
     <div className="mx-auto w-full max-w-[420px] select-none">
       {/* HUD */}
       <div className="mb-2 flex items-center justify-between gap-2 text-sm font-semibold text-white">
-        <div className="flex items-center gap-0.5" aria-label={`Can: ${hud.lives} / ${MAX_LIVES}`}>
+        <div className="flex items-center gap-0.5" aria-label={c.lives(hud.lives, MAX_LIVES)}>
           {Array.from({ length: MAX_LIVES }).map((_, i) => (
             <Heart
               key={i}
@@ -558,27 +563,27 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/80">Sv {hud.phase + 1}</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums text-white/90">{hud.timeLeft} sn</span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/80">{c.levelShort(hud.phase + 1)}</span>
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums text-white/90">{c.seconds(hud.timeLeft)}</span>
         </div>
       </div>
       <div className="mb-2 flex h-5 items-center justify-center gap-2 text-[11px] font-bold">
         {hud.frozen > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-[#56B4E9]/20 px-2 py-0.5 text-[#bfe3f8]">
-            <Snowflake className="h-3 w-3" aria-hidden /> Donuk {hud.frozen} sn
+            <Snowflake className="h-3 w-3" aria-hidden /> {t.frozen(hud.frozen)}
           </span>
         )}
         {hud.double > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-[#F0E442]/20 px-2 py-0.5 text-[#fff9c4]">
-            <Star className="h-3 w-3" aria-hidden /> Çift puan {hud.double} sn
+            <Star className="h-3 w-3" aria-hidden /> {t.double(hud.double)}
           </span>
         )}
         {hud.rage && (
           <span className="flex items-center gap-1 rounded-full bg-[#ff6b6b]/25 px-2 py-0.5 text-[#ffd0d0]">
-            <Flame className="h-3 w-3" aria-hidden /> Öfke modu
+            <Flame className="h-3 w-3" aria-hidden /> {t.rageMode}
           </span>
         )}
-        {mode === 'practice' && <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/70">Pratik</span>}
+        {mode === 'practice' && <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/70">{c.practice}</span>}
       </div>
       <p className="sr-only" aria-live="polite">
         {hudSummary}
@@ -602,8 +607,8 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
           ref={canvasRef}
           className="absolute inset-0 h-full w-full touch-none"
           role="application"
-          aria-roledescription="oyun alanı"
-          aria-label="Zihin Hırsızı oyun alanı. Ok tuşlarıyla kart seç, Boşluk ya da Enter ile yok et, Esc ile duraklat."
+          aria-roledescription={c.roleArena}
+          aria-label={t.arenaLabel}
           tabIndex={0}
         />
 
@@ -615,26 +620,26 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
             className="absolute inset-0 z-10 flex flex-col justify-center gap-3 bg-black/80 p-5 text-white backdrop-blur-sm"
           >
             <h3 id="mt-intro-title" className="text-lg font-bold">
-              Nasıl oynanır?
+              {c.howTo}
             </h3>
             <ul className="space-y-2.5 text-sm">
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E69F00] text-xs font-black text-black">✕</span>
-                <span><strong>Bozuk yoruma dokun</strong> ve yok et. Süresi dolarsa ağa sızar: −1 can.</span>
+                <span><strong>{t.corruptTitle}</strong>{t.corruptBody}</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#56B4E9] text-xs font-black text-black">✓</span>
-                <span><strong>Gerçek yoruma dokunma.</strong> Dokunursan −1 can.</span>
+                <span><strong>{t.genuineTitle}</strong>{t.genuineBody}</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F0E442] text-[10px] font-black text-black">★</span>
-                <span><strong>Sarı güçler:</strong> ❄ kartları 3,5 sn dondurur (sızıntı yok), ×2 6 sn çift puan, ♥ +1 can.</span>
+                <span><strong>{t.powerTitle}</strong>{t.powerBody}</span>
               </li>
               <li className="text-white/75">
-                Her 5 komboda +1 bonus. 45 saniye, 3 seviye; patron her 12 saniyede öfkelenir.{' '}
-                {mode === 'ranked' ? `Ödül için ${config.rewardThreshold} skor.` : 'Pratik turu ödülsüzdür.'}
+                {t.rules}{' '}
+                {mode === 'ranked' ? c.rankedReward(config.rewardThreshold) : c.practiceShort}
               </li>
-              <li className="text-xs text-white/60">Klavye: ← → kart seç · Boşluk/Enter yok et · Esc duraklat</li>
+              <li className="text-xs text-white/60">{t.keys}</li>
             </ul>
             <button
               type="button"
@@ -643,14 +648,14 @@ export function MindThiefGame({ seed, config, mode, paused, onPauseRequest, onFi
               className="mt-1 h-11 rounded-xl font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               style={{ background: accent }}
             >
-              Anladım, başla
+              {c.gotIt}
             </button>
           </div>
         )}
       </div>
 
       <p className="mt-2 text-center text-[11px] text-white/55">
-        ✕ Bozuk: yok et · ✓ Gerçek: dokunma · ★ Güç: topla
+        {t.legend}
       </p>
     </div>
   );
