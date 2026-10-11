@@ -77,6 +77,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
       const { userIds, role } = parsed.data;
+      // Dalga 2 (admin_users.md B5): toplu ADMIN yükseltmesi yok — yükseltme kişi başına ve
+      // ikinci bir yöneticinin onayıyla (POST /api/admin/users/[id]/role → /elevation).
+      if (role === 'ADMIN') {
+        return NextResponse.json(
+          { error: 'Yönetici yükseltmesi toplu yapılamaz; her kullanıcı için ikinci bir yöneticinin onayı gerekir.', code: 'ELEVATION_REQUIRES_APPROVAL' },
+          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
       const currentUser = auth.session.user.id;
       const ids = userIds.filter((id) => id !== currentUser);
       if (ids.length === 0) {
@@ -102,7 +110,7 @@ export async function POST(request: NextRequest) {
           newData: { userIds: ids, role } as object, ...getAuditRequestMeta(request),
         },
       }).catch((e) => console.error('[users/bulk] audit failed:', e));
-      return NextResponse.json({ ok: true, updated: ids.length }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ ok: true, success: true, updated: changedIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (body.action === 'delete') {
       const parsed = bulkDeleteSchema.safeParse(body);

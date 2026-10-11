@@ -64,6 +64,8 @@ jest.mock('@/lib/prisma', () => ({
       findUnique: (...a: unknown[]) => userFindUnique(...a),
       findMany: (...a: unknown[]) => userFindMany(...a),
       updateMany: (...a: unknown[]) => userUpdateMany(...a),
+      // Dalga 2: son-yönetici koruması etkin yönetici sayısını okur.
+      count: jest.fn(async () => 2),
     },
     auditLog: { create: jest.fn(async () => ({})) },
   },

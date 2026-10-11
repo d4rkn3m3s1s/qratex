@@ -65,9 +65,17 @@ describe('admin/users rol görünüm sözlüğü', () => {
     expect(isAssignableRole('DEALER')).toBe(true);
   });
 
-  it('users-client doğrudan `map[user.role]` indekslemesi yapmıyor', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'app', 'admin', 'users', 'users-client.tsx'), 'utf8');
-    expect(src).not.toMatch(/\[\s*(user|selectedUser|u)\.role\s*\]/);
-    expect(src).not.toMatch(/\broleIcons\b|\broleColors\b|\broleLabels\b/);
+  it('Kullanıcılar yüzeyi doğrudan `map[user.role]` indekslemesi yapmıyor (Dalga 2: components/admin/a-kullanicilar)', () => {
+    const dir = path.resolve(__dirname, '..', '..', 'components', 'admin', 'a-kullanicilar');
+    const files = [
+      ...fs.readdirSync(dir).map((f) => path.join(dir, f)),
+      ...fs.readdirSync(path.join(dir, 'tabs')).map((f) => path.join(dir, 'tabs', f)),
+    ].filter((f) => /\.tsx?$/.test(f));
+    expect(files.length).toBeGreaterThan(3);
+    for (const f of files) {
+      const src = fs.readFileSync(f, 'utf8');
+      expect(src).not.toMatch(/\[\s*(user|selectedUser|u|ident|row\.original)\.role\s*\]/);
+      expect(src).not.toMatch(/\broleIcons\b|\broleColors\b|\broleLabels\b/);
+    }
   });
 });

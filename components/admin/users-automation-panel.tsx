@@ -53,6 +53,18 @@ type DryRunResult = {
   sampleUserIds?: string[];
 };
 
+const RUN_MODE: Record<string, string> = { dry_run: 'Önizleme', execute: 'Çalıştırma', scheduled: 'Zamanlanmış', manual: 'Elle' };
+const RUN_STATUS: Record<string, string> = {
+  queued: 'Kuyrukta',
+  pending: 'Bekliyor',
+  processing: 'İşleniyor',
+  running: 'Çalışıyor',
+  completed: 'Tamamlandı',
+  failed: 'Başarısız',
+  partial: 'Kısmen tamamlandı',
+  cancelled: 'İptal edildi',
+};
+
 const DEFAULT_RULE = {
   name: '',
   description: '',
@@ -78,6 +90,7 @@ export function UsersAutomationPanel() {
   const [executePreview, setExecutePreview] = useState<DryRunResult | null>(null);
   const [executing, setExecuting] = useState(false);
   const [metrics, setMetrics] = useState<RunMetrics | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const selectedRule = useMemo(() => rules.find((r) => r.id === selectedRuleId) || null, [rules, selectedRuleId]);
 
@@ -88,17 +101,20 @@ export function UsersAutomationPanel() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [rulesRes, runsRes] = await Promise.all([
         fetch('/api/admin/users/automation/rules').then((r) => r.json()),
         fetch('/api/admin/users/automation/runs').then((r) => r.json()),
       ]);
-      if (rulesRes?.success) setRules(rulesRes.items || []);
-      if (runsRes?.success) {
-        setRuns(runsRes.items || []);
-        setMetrics(runsRes.metrics || null);
+      if (!rulesRes?.success || !runsRes?.success) {
+        throw new Error(rulesRes?.error || runsRes?.error || 'Otomasyon verileri alınamadı');
       }
-    } catch {
-      toast.error('Automation verileri alınamadı');
+      setRules(rulesRes.items || []);
+      setRuns(runsRes.items || []);
+      setMetrics(runsRes.metrics || null);
+    } catch (error) {
+      // Hata görünür kalır: boş liste "hiç kural yok" gibi görünmesin.
+      setLoadError(error instanceof Error ? error.message : 'Otomasyon verileri alınamadı');
     } finally {
       setLoading(false);
     }
@@ -159,11 +175,11 @@ export function UsersAutomationPanel() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Dry-run başarısız');
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Önizleme başarısız');
       setDryRunResult(data.result);
-      toast.success('Dry-run tamamlandı');
+      toast.success('Önizleme hazır (hiçbir şey yazılmadı)');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Dry-run başarısız');
+      toast.error(error instanceof Error ? error.message : 'Önizleme başarısız');
     }
   };
 
@@ -223,6 +239,22 @@ export function UsersAutomationPanel() {
     }
   };
 
+  const toggleActive = async (rule: Rule) => {
+    try {
+      const res = await fetch(`/api/admin/users/automation/rules/${rule.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !rule.isActive }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Güncellenemedi');
+      toast.success(rule.isActive ? 'Kural pasifleştirildi' : 'Kural etkinleştirildi');
+      fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Güncellenemedi');
+    }
+  };
+
   const approveRule = async (ruleId: string) => {
     try {
       const res = await fetch(`/api/admin/users/automation/rules/${ruleId}`, {
@@ -241,15 +273,23 @@ export function UsersAutomationPanel() {
 
   return (
     <div className="space-y-4">
+      {loadError ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-border bg-danger-subtle p-3 text-sm text-danger">
+          <span>{loadError}</span>
+          <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={fetchData}>
+            Tekrar dene
+          </Button>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
-          <CardTitle>Kural Editörü</CardTitle>
-          <CardDescription>Koşul ve aksiyon tanımlayıp dry-run ile test edin.</CardDescription>
+          <CardTitle>Kural editörü</CardTitle>
+          <CardDescription>Koşul ve aksiyon tanımlayın; önizleme ile kimlerin etkileneceğini görün.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Kayıtlı Kural</Label>
+              <Label>Kayıtlı kural</Label>
               <Select value={selectedRuleId} onValueChange={setSelectedRuleId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Mevcut kural seçin (opsiyonel)" />
@@ -264,8 +304,8 @@ export function UsersAutomationPanel() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Kural Adı</Label>
-              <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="VIP Upgrade Trigger" />
+              <Label>Kural adı</Label>
+              <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ör. Sadık müşteri ödülü" />
             </div>
           </div>
 
@@ -276,7 +316,7 @@ export function UsersAutomationPanel() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="space-y-2">
-              <Label>Rol Koşulu</Label>
+              <Label>Rol koşulu</Label>
               <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -295,8 +335,8 @@ export function UsersAutomationPanel() {
               <Select value={form.actionType} onValueChange={(v) => setForm((p) => ({ ...p, actionType: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="add_points">Puan Ekle</SelectItem>
-                  <SelectItem value="add_xp">XP Ekle</SelectItem>
+                  <SelectItem value="add_points">Puan ekle</SelectItem>
+                  <SelectItem value="add_xp">XP ekle</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -321,8 +361,8 @@ export function UsersAutomationPanel() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={createRule} disabled={saving} className="gap-2"><Save className="h-4 w-4" />Kural Kaydet</Button>
-            <Button variant="outline" onClick={runDry} className="gap-2"><FlaskConical className="h-4 w-4" />Dry-run</Button>
+            <Button onClick={createRule} disabled={saving} className="gap-2"><Save className="h-4 w-4" />Kuralı kaydet</Button>
+            <Button variant="outline" onClick={runDry} className="gap-2"><FlaskConical className="h-4 w-4" />Önizle</Button>
             <Button variant="outline" onClick={executeRule} disabled={executing || !selectedRuleId} className="gap-2"><Play className="h-4 w-4" />Şimdi çalıştır</Button>
             <Button variant="ghost" onClick={fetchData} className="gap-2"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Yenile</Button>
           </div>
@@ -368,19 +408,19 @@ export function UsersAutomationPanel() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Otomasyon KPI (24s)</CardTitle>
+          <CardTitle>Son 24 saat</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Toplam Run</p><p className="text-xl font-semibold">{metrics?.last24hTotalRuns ?? 0}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Başarısız Run</p><p className="text-xl font-semibold">{metrics?.last24hFailedRuns ?? 0}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Fail Oranı</p><p className="text-xl font-semibold">%{metrics?.last24hFailureRate ?? 0}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Ort. Etkilenen</p><p className="text-xl font-semibold">{metrics?.avgAffectedUsersCompleted ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Çalıştırma</p><p className="text-xl font-semibold">{metrics?.last24hTotalRuns ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Başarısız</p><p className="text-xl font-semibold">{metrics?.last24hFailedRuns ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Hata oranı</p><p className="text-xl font-semibold">%{metrics?.last24hFailureRate ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Ort. etkilenen</p><p className="text-xl font-semibold">{metrics?.avgAffectedUsersCompleted ?? 0}</p></div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Kural Listesi</CardTitle>
+          <CardTitle>Kurallar</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {rules.length === 0 ? (
@@ -397,7 +437,10 @@ export function UsersAutomationPanel() {
                   <Badge variant={rule.approvedAt ? 'default' : 'outline'}>
                     {rule.approvedAt ? `Onaylı${rule.approvedBy?.name ? ` · ${rule.approvedBy.name}` : ''}` : 'Onay bekliyor'}
                   </Badge>
-                  <Badge variant="outline">Run: {rule._count?.runs || 0}</Badge>
+                  <Badge variant="outline">{rule._count?.runs || 0} çalıştırma</Badge>
+                  <Button size="sm" variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => toggleActive(rule)}>
+                    {rule.isActive ? 'Pasifleştir' : 'Etkinleştir'}
+                  </Button>
                   {!rule.approvedAt && (
                     <Button size="sm" variant="outline" onClick={() => approveRule(rule.id)}>
                       Onayla
@@ -412,7 +455,7 @@ export function UsersAutomationPanel() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Çalıştırma Geçmişi</CardTitle>
+          <CardTitle>Çalıştırma geçmişi</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {runs.length === 0 ? (
@@ -421,7 +464,7 @@ export function UsersAutomationPanel() {
             runs.map((run) => (
               <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-md p-3 text-sm">
                 <div>
-                  <p className="font-medium">{run.mode} - {run.status}</p>
+                  <p className="font-medium">{RUN_MODE[run.mode] ?? run.mode} · {RUN_STATUS[run.status] ?? run.status}</p>
                   <p className="text-xs text-muted-foreground">{new Date(run.createdAt).toLocaleString('tr-TR')}</p>
                 </div>
                 <div className="flex items-center gap-3">

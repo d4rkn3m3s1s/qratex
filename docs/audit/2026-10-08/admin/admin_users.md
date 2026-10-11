@@ -274,3 +274,93 @@ Yöntem: her iddia çürütülmeye çalışıldı; çağıran/çağrılan tarafl
 **8 — Rozetler sekmesi boş: doğrulandı.** İstemci `data.userBadges` okuyor (`users-client.tsx:393-397`); API yanıtı yalnız `success, data, userProgress, userPoints` içeriyor (`badges/route.ts:287-292`). `userBadges` her zaman `[]`, sekme "Henüz rozet yok" gösterir (`users-client.tsx:1254-1257`) ve geri alma butonları hiç render edilmez. Ek not: `data.data` okunsa bile admin dışı mod karakter rozetlerini dışladığı için liste eksik kalırdı; doğru çözüm admin'e özel `GET /api/admin/users/:id/badges` ucudur. **Yeniden üretim:** rozeti olan herhangi bir kullanıcının detayını aç → Rozetler sekmesi boş, tablodaki rozet sayısı (`_count.badges`) ise sıfırdan büyük.
 
 **Özet:** Sekiz iddianın hiçbiri çürütülemedi. Ancak #3'teki "otomasyon motoru doğru yapıyor" karşılaştırması negatif yol için yanlış (orada da taban kontrolü yok) ve #6'nın etkisi, liderlik tablosu aynı kimlik/puan/seviye bilgisini zaten açık verdiği için iddiadan düşük. Öncelik sırası: 1 (sayfa tamamen kullanılamaz hale gelebilir) → 5 ve 7 (yetki/ekonomi kontrolü) → 2 (geri alınamaz veri kaybı) → 8, 4, 3 → 6.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı.** `/admin/users` artık sunucu bileşeni: KPI'lar ve URL'deki ilk sayfa sunucuda paralel çekilip `initialData` olarak veriliyor. İstemci adası küçük: `components/admin/a-kullanicilar/users-screen.tsx` (QDL `DataTable` + `FilterBar` + `MetricTile`). Yeni **Kullanıcı 360** rotası `/admin/users/[id]`: kimlik kartı ve URL'li sekmeler (Genel · Ekonomi · Rozet ve ödüller · Geri bildirimler · Güven ve aktivite · İşletme (bayi) · Erişim · Denetim). Ağır sekmeler `next/dynamic` ile yalnız açılınca yükleniyor. Otomasyon ayrı sayfaya taşındı: `/admin/users/automation`. Sunucu mantığı `lib/admin-users/{contract,list.server,detail.server,actions.server,account.server}.ts` dosyalarında. 22 yeni `defineRoute` BFF ucu eklendi (`/api/admin/users/{list,stats,export,create,catalog}`, `/api/admin/users/[id]/{ ,ledger,badges,rewards,feedbacks,audit,activity,points,approval,role,elevation,suspension,sessions,notify,access-link,profile,anonymize}`); hepsinde `roles:['ADMIN']`, zod ve rate limit var, mutasyonlar denetim izi yazıyor. Eski `users-client.tsx` (1.711 satır) silindi. Testler: `__tests__/admin/a-kullanicilar/users-server.test.ts` (17 test); ilgili 6 mevcut paket yeşil.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | Sunucu sayfası ayrıca `requireAuth(['ADMIN'])` (yetki DB'den, oturum sürümü). |
+| 2 | API yetkisi | ÇALIŞIYOR | Yeni uçlar `defineRoute` (rol + zod + rate limit + zarf v2). |
+| 3 | Code-split | ÇALIŞIYOR | `ssr:false` yerine sunucu önce; ağır 360 sekmeleri lazy. |
+| 4 | loading.tsx | ÇALIŞIYOR | QDL `SkeletonStats/Table/Detail`, tek iskelet. |
+| 5 | Hero | ÇALIŞIYOR | `PageHeader` (ops, compact). |
+| 6 | Users/Automation anahtarı | KALDIRILDI | Otomasyon ayrı sayfada (`/admin/users/automation`, başlıkta bağlantı); 360 sekmeleri `SectionTabs` (tablist, URL'de). |
+| 7 | Kullanıcı Ekle | ÇALIŞIYOR | Diyalog her zaman mount. Varsayılan **davet bağlantısı** (72 saat geçerli, şifre admin'e görünmez); istenirse şifre (≥10 karakter, e-posta doğrulaması bekler). `<form>` + Enter, Türkçe alan hataları. |
+| 8 | CSV | ÇALIŞIYOR | Sunucuda filtre sonucunun tamamı (≤10.000), OWASP formül nötrleme, `USERS_EXPORT` denetimi, butonda satır sayısı. |
+| 9 | Yenile | KALDIRILDI | React Query kendisi tazeler; mutasyonlar sorguyu geçersizler. |
+| 10 | KPI Toplam | ÇALIŞIYOR | `/stats` (anonim hariç). |
+| 11 | KPI Admin/Bayi/Müşteri | ÇALIŞIYOR | `groupBy(role)` tüm veride. Eklenenler: Personel, Askıda, İşaretli, Düşük güven, Anonim, son 7 gün. Karta tıklayınca filtre uygulanıyor. |
+| 12 | STAFF gösterimi | ÇALIŞIYOR | `role-meta.ts` sözlüğü üzerinden; STAFF satırında bağlı işletme. |
+| 13 | Arama | ÇALIŞIYOR | Ad/e-posta/işletme/kimlik, ≥2 karakter, URL'de. |
+| 14 | Rol filtresi | ÇALIŞIYOR | STAFF dahil; durum, güven, suistimal, plan ve e-posta doğrulama filtreleri eklendi. |
+| 15 | Filtrede 1. sayfaya dönüş | ÇALIŞIYOR | `useFilterState` URL'ye tek kez yazar ve `page`'i sıfırlar (çift istek yok). |
+| 16 | İstek iptali/sıra | ÇALIŞIYOR | Sorgu anahtarı = query string, `signal` ile iptal, `keepPreviousData`. |
+| 17 | Yükleniyor | ÇALIŞIYOR | Önceki satırlar yerinde kalır, "güncelleniyor" gösterilir; tablo boşalmaz. |
+| 18 | Boş durum | ÇALIŞIYOR | "Filtrelere uyan yok" + Filtreleri temizle; ilk kullanım ayrı gösteriliyor. |
+| 19 | Hata durumu | ÇALIŞIYOR | `QueryState` kalıcı hata + Tekrar dene (tablo ve KPI ayrı). |
+| 20 | Kolonlar | ÇALIŞIYOR | Durum, güven/suistimal ve plan eklendi; `tr-TR` sayı biçimi; mobilde kart görünümü. |
+| 21 | Satırdan detay | ÇALIŞIYOR | Tam sayfa 360; satır Enter/Space ile açılır, ad hücresi gerçek `Link` (yeni sekmede açılabilir). |
+| 22 | Satır animasyonu | KALDIRILDI | Yoğun tabloda stagger yok (§4.2 kural 3). |
+| 23 | Satır seçimi | ÇALIŞIYOR | |
+| 24 | Tümünü seç | ÇALIŞIYOR | Seçim filtre değişince sıfırlanır. |
+| 25 | Toplu rol | KALDIRILDI | Toplu yetki değişikliği UI'dan kaldırıldı. API'de toplu ADMIN yükseltmesi 403 dönüyor, `updated` artık gerçek sayı. |
+| 26 | Toplu silme | ÇALIŞIYOR | Toplu **askıya al / askıdan çıkar / anonimleştir** (etki önizlemesi + "ANONİMLEŞTİR" yazarak onay). |
+| 27 | Seçimi temizle | ÇALIŞIYOR | DataTable toplu işlem çubuğu. |
+| 28 | Sayfalama | ÇALIŞIYOR | DataTable sayfalayıcı (sayfa numaralarıyla). |
+| 29 | Sayfa boyutu | ÇALIŞIYOR | 10/20/50/100, URL'de. |
+| 30 | Satır menüsü aksiyonları | KALDIRILDI | Bütün aksiyonlar 360'ta tek ve tutarlı bir sette; yanlış satırda tek tık riski kalmadı. |
+| 31 | Rol değiştir | ÇALIŞIYOR | 360 → Erişim. Gerekçe zorunlu; kişi kendi rolünü değiştiremez, son yönetici korunur, STAFF yalnız davetle atanır. STAFF'tan çıkan hesabın personel kaydı pasifleşir. Oturumlar anında düşer. ADMIN'e yükseltme: e-posta yazılarak talep açılır, **başka bir yönetici onaylar** (dört göz, 24 saat). |
+| 32 | Sil | ÇALIŞIYOR | Kalıcı silme yok. Seçenekler: askıya alma (geri alınabilir) ve KVKK anonimleştirmesi (sunucu etki önizlemesi, engelleyiciler, e-posta yazarak onay). |
+| 33 | Detay başlığı | ÇALIŞIYOR | STAFF dahil güvenli rol rozeti. |
+| 34 | Puan/Seviye/XP kartları | ÇALIŞIYOR | Mutasyondan sonra sorgu geçersizlenir, değerler anında güncellenir (`animate` sayı geçişi). |
+| 35 | Seviye ilerleme çubuğu | ÇALIŞIYOR | `calculateLevelProgress`/`calculateXpToNextLevel` (geometrik). Kayıtlı seviye XP'den türeyen seviyeden farklıysa uyarı gösteriliyor. |
+| 36 | E-posta/kayıt/işletme | ÇALIŞIYOR | |
+| 37 | Aktivite sayaçları | ÇALIŞIYOR | Ödül, tüketim ve okunmamış bildirim eklendi. |
+| 38 | Bayi konum formu | ÇALIŞIYOR | İşletme sekmesinde: Türkçe etiketler, alan doğrulaması, OpenStreetMap bağlantısı, alan alan denetim. |
+| 39 | Plan atama | ÇALIŞIYOR | Onay adımlı; mevcut `[id]/plan` ucu. |
+| 40 | Rozetler sekmesi | ÇALIŞIYOR | Admin'e özel `GET /[id]/badges` (karakter, gizli ve arşivli rozetler dahil). |
+| 41 | Rozet geri alma | ÇALIŞIYOR | Her zaman görünen `IconButton` (aria-label), gerekçe zorunlu, denetime yazılır; vitrindeki karakter rozeti temizlenir. |
+| 42 | Rozet Ver kısa yolu | ÇALIŞIYOR | Aranabilir katalog (gizli ve karakter dahil); sahip olunan rozetler listelenmez. |
+| 43 | İşlemler sekmesi | KALDIRILDI | Aksiyonlar ilgili sekmelere dağıtıldı (Ekonomi, Rozet, Erişim); kimlik kartında hızlı aksiyonlar var. |
+| 44 | Puan Ekle | ÇALIŞIYOR | Tek "Bakiye düzeltmesi" formu → `adjustPointsByAdmin`: defter + `points_credited`, gerekçe kodu + açıklama, ≤100.000, günlük tavan, eşik üstünde dört göz belirteci, istek kimliğiyle tek seferlik. Form önce/sonra bakiyesini gösteriyor. |
+| 45 | Puan Düş | ÇALIŞIYOR | `debitPoints`; eksi bakiye sunucuda 409 döner, formda da engelleniyor. |
+| 46 | XP Ekle | ÇALIŞIYOR | Aynı form (XP yalnız pozitif, defterden), denetime yazılır; eski `add_xp` 410 döner. |
+| 47 | Seviye Ayarla | KALDIRILDI | Seviye XP'den türüyor (tek doğruluk kaynağı); eski `set_level` 410 döner. |
+| 48 | Rozet Ver | ÇALIŞIYOR | Admin kataloğu; `awardBadgeInTx` + denetim. |
+| 49 | Ödül Ver | ÇALIŞIYOR | Etkin/arşivsiz kontrolü, koşullu stok düşümü, denetim; kupon kodu bildirimde yer almıyor. |
+| 50 | Bildirim Gönder | ÇALIŞIYOR | Başlık ≤80, mesaj ≤500, önizleme, denetim, idempotent. Bildirim tercih grupları (kampanya, karakter, ekip, hatırlatma) doğrudan hizmet mesajını kapsamıyor. |
+| 51 | Kullanıcı oluşturma | ÇALIŞIYOR | Bkz. #7; ADMIN doğrudan oluşturulamaz. |
+| 52 | Silme onay diyaloğu | ÇALIŞIYOR | `ConfirmAction` + sunucu etki önizlemesi + yazarak onay + bekleme durumu. |
+| 53 | Katalog yüklemesi | ÇALIŞIYOR | Kataloglar yalnız ilgili diyalog açılınca çekiliyor, uzun `staleTime` ile. |
+| 54 | `?id=` derin bağlantı | ÇALIŞIYOR | `/admin/users?id=X` → `/admin/users/X` yönlenir. |
+| 55 | Otomasyon kural editörü | KISMİ | Ayrı sayfada; Türkçe etiketler, kural etkinleştir/pasifleştir eklendi. Mevcut kuralın içeriğini düzenleme UI'ı hâlâ yok (aşağıda). |
+| 56 | Dry-run | ÇALIŞIYOR | "Önizle" adını aldı; örnek ad/e-posta ve toplam puan etkisi gösteriyor (P0-19 ile geldi). |
+| 57 | Execute Now | ÇALIŞIYOR | Yalnız kayıtlı ve onaylı kural çalışıyor; sunucu önizlemesi onaylanmadan çalışmıyor (P0-19). |
+| 58 | Onay akışı | ÇALIŞIYOR | Onaylayan ≠ oluşturan/son düzenleyen kuralı sunucuda zorlanıyor (P0-19). |
+| 59 | 24 sa KPI | ÇALIŞIYOR | Türkçe. |
+| 60 | Kural listesi | ÇALIŞIYOR | "Onaylı" doğru yazılıyor. |
+| 61 | Çalıştırma geçmişi | ÇALIŞIYOR | Mod ve durum Türkçe; yükleme hatası görünür bantla + Tekrar dene. |
+| 62 | Audit kapsamı | ÇALIŞIYOR | Bütün yeni mutasyonlar aktör anlık görüntüsüyle denetime yazılıyor; eski PATCH uçları da yeni servise yönlendirildi. |
+| 63 | İkon buton adları | ÇALIŞIYOR | `IconButton`'da `aria-label` zorunlu. |
+| 64 | Kolon sıralama | ÇALIŞIYOR | Kayıt, puan, seviye, ad, güven (izin listesiyle). Son aktiviteye göre sıralama yok (DB'de sütunu yok). |
+| 65 | Askıya alma | ÇALIŞIYOR | Tekil ve toplu, gerekçeli, geri alınabilir. |
+| 66 | Şifre sıfırlama / oturum sonlandırma / 2FA | ÇALIŞIYOR | Sıfırlama bağlantısı (e-posta doğrulanmamışsa doğrulama bağlantısı), tüm oturumları sonlandırma (`sessionVersion`), 2FA durumu görünür. |
+| 67 | Aktivite + audit zaman çizelgesi, puan defteri | ÇALIŞIYOR | Ekonomi (defter + son 30 gün özeti), Güven ve aktivite (olaylar + şüpheli etkinlikler), Denetim (kullanıcı üzerinde yapılanlar ve kullanıcının yaptıkları). |
+| 68 | Gelişmiş filtreler | KISMİ | Güven, suistimal, plan, doğrulama ve durum filtreleri eklendi; kayıt tarihi aralığı ve kayıtlı görünümler yok. |
+| 69 | Kullanıcı taklidi | EKSİK | Bilerek yapılmadı (aşağıda). |
+
+### Kapanan bulgular (17/17)
+1 (STAFF çökmesi), 2 (hard delete → askıya alma + anonimleştirme, etki önizlemeli), 3 (puan yalnız `adjustPointsByAdmin` üzerinden), 4 (seviye geometrik formülden; Seviye Ayarla kaldırıldı), 5 (rol: kendine değişiklik yok, son yönetici korunuyor, ADMIN için dört göz, oturum anında düşüyor), 6 (rozetler sekmesi ve geri alma), 7 (otomasyon onayı P0-19 ile kapanmıştı; UI artık ayrı sayfada), 8 (rozet IDOR P0-09 ile zaten kapalıydı; admin ihtiyacı ayrı uçta), 9 (KPI tüm veriden), 10 (yarış durumu, çift istek, kalıcı seçim), 11 (derin bağlantı), 12 (bayat detay, durum karmaşası), 13 (ödül stok/aktiflik + audit kapsamı), 14 (CSV), 15 (dil karışıklığı ve marka dışı renkler: QDL token'ları, Türkçe metin), 16 (erişilebilirlik), 17 (ölü kod; liste `select`'i dar, PII yalnız 360'ta).
+
+### Kalanlar
+- **Kullanıcı taklidi (impersonation):** süre sınırlı, ayrı imzalı ve ekranda bantla belirtilen bir "gözünden görüntüle" oturumu, oturum altyapısında değişiklik gerektiriyor. Güvenlik etkisi yüksek olduğu için bu dalgada yapılmadı.
+- **Otomasyon kuralı içerik düzenleme:** kurallar yalnız etkinleştir/pasifleştir ve onayla yönetiliyor; koşul veya aksiyon değişikliği yeni kural kaydıyla yapılıyor. Kalıcı çözüm rapordaki segmentlerle "Kurallar ve kampanyalar" birleşimi (ayrı epik).
+- **Kayıtlı görünümler ve kayıt tarihi aralığı filtresi:** şema veya bir görünüm deposu gerektiriyor. Filtreler URL'de tutulduğu için yer imiyle paylaşılabiliyor.
+- **Son aktiviteye göre sıralama:** `User`'da son giriş sütunu yok; 360'taki "son görülme" analitik olaylardan türetiliyor.
+- **Görsel doğrulama:** kurallar gereği dev server çalıştırılmadı, ekran tezgâhında doğrulama yapılmadı. `tsc` kendi dosyalarda 0 hata, jest yeşil.

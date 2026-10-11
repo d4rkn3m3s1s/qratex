@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { parseCursor, encodeCursor } from '@/lib/cursor-pagination';
 import { requireAuth } from '@/lib/api-auth';
-import { creditPointsAndXp, InsufficientPointsError } from '@/lib/points-wallet';
+import { InsufficientPointsError } from '@/lib/points-wallet';
 import { adjustPointsByAdmin, isEconomyError, ADMIN_ADJUST_LIMITS } from '@/lib/economy';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
@@ -14,6 +14,14 @@ import { archiveGateResponse, readArchiveIntent } from '@/lib/data-safety/archiv
 import { actorFromSession } from '@/lib/data-safety/audit';
 import { previewUserErasure } from '@/lib/data-safety/user-erasure';
 import { invalidateSessionState } from '@/lib/auth/session-state';
+import { ApiError } from '@/lib/http/define-route';
+import {
+  actionCtx,
+  checkRoleChange,
+  grantReward,
+  revokeBadge,
+  sendDirectNotification,
+} from '@/lib/admin-users/actions.server';
 
 
 export const dynamic = 'force-dynamic';
@@ -73,18 +81,6 @@ const addPointsSchema = z.object({
     .nullable(),
 });
 
-const addXpSchema = z.object({
-  action: z.literal('add_xp'),
-  userId: z.string(),
-  amount: z.number(),
-});
-
-const setLevelSchema = z.object({
-  action: z.literal('set_level'),
-  userId: z.string(),
-  level: z.number().min(1).max(100),
-});
-
 const grantBadgeSchema = z.object({
   action: z.literal('grant_badge'),
   userId: z.string(),
@@ -106,8 +102,8 @@ const grantRewardSchema = z.object({
 const sendNotificationSchema = z.object({
   action: z.literal('send_notification'),
   userId: z.string(),
-  title: z.string(),
-  message: z.string(),
+  title: z.string().trim().min(2).max(80),
+  message: z.string().trim().min(2).max(500),
   type: z.enum(['info', 'success', 'warning', 'error']).default('info'),
 });
 
@@ -372,6 +368,30 @@ export async function PUT(request: NextRequest) {
 
     // P0-07: rol değişikliği açık oturumları düşürür (eski rolle verilmiş token geçersizleşir).
     const roleChanged = validatedData.data.role !== undefined && validatedData.data.role !== existing.role;
+    if (roleChanged) {
+      // Dalga 2 (B5): kendine rol yok, son yönetici korunur; ADMIN'e yükseltme yalnız dört göz akışıyla
+      // (POST /api/admin/users/[id]/role → başka bir yöneticinin /elevation onayı).
+      if (validatedData.data.role === 'ADMIN') {
+        return NextResponse.json(
+          { error: 'Yönetici yükseltmesi ikinci bir yöneticinin onayını ister. Kullanıcı 360 → Erişim sekmesini kullanın.', code: 'ELEVATION_REQUIRES_APPROVAL' },
+          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      try {
+        const activeAdminCount = await prisma.user.count({ where: { role: 'ADMIN', suspendedAt: null, anonymizedAt: null } });
+        checkRoleChange({
+          actorId: session.user.id,
+          target: { id: existing.id, role: String(existing.role), anonymizedAt: existing.anonymizedAt ?? null },
+          newRole: validatedData.data.role!,
+          activeAdminCount,
+        });
+      } catch (e) {
+        if (e instanceof ApiError) {
+          return NextResponse.json({ error: e.message, code: e.code }, { status: e.status, headers: PRIVATE_NO_STORE_HEADERS });
+        }
+        throw e;
+      }
+    }
     const user = await prisma.user.update({
       where: { id: userId },
       data: roleChanged ? { ...validatedData.data, sessionVersion: { increment: 1 } } : validatedData.data,
@@ -508,66 +528,18 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      case 'add_xp': {
-        const data = addXpSchema.parse(body);
-        
-        // Varlık kontrolü (yalnızca name + existence; xp/level credited'tan gelir).
-        const currentUser = await prisma.user.findUnique({
-          where: { id: data.userId },
-          select: { name: true },
-        });
-
-        if (!currentUser) {
-          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        // TEK kaynak: creditPointsAndXp (geometrik calculateLevel + atomik artış).
-        // Önceden linear floor(xp/1000)+1 ile canonical formülle çelişiyordu.
-        // credited zaten güncel xp/level döndürür → ikinci tam-satır fetch kaldırıldı.
-        const credited = await creditPointsAndXp(prisma, {
-          userId: data.userId,
-          xp: data.amount,
-        });
-        const newXp = credited.xp;
-        const newLevel = credited.level;
-        const leveledUp = credited.isLevelUp;
-
-        const user = { id: credited.id, name: currentUser.name, xp: newXp, level: newLevel };
-
-        // Notification for XP
-        await prisma.notification.create({
-          data: {
-            userId: data.userId,
-            title: leveledUp ? `Seviye Atladınız! 🚀 Seviye ${newLevel}` : 'XP Kazandınız! ⚡',
-            message: `${data.amount} XP kazandınız!${leveledUp ? ` Artık Seviye ${newLevel} oldunuz!` : ` Toplam: ${newXp} XP`}`,
-            type: 'success',
-          },
-        });
-
-        return NextResponse.json({ success: true, user, leveledUp, newXp, newLevel }, { headers: PRIVATE_NO_STORE_HEADERS });
-      }
-
+      // Dalga 2 (admin_users.md B3/B4): XP yalnız defterden (adjustPointsByAdmin, gerekçeli) eklenir;
+      // "Seviye Ayarla" kaldırıldı — seviye XP'den kanonik formülle türer. Yeni uç:
+      // POST /api/admin/users/[id]/points { delta, xp, reasonCode, note }.
+      case 'add_xp':
       case 'set_level': {
-        const data = setLevelSchema.parse(body);
-        const user = await prisma.user.update({
-          where: { id: data.userId },
-          data: { 
-            level: data.level,
-            xp: (data.level - 1) * 1000, // Reset XP to level start
+        return NextResponse.json(
+          {
+            error: 'Bu işlem kaldırıldı. XP eklemek için Kullanıcı 360 → Ekonomi → Bakiye düzeltmesi kullanın.',
+            code: 'GONE',
           },
-          select: { id: true, name: true, level: true, xp: true },
-        });
-
-        await prisma.notification.create({
-          data: {
-            userId: data.userId,
-            title: 'Seviye Güncellendi',
-            message: `Seviyeniz ${data.level} olarak ayarlandı`,
-            type: 'info',
-          },
-        });
-
-        return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
+          { status: 410, headers: PRIVATE_NO_STORE_HEADERS }
+        );
       }
 
       case 'grant_badge': {
@@ -622,87 +594,30 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ success: true, userBadge }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
+      // Dalga 2: rozet geri alma, ödül ve bildirim denetimli tek servise taşındı
+      // (lib/admin-users/actions.server.ts). Eski istemciler için ince uyum katmanı.
       case 'revoke_badge': {
         const data = revokeBadgeSchema.parse(body);
-        
-        const existing = await prisma.userBadge.findUnique({
-          where: {
-            userId_badgeId: {
-              userId: data.userId,
-              badgeId: data.badgeId,
-            },
-          },
-          include: { badge: true },
+        await revokeBadge(actionCtx(session, request), data.userId, {
+          badgeId: data.badgeId,
+          reason: 'Yönetici panelinden kaldırıldı',
         });
-
-        if (!existing) {
-          return NextResponse.json({ error: 'Kullanıcı bu rozete sahip değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        await prisma.userBadge.delete({
-          where: { id: existing.id },
-        });
-
-        await prisma.notification.create({
-          data: {
-            userId: data.userId,
-            title: 'Rozet Kaldırıldı',
-            message: `"${existing.badge.name}" rozeti hesabınızdan kaldırıldı`,
-            type: 'warning',
-          },
-        });
-
         return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'grant_reward': {
         const data = grantRewardSchema.parse(body);
-        
-        const reward = await prisma.reward.findUnique({
-          where: { id: data.rewardId },
-        });
-
-        if (!reward) {
-          return NextResponse.json({ error: 'Ödül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        // Generate unique code for coupon
-        const code = `GIFT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-        const userReward = await prisma.userReward.create({
-          data: {
-            userId: data.userId,
-            rewardId: data.rewardId,
-            code: reward.type === 'coupon' ? code : null,
-          },
-          include: { reward: true },
-        });
-
-        await prisma.notification.create({
-          data: {
-            userId: data.userId,
-            title: 'Hediye Ödül! 🎁',
-            message: `"${reward.name}" ödülü hesabınıza eklendi!`,
-            type: 'success',
-            data: { rewardId: data.rewardId, code },
-          },
-        });
-
-        return NextResponse.json({ success: true, userReward }, { headers: PRIVATE_NO_STORE_HEADERS });
+        const out = await grantReward(actionCtx(session, request), data.userId, { rewardId: data.rewardId });
+        return NextResponse.json({ success: true, userReward: { id: out.userRewardId } }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'send_notification': {
         const data = sendNotificationSchema.parse(body);
-        
-        const notification = await prisma.notification.create({
-          data: {
-            userId: data.userId,
-            title: data.title,
-            message: data.message,
-            type: data.type,
-          },
+        const notification = await sendDirectNotification(actionCtx(session, request), data.userId, {
+          title: data.title,
+          message: data.message,
+          type: data.type === 'error' ? 'warning' : data.type,
         });
-
         return NextResponse.json({ success: true, notification }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
@@ -710,6 +625,9 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'Geçersiz işlem' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
   } catch (error) {
+    if (error instanceof ApiError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status, headers: PRIVATE_NO_STORE_HEADERS });
+    }
     console.error('Error in user action:', error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
