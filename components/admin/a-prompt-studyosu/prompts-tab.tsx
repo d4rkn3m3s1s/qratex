@@ -13,6 +13,7 @@ import { createNoteDraft, errorText, fetchPrompts, isConflict, noteVersionAction
 import { TextDiff } from './diff-view';
 import { actorName, fmtDateTime } from './format';
 import { CountedTextarea, PromptBlock, ReasonInput, reasonOk } from './parts';
+import { usePromptStudioCopy } from './copy';
 
 const STATUS_LABEL: Record<NoteVersion['status'], { label: string; tone: 'success' | 'info' | 'neutral' | 'warning' }> = {
   published: { label: 'Yayında', tone: 'success' },
@@ -42,6 +43,7 @@ export default function PromptsTab({ initial }: { initial?: PromptsState | null 
 }
 
 function BasePrompts({ state }: { state: PromptsState }) {
+  const px = usePromptStudioCopy();
   return (
     <SectionCard
       title="Temel promptlar"
@@ -56,7 +58,7 @@ function BasePrompts({ state }: { state: PromptsState }) {
                 <span className="font-medium text-fg">{b.title}</span>
                 <StatusBadge label={b.version} tone="brand" size="sm" icon={null} />
                 <span className="qx-small text-fg-muted">{b.usedBy.join(' · ')}</span>
-                <span className="qx-small ml-auto text-brand group-open:hidden">Metni göster</span>
+                <span className="qx-small ml-auto text-brand group-open:hidden">{px.showText}</span>
                 <span className="qx-small ml-auto hidden text-brand group-open:inline">Gizle</span>
               </summary>
               <div className="mt-2">
@@ -71,6 +73,7 @@ function BasePrompts({ state }: { state: PromptsState }) {
 }
 
 function NoteCard({ note, version }: { note: NoteState; version: string }) {
+  const px = usePromptStudioCopy();
   const meta = NOTE_META[note.key];
   const qc = useQueryClient();
   const draft = note.versions.find((v) => v.status === 'draft') ?? null;
@@ -189,8 +192,8 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
         ) : null}
 
         <div className="space-y-2">
-          <h3 className="qx-small font-medium text-fg">Yayındaki metin</h3>
-          {note.live ? <PromptBlock text={note.live} label={`${meta.title} yayındaki metin`} maxHeight="max-h-48" /> : <p className="qx-small text-fg-muted">Yayında not yok; yalnız temel prompt ve onaylı öğrenilen kurallar kullanılıyor.</p>}
+          <h3 className="qx-small font-medium text-fg">{px.liveText}</h3>
+          {note.live ? <PromptBlock text={note.live} label={px.liveTextLabel(meta.title)} maxHeight="max-h-48" /> : <p className="qx-small text-fg-muted">{px.noLiveNote}</p>}
         </div>
 
         {draft ? (
@@ -313,14 +316,14 @@ function NoteCard({ note, version }: { note: NoteState; version: string }) {
 
         {preview ? (
           <div className="space-y-2" aria-live="polite">
-            <h3 className="qx-small font-medium text-fg">Derlenmiş ek bağlam (temel promptun sonuna eklenen blok)</h3>
-            <p className="qx-small text-fg-muted">LLM çağrısı yapılmadı; yalnız prompt kurucusu taslağınızla çalıştırıldı. Satır temizleme ve uzunluk tavanı burada görünür.</p>
+            <h3 className="qx-small font-medium text-fg">{px.compiledContext}</h3>
+            <p className="qx-small text-fg-muted">{px.dryRunNote}</p>
             <PromptBlock text={note.key === 'chat' ? preview.chatBlock : preview.insightBlock} label="Derlenmiş ek bağlam" />
           </div>
         ) : null}
 
         <div className="space-y-2">
-          <h3 className="qx-small font-medium text-fg">Sürüm geçmişi</h3>
+          <h3 className="qx-small font-medium text-fg">{px.versionHistory}</h3>
           <Timeline events={events} timeStyle="datetime" dense emptyLabel="Henüz yayınlanmış sürüm yok." ariaLabel={`${meta.title} sürüm geçmişi`} />
         </div>
       </div>

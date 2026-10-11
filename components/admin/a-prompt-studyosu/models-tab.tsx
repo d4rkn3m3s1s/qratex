@@ -14,6 +14,7 @@ import { MODEL_SLOTS, MODEL_SLOT_META, type ModelSlot, type ModelsState } from '
 import { errorText, fetchModels, isConflict, saveModels, studioKeys } from './api';
 import { fmtNumber, percent } from './format';
 import { ReasonInput, reasonOk } from './parts';
+import { usePromptStudioCopy } from './copy';
 
 const DEFAULT = '__default__';
 const SOURCE_LABEL = { override: 'Yönetici seçimi', env: 'Ortam değişkeni', default: 'Kod varsayılanı', none: 'Sağlayıcı yok' } as const;
@@ -32,6 +33,7 @@ export default function ModelsTab({ initial }: { initial?: ModelsState | null })
 }
 
 function ModelsBody({ s }: { s: ModelsState }) {
+  const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const baseId = useId();
   const initialSel = () => Object.fromEntries(s.slots.map((x) => [x.slot, x.override && !x.overrideIgnored ? x.override : DEFAULT])) as Record<ModelSlot, string>;
@@ -100,7 +102,7 @@ function ModelsBody({ s }: { s: ModelsState }) {
                     </Label>
                     <p className="qx-small text-fg-muted">{meta.description}</p>
                     <p className="qx-small flex flex-wrap items-center gap-2">
-                      <span className="text-fg-muted">Şu an:</span>
+                      <span className="text-fg-muted">{px.current}</span>
                       <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs">{slot.effective ?? '—'}</code>
                       <StatusBadge size="sm" tone={slot.source === 'override' ? 'brand' : 'neutral'} label={SOURCE_LABEL[slot.source]} icon={null} />
                     </p>
@@ -128,7 +130,7 @@ function ModelsBody({ s }: { s: ModelsState }) {
             })}
           </ul>
           <details>
-            <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">Katalog notları</summary>
+            <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">{px.catalogNotes}</summary>
             <ul className="mt-1 space-y-1 text-sm">
               {s.catalog.map((m) => (
                 <li key={m.id}>
@@ -151,14 +153,14 @@ function ModelsBody({ s }: { s: ModelsState }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <caption className="sr-only">Model başına son 7 gün kullanım</caption>
+              <caption className="sr-only">{px.usageCaption}</caption>
               <thead className="border-b border-border text-left text-fg-muted">
                 <tr>
                   <th scope="col" className="px-4 py-2 font-medium">Model</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Çağrı</th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">{px.calls}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Pay</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Hata</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Token (girdi / çıktı)</th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">{px.tokens}</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Ort. gecikme</th>
                 </tr>
               </thead>

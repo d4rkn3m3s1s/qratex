@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { errorText, fetchDealer, fetchDealers, fieldErrors, isConflict, refreshDealerProfile, studioKeys, updateDealerPolicy } from './api';
 import { fmtAgo, fmtDateTime, fmtNumber } from './format';
 import { CountedTextarea, ReasonInput, reasonOk } from './parts';
+import { usePromptStudioCopy } from './copy';
 
 export type DealersInitial = { qs: string; page: DealerListPage } | null;
 
@@ -178,6 +179,7 @@ function pickPolicy(p: DealerPolicyView) {
 }
 
 function DealerDetailView({ d }: { d: DealerDetail }) {
+  const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const baseId = useId();
   const [form, setForm] = useState(() => pickPolicy(d.policy));
@@ -351,7 +353,7 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
           Son düzeltmeler
         </h3>
         {d.corrections.length === 0 ? (
-          <p className="qx-small text-fg-muted">Bayi henüz AI analizini düzeltmemiş.</p>
+          <p className="qx-small text-fg-muted">{px.noDealerEdits}</p>
         ) : (
           <ol className="space-y-2">
             {d.corrections.map((c) => (
@@ -373,6 +375,7 @@ function DealerDetailView({ d }: { d: DealerDetail }) {
 }
 
 function ProfileView({ d }: { d: DealerDetail }) {
+  const px = usePromptStudioCopy();
   const p = d.profile!;
   const PRI: Record<string, string> = { high: 'yüksek', medium: 'orta', low: 'düşük' };
   return (
@@ -404,7 +407,7 @@ function ProfileView({ d }: { d: DealerDetail }) {
       ) : null}
       {p.risks.length ? (
         <div className="space-y-1">
-          <h4 className="qx-small font-medium text-fg">Risk kalıpları</h4>
+          <h4 className="qx-small font-medium text-fg">{px.riskPatterns}</h4>
           <ul className="list-disc space-y-0.5 pl-5 text-sm">
             {p.risks.map((r) => (
               <li key={r.pattern}>
@@ -421,7 +424,7 @@ function ProfileView({ d }: { d: DealerDetail }) {
           <ul className="list-disc space-y-0.5 pl-5 text-sm">{p.guidelines.do.length ? p.guidelines.do.map((x) => <li key={x}>{x}</li>) : <li className="list-none text-fg-muted">—</li>}</ul>
         </div>
         <div className="space-y-1">
-          <h4 className="qx-small font-medium text-fg">Kaçın</h4>
+          <h4 className="qx-small font-medium text-fg">{px.avoid}</h4>
           <ul className="list-disc space-y-0.5 pl-5 text-sm">{p.guidelines.avoid.length ? p.guidelines.avoid.map((x) => <li key={x}>{x}</li>) : <li className="list-none text-fg-muted">—</li>}</ul>
         </div>
       </div>

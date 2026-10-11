@@ -13,6 +13,7 @@ import { decideProposal, errorText, fetchLearning, restoreLearning, runTraining,
 import { ListDiffView, TextDiff } from './diff-view';
 import { actorName, fmtAgo, fmtDateTime, fmtNumber } from './format';
 import { ReasonInput, reasonOk } from './parts';
+import { usePromptStudioCopy } from './copy';
 
 /**
  * Öğrenilen kurallar: anonim toplulaştırmadan LLM ÖNERİ üretir → diff → yönetici onayı.
@@ -35,6 +36,7 @@ export default function LearningTab({ initial }: { initial?: LearningState | nul
 }
 
 function LearningBody({ s }: { s: LearningState }) {
+  const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const set = (next: LearningState) => {
     qc.setQueryData(studioKeys.learning(), next);
@@ -160,7 +162,7 @@ function LearningBody({ s }: { s: LearningState }) {
                   />
                 </div>
                 <details>
-                  <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">İçeriği göster</summary>
+                  <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">{px.showContent}</summary>
                   <div className="mt-2">
                     <PayloadView p={h.payload} />
                   </div>
@@ -175,6 +177,7 @@ function LearningBody({ s }: { s: LearningState }) {
 }
 
 function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningState) => void }) {
+  const px = usePromptStudioCopy();
   const p = s.proposal!;
   const d = s.diff!;
   const [reason, setReason] = useState('');
@@ -253,7 +256,7 @@ function ProposalCard({ s, onDone }: { s: LearningState; onDone: (n: LearningSta
             }}
           />
         </div>
-        {!reasonOk(reason) ? <InlineError variant="field" tone="info">Reddetmek için gerekçe yazın.</InlineError> : null}
+        {!reasonOk(reason) ? <InlineError variant="field" tone="info">{px.rejectNeedsReason}</InlineError> : null}
       </div>
     </SectionCard>
   );

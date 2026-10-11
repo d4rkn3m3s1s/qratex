@@ -19,6 +19,7 @@ import { createTone, errorText, fetchToneHistory, fetchTones, fieldErrors, isCon
 import { TextDiff } from './diff-view';
 import { actorName, fmtDateTime, fmtNumber } from './format';
 import { CountedTextarea, PromptBlock, ReasonInput, reasonOk } from './parts';
+import { usePromptStudioCopy } from './copy';
 
 const SOURCE: Record<ToneRow['source'], { label: string; tone: 'neutral' | 'brand' | 'info' }> = {
   builtin: { label: 'Yerleşik · etkin değil', tone: 'neutral' },
@@ -178,6 +179,7 @@ function ToneItem({ t, onEdit, onActivate }: { t: ToneRow; onEdit: () => void; o
 }
 
 function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClose: () => void }) {
+  const px = usePromptStudioCopy();
   const qc = useQueryClient();
   const tone = state.mode === 'edit' ? state.tone : null;
   const [slug, setSlug] = useState(state.mode === 'create' ? state.preset?.slug ?? '' : tone!.slug);
@@ -243,9 +245,9 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="tone-name">Görünen ad</Label>
+            <Label htmlFor="tone-name">{px.displayName}</Label>
             <Input id="tone-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="min-h-11 sm:min-h-10" aria-invalid={!!errors.name || undefined} />
-            {errors.name ? <p className="qx-small text-danger">{errors.name}</p> : <p className="qx-small text-fg-muted">Bayi kural ekranında bu ad görünür.</p>}
+            {errors.name ? <p className="qx-small text-danger">{errors.name}</p> : <p className="qx-small text-fg-muted">{px.displayNameHint}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="tone-slug">Anahtar</Label>
@@ -300,6 +302,7 @@ function ToneEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
 const RATING_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} ★`, textLabel: `${n} yıldız` }));
 
 function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
+  const px = usePromptStudioCopy();
   const [rating, setRating] = useState('2');
   const [text, setText] = useState('Yemek soğuk geldi, garson da ilgisizdi.');
   const run = useMutation({
@@ -318,7 +321,7 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
         <Sparkles className="h-4 w-4" aria-hidden />
         Önizleme (kaydetmeden)
       </h3>
-      <p className="qx-small text-fg-muted">Gerçek otomatik yanıt sistem mesajı taslağınızla derlenir ve AI geçidinden (limit + günlük tavan + kullanım kaydı) bir yanıt üretilir.</p>
+      <p className="qx-small text-fg-muted">{px.previewNote}</p>
       <div className="space-y-1.5">
         <span id="tone-rating-l" className="qx-small font-medium text-fg">
           Müşteri puanı
@@ -326,7 +329,7 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
         <ChoiceChips aria-labelledby="tone-rating-l" options={RATING_OPTIONS} value={rating} onChange={(v) => v && setRating(v)} size="sm" />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="tone-sample">Örnek yorum</Label>
+        <Label htmlFor="tone-sample">{px.sampleReview}</Label>
         <Textarea id="tone-sample" value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={600} />
       </div>
       <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" disabled={run.isPending || text.trim().length < 5} onClick={() => run.mutate()}>
@@ -344,7 +347,7 @@ function TonePreview({ slug, prompt }: { slug: string; prompt: string }) {
           )}
           {r.model ? <p className="qx-small text-fg-muted">Model: {r.model}</p> : null}
           <details>
-            <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">Gönderilen sistem mesajını göster</summary>
+            <summary className="qx-small min-h-11 cursor-pointer content-center text-brand">{px.showSystemMsg}</summary>
             <PromptBlock text={r.systemPrompt} label="Gönderilen sistem mesajı" />
           </details>
         </div>
