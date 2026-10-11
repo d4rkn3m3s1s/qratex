@@ -18,8 +18,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   }
 
   const disallow = seo.robotsDisallow?.length ? seo.robotsDisallow : ['/admin/', '/dealer/', '/customer/', '/auth/'];
+  // Giriş/kayıt herkese açık giriş kapılarıdır (marka araması "qratex giriş"): /auth/ altı
+  // kapalı kalırken bu ikisi açıkça izinli — en uzun eşleşme kuralı Allow'u kazandırır.
   return {
-    rules: [{ userAgent: '*', allow: '/', disallow }],
+    rules: [{ userAgent: '*', allow: ['/', '/auth/login', '/auth/register'], disallow }],
     sitemap: seo.sitemapEnabled ? `${base}/sitemap.xml` : undefined,
   };
 }

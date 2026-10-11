@@ -104,19 +104,20 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
             <Link href="/" className={cn('mb-6 inline-flex items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2')}>
+              {/* Erişilebilir ad sr-only metinden gelir; logolar dekoratif (alt="" — axe image-redundant-alt). */}
               <span className="sr-only">QRateX</span>
               {mounted && (
                 <>
                   <Image
                     src={logoSrc}
-                    alt="QRateX Logo"
+                    alt=""
                     width={56}
                     height={56}
                     className="object-contain w-12 h-12 sm:w-14 sm:h-14"
                   />
                   <Image
                     src={fontLogoSrc}
-                    alt="QRateX"
+                    alt=""
                     width={140}
                     height={36}
                     className="object-contain h-8 sm:h-9"

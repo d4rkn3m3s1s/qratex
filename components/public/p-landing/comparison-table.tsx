@@ -60,22 +60,23 @@ export function ComparisonTable({ copy, brand }: { copy: WhyCopy['comparison']; 
           <li key={row.topic} className="rounded-card border border-subtle bg-surface-1/90 p-4 backdrop-blur-md">
             <p className="font-semibold text-fg">{row.topic}</p>
             <dl className="mt-3 space-y-3 text-sm">
-              <div className="flex items-start gap-2.5">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-brand">{brand}</dt>
-                  <dd className="text-fg">
-                    {row.ours}
-                    {row.trustLink ? <TrustLink label={copy.trustLinkLabel} /> : null}
-                  </dd>
-                </div>
+              {/* dl yalnız dt/dd gruplayan div kabul eder (axe definition-list/dlitem): ikon dt içinde, mutlak konumlu. */}
+              <div className="relative pl-[1.625rem]">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-brand">
+                  <Check className="absolute left-0 top-0.5 h-4 w-4 text-success" aria-hidden />
+                  {brand}
+                </dt>
+                <dd className="text-fg">
+                  {row.ours}
+                  {row.trustLink ? <TrustLink label={copy.trustLinkLabel} /> : null}
+                </dd>
               </div>
-              <div className="flex items-start gap-2.5">
-                <Minus className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{copy.colClassic}</dt>
-                  <dd className="text-fg-muted">{row.classic}</dd>
-                </div>
+              <div className="relative pl-[1.625rem]">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                  <Minus className="absolute left-0 top-0.5 h-4 w-4 text-fg-subtle" aria-hidden />
+                  {copy.colClassic}
+                </dt>
+                <dd className="text-fg-muted">{row.classic}</dd>
               </div>
             </dl>
           </li>

@@ -63,7 +63,10 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const suffix = locale === 'en' ? 'Feedback' : 'Geri bildirim';
   return {
     title: lookup.status === 'ok' ? `${lookup.venue.businessName} — ${suffix}` : suffix,
-    description: undefined,
+    description:
+      locale === 'en'
+        ? lookup.status === 'ok' ? `Share your experience at ${lookup.venue.businessName} in under a minute.` : 'Share your experience in under a minute.'
+        : lookup.status === 'ok' ? `${lookup.venue.businessName} deneyimini bir dakikadan kısa sürede paylaş.` : 'Deneyimini bir dakikadan kısa sürede paylaş.',
     robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
   };
 }
