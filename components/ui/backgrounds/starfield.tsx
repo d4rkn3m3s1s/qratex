@@ -59,7 +59,11 @@ export function StarfieldBackground({
 
     const bgColor = isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.25)';
     const starColor = isDark ? 'rgba(255, 255, 255,' : 'rgba(30, 30, 30,';
-    const trailStartColor = isDark ? 'rgba(139, 92, 246,' : 'rgba(109, 40, 217,';
+    // İz rengi aktif temanın marka rengini izler (yönetici teması / dönemsel konsept `--primary`'yi
+    // yazar); okunamazsa eski sabit mor. Değer "H S% L%" üçlüsüdür → `hsl(H S% L% / a)`.
+    const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+    const trailColor = (a: number) =>
+      primary ? `hsl(${primary} / ${a})` : `${isDark ? 'rgba(139, 92, 246,' : 'rgba(109, 40, 217,'} ${a})`;
 
     const animate = () => {
       ctx.fillStyle = bgColor;
@@ -97,7 +101,7 @@ export function StarfieldBackground({
 
         const brightness = Math.max(0, Math.min(1, 1 - star.z / width));
         const gradient = ctx.createLinearGradient(px, py, sx, sy);
-        gradient.addColorStop(0, `${trailStartColor} ${brightness * 0.3})`);
+        gradient.addColorStop(0, trailColor(brightness * 0.3));
         gradient.addColorStop(1, `${starColor} ${brightness})`);
 
         ctx.strokeStyle = gradient;

@@ -4,13 +4,14 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
-import { ArrowUpRight, Rocket, ShieldCheck, UserRound } from 'lucide-react';
+import { Accessibility, ArrowUpRight, Rocket, ShieldCheck, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { InlineError, SectionCard, StatTile } from '@/components/states';
 import { StatusBadge } from '@/components/ds';
+import { AccessibilityToggles } from '@/components/settings/accessibility-toggles';
 import { cn } from '@/lib/utils';
 import { avatarList, resolveAvatarImage } from '@/lib/avatar-options';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
@@ -22,6 +23,10 @@ export function SecuritySection({ state }: { state: PlatformSettingsState }) {
       <GateSummaryCard gate={state.context.gate} />
       <AccountCard />
       <PasswordCard />
+      {/* Admin panelinde kişisel erişilebilirlik ayarı yoktu (müşteri/bayi panelinde var). */}
+      <SectionCard title="Erişilebilirlik" description="Bu cihazda hemen uygulanır (cihaz bazlı tercih)." icon={<Accessibility aria-hidden />}>
+        <AccessibilityToggles />
+      </SectionCard>
     </div>
   );
 }
