@@ -1,11 +1,10 @@
 /**
  * Spam Kırıcı — kayıt defteri girdisi (istemci güvenli).
  *
- * KORU (§7.3 #13): alt-adımlı fizik sabit adımlı döngüye taşınınca 120 Hz'de 2× hız hatası
- * kapanır.
- *
- * OYUN AJANI: v2'ye taşırken `component`'i `{ contract: 'v2', load }` yap, doğrulayıcıyı
- * `./spam-breaker.server.ts`'e yaz. Sözleşme: lib/games/README.md
+ * KORU (§7.3 #13): tamsayı fizik + motorun 60 Hz sabit adımı (4 alt-adım) → 120/144 Hz ekranda
+ * 2× hız hatası yapısal olarak kapandı. 5 seviye, bot tuğlaları, kapsüller (geniş kalkan / +1 can).
+ * Saf simülasyon `components/customer/games/spam-breaker/sim.ts`; sunucu aynı tohum + girdi
+ * kaydıyla yeniden oynatır (`./spam-breaker.server.ts`). Ödül: skor ≥ eşik (topu kaçırmak silmez).
  */
 import { defineGame } from './types';
 
@@ -13,18 +12,16 @@ export const spamBreakerGame = defineGame({
   id: 'spam-breaker',
   gameType: 'spam-breaker',
   title: 'Spam Kırıcı',
-  tagline:
-    'Kalkanı kaydır, topu sektir, spam tuğlalarını kır; topu düşürme.',
+  tagline: 'Kalkanı kaydır, topu sektir, 5 seviyede spam ve bot tuğlalarını kır; eşiği geçince top kaçsa da skorun sayılır.',
   emoji: '🧊',
   accent: '#f43f5e',
   status: 'live',
   role: 'arcade',
   verification: 'deterministic',
-  // Eski sözleşmeli bileşen pratik modunu bilmiyor; v2'ye taşınınca true.
-  modes: { practice: false, ranked: { attemptsPerDay: 1 } },
+  modes: { practice: true, ranked: { attemptsPerDay: 1 } },
   component: {
-    contract: 'legacy',
-    load: () => import('@/components/customer/games/spam-breaker-game').then((m) => m.SpamBreakerGame),
+    contract: 'v2',
+    load: () => import('@/components/customer/games/spam-breaker/spam-breaker-game').then((m) => m.SpamBreakerGame),
   },
-  controls: 'Parmağını/fareyi yatay kaydır ya da ← / → tuşları.',
+  controls: 'Parmağını/fareyi oyun alanında kaydır ya da ← / → (A / D); Boşluk ya da dokunup bırak: fırlat. Esc/P: duraklat.',
 });

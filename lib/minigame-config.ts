@@ -413,16 +413,18 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'spam_breaker_game',
     title: 'Spam Kırıcı',
     description:
-      'Kalkanı kaydır, topu sektir, spam tuğlalarını kır! Çekirdeği koru, tüm bloğu temizle.',
+      'Kalkanı kaydır, topu sektir, 5 seviyede spam ve bot tuğlalarını kır! Eşiği geçince top kaçsa da skorun sayılır.',
     emoji: '🧊',
     accent: '#ef4444',
-    // Skor = isabet sayısı. Tahta: 2 sıra×7 (hp2) + 3 sıra×7 (hp1) = 49 isabet üst sınır.
-    maxScore: 49,
-    rewardThreshold: 18,
+    // Skor = tuğla isabeti (v2, sunucu replay). Tavan = 5 seviyenin büyük varyant toplamı
+    // (`MAX_TOTAL_HITS`, components/customer/games/spam-breaker/sim.ts — testle hizalı).
+    // Eşik ≈ 1. seviyenin dörtte üçü (iyi oyuncu ~45-60 sn); ödül skor ≥ eşikte (top kaçsa da).
+    maxScore: 246,
+    rewardThreshold: 24,
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 12,
-    maxScorePerSec: 3,
+    maxScorePerSec: 6,
     maxDurationSec: 1800,
   },
   {
@@ -438,7 +440,7 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     // ≤ ~34, seyrek ~34 ort., dikkatli ~97 ort., en iyi ~155 → eşik 45, tavan 200 (betik sigortası).
     // Deneme penceresi duraklatma payıyla 300 sn.
     maxScore: 200,
-    rewardThreshold: 45,
+    rewardThreshold: 24,
     rewardPoints: 120,
     rewardXp: 60,
     minDurationSec: 10,

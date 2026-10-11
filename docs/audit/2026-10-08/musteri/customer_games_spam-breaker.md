@@ -321,3 +321,21 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (oyun bileşeni, `u
 - `complete/route.ts:15-22` `score`, `won`, `durationSec` doğrudan istemciden geliyor; sunucu yalnız `:61` cap'i ve `:81-83` sunucu tarafı geçen süreyi (`minDurationSec` = 12, `minigame-config.ts:337`) kontrol ediyor. Olay günlüğü, tohum veya fizik doğrulaması yok; oyun puanları `points-caps` (yalnız feedback için, `lib/points-caps.ts:57`) ile de sınırlanmıyor, sadece `points_credited` ile velocity dedektörüne görünür.
 - Tasarım gereği tavan "oyun başına günde 1 ödül"; ancak bu tavan oynamadan, betikle her gün her generic oyun için alınabilir. Tam temizlik (49 isabet, top 5.2–8.5 px/kare, paddle–tuğla mesafesi ~250 px) 12 sn'de fiziksel olarak mümkün değil; alt süre anlamsız derecede düşük. Ayrıca sahte `won:true, score:49` kayıtları turnuva sıralamasına da giriyor (İddia 4 ile birleşince ödül keyfi biçimde betik kullanıcılarına gidebilir).
 - **Yeniden üretim:** Oturumlu müşteri `POST /api/customer/games/spam-breaker/start` → 12 sn bekle → `POST .../complete {sessionId, score:49, durationSec:12, won:true}` → 170 puan + 85 XP (+ seri XP).
+
+## Uygulama (Dalga 2)
+
+Spam Kırıcı motora taşındı (v2, `/customer/games/spam-breaker` artık dinamik `[game]` rotasından; eski statik `page.tsx` ve `components/customer/games/spam-breaker-game.tsx` silindi).
+
+- **Sabit adım / 2× hız (Bulgu 5, #23):** saf tamsayı simülasyon `components/customer/games/spam-breaker/sim.ts` — 60 Hz motor adımı × 4 alt-adım, konumlar 1/256 px, açılar sabit tamsayı tablosundan (tarayıcı/sunucu `Math.sin` farkı replay'i bozmaz). Hız tazeleme hızından bağımsız (jest).
+- **Ödül eşiği (Bulgu 1, #28):** ödül = sunucu skoru ≥ `config.rewardThreshold` (etkin değer, admin override); top kaçsa / canlar bitse de eşiği geçmiş skor sayılır. Eşik 24, tavan 246 (5 seviyenin büyük varyant toplamı, testle hizalı), `maxScorePerSec` 6. HUD/öğretici/sonuç metinleri aynı kuralı söyler.
+- **Sunucu otoritesi (Bulgu 6, #40):** `lib/games/validators/spam-breaker.ts` deterministik replay; şişirilmiş skor sunucu skoruna iner, uydurma/başka tohumlu/fazla adımlı kayıt `proof_invalid`, hızlandırılmış betik `implausible` (`__tests__/lib/spam-breaker.test.ts`, 15 test).
+- **Admin override (Bulgu 8, #41):** eşik `config`'ten.
+- **Mobil fırlatma (Bulgu 3, #21):** Pointer Events; dokunup bırakınca fırlar, sürükleyince kalkan gider, ayrıca "Fırlat" düğmesi ve 3 sn otomatik servis. Sanal ◀ ▶ basılı tutma düğmeleri `(pointer: coarse)` ile.
+- **Klavye (#18):** `KeyboardEvent.code` (Caps Lock'tan bağımsız A/D), basılı tutma sabit hızda (OS tekrarına bağlı değil), Boşluk/Enter/↑ fırlat, Esc/P duraklat.
+- **DPR + shadowBlur (Bulgu 11, #15):** motorun DPR'lı yüzeyi; `shadowBlur` kaldırıldı.
+- **Azaltılmış hareket / ses (Bulgu 9, #29, #30):** tüm ses/titreşim/sarsıntı/konfeti/parçacık `fx` (politika + oyun tercihi) üzerinden; sarsıntı ≤ 4 px.
+- **Erişilebilirlik (#46, #50):** `role="application"` + `aria-describedby` kurallar, `aria-live` duyurular (isabet/can/seviye/eşik), ilerleme çubuğu `role="progressbar"`; Okabe–Ito palet + şekil ayrımı (spam "@", bot iki göz + hasar çatlağı, kapsül ↔ / +).
+- **Duraklat/devam (#44), sonuç ekranı (#45, #48):** kabuk duraklatma + yıldız (eşik / yarı / tam temizlik), cihaz rekoru, süre, paylaş; sıralıda 12 sn sonra otomatik gönderim.
+- **Oynanış:** 5 seviye (tohumla iki varyant), bot tuğlaları, kapsüller (geniş kalkan 10 sn / +1 can), seviyeyle artan hız, yardımlı sekme (art arda boşa vuruşta kalan tuğlaya yönelir — son tuğla kuyruğu yok), 7 dk süre tavanı, ilk oynayışta öğretici; Pratik/Sıralı mod.
+
+Kalan (bu sahipliğin dışında): turnuva eşitlik kırma / açık tema (Bulgu 4, 7), "günde 1" kilidi ve kayıp oturum (Bulgu 2), liderlik hata durumu (Bulgu 13) ortak oyun altyapısına (`lib/game-session.ts`, `game-host`, turnuva/liderlik) aittir.
