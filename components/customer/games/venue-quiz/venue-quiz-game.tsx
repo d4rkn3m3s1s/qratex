@@ -17,6 +17,8 @@ import { AnimatePresence, m, useAnimationControls } from 'framer-motion';
 import { Check, Flame, Link2, Share2, Swords, Timer, Trophy, X } from 'lucide-react';
 import type { GameComponentProps } from '@/lib/games/registry/types';
 import { createRng } from '@/lib/games/engine/rng';
+import { useLatestRef } from '@/lib/games/engine/hooks';
+import { useVenueQuizCopy, type VenueQuizCopy } from './copy';
 import { useReducedMotionPref } from '@/lib/motion';
 import { sfxClick, sfxCombo, sfxFanfare, sfxHit, sfxWarn } from '@/lib/game-sounds';
 import {
@@ -110,7 +112,7 @@ function toQuestions(content: unknown[] | null | undefined): Question[] {
   return out.filter((q) => q.options.length === 4);
 }
 
-async function postDuel<T>(body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+async function postDuel<T>(body: unknown, fallbackError: string): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
     const res = await fetch('/api/customer/venue-quiz/duel', {
       method: 'POST',
@@ -119,9 +121,9 @@ async function postDuel<T>(body: unknown): Promise<{ ok: true; data: T } | { ok:
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; data?: T; error?: string } | null;
     if (res.ok && json?.ok && json.data) return { ok: true, data: json.data };
-    return { ok: false, error: json?.error ?? 'Sunucuya ulaşılamadı. Bağlantını kontrol edip yeniden dene.' };
+    return { ok: false, error: json?.error ?? fallbackError };
   } catch {
-    return { ok: false, error: 'Sunucuya ulaşılamadı. Bağlantını kontrol edip yeniden dene.' };
+    return { ok: false, error: fallbackError };
   }
 }
 
@@ -132,6 +134,13 @@ function readDuelParam(): string | null {
   } catch {
     return null;
   }
+}
+
+/** Kategori başlığı/açıklaması: EN'de çeviri, yoksa kayıttaki Türkçe. */
+function catText(tx: VenueQuizCopy, id: string): { title: string; blurb: string; emoji: string } {
+  const meta = categoryMeta(id);
+  const tr = tx.categories?.[id];
+  return { emoji: meta.emoji, title: tr?.title ?? meta.title, blurb: tr?.blurb ?? meta.blurb };
 }
 
 function clearDuelParam() {
@@ -147,6 +156,8 @@ function clearDuelParam() {
 
 export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, onPauseRequest, onFinish, fx, accent }: GameComponentProps) {
   const reduce = useReducedMotionPref();
+  const tx = useVenueQuizCopy();
+  const txRef = useLatestRef(tx);
   const ranked = mode === 'ranked';
   const all = useMemo(() => toQuestions(content), [content]);
   const [local, setLocal] = useState(readLocal);
@@ -259,7 +270,10 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
   const submitDuel = useCallback(
     async (r: Run) => {
       setScreen('submitting');
-      const res = await postDuel<DuelResult>({ action: 'submit', roundToken: r.roundToken, answers: answersRef.current });
+      const res = await postDuel<DuelResult>(
+        { action: 'submit', roundToken: r.roundToken, answers: answersRef.current },
+        txRef.current.serverError
+      );
       if (!res.ok) {
         setError(res.error);
         setScreen('error');
@@ -273,7 +287,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
         fx.confetti('burst');
       }
     },
-    [fx]
+    [fx, txRef]
   );
 
   const finishPracticeRun = useCallback(
@@ -444,7 +458,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
   const loadDuel = useCallback(async (challenge: string | null) => {
     setScreen('loading');
     setError('');
-    const res = await postDuel<DuelRound>({ action: 'round', ...(challenge ? { challenge } : {}) });
+    const res = await postDuel<DuelRound>({ action: 'round', ...(challenge ? { challenge } : {}) }, txRef.current.serverError);
     if (challenge) clearDuelParam();
     if (!res.ok) {
       setError(res.error);
@@ -453,27 +467,27 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
     }
     const qs = toQuestions(res.data.items);
     if (qs.length === 0) {
-      setError('Düello soruları yüklenemedi. Yeniden dene.');
+      setError(txRef.current.duelLoadFailed);
       setScreen('error');
       return;
     }
     setRun({ kind: 'duel', questions: qs, key: null, catKey: 'duello', roundToken: res.data.roundToken, challenger: res.data.challenger });
     setScreen('ready');
-  }, []);
+  }, [txRef]);
 
   const share = useCallback(async (text: string, url: string, title: string) => {
     try {
       if (navigator.share) {
         await navigator.share({ title, text, url });
-        setShareMsg('Paylaşıldı.');
+        setShareMsg(txRef.current.shared);
       } else {
         await navigator.clipboard.writeText(`${text} ${url}`);
-        setShareMsg('Bağlantı panoya kopyalandı.');
+        setShareMsg(txRef.current.linkCopied);
       }
     } catch {
-      setShareMsg('Paylaşım iptal edildi ya da desteklenmiyor.');
+      setShareMsg(txRef.current.shareFailed);
     }
-  }, []);
+  }, [txRef]);
 
   const exitPractice = useCallback(() => {
     if (finishedRef.current) return;
@@ -485,7 +499,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
   if (all.length === 0 || (!ranked && !answerKey)) {
     return (
       <div role="alert" className="rounded-2xl border border-white/15 bg-black/60 p-6 text-center text-sm text-white">
-        Bu tur için sorular yüklenemedi. Lütfen oyunu yeniden başlat.
+        {tx.noContent}
         <button
           type="button"
           onClick={() => {
@@ -495,7 +509,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
           }}
           className="mx-auto mt-4 block min-h-[44px] rounded-xl border border-white/30 px-4 font-semibold"
         >
-          Turu kapat
+          {tx.closeRound}
         </button>
       </div>
     );
@@ -506,11 +520,11 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
   const truth = run?.key && current ? run.key[current.id] : null;
   const liveText =
     screen === 'question' && current
-      ? `Soru ${idx + 1} / ${total}. ${current.prompt}`
+      ? tx.liveQuestion(idx + 1, total, current.prompt)
       : screen === 'feedback' && current
-        ? `${chosen === truth ? `Doğru, ${lastPoints} puan.` : chosen === TIMEOUT_VERDICT ? 'Süre doldu.' : 'Yanlış.'} ${current.why ?? ''}`
+        ? `${chosen === truth ? tx.liveCorrect(lastPoints) : chosen === TIMEOUT_VERDICT ? tx.liveTimeUp : tx.liveWrong} ${current.why ?? ''}`
         : screen === 'transition'
-          ? 'Cevap kaydedildi.'
+          ? tx.liveSaved
           : screen === 'countdown'
             ? `${count}`
             : '';
@@ -532,7 +546,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
         {showHud && run && (
           <div className="mb-3 space-y-2 text-white">
             <div className="flex items-center justify-between gap-2 text-sm font-semibold">
-              <ol className="flex flex-wrap items-center gap-1" aria-label={`Soru ${idx + 1} / ${total}`}>
+              <ol className="flex flex-wrap items-center gap-1" aria-label={tx.questionOf(idx + 1, total)}>
                 {questions.map((q, i) => {
                   const r = results[i];
                   const practice = run.kind === 'practice';
@@ -557,17 +571,17 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                 {run.kind === 'practice' ? (
                   <>
                     {streak >= 2 && (
-                      <span className="flex items-center gap-0.5 text-amber-300" aria-label={`${streak} seri`}>
+                      <span className="flex items-center gap-0.5 text-amber-300" aria-label={tx.streak(streak)}>
                         <Flame aria-hidden className="h-4 w-4" />
                         {streak}
                       </span>
                     )}
                     <span className="tabular-nums" style={{ color: accent }}>
-                      {score} puan
+                      {tx.points(score)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-xs text-white/70">{run.kind === 'ranked' ? 'Sunucu puanlar' : 'Düello · sunucu puanlar'}</span>
+                  <span className="text-xs text-white/70">{run.kind === 'ranked' ? tx.serverScores : tx.duelServerScores}</span>
                 )}
               </div>
             </div>
@@ -581,7 +595,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                   }}
                 />
               </div>
-              <span className="flex w-12 items-center justify-end gap-1 text-xs tabular-nums text-white/80" role="timer" aria-label={`Kalan süre ${secs} saniye`}>
+              <span className="flex w-12 items-center justify-end gap-1 text-xs tabular-nums text-white/80" role="timer" aria-label={tx.timeLeft(secs)}>
                 <Timer aria-hidden className="h-3.5 w-3.5" />
                 {screen === 'question' ? secs : '–'}
               </span>
@@ -616,12 +630,10 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
           {screen === 'invite' && (
             <Centered>
               <Swords aria-hidden className="mx-auto h-10 w-10" style={{ color: accent }} />
-              <h3 className="mt-2 text-xl font-black">Düello daveti</h3>
-              <p className="mt-2 text-sm text-white/80">
-                Bir arkadaşın seni aynı 8 soruyla düelloya çağırdı. Puanları sunucu hesaplar; ödül verilmez, gurur için oynanır.
-              </p>
+              <h3 className="mt-2 text-xl font-black">{tx.inviteTitle}</h3>
+              <p className="mt-2 text-sm text-white/80">{tx.inviteBody}</p>
               <PrimaryButton accent={accent} onClick={() => void loadDuel(inviteToken)}>
-                Daveti kabul et
+                {tx.accept}
               </PrimaryButton>
               <SecondaryButton
                 onClick={() => {
@@ -630,7 +642,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                   setScreen('menu');
                 }}
               >
-                Şimdi değil, menüye dön
+                {tx.notNow}
               </SecondaryButton>
             </Centered>
           )}
@@ -638,7 +650,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
           {(screen === 'loading' || screen === 'submitting') && (
             <Centered>
               <div role="status" className="text-sm text-white/80">
-                {screen === 'loading' ? 'Sorular hazırlanıyor…' : 'Cevapların sunucuda puanlanıyor…'}
+                {screen === 'loading' ? tx.preparing : tx.scoring}
               </div>
             </Centered>
           )}
@@ -649,7 +661,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                 {error}
               </p>
               <PrimaryButton accent={accent} onClick={() => setScreen('menu')}>
-                Menüye dön
+                {tx.backToMenu}
               </PrimaryButton>
             </Centered>
           )}
@@ -668,7 +680,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
 
           {screen === 'countdown' && (
             <Centered>
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/70">Hazır ol</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/70">{tx.getReady}</p>
               <AnimatePresence mode="popLayout" initial={false}>
                 <m.p
                   key={count}
@@ -698,20 +710,20 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
                   <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1">
-                    <span aria-hidden>{categoryMeta(current.category).emoji} </span>
-                    {categoryMeta(current.category).title}
+                    <span aria-hidden>{catText(tx, current.category).emoji} </span>
+                    {catText(tx, current.category).title}
                   </span>
                   <span className="rounded-full border border-white/15 px-2 py-1 text-white/70">
-                    {current.difficulty <= 1 ? 'Kolay' : current.difficulty >= 3 ? 'Zor' : 'Orta'}
+                    {current.difficulty <= 1 ? tx.easy : current.difficulty >= 3 ? tx.hard : tx.medium}
                   </span>
                   {current.sponsor && (
                     <span className="rounded-full border border-amber-300/50 bg-amber-300/10 px-2 py-1 text-amber-200">
-                      Sponsorlu · {current.sponsor.name}
+                      {tx.sponsored(current.sponsor.name)}
                     </span>
                   )}
                 </div>
                 <h3 className="text-lg font-bold leading-snug sm:text-xl">{current.prompt}</h3>
-                <div role="group" aria-label="Şıklar" className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                <div role="group" aria-label={tx.options} className="mt-4 grid gap-2.5 sm:grid-cols-2">
                   {current.options.map((o, i) => {
                     const isChosen = chosen === o.id;
                     const reveal = screen === 'feedback' && !!truth;
@@ -743,8 +755,8 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                           {isTruth ? <Check className="h-4 w-4" /> : isWrongPick ? <X className="h-4 w-4" /> : LETTERS[i]}
                         </span>
                         <span className="flex-1">{o.text}</span>
-                        {isTruth && <span className="sr-only">(doğru cevap)</span>}
-                        {isWrongPick && <span className="sr-only">(senin seçimin, yanlış)</span>}
+                        {isTruth && <span className="sr-only">{tx.correctAnswer}</span>}
+                        {isWrongPick && <span className="sr-only">{tx.yourWrongPick}</span>}
                       </button>
                     );
                   })}
@@ -752,7 +764,7 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
 
                 {screen === 'transition' && (
                   <p className="mt-4 text-center text-sm font-semibold text-white/80">
-                    {chosen === TIMEOUT_VERDICT ? 'Süre doldu — sıradaki soru geliyor.' : 'Cevabın kilitlendi — sıradaki soru geliyor.'}
+                    {chosen === TIMEOUT_VERDICT ? tx.timeUpNext : tx.lockedNext}
                   </p>
                 )}
 
@@ -760,11 +772,11 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
                   <div className="mt-4 rounded-2xl border border-white/15 bg-black/40 p-3 text-sm">
                     <p className="flex items-center gap-2 font-bold" style={{ color: chosen === truth ? CORRECT : WRONG }}>
                       {chosen === truth ? <Check aria-hidden className="h-4 w-4" /> : <X aria-hidden className="h-4 w-4" />}
-                      {chosen === truth ? `Doğru! +${lastPoints} puan` : chosen === TIMEOUT_VERDICT ? 'Süre doldu' : 'Yanlış'}
+                      {chosen === truth ? tx.correctPts(lastPoints) : chosen === TIMEOUT_VERDICT ? tx.timeUp : tx.wrong}
                     </p>
                     {current.why && <p className="mt-1 leading-relaxed text-white/85">{current.why}</p>}
                     <PrimaryButton accent={accent} onClick={goNext}>
-                      {idx + 1 >= total ? 'Sonucu gör' : 'Devam'} <span className="text-xs font-semibold opacity-70">(Enter)</span>
+                      {idx + 1 >= total ? tx.seeResult : tx.cont} <span className="text-xs font-semibold opacity-70">(Enter)</span>
                     </PrimaryButton>
                   </div>
                 )}
@@ -782,12 +794,12 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
               accent={accent}
               shareMsg={shareMsg}
               onShare={() => {
-                const cat = run.catKey === 'karisik' ? 'Karışık' : categoryMeta(run.catKey).title;
+                const cat = run.catKey === 'karisik' ? tx.mixed : catText(tx, run.catKey).title;
                 const correct = results.filter((r) => r.correct).length;
                 void share(
-                  `Mekân Bilgi Yarışması (${cat}) pratiğinde ${correct}/${run.questions.length} doğru, ${score} puan! Sen de dene:`,
+                  tx.sharePractice(cat, correct, run.questions.length, score),
                   `${window.location.origin}/customer/games/venue-quiz?kip=pratik`,
-                  'Mekân Bilgi Yarışması'
+                  tx.shareTitle
                 );
               }}
               onAgain={() => startPractice(run.catKey)}
@@ -805,9 +817,9 @@ export function VenueQuizGame({ mode, seed, config, content, answerKey, paused, 
               onShare={() => {
                 const url = `${window.location.origin}/customer/games/venue-quiz?kip=pratik&duello=${encodeURIComponent(duelResult.challengeToken)}`;
                 void share(
-                  `Mekân Bilgi Yarışması düellosunda ${duelResult.score} puan yaptım (${duelResult.correct}/${duelResult.total}). Aynı sorularla geçebilir misin?`,
+                  tx.shareDuel(duelResult.score, duelResult.correct, duelResult.total),
                   url,
-                  'Mekân Bilgi Yarışması düellosu'
+                  tx.shareDuelTitle
                 );
               }}
               onNewDuel={() => {
@@ -861,32 +873,31 @@ function SecondaryButton({ children, onClick }: { children: React.ReactNode; onC
 }
 
 function RulesList({ ranked }: { ranked: boolean }) {
+  const tx = useVenueQuizCopy();
   return (
     <ul className="mt-3 space-y-1.5 text-left text-xs leading-relaxed text-white/80">
-      <li>• Her soru için {QUESTION_MS / 1000} saniyen var. Doğru cevap 10 puan.</li>
-      <li>• Hızlı ol: 3 saniye içinde cevap +5, sonra azalır. Art arda 3. doğrudan itibaren her doğruya +2 seri.</li>
-      {ranked ? (
-        <li>• Sıralıda cevaplar kilitlenir, doğruyu tur sonunda sunucu puanlar. Duraklatsan da soru süresi işler.</li>
-      ) : (
-        <li>• Pratikte her cevaptan sonra doğrusunu ve kısa açıklamasını görürsün. Ödül yok.</li>
-      )}
+      <li>{tx.ruleTime(QUESTION_MS / 1000)}</li>
+      <li>{tx.ruleSpeed}</li>
+      {ranked ? <li>{tx.ruleRanked}</li> : <li>{tx.rulePractice}</li>}
       <li>
-        • Klavye: <kbd>1–4</kbd> ya da <kbd>A–D</kbd> şık, <kbd>Enter</kbd> devam, <kbd>Esc</kbd> duraklat.
+        {tx.ruleKeysPre} <kbd>1–4</kbd> {tx.ruleKeysOr} <kbd>A–D</kbd> {tx.ruleKeysOption} <kbd>Enter</kbd> {tx.ruleKeysNext}{' '}
+        <kbd>Esc</kbd> {tx.ruleKeysPause}
       </li>
     </ul>
   );
 }
 
 function Tutorial({ accent, onDone }: { accent: string; onDone: () => void }) {
+  const tx = useVenueQuizCopy();
   return (
     <div className="mx-auto max-w-md text-white">
-      <h3 className="text-center text-lg font-bold">Nasıl oynanır?</h3>
-      <p className="mt-1 text-center text-sm text-white/80">Kahveden şehir lezzetlerine, mekânların dünyasından süreli sorular.</p>
+      <h3 className="text-center text-lg font-bold">{tx.howTo}</h3>
+      <p className="mt-1 text-center text-sm text-white/80">{tx.tutorialIntro}</p>
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3">
-        <p className="text-sm font-bold">Örnek soru</p>
-        <p className="mt-1 text-sm text-white/85">Türk kahvesi geleneksel olarak hangi kapta pişirilir?</p>
+        <p className="text-sm font-bold">{tx.sampleTitle}</p>
+        <p className="mt-1 text-sm text-white/85">{tx.sampleQuestion}</p>
         <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
-          {['Cezve', 'Moka pot', 'French press', 'Semaver'].map((t, i) => (
+          {tx.sampleOptions.map((t, i) => (
             <span
               key={t}
               className="flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
@@ -896,17 +907,17 @@ function Tutorial({ accent, onDone }: { accent: string; onDone: () => void }) {
                 {i === 0 ? '✓' : LETTERS[i]}
               </span>
               {t}
-              {i === 0 && <span className="sr-only">(doğru cevap)</span>}
+              {i === 0 && <span className="sr-only">{tx.correctAnswer}</span>}
             </span>
           ))}
         </div>
       </div>
       <RulesList ranked={false} />
       <p className="mt-2 text-xs text-white/70">
-        Pratikte kategori seçebilir ya da bir arkadaşına aynı sorularla düello atabilirsin. Sıralı turda günde bir deneme, ödüllüdür.
+        {tx.tutorialOutro}
       </p>
       <PrimaryButton onClick={onDone} accent={accent}>
-        Anladım
+        {tx.gotIt}
       </PrimaryButton>
     </div>
   );
@@ -931,20 +942,22 @@ function PracticeMenu({
   onExit: () => void;
   onTutorial: () => void;
 }) {
+  const tx = useVenueQuizCopy();
   return (
     <div className="mx-auto max-w-lg text-white">
-      <h3 className="text-center text-lg font-bold">Pratik: kategori seç</h3>
-      <p className="mt-1 text-center text-xs text-white/70">Her turda {PRACTICE_COUNT} soru, kolaydan zora. Ödül yok, rekor bu cihazda tutulur.</p>
+      <h3 className="text-center text-lg font-bold">{tx.menuTitle}</h3>
+      <p className="mt-1 text-center text-xs text-white/70">{tx.menuSub(PRACTICE_COUNT)}</p>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <CategoryButton emoji="🎲" title="Karışık" blurb={`${total} soruluk havuz`} best={best.karisik} accent={accent} onClick={() => onPick('karisik')} />
+        <CategoryButton emoji="🎲" title={tx.mixed} blurb={tx.pool(total)} best={best.karisik} accent={accent} onClick={() => onPick('karisik')} />
         {CATEGORIES.map((c) => {
           const n = counts.get(c.id) ?? 0;
+          const ct = catText(tx, c.id);
           return (
             <CategoryButton
               key={c.id}
               emoji={c.emoji}
-              title={c.title}
-              blurb={n >= 3 ? c.blurb : 'Bu turda yeterli soru yok'}
+              title={ct.title}
+              blurb={n >= 3 ? ct.blurb : tx.notEnough}
               best={best[c.id]}
               accent={accent}
               disabled={n < 3}
@@ -961,13 +974,13 @@ function PracticeMenu({
       >
         <Swords aria-hidden className="h-6 w-6 shrink-0" style={{ color: accent }} />
         <span>
-          <span className="block text-sm font-bold">Arkadaşına düello at</span>
-          <span className="block text-xs text-white/70">Aynı 8 soru, sunucu puanlar; bağlantıyı paylaş, kim önde görsün.</span>
+          <span className="block text-sm font-bold">{tx.duelCta}</span>
+          <span className="block text-xs text-white/70">{tx.duelCtaSub}</span>
         </span>
       </button>
       <div className="mt-2 flex gap-2">
-        <SecondaryButton onClick={onTutorial}>Nasıl oynanır?</SecondaryButton>
-        <SecondaryButton onClick={onExit}>Pratiği bitir</SecondaryButton>
+        <SecondaryButton onClick={onTutorial}>{tx.howTo}</SecondaryButton>
+        <SecondaryButton onClick={onExit}>{tx.endPractice}</SecondaryButton>
       </div>
     </div>
   );
@@ -990,6 +1003,7 @@ function CategoryButton({
   disabled?: boolean;
   onClick: () => void;
 }) {
+  const tx = useVenueQuizCopy();
   return (
     <button
       type="button"
@@ -1004,7 +1018,7 @@ function CategoryButton({
       <span className="text-[11px] leading-tight text-white/70">{blurb}</span>
       {typeof best === 'number' && best > 0 && (
         <span className="mt-1 text-[11px] font-semibold" style={{ color: accent }}>
-          En iyi: {best}
+          {tx.best(best)}
         </span>
       )}
     </button>
@@ -1012,32 +1026,37 @@ function CategoryButton({
 }
 
 function ReadyCard({ run, accent, threshold, onStart }: { run: Run; accent: string; threshold: number; onStart: () => void }) {
+  const tx = useVenueQuizCopy();
   const ranked = run.kind === 'ranked';
   return (
     <Centered>
       {ranked ? <Trophy aria-hidden className="h-10 w-10" style={{ color: accent }} /> : <Swords aria-hidden className="h-10 w-10" style={{ color: accent }} />}
-      <h3 className="mt-2 text-xl font-black">{ranked ? 'Günün sıralı turu' : 'Düello turu'}</h3>
+      <h3 className="mt-2 text-xl font-black">{ranked ? tx.rankedRound : tx.duelRound}</h3>
       <p className="mt-1 text-sm text-white/80">
-        {run.questions.length} soru, kolaydan zora.{' '}
-        {ranked ? `Ödül için en az ${threshold} puan gerekir.` : 'Ödül yok; puanı sunucu hesaplar.'}
+        {tx.questionsIntro(run.questions.length)}{' '}
+        {ranked ? tx.rankedNeed(threshold) : tx.duelNoReward}
       </p>
       {run.kind === 'duel' && run.challenger && (
         <p className="mt-3 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm">
-          <strong>{run.challenger.name}</strong> bu sorulardan <strong style={{ color: accent }}>{run.challenger.score} puan</strong> aldı. Geçebilecek misin?
+          <strong>{run.challenger.name}</strong>
+          {tx.challengerMid}
+          <strong style={{ color: accent }}>{tx.challengerPts(run.challenger.score)}</strong>
+          {tx.challengerTail}
         </p>
       )}
       <RulesList ranked={ranked} />
-      {ranked && <p className="mt-2 text-xs text-white/60">İlk kez mi oynuyorsun? Önce Pratik modunda dene.</p>}
+      {ranked && <p className="mt-2 text-xs text-white/60">{tx.firstTime}</p>}
       <PrimaryButton accent={accent} onClick={onStart}>
-        Başla
+        {tx.start}
       </PrimaryButton>
     </Centered>
   );
 }
 
 function Stars({ n }: { n: number }) {
+  const tx = useVenueQuizCopy();
   return (
-    <p className="mt-1 text-3xl tracking-widest" aria-label={`${n} yıldız / 3`}>
+    <p className="mt-1 text-3xl tracking-widest" aria-label={tx.starsOf(n)}>
       <span aria-hidden>
         {'★'.repeat(n)}
         <span className="text-white/25">{'★'.repeat(3 - n)}</span>
@@ -1073,17 +1092,18 @@ function PracticeSummary({
 }) {
   const max = maxPossibleScore(run.questions.length);
   const stars = starsFor(score, threshold, max);
+  const tx = useVenueQuizCopy();
   const correct = results.filter((r) => r.correct).length;
-  const cat = run.catKey === 'karisik' ? 'Karışık' : categoryMeta(run.catKey).title;
+  const cat = run.catKey === 'karisik' ? tx.mixed : catText(tx, run.catKey).title;
   return (
     <div className="mx-auto max-w-md text-center text-white">
-      <p className="text-xs font-semibold uppercase tracking-widest text-white/70">Pratik · {cat}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-white/70">{tx.practiceCat(cat)}</p>
       <p className="mt-1 text-5xl font-black tabular-nums" style={{ color: accent }}>
         {score}
       </p>
       <Stars n={stars} />
       <p className="mt-1 text-sm text-white/80">
-        {correct}/{run.questions.length} doğru · en iyi {Math.max(best, score)} · tavan {max}
+        {tx.practiceStats(correct, run.questions.length, Math.max(best, score), max)}
       </p>
       <ul className="mt-3 space-y-1 text-left text-xs">
         {run.questions.map((q, i) => {
@@ -1093,22 +1113,22 @@ function PracticeSummary({
               <span aria-hidden className="font-black" style={{ color: r?.correct ? CORRECT : WRONG }}>
                 {r?.correct ? '✓' : '✕'}
               </span>
-              <span className="sr-only">{r?.correct ? 'Doğru:' : r?.timedOut ? 'Süre doldu:' : 'Yanlış:'}</span>
+              <span className="sr-only">{r?.correct ? tx.srCorrect : r?.timedOut ? tx.srTimeUp : tx.srWrong}</span>
               <span className="text-white/85">{q.prompt}</span>
             </li>
           );
         })}
       </ul>
       <PrimaryButton accent={accent} onClick={onAgain}>
-        Aynı kategoride tekrar
+        {tx.again}
       </PrimaryButton>
       <div className="mt-1 grid grid-cols-2 gap-2">
         <SecondaryButton onClick={onShare}>
-          <Share2 aria-hidden className="h-4 w-4" /> Paylaş
+          <Share2 aria-hidden className="h-4 w-4" /> {tx.share}
         </SecondaryButton>
-        <SecondaryButton onClick={onMenu}>Kategori seç</SecondaryButton>
+        <SecondaryButton onClick={onMenu}>{tx.pickCategory}</SecondaryButton>
       </div>
-      <SecondaryButton onClick={onExit}>Pratiği bitir</SecondaryButton>
+      <SecondaryButton onClick={onExit}>{tx.endPractice}</SecondaryButton>
       <p className="mt-2 min-h-[1.25rem] text-xs text-white/70" aria-live="polite">
         {shareMsg}
       </p>
@@ -1133,26 +1153,27 @@ function DuelSummary({
   onNewDuel: () => void;
   onMenu: () => void;
 }) {
+  const tx = useVenueQuizCopy();
   const v = result.versus;
-  const title = v ? (v.result === 'win' ? 'Düelloyu kazandın!' : v.result === 'lose' ? 'Bu sefer rakibin önde' : 'Berabere!') : 'Düello skorun hazır';
-  const expires = new Date(result.challengeExpiresAt).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'long' });
+  const title = v ? (v.result === 'win' ? tx.duelWon : v.result === 'lose' ? tx.duelLost : tx.duelDraw) : tx.duelReady;
+  const expires = new Date(result.challengeExpiresAt).toLocaleDateString(tx.dateLocale, { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'long' });
   return (
     <div className="mx-auto max-w-md text-center text-white">
       <h3 className="text-xl font-black">{title}</h3>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-2xl border-2 p-3" style={{ borderColor: accent }}>
-          <p className="text-xs text-white/70">Sen</p>
+          <p className="text-xs text-white/70">{tx.you}</p>
           <p className="text-3xl font-black tabular-nums" style={{ color: accent }}>
             {result.score}
           </p>
           <p className="text-xs text-white/70">
-            {result.correct}/{result.total} doğru
+            {tx.correctOf(result.correct, result.total)}
           </p>
         </div>
         <div className="rounded-2xl border border-white/20 p-3">
-          <p className="text-xs text-white/70">{v ? v.opponentName : 'Rakip'}</p>
+          <p className="text-xs text-white/70">{v ? v.opponentName : tx.opponent}</p>
           <p className="text-3xl font-black tabular-nums">{v ? v.opponentScore : '—'}</p>
-          <p className="text-xs text-white/70">{v ? 'sunucu puanı' : 'bağlantıyı paylaş'}</p>
+          <p className="text-xs text-white/70">{v ? tx.serverScore : tx.shareLink}</p>
         </div>
       </div>
       <ul className="mt-3 space-y-1.5 text-left text-xs">
@@ -1165,11 +1186,11 @@ function DuelSummary({
                 <span aria-hidden className="font-black" style={{ color: r.correct ? CORRECT : WRONG }}>
                   {r.correct ? '✓' : '✕'}
                 </span>
-                <span className="sr-only">{r.correct ? 'Doğru:' : r.timedOut ? 'Süre doldu:' : 'Yanlış:'}</span>
+                <span className="sr-only">{r.correct ? tx.srCorrect : r.timedOut ? tx.srTimeUp : tx.srWrong}</span>
                 <span className="text-white/85">{q?.prompt}</span>
               </p>
               <p className="ml-5 mt-0.5 text-white/70">
-                Doğru cevap: <strong className="text-white">{ans}</strong>
+                {tx.answerWas} <strong className="text-white">{ans}</strong>
                 {r.points > 0 && <span style={{ color: accent }}> · +{r.points}</span>}
               </p>
               {r.why && <p className="ml-5 text-white/60">{r.why}</p>}
@@ -1178,12 +1199,12 @@ function DuelSummary({
         })}
       </ul>
       <PrimaryButton accent={accent} onClick={onShare}>
-        <Link2 aria-hidden className="h-4 w-4" /> {v ? 'Rövanş bağlantısını paylaş' : 'Düello bağlantısını paylaş'}
+        <Link2 aria-hidden className="h-4 w-4" /> {v ? tx.rematch : tx.duelLink}
       </PrimaryButton>
-      <p className="mt-1 text-[11px] text-white/60">Bağlantı {expires} tarihine kadar geçerli; puanın imzalıdır, değiştirilemez.</p>
+      <p className="mt-1 text-[11px] text-white/60">{tx.linkValid(expires)}</p>
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <SecondaryButton onClick={onNewDuel}>Yeni düello</SecondaryButton>
-        <SecondaryButton onClick={onMenu}>Menüye dön</SecondaryButton>
+        <SecondaryButton onClick={onNewDuel}>{tx.newDuel}</SecondaryButton>
+        <SecondaryButton onClick={onMenu}>{tx.backToMenu}</SecondaryButton>
       </div>
       <p className="mt-2 min-h-[1.25rem] text-xs text-white/70" aria-live="polite">
         {shareMsg}
