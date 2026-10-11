@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CheckCircle2, CircleSlash, Dumbbell, Gamepad2, Hourglass, HelpCircle, Medal, Play, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Dumbbell, Hourglass, HelpCircle, Medal, Play, type LucideIcon } from 'lucide-react';
 import { EmptyState, InlineError } from '@/components/states';
 import { Reveal } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -89,13 +89,14 @@ export function GameGrid({
   const c = playHubCopy(locale);
 
   if (games.length === 0) {
-    return <EmptyState icon={Gamepad2} title={c.gamesEmptyTitle} description={c.gamesEmptyBody} headingLevel="h3" />;
+    // Sunucu bileşeni: istemci EmptyState'e ikon bileşeni geçilemez (RSC serileştirme) → varyant ikonu.
+    return <EmptyState variant="first-use" title={c.gamesEmptyTitle} description={c.gamesEmptyBody} headingLevel="h3" />;
   }
 
   if (mode === 'practice' && !games.some((g) => g.practice)) {
     return (
       <EmptyState
-        icon={Dumbbell}
+        variant="filtered"
         title={c.practiceEmptyTitle}
         description={c.practiceEmptyBody}
         headingLevel="h3"

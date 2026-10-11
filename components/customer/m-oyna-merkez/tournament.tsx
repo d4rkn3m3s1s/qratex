@@ -179,7 +179,7 @@ export function TournamentBoard({
           </span>
         </div>
         {t.leaderboard.length === 0 ? (
-          <EmptyState variant="first-use" icon={Trophy} title={c.tTabEmpty} compact headingLevel="p" />
+          <EmptyState variant="first-use" title={c.tTabEmpty} compact headingLevel="p" />
         ) : (
           <table className="w-full table-fixed qx-small">
             <caption className="sr-only">{c.tTabLeaderboard}</caption>

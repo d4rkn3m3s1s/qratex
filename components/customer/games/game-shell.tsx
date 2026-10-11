@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useRef } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2,
@@ -20,6 +20,7 @@ import {
   Medal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { contrastTextOn } from '@/lib/team/constants';
 import { GameLeaderboard } from './game-leaderboard';
 import { GameTournament } from './game-tournament';
 import type { MiniGameMode, MiniGamePhase, MiniGameResult } from '@/lib/use-mini-game';
@@ -115,6 +116,8 @@ export function GameShell({
   const showResult = phase === 'done' && !!result;
   const showLocked = phase === 'done' && alreadyPlayed && !result;
   const practice = mode === 'practice';
+  // Açık vurgu renklerinde (cyan/sarı/zümrüt) beyaz metin ~2:1 kontrastta kalıyordu → okunur metin rengi.
+  const onAccent = contrastTextOn(accent);
   const canPractice = typeof onModeChange === 'function';
 
   // Kazanma/kaybetme başlığı: varyant dizisinden bir kez seç (her render'da
@@ -141,6 +144,12 @@ export function GameShell({
   // Duraklatma menüsü: açılınca "Devam"a odaklan, Esc ile devam et.
   const resumeRef = useRef<HTMLButtonElement | null>(null);
   const pauseOpen = playing && paused === true;
+  // Sıralıda 'Turu bitir' denemeyi yakar: menünün ortasında tek yanlış dokunuşla (ör. otomatik
+  // duraklatma sonrası oyuna devam etmeye çalışırken) hak gitmesin diye iki adımlı onay.
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  useEffect(() => {
+    if (!pauseOpen) setConfirmQuit(false);
+  }, [pauseOpen]);
   useEffect(() => {
     if (!pauseOpen) return;
     resumeRef.current?.focus();
@@ -246,18 +255,24 @@ export function GameShell({
                 ref={resumeRef}
                 onClick={onResume}
                 className="h-12 text-base font-bold"
-                style={{ background: accent }}
+                style={{ background: accent, color: onAccent }}
               >
                 <Play className="mr-2 h-4 w-4" aria-hidden /> Devam et
               </Button>
               {onQuit && (
                 <Button
                   variant="outline"
-                  onClick={onQuit}
+                  onClick={() => {
+                    if (!practice && !confirmQuit) {
+                      setConfirmQuit(true);
+                      return;
+                    }
+                    onQuit();
+                  }}
                   className="h-12 border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 >
                   <LogOut className="mr-2 h-4 w-4" aria-hidden />
-                  {practice ? 'Turu bitir' : 'Turu bitir (deneme kullanılır)'}
+                  {practice ? 'Turu bitir' : confirmQuit ? 'Eminim, bitir (deneme kullanılır)' : 'Turu bitir (deneme kullanılır)'}
                 </Button>
               )}
             </div>
@@ -332,7 +347,7 @@ export function GameShell({
                 <Button
                   onClick={onStart}
                   className="relative px-9 py-6 text-base font-bold"
-                  style={{ background: accent, boxShadow: `0 0 30px ${accent}88` }}
+                  style={{ background: accent, color: onAccent, boxShadow: `0 0 30px ${accent}88` }}
                 >
                   {practice ? '▶ Pratik yap' : copy?.startCta ?? '▶ Oyna'}
                 </Button>
@@ -440,7 +455,7 @@ export function GameShell({
 
               {result.practice ? (
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button onClick={onStart} className="h-11 font-bold" style={{ background: accent }}>
+                  <Button onClick={onStart} className="h-11 font-bold" style={{ background: accent, color: onAccent }}>
                     <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> Tekrar oyna
                   </Button>
                   {canPractice && !alreadyPlayed && (
@@ -500,7 +515,7 @@ export function GameShell({
                 <Button
                   onClick={() => onModeChange?.('practice')}
                   className="h-11 font-bold"
-                  style={{ background: accent }}
+                  style={{ background: accent, color: onAccent }}
                 >
                   <Dumbbell className="mr-2 h-4 w-4" aria-hidden /> Pratik modunda oyna
                 </Button>

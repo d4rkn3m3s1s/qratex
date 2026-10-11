@@ -168,6 +168,11 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
 
   /** Denemeyi/turu açar. İzinliyse phase='playing' yapar. */
   const start = useCallback(async (): Promise<boolean> => {
+    // Yeniden giriş koruması: "starting" sırasında CTA'ya ikinci dokunuş / Enter-Space tekrarı
+    // birden çok /start isteği atıyor ve her biri startTimeRef'i sıfırlayıp istemci süresini
+    // kısaltıyordu (e2e: 4 paralel /start → complete "too_fast"). Tur sürerken başlatma yok.
+    const p = phaseRef.current;
+    if (p === 'starting' || p === 'playing' || p === 'submitting') return false;
     primeAudio();
     go('starting');
     setResult(null);
