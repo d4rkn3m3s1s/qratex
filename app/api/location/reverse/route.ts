@@ -1,85 +1,79 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+/**
+ * `GET /api/location/reverse?lat=&lng=&lang=` — koordinattan okunur adres (Ayarlar › İşletme).
+ *
+ * Nominatim kullanım politikası (B12): saniyede ~1 istek ve önbellek bekler. Bu yüzden:
+ *  - koordinat ~1 m'ye (5 ondalık) yuvarlanıp Redis'te 30 gün önbelleklenir,
+ *  - kullanıcı başına dakikada 10 istek,
+ *  - yanıt dili arayüz diline bağlıdır (`lang=tr|en`).
+ */
+import { z } from 'zod';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-
+import { redisGetJson, redisSetJson } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
-function toNumber(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return null;
-  return parsed;
-}
+const CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+type Resolved = { displayName: string; compactAddress: string };
 
-    const { searchParams } = new URL(request.url);
-    const lat = toNumber(searchParams.get('lat'));
-    const lng = toNumber(searchParams.get('lng'));
+const Query = z.object({
+  lat: z.coerce.number().min(-90, 'Geçersiz koordinat').max(90, 'Geçersiz koordinat'),
+  lng: z.coerce.number().min(-180, 'Geçersiz koordinat').max(180, 'Geçersiz koordinat'),
+  lang: z.enum(['tr', 'en']).default('tr'),
+});
 
-    if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      return NextResponse.json({ error: 'Geçersiz koordinat' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+export const GET = defineRoute(
+  { name: 'location.reverse', roles: ['DEALER'], query: Query, rateLimit: { max: 10, windowMs: 60_000, by: 'user' } },
+  async ({ query }) => {
+    const lat = Number(query.lat.toFixed(5));
+    const lng = Number(query.lng.toFixed(5));
+    const cacheKey = `geo:rev:v1:${query.lang}:${lat}:${lng}`;
+    const cached = await redisGetJson<Resolved>(cacheKey).catch(() => null);
+    if (cached) return ok(cached);
 
     const endpoint = new URL('https://nominatim.openstreetmap.org/reverse');
     endpoint.searchParams.set('lat', String(lat));
     endpoint.searchParams.set('lon', String(lng));
     endpoint.searchParams.set('format', 'jsonv2');
     endpoint.searchParams.set('addressdetails', '1');
-    endpoint.searchParams.set('accept-language', 'tr');
+    endpoint.searchParams.set('accept-language', query.lang);
 
     const appOrigin = getPublicAppOrigin();
-
-    const response = await fetch(endpoint.toString(), {
-      headers: {
-        'User-Agent': `QRateX/1.0 (reverse geocode; +${appOrigin})`,
-        Referer: `${appOrigin}/`,
-        'Accept-Language': 'tr,en;q=0.8',
-      },
-      cache: 'no-store',
-    });
-
+    let response: Response;
+    try {
+      response = await fetch(endpoint.toString(), {
+        headers: {
+          'User-Agent': `QRateX/1.0 (reverse geocode; +${appOrigin})`,
+          Referer: `${appOrigin}/`,
+          'Accept-Language': query.lang === 'en' ? 'en,tr;q=0.8' : 'tr,en;q=0.8',
+        },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch {
+      throw new ApiError('SERVICE_UNAVAILABLE', 'Adres servisine ulaşılamadı. Biraz sonra tekrar deneyin.', { retryable: true });
+    }
     if (response.status === 429) {
-      return NextResponse.json(
-        { error: 'Adres servisi şu an meşgul. Bir süre sonra tekrar deneyin.' },
-        { status: 503, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+      throw new ApiError('SERVICE_UNAVAILABLE', 'Adres servisi şu an meşgul. Bir süre sonra tekrar deneyin.', { retryable: true });
     }
+    if (!response.ok) throw new ApiError('SERVICE_UNAVAILABLE', 'Adres çözümlenemedi.', { status: 502, retryable: true });
 
-    if (!response.ok) {
-      return NextResponse.json({ error: 'Adres çözümlenemedi' }, { status: 502 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const data = await response.json();
+    const data = (await response.json().catch(() => null)) as { display_name?: unknown; address?: Record<string, unknown> } | null;
     const displayName = typeof data?.display_name === 'string' ? data.display_name : '';
     const address = data?.address && typeof data.address === 'object' ? data.address : {};
-
     const compactAddress = [
-      address?.road,
-      address?.suburb || address?.neighbourhood,
-      address?.city || address?.town || address?.state,
-      address?.country,
+      address.road,
+      address.suburb || address.neighbourhood,
+      address.city || address.town || address.state,
+      address.country,
     ]
-      .filter((item) => typeof item === 'string' && item.trim().length > 0)
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
       .join(', ');
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        displayName,
-        compactAddress: compactAddress || displayName,
-      },
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Reverse geocode error:', error);
-    return NextResponse.json({ error: 'Adres çözümlenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    if (!displayName && !compactAddress) throw new ApiError('NOT_FOUND', 'Bu konum için adres bulunamadı.');
+    const resolved: Resolved = { displayName, compactAddress: compactAddress || displayName };
+    await redisSetJson(cacheKey, resolved, CACHE_TTL_SECONDS).catch(() => undefined);
+    return ok(resolved);
   }
-}
+);

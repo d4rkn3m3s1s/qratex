@@ -223,3 +223,58 @@ Kıyas: Square Dashboard (Subscriptions & Billing), Toast (Billing), Yelp for Bu
 ### 4. İstemci HTTP durumunu kontrol etmiyor; 401/403 sayfayı çökertir — **DOĞRULANDI** (önem: orta, veri etkisi yok)
 - Kanıt: page.tsx:53-55 `r.ok` bakmadan `setData(d)`; api-auth.ts:23-26 (401) ve 72-75 (token-replay 403) JSON gövde döner. proxy.ts:105-118 `/api/*` için oturum kontrolü yapmaz, sayfa yolları ise yalnız `!!token` kontrol eder (proxy.ts:97-99) — token-replay kontrolü sayfa gezinmesinde değil yalnız API'de çalışır.
 - Senaryo: Bayi oturumu wifi'da açtı, telefon mobil veriye geçti (IP değişti) → sayfa proxy'den geçer, `GET /api/dealer/billing` 403 `{error}` döner → `data={error}`, page.tsx:111 `!data` false → page.tsx:123 `data.limits.planName` TypeError → app/dealer/error.tsx hata sınırı gösterilir; "Lütfen tekrar giriş yapın" mesajı kullanıcıya hiç ulaşmaz. (Not: 500'de Next.js JSON olmayan gövde döndürürse `r.json()` reddeder ve `catch` toast'a düşer; çökme yalnız JSON hata gövdelerinde.) Etki UX düzeyinde; "KRİTİK/YÜKSEK" etiketi abartılı, "Orta" uygundur.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/dealer/billing` emekliye ayrıldı. Rota `/dealer/settings?tab=billing` adresine kalıcı yönleniyor; `status`, `session_id` ve `plan` sorguları korunuyor, Stripe dönüş URL'leri değişmeden çalışıyor. Abonelik artık Ayarlar'ın **Abonelik** sekmesinde (`components/dealer/b-ayarlar/billing-tab.tsx`). Özet sunucuda yükleniyor (`lib/dealer-settings/billing.server.ts#loadBillingSummary`, sayfaya gömülü). Stripe'tan canlı gelen ayrıntılar ayrı ve ertelenmiş bir uçtan okunuyor. Çift abonelik engeli, `subscriptions.update` ve webhook tekilliği/sırası Dalga 1'de `lib/billing-core.ts` içinde çözülmüştü; bu yüzey onları kullanıyor.
+
+Yeni ve değişen uçlar: `GET /api/dealer/billing` (defineRoute, zarf v2, kota QR yüzeyiyle aynı kaynaktan: `loadQrQuota`), `GET /api/dealer/billing/details` (dönem sonunda iptal, deneme bitişi, ödeme yöntemi, son 12 fatura), `GET /api/dealer/billing/checkout/status?session_id=` (oturum sahipliği doğrulanıyor, abonelik Stripe'tan taze okunup uzlaştırılıyor).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR: Ayarlar › Abonelik (menü adıyla tutarlı) |
+| 2 | Abonelik yükleme | ÇALIŞIYOR: zarf v2 + `res.ok`; 401/403/5xx hata kartında görünüyor, çökme yok (B4) |
+| 3 | İskelet | ÇALIŞIYOR: `QueryState` (`aria-busy`) |
+| 4 | Hata durumu | ÇALIŞIYOR: "Tekrar dene" var |
+| 5 | Checkout başarı dönüşü | ÇALIŞIYOR: oturum doğrulanıyor, webhook beklenmeden uzlaştırılıyor, 2 sn aralıkla en fazla ~20 sn yoklanıyor, `aria-live` bant gösteriliyor, sonra URL temizleniyor; F5'te tekrar etmiyor (B9) |
+| 6 | Checkout iptal dönüşü | ÇALIŞIYOR: bilgi toast'ı + URL temizliği |
+| 7 | Mevcut plan adı | ÇALIŞIYOR |
+| 8 | Durum rozeti | ÇALIŞIYOR: tüm Stripe durumları Türkçe; `<p>` içinde `<div>` yok. Dönem sonu iptali Stripe'tan canlı okunup bant olarak gösteriliyor |
+| 9 | QR kota | ÇALIŞIYOR: `role="meter"` ölçer, %80 / %100 uyarıları |
+| 10 | Şube kotası | ÇALIŞIYOR: ölçer. QR yüzeyi şube sınırını Dalga 2'de uyguluyor |
+| 11 | Yenileme tarihi | ÇALIŞIYOR: etiket duruma göre "Yenileme / Sona erecek / Sona erdi" |
+| 12 | Aboneliği yönet | ÇALIŞIYOR: yalnız gerçek abonelik geçmişi olan bayiye gösteriliyor |
+| 13 | Stripe kapalı bandı | ÇALIŞIYOR: dürüst bilgi metni; olmayan iletişim kanalı vaadi kaldırıldı |
+| 14–15 | Plan kartları / Popüler | ÇALIŞIYOR: mevcut plan "Şu anki planınız", popüler ve önerilen plan vurgulu |
+| 16 | Fiyat | ÇALIŞIYOR: kuruş + `Intl` para birimi ("₺499,00"). DB ile Stripe fiyat eşitlemesi Kalanlar'da |
+| 17 | Dönem etiketi | ÇALIŞIYOR: lifetime "satın alınabilir" sayılmıyor, abonelik moduna gitmiyor |
+| 18–19 | Açıklama / QR limiti | ÇALIŞIYOR |
+| 20 | Özellik listesi | ÇALIŞIYOR: tamamı listeleniyor; yinelenenler ve metin olmayanlar ayıklanıyor |
+| 21 | Şube limiti satırı | ÇALIŞIYOR |
+| 22 | Mevcut planınız | ÇALIŞIYOR |
+| 23 | Bu plana geç | ÇALIŞIYOR: abonesi olana önizlemeli "Plan değiştir" diyaloğu (prorasyon, sonraki dönem, yenileme tarihi, limit aşımı uyarısı → `subscriptions.update`). Abonesi olmayana Checkout. İşlem sürerken tüm düğmeler kilitli |
+| 24 | "İletişime geçin" (ölü) | KALDIRILDI: yerine dürüst "Bu plan çevrimiçi satın alınamıyor" metni |
+| 25–26 | Hız sınırı / rol | ÇALIŞIYOR |
+| 27 | Webhook senkronu | ÇALIŞIYOR (Dalga 1: taze okuma, fiyattan plan, `StripeEvent` tekilliği) |
+| 28 | Ücretsiz kademe / düşürme | ÇALIŞIYOR: plansız bayi "Ücretsiz kademe" görüyor; düşürmenin portalda iptal + dönem sonu olduğu yazıyor |
+| 29 | Fatura geçmişi | ÇALIŞIYOR: son 12 fatura, durum, PDF / barındırılan bağlantı |
+| 30 | Ödeme yöntemi | ÇALIŞIYOR: marka, son 4 hane, son kullanma tarihi |
+| 31 | Aylık/yıllık anahtarı | Uygulanmadı: katalogda eş planlar (aynı plan iki dönemde) modellenmemiş; dönem her kartta yazıyor (Kalanlar) |
+| 32 | Karşılaştırma tablosu | Uygulanmadı: kartlar limit ve özellikleri yan yana gösteriyor (Kalanlar) |
+| 33 | i18n | KISMİ: diğer bayi yüzeyleri gibi yalnız Türkçe |
+| 34 | Toast metin dili | Kapsam dışı (global `lib/admin-toast`). Bu yüzey `sonner`'ı doğrudan Türkçe metinle kullanıyor |
+| 35 | Mobil düzen | ÇALIŞIYOR: `PanelPage` ritmi, çift kenar boşluğu yok |
+| 36 | Onboarding plan adımı | ÇALIŞIYOR: yönlendirme sorguyu koruyor; landing'den gelen `?plan=` ilgili kartı vurgulayıp ekrana kaydırıyor |
+| 37 | Kota aşımında yönlendirme | QR yüzeyinin işi (402 + kota ayrıntısı). Hedef URL artık Ayarlar › Abonelik |
+| 38 | Azaltılmış hareket | ÇALIŞIYOR |
+
+### Kapanan bulgular
+1 (Dalga 1 + bu arayüzde Checkout/Değiştir ayrımı) · 2 · 3 (Dalga 1) · 4 · 5 (durum bandı + kart güncelleme CTA'sı; `past_due` planı koruyor) · 7 (ölü düğme kaldırıldı) · 8 · 9 · 10 · 11 (Dalga 1 + arayüz kilidi) · 12.
+
+### Kalanlar
+- **6:** gösterilen DB fiyatı ile Stripe Price eşitlemesi admin fiyatlandırma tarafının işi (F3.3f). KDV bilgisi de orada tanımlanmalı.
+- Aylık/yıllık geçişi, karşılaştırma tablosu, iptal nedeni anketi ve deneme başlatma ürün kararı ve katalog modeli bekliyor.

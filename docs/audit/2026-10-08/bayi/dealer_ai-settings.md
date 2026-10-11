@@ -229,3 +229,57 @@ Salt okunur inceleme; kod, veritabanı, build ve test çalıştırılmadı. Her 
 - `lib/inngest/feedback-analyze-pipeline.ts:87-116` üç bildirimi de koşulsuz oluşturuyor. Ayar sorgusu yalnızca `customPrompt` seçiyor (`:34`). Inline yol `app/api/feedbacks/route.ts:497` de toksik bildirimini koşulsuz yazıyor.
 - **Yeniden üretim:** Bayi AI açıkken yalnızca "Toksik içerik uyarısı"nı kapatır. Küfürlü bir yorum gelir ve analiz `isToxic=true` döner. "Toksik İçerik Tespit Edildi" bildirimi yine oluşur.
 - **Öneri:** Pipeline politikayı okumalı. Uyarı üretimi `emitAiAlert(kind, policy)` gibi tek bir yardımcıya taşınmalı ve eşik ile kanal tercihi aynı politikadan gelmeli. İki analiz yolu (inline ve pipeline) birleştirilip tek pipeline'a indirilmeli; inline yol zaten acil/churn bildirimlerini hiç üretmiyor, yani iki yolun davranışı da birbirinden farklı.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/dealer/ai-settings` emekliye ayrıldı. Rota `/dealer/settings?tab=ai` adresine kalıcı yönleniyor (sorgu korunuyor). AI yapılandırması artık Ayarlar'ın **AI** sekmesinde; uyarı ve rapor teslim tercihleri **Bildirimler** sekmesinde. Tek kaynak `AISettings`, okuyucu `lib/ai-policy` (fail-closed, Dalga 1). Tek yazma yolu `lib/dealer-settings/write.server.ts#updateDealerAiSettings`: zod `.strict()`, `baseVersion` → 409, değişen alanlar, `AuditLog` (`UPDATE_AI_SETTINGS`; serbest metnin kendisi değil uzunluğu yazılıyor) ve politika önbelleğinin hemen bayatlatılması. Uçlar: `GET|PATCH /api/dealer/settings/ai` (PATCH `module: 'ai_features'`) ve `POST /api/dealer/settings/ai/retrain` (modül kapısı + `canUseAi`, 2/10 dk). Hepsi yalnız DEALER; ADMIN ile kendi id'siyle satır açma yolu yok. GET'te LLM çağrısı yok.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR: ayrı layout kaldırıldı; Ayarlar metadata'sı ton/veri kapsamı vaadi içermiyor |
+| 2 | Yükleniyor iskeleti | ÇALIŞIYOR: `QueryState` form iskeleti |
+| 3 | Hero | ÇALIŞIYOR: Ayarlar başlığı + "AI motoru" kartı ve durum rozeti |
+| 4 | "n/9 özellik aktif" | KALDIRILDI: tüketicisi olmayan modülleri sayıyordu |
+| 5 | "n geri bildirim analiz edildi" | ÇALIŞIYOR: "Analiz edilen yorum" metriği |
+| 6 | Yenile | ÇALIŞIYOR: yalnız istatistikleri yeniliyor, düzenlenen metni ezmiyor (B9) |
+| 7 | Kaydet | ÇALIŞIYOR: anahtarlar anında ve iyimser kaydediliyor; bağlam metni `DirtyBar` ile. Yalnız değişen alan gidiyor, sürüm kilidi var |
+| 8–9 | Analiz edilen / Son 24 saat | ÇALIŞIYOR |
+| 10 | Öğrenme profili | ÇALIŞIYOR: durum çevrilmiş (Henüz eğitilmedi / Eğitiliyor / Hazır); son eğitim, işlenen ve toplam düzeltme, eğitimdeki yorum sayısı gösteriliyor |
+| 11 | Embedding sayısı | KALDIRILDI (jargon). Yerine "Analiz bekleyen (30 gün)" ve "AI çağrısı (7 gün)" metrikleri geldi |
+| 12 | 7 günlük grafik | ÇALIŞIYOR: çubuk yüksekliği yüzde ile, değer etiketi üstte, gün etiketi altta. Günler İstanbul saatine göre (`AT TIME ZONE`), etiketler istemcide `Intl`; tüm günler sıfırsa dürüst boş durum gösteriliyor (B8) |
+| 13 | Grafik ipucu | ÇALIŞIYOR: görünür değerler, `role="img"` özeti ve ekran okuyucu tablosu |
+| 14 | Ana anahtar | ÇALIŞIYOR: kapatma, etkileri listeleyen onay diyaloğuyla yapılıyor. Politika analiz hattında, cron'da, sohbette ve otomatik yanıtta uygulanıyor (`lib/ai-policy`) |
+| 15 | Ana anahtar kaskadı | ÇALIŞIYOR: alt ayarlar sıfırlanmıyor, yalnız soluk gösterilip "korunur" deniyor (B9) |
+| 16 | Otomatik analiz | ÇALIŞIYOR: `canAutoAnalyze` cron ve hattı kapatıyor |
+| 17–25 | 9 analiz modülü | KALDIRILDI: tek LLM çağrısı her şeyi üretiyor, anahtarları okuyan bir analiz yolu yok (B3) |
+| 26 | Duygu bağımlılık ipucu | KALDIRILDI (yukarıdakiyle birlikte) |
+| 27–29 | Toksik / acil / kayıp riski uyarısı | ÇALIŞIYOR: Bildirimler › AI uyarıları. Hat `policy.alertOn*` okuyor; AI kapalıyken "üretilmez" notu çıkıyor |
+| 30 | Haftalık rapor | ÇALIŞIYOR: Bildirimler › "Haftalık özet e-postası". `lib/weekly-digest-core` `weeklyReportEnabled=false` iken e-posta göndermiyor (uygulama içi özet kalıyor) |
+| 31 | Aylık rapor | KALDIRILDI: üretici yok |
+| 32 | Özel prompt | ÇALIŞIYOR: "İşletme bağlamı" adıyla ≤1000 karakter (sunucu ve istemci). `detectPromptInjection` ile reddediliyor; analizde talimat değil bağlam veri bloğu olarak kullanılıyor (`lib/ai-engine` sınırlı blok). Sistem öğrenme agregasyonunda artık yer almıyor (B2) |
+| 33 | "AI öğrenme profili" kartı (404) | ÇALIŞIYOR: AI sekmesinde "Öğrenme" bölümü; yeniden eğitme önerisi (DB'den) ve "Profili şimdi güncelle" (AI açıkken, modül kapısı ve hız sınırıyla) |
+| 34 | Alt kaydet düğmesi | KALDIRILDI (yinelenmiş) |
+| 35 | Yükleme hatası | ÇALIŞIYOR: hata kartı + tekrar dene; form açılmıyor, varsayılanlarla kayıt yok (B4) |
+| 36 | Kaydetme toast'ları | ÇALIŞIYOR |
+| 37 | Boş durum | ÇALIŞIYOR: grafik ve öğrenme için açıklayıcı boş durumlar |
+| 38 | Rol yetkisi | ÇALIŞIYOR: yalnız DEALER |
+| 39 | `ai_features` modül kapısı | ÇALIŞIYOR: PATCH ve retrain 403 `MODULE_DISABLED`; sayfada "yönetici tarafından kapatıldı" bandı, anahtarlar devre dışı |
+| 40 | PATCH doğrulaması | ÇALIŞIYOR: zod strict + merkezi hata zarfı |
+| 41 | Analiz dili | KALDIRILDI: motor okumuyor; UI'da yanıltıcı bir seçenek açılmadı |
+| 42 | 7 günlük kullanım | ÇALIŞIYOR: "AI çağrısı (7 gün)" |
+| 43 | Kaydedilmemiş değişiklik koruması | ÇALIŞIYOR: `DirtyBar` + `beforeunload` |
+| 44 | Switch erişilebilir adları | ÇALIŞIYOR: `InstantSwitchRow` → `<label htmlFor>` + `aria-describedby`, satır ≥44px |
+| 45 | Azaltılmış hareket | ÇALIŞIYOR: yükseklik geçişi CSS + `motion-reduce:transition-none`; kademeli framer girişleri kaldırıldı |
+| 46 | Mobil yerleşim | ÇALIŞIYOR: `min-w-0` ve sarma; kaydet çubuğu mobil sekme çubuğunun üstünde |
+| 47 | Değişiklik denetim kaydı | ÇALIŞIYOR: `UPDATE_AI_SETTINGS` (önceki → yeni), Güvenlik › Son etkinlikte görünüyor |
+
+### Kapanan bulgular
+B1 (politika `lib/ai-policy` ile Dalga 1'de; bu yüzey yazımda önbelleği bayatlatıyor) · B2 · B3 · B4 · B5 · B6 · B7 (yeni uç) · B8 · B9 · B10 · B11 (yeni yükleyicide probe ve ölü sorgu yok) · B12.
+
+### Kalanlar
+- Eski `PATCH /api/dealer/ai-settings` dosyası duruyor: arayüzde kullanılmıyor, `__tests__/api/settings-load-error-overwrite.test.ts` geriye uyum testi buna bağlı. Sürüm kilitli ama zod'suz ve politika önbelleğini bayatlatmıyor (en fazla 30 sn gecikme). Test yeni uca taşınınca silinmeli.
+- Uyarı eşikleri, kanal ve alıcı yönlendirmesi, PII maskeleme, "örnek yorumla dene" önizlemesi ve toplu yeniden analiz için şema alanı yok (`alertThresholds`, `piiRedaction` …). **ŞEMA İSTEĞİ** olarak not edildi; mevcut alanlarla dürüst biçimde yapılamadığı için arayüze konmadı.

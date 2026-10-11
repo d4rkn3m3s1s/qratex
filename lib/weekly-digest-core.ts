@@ -134,7 +134,7 @@ function digestSubject(businessName: string): string {
 export async function generateWeeklyDigestForDealer(
   dealer: { id: string; email: string | null; businessName: string | null; name: string | null },
   weekStart: Date
-): Promise<{ dealerId: string; status: 'sent' | 'no_email' | 'skipped' }> {
+): Promise<{ dealerId: string; status: 'sent' | 'no_email' | 'skipped' | 'opted_out' }> {
   const notifyKey = weeklyDigestNotifyKey(dealer.id, weekStart);
   // Hızlı yol: bu (bayi, hafta) zaten bildirildiyse AI'ya yeniden harcama yapma.
   const alreadyNotified = await prisma.idempotencyKey.findUnique({ where: { key: notifyKey } });
@@ -196,6 +196,17 @@ export async function generateWeeklyDigestForDealer(
   if (!claimed) return { dealerId: dealer.id, status: 'skipped' };
 
   if (!dealer.email) return { dealerId: dealer.id, status: 'no_email' };
+
+  // Bayi "Haftalık özet e-postası"nı kapattıysa (Ayarlar › Bildirimler → AISettings.weeklyReportEnabled)
+  // uygulama içi bildirim yine düşer, e-posta gönderilmez. Okuma hatasında eski davranış (gönder).
+  let optedOut = false;
+  try {
+    const pref = await prisma.aISettings.findUnique({ where: { dealerId: dealer.id }, select: { weeklyReportEnabled: true } });
+    optedOut = pref?.weeklyReportEnabled === false;
+  } catch {
+    optedOut = false;
+  }
+  if (optedOut) return { dealerId: dealer.id, status: 'opted_out' };
 
   const businessName = dealer.businessName || dealer.name || 'İşletmeniz';
   await sendTransactionalEmail({

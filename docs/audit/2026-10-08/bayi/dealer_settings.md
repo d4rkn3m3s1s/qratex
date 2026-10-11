@@ -274,3 +274,70 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (sayfa, çağrılan
 | 4 | Tatil modu / çalışma saatleri / şablon ölü veri | Doğrulandı (yanıltıcı arayüz, güvenlik değil) |
 | 5 | Benchmark widget'ı API tarafından düşürülüyor | Doğrulandı |
 | 6 | Dil tercihi arayüze yansımıyor | Doğrulandı (orta) |
+
+---
+
+## Uygulama (Dalga 2)
+
+`/dealer/settings` baştan yazıldı. Sayfa artık altı sekmeden oluşuyor: **İşletme · Hesabım · Bildirimler · Güvenlik · AI · Abonelik**. `/dealer/ai-settings` ve `/dealer/billing` bu sayfaya kalıcı yönlendiriliyor (`permanentRedirect`); sorgu parametreleri ve Stripe dönüşündeki `session_id` korunuyor. Mimari şöyle:
+
+- **Sunucu önce.** `app/dealer/settings/page.tsx` yetkiyi DB'den alıyor (`requireAuth(['DEALER'])`). Ayarlar ve abonelik özeti tek paralel turda yükleniyor (`lib/dealer-settings/load.server.ts`, `billing.server.ts`) ve React Query'ye gömülüyor. Bir yükleme düşerse istemci adası BFF'i yeniden çağırıyor ve hata `QueryState` ile görünür kalıyor. **Yükleme kilidi korunuyor:** veri gelmeden form açılmıyor, varsayılan değerlerle kayıt yapılamıyor.
+- **BFF (defineRoute).** `GET /api/dealer/settings`, `PATCH …/business`, `POST|DELETE …/business/logo`, `PATCH …/account`, `GET|PATCH …/ai`, `POST …/ai/retrain`, `POST …/sessions`, `DELETE …/push-devices/:id`. Hepsi şu kurallarla çalışıyor: rol DEALER, zod `.strict()`, rate limit, yalnız değişen alanlar, `baseVersion` ile iyimser kilit (409) ve denetim kaydı.
+- **İstemci.** `components/dealer/b-ayarlar/**` QDL v2 ile yazıldı: `PanelPage`, `SectionTabs` (URL `?tab=`), `SectionCard`, RHF + paylaşılan zod, `DirtyBar` (Kaydet / Geri al, Ctrl+S, `beforeunload`, 409 bandı, mobil sekme çubuğu payı). İşletme dışındaki sekmeler `next/dynamic` ile ayrı parçalarda yükleniyor. Testler: `__tests__/dealer/b-ayarlar/*.test.ts` (25 test).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR: QDL `PageHeader`. Üstte "müşterinin gördüğü / güvenlik / AI / plan" özet kutucukları var; dokununca ilgili sekme açılır |
+| 2 | Metadata | ÇALIŞIYOR: sayfa metadata'sı doğru ("ekip erişimi, entegrasyonlar" vaadi kaldırıldı) |
+| 3 | Rol koruması | ÇALIŞIYOR: proxy + sayfada ve her BFF'de `requireAuth(['DEALER'])` |
+| 4 | Sekme çubuğu | ÇALIŞIYOR: URL'de `?tab=`, mobilde metin görünür, ←/→ ile gezinme, ≥44px. Onboarding'in "profil/konum" adları kanonik sekmeye yönlendiriliyor |
+| 5 | Profil yükleme | ÇALIŞIYOR: SSR + `QueryState` (iskelet, hata, tekrar dene). Oturum yenilense de form ezilmiyor (B2) |
+| 6 | Sahte telefon varsayılanı | KALDIRILDI: başlangıç değeri yok, veri sunucudan geliyor |
+| 7–9 | Avatar kartı / hover katmanı / değiştir | ÇALIŞIYOR: Hesabım sekmesinde. Katman `group-focus-visible` ile klavyede de görünüyor |
+| 10 | Avatar modalı | ÇALIŞIYOR: Radix `Dialog` (odak tuzağı, Esc, odak iadesi) |
+| 11 | Avatar kategorileri | ÇALIŞIYOR: `ChoiceChips` radiogroup |
+| 12 | Avatar ızgarası | ÇALIŞIYOR: `role="radio"` + `aria-checked` + "Kategori avatarı N" adları |
+| 13 | Modal kapatma | ÇALIŞIYOR: Radix kapatma düğmesi + Esc |
+| 14 | Ad soyad | ÇALIŞIYOR: satır içi zod hatası; ad yalnız değiştiyse gönderiliyor (B8) |
+| 15 | E-posta (salt okunur) | ÇALIŞIYOR. E-posta değiştirme akışı hâlâ yok (Kalanlar) |
+| 16 | Telefon | ÇALIŞIYOR: biçim doğrulaması, `type="tel"` |
+| 17–18 | İşletme adı / adres | ÇALIŞIYOR |
+| 19 | Enlem/boylam | ÇALIŞIYOR: `NumberField` aralık hataları alanın yanında; OSM "Haritada gör" bağlantısı |
+| 20 | Konumumu al | ÇALIŞIYOR: artık anında kaydetmiyor. Bulunan adres onay kartında gösteriliyor ("Adresi ve konumu kullan / Yalnız koordinat / Vazgeç") ve forma işleniyor (B9) |
+| 21 | Koordinattan adres bul | ÇALIŞIYOR: aynı onay kartı. Uç 5 ondalığa yuvarlıyor, Redis'te 30 gün önbelleğe alıyor, 10/dk/kullanıcı sınırı uyguluyor, dili parametreyle alıyor, 8 sn zaman aşımı var (B12) |
+| 22 | Buton yerleşimi | ÇALIŞIYOR: `flex-wrap` ile |
+| 23 | Açıklama | ÇALIŞIYOR: etiket bağlı, 500 karakterlik sayaç |
+| 24 | Çalışma saatleri | ÇALIŞIYOR: yapılandırılmış haftalık düzenleyici (gün × en çok 3 aralık, 24 saat, gece yarısını aşan aralık, "hafta içine / tüm günlere kopyala"). JSON yazıyor; Keşfet, mekân detayı ve Kaydettiklerim (`lib/places/business-hours`) aynı kuralla "Açık · 18:00'de kapanır" gösteriyor. Eski serbest metin çözülüp yükleniyor ve uyarı bandı gösteriliyor |
+| 25 | Varsayılan yanıt şablonu | ÇALIŞIYOR: gelen kutusu "Varsayılan şablonum" olarak okuyor (`lib/dealer-inbox/server.ts`) |
+| 26 | Tercih edilen dil | ÇALIŞIYOR: Hesabım › Panel dili. Kayıtta oturum `update({ preferredLanguage })` ve `setLocale` ile anında uygulanıyor (B6) |
+| 27 | Tatil modu | ÇALIŞIYOR: Keşfet ve mekân sayfası "Tatilde" gösteriyor. Önizleme kartı da canlı gösteriyor |
+| 28 | Değişiklikleri kaydet | ÇALIŞIYOR: sekme başına `DirtyBar`. Yalnız değişen alanlar gidiyor, sunucu mesajları alanın yanında ya da bantta görünüyor, 409 durumunda "güncel hâli yükle" sunuluyor |
+| 29 | Otomasyon bağlantısı | ÇALIŞIYOR: AI sekmesi › Otomasyon |
+| 30 | E-posta bildirimleri (3 sahte anahtar) | KALDIRILDI. Yerine gerçek "Haftalık özet e-postası" geldi (`AISettings.weeklyReportEnabled`; `lib/weekly-digest-core` artık uyuyor) |
+| 31 | Push anahtarları (2 sahte) | KALDIRILDI. Yerine gerçek "Bu cihazda anlık bildirim" (abone ol / bırak) ve kayıtlı cihaz listesi (kaldırılabilir) geldi |
+| 32 | Ayarları kaydet (setTimeout) | KALDIRILDI: anahtarlar anında ve iyimser kaydediliyor; hata olursa değer geri dönüyor ve hata gösteriliyor |
+| 33 | 2FA durumu | ÇALIŞIYOR: durum sunucu anlık görüntüsünden geliyor; GET düşerse yanlış "Etkinleştir" gösterilmiyor |
+| 34–36 | 2FA kurulum, doğrulama, kurtarma kodları | ÇALIŞIYOR: kodlar kopyalanabiliyor ve **indirilebiliyor**; yeni kod üretme eklendi |
+| 37 | 2FA kapat | ÇALIŞIYOR: `prompt()` yerine kod alanlı `Dialog` |
+| 38–41 | Şifre alanları ve güç göstergesi | ÇALIŞIYOR: göster/gizle düğmesi `aria-pressed`, güç göstergesi `aria-live` |
+| 42 | Şifreyi güncelle | ÇALIŞIYOR: `sessionVersion` artınca diğer oturumlar düşüyor (Dalga 1). E-posta bildirimi yok (Kalanlar) |
+| 43 | İlk şifre | ÇALIŞIYOR (uç paylaşımlı; hız sınırı Kalanlar'da) |
+| 44–47 | Panel düzeni (yükle, görünürlük, sırala, kaydet) | KALDIRILDI: yeni Bugün paneli bu düzeni okumuyor, ayar hiçbir şeyi değiştirmiyordu. Yetim kalan `app/api/dealer/dashboard-layout` silindi (B5 ve B11 bu yolla kapandı) |
+| 48 | Erişilebilirlik anahtarları | ÇALIŞIYOR: Hesabım. "Bu cihazda" uygulandığı açıkça yazıyor |
+| 49 | Sekme geçiş animasyonu | ÇALIŞIYOR: `SectionTabs` fade (`duration-base`), azaltılmış hareket CSS tarafında |
+| 50–52 | Yükleniyor / hata / kaydedilmemiş değişiklik | ÇALIŞIYOR |
+| 53 | Logo yükleme | ÇALIŞIYOR: R2 (`logos/<bayi>/…`). Baytlardan biçim doğrulanıyor, sharp ile yeniden kodlanıyor (EXIF atılıyor), eski logo siliniyor, işlem denetime düşüyor. R2 yoksa dürüst not gösteriliyor |
+| 54 | Veri dışa aktarma / hesap silme | Dışa aktarma ÇALIŞIYOR (Hesabım › Verileriniz). Hesap silme bayiye SUNULMADI: aktif abonelik ve cascade riski var (Kalanlar) |
+| 55 | Oturumlar / giriş geçmişi | ÇALIŞIYOR: "Diğer cihazlardan çık / Her yerden çık" (`sessionVersion`) ve son 10 güvenlik olayı (`AuditLog`: şifre, oturum, hesap, işletme, AI). Cihaz cihaz aktif oturum listesi yok (JWT) |
+
+### Kapanan bulgular
+B1 · B2 · B3 · B4 · B5 (kaldırma ile) · B6 · B8 · B9 · B10 · B11 (kaldırma ile) · B12 · B13 (bayi yazma yolu yalnız hazır avatar, kayıtlı görsel ya da boş değer kabul ediyor) · B14 (sekme başına bileşen, tipli sözleşme). B7 kısmen kapandı: oturum iptali ve şifre değişiminde `sv` artışı var.
+
+### Kalanlar
+- **B7 kalanı:** şifre değişince e-posta bildirimi gönderilmiyor. `/api/user/initial-password` için hız sınırı ve 2FA ara adımı yok. Uç paylaşımlı (müşteri de kullanıyor), sahiplik dışında.
+- **B13 kalanı:** paylaşımlı `PATCH /api/user/profile`, DEALER için `image` alanına hâlâ serbest URL kabul ediyor. Yeni yüzey o ucu kullanmıyor. Ucun sahibi bayi izin listesini `isAllowedDealerAvatar` (lib/dealer-settings/write.server) ile eklemeli.
+- **B15:** uygulama içi "animasyonları azalt" ayarının framer'a bağlanması global bir iş (`lib/motion` / providers).
+- E-posta değiştirme akışı ve bayi hesap kapatma: doğrulama maili ve abonelik iptali gerekiyor, ürün kararı bekliyor.
+- i18n: diğer bayi yüzeyleri gibi bu yüzey de yalnız Türkçe.
