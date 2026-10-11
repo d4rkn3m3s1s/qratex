@@ -39,6 +39,7 @@ import {
 } from '@/lib/pii-registry';
 import { SYSTEM_ACTOR, auditEntry, type AuditActor } from '@/lib/data-safety/audit';
 import { invalidateSessionState } from '@/lib/auth/session-state';
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 import { deleteFromR2, isR2Configured, keyFromPublicUrl } from '@/lib/r2-storage';
 
 // ───────────────────────────── Dinamik temsilci erişimi ─────────────────────────────
@@ -479,6 +480,8 @@ export async function anonymizeUser(userId: string, opts: AnonymizeOptions = {})
 
   // Commit SONRASI yan etkiler (en iyi çaba; anonimleştirmeyi geri almaz).
   await invalidateSessionState(userId).catch(() => undefined);
+  // Native cihaz jetonları: anonim hesabın cihazına kişisel bildirim gitmesin (KVKK).
+  await revokeNativePushTokens(userId).catch(() => undefined);
   await deletePersonalObjects(outcome.objectUrls).catch(() => 0);
 
   return {
