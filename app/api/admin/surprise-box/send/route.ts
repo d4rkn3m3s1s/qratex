@@ -8,7 +8,6 @@ import { assertModuleEnabled } from '@/lib/module-gate';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { checkRateLimitDb } from '@/lib/rate-limit';
 import { emailLookupFilter } from '@/lib/auth/normalize-email';
-import { startOfDayUTC } from '@/lib/timezone';
 import { maskEmail, publicDisplayName } from '@/lib/http/dto';
 import {
   SURPRISE_BOX_LIMITS,
@@ -17,6 +16,7 @@ import {
   requiresConfirmation,
   type CampaignTotals,
 } from '@/lib/admin-surprise-box';
+import { sentTodayBySender, validateBoxCoupon } from '@/lib/admin-surprise-boxes/server';
 
 /**
  * POST /api/admin/surprise-box/send — admin sürpriz kutu gönderimi (P0-19).
@@ -78,14 +78,6 @@ type Preview = CampaignTotals & {
 
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-async function sentTodayBySender(db: Prisma.TransactionClient | typeof prisma, senderId: string, now: Date) {
-  const agg = await db.userSurpriseBox.aggregate({
-    where: { sentByUserId: senderId, dayKey: null, createdAt: { gte: startOfDayUTC(now) } },
-    _sum: { points: true },
-  });
-  return agg._sum.points ?? 0;
 }
 
 /** POST: Admin sürpriz kutu gönderir (isimle veya rastgele) */
@@ -179,6 +171,13 @@ export async function POST(req: NextRequest) {
       return json({ success: false, error: check.message, code: check.code, preview }, check.code === 'NO_RECIPIENTS' ? 400 : 422);
     }
 
+    // Kupon gerçek bir Coupon kaydına bağlı olmalı (aktif, süresi geçmemiş, hak yeterli).
+    const coupon = await validateBoxCoupon(input.couponCode, targetUserIds.length, now);
+    if (!coupon.ok) {
+      return json({ success: false, code: 'COUPON_INVALID', error: coupon.message, preview }, 422);
+    }
+    const couponCode = coupon.code;
+
     if (input.dryRun) {
       return json({ success: true, dryRun: true, preview });
     }
@@ -229,9 +228,9 @@ export async function POST(req: NextRequest) {
           sentByUserId: senderId,
           title: input.title,
           message: input.message ?? null,
-          couponCode: input.couponCode || null,
+          couponCode,
           points: input.points,
-          rewardType: input.rewardType ?? (input.points > 0 ? 'points' : input.couponCode ? 'coupon' : null),
+          rewardType: input.rewardType ?? (input.points > 0 ? 'points' : couponCode ? 'coupon' : null),
           metadata,
         })),
       });
@@ -240,9 +239,9 @@ export async function POST(req: NextRequest) {
         data: targetUserIds.map((uid) => ({
           userId: uid,
           title: '🎁 Bir sürpriz kutunuz var!',
-          message: `${input.title} — açmak için Sürpriz Kutular sayfanıza göz atın.`,
+          message: `${input.title} — açmak için Ödüllerim sayfanıza göz atın.`,
           type: 'success',
-          data: { kind: 'surprise_box', campaignId } as Prisma.InputJsonObject,
+          data: { kind: 'surprise_box', campaignId, href: '/customer/wallet/owned' } as Prisma.InputJsonObject,
         })),
       });
 
@@ -264,7 +263,7 @@ export async function POST(req: NextRequest) {
             recipientCount: created.count,
             pointsPerBox: input.points,
             totalPoints: created.count * input.points,
-            couponCode: input.couponCode || null,
+            couponCode,
             // Tek alıcıda kim olduğu iz için gerekli; toplu gönderimde ilk 50 id yeter.
             recipientIds: targetUserIds.slice(0, 50),
           } as Prisma.InputJsonObject,

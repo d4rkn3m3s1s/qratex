@@ -261,3 +261,61 @@ Tüm bunlar `useReducedMotion` ile kapatılabilmeli. Hero'daki mevcut "breathe" 
 - (b) **İşletmede kullanılan teklif:** Redeem işlemi müşteriye ait bir cüzdan kaydı (`UserReward`/`CustomerOffer` + gösterilebilir kod/QR) üretmeli. Bayi panelinde "kodu doğrula ve kullan" ucu olmalı. `minPurchase` ve kapsam (`scopeBusinessId`) kontrolü burada yapılmalı.
 
 Karar verilene kadar müşteri kartı gizlenmeli (feature flag) ya da mesaj gerçeğe uygun hale getirilmeli. Ayrıca admin sayfasındaki "indirim" dili ve açıklama metni (`page.tsx:99,108,171`) seçilen modele göre güncellenmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/coupons/page.tsx` sunucu bileşeni (KPI + ilk sayfa sunucuda) → `components/admin/a-kutu-kupon/coupons-center.tsx` (QDL v2 ops: `PanelPage`, `MetricTile`, sayaçlı durum sekmeleri, URL'de arama + sıralama, mobilde karta dönen `DataTable`, `DetailSheet ?kupon=`). Düzenleyici sağ panel (`coupon-editor.tsx`), toplu üretim (`coupon-batch-dialog.tsx`), satır işlemleri (`coupon-actions.tsx`, `ConfirmAction`). Tek şema `lib/admin-coupons/contract.ts` (istemci + sunucu, Türkçe mesajlar), çekirdek `lib/admin-coupons/server.ts`. Uçlar `defineRoute` ile: `GET/POST/DELETE /api/admin/coupons`, `GET/PATCH /api/admin/coupons/[id]`, `GET …/stats`, `POST …/batch`, `GET …/export`. Testler: `__tests__/admin/a-kutu-kupon/kutu-kupon-server.test.ts`.
+
+**Domain kararı (Bulgu 1):** Ödeme/sepet akışı olmadığı için kupon, sürpriz kutuyla dağıtılan, Ödüllerim'de saklanan ve kasada gösterilen kampanya kodudur; indirimi işletme uygular. Sayfa bu durumu bilgi bandında açıkça söyler. "Sürpriz kutuyla dağıt" kısayolu var ve kutuyla dağıtım sayıları gerçek veriden gelir. `minPurchase` hiçbir yerde denetlenmediği için formdan kaldırıldı. Kasada doğrulama (bayinin "kodu doğrula" ucu) F2.5'in işi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa kabuğu + başlık | ÇALIŞIYOR | `PageHeader` + 4 KPI. |
+| 2 | Yetki | ÇALIŞIYOR | Tüm uçlar ADMIN + rate limit + zod (`defineRoute`). |
+| 3 | Kod alanı | ÇALIŞIYOR | Büyük harf görünümü, yazarken normalize, kriptografik "Üret", alan altı hata. |
+| 4 | Tür seçimi | ÇALIŞIYOR | `ChoiceChips` (Yüzde / Sabit tutar ₺), etiketli. |
+| 5 | Değer alanı | ÇALIŞIYOR | Birim etiketi (% / ₺); %>100 istemcide ve sunucuda reddedilir. |
+| 6 | Min. tutar | KALDIRILDI | Hiçbir akışta denetlenmiyordu (sahte alan). |
+| 7 | Maks. kullanım | ÇALIŞIYOR | Boş = sınırsız (−1 arayüzden kalktı), ≥1, Türkçe tam sayı hatası. |
+| 8 | Son kullanım | ÇALIŞIYOR | İstanbul saati, geçmiş tarih reddedilir, "Süresiz yap". `startsAt` → ŞEMA İSTEĞİ. |
+| 9 | Oluştur + kaydediliyor | ÇALIŞIYOR | Idempotency anahtarlı. |
+| 10 | İstemci doğrulaması | ÇALIŞIYOR | Paylaşılan zod, alan altı. |
+| 11 | Sunucu doğrulaması | ÇALIŞIYOR | Tüm mesajlar Türkçe; `details` alanlara eşlenir. |
+| 12 | Tekrarlanan kod | ÇALIŞIYOR | Ön kontrol + P2002 → 409. |
+| 13 | Audit log | ÇALIŞIYOR | Transaction içinde, tüm alanlarla; düzenlemede eski/yeni fark; tekrar pasifleştirme denetim yazmaz. |
+| 14 | Liste yükleme | ÇALIŞIYOR | Sunucu sayfalama + sıralama (en yeni / en çok kullanılan / bitişi yakın). |
+| 15 | Liste hata durumu | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; `r.ok` + zarf kontrolü. |
+| 16 | Yükleniyor | ÇALIŞIYOR | İskelet; arka plan yenilemesinde dönen ikon. |
+| 17 | Boş durum | ÇALIŞIYOR | Sekmeye göre metin, CTA'lı; aramada "temizle". |
+| 18 | Satır: kod, değer, durum | ÇALIŞIYOR | Türetilmiş durum rozeti (ikon + metin): kullanılabilir / süresi doldu / limit doldu / pasif. |
+| 19 | Kullanım sayacı / tarih | ÇALIŞIYOR | İlerleme çubuğu; oluşturulma tarihi detayda. |
+| 20 | Pasifleştir | ÇALIŞIYOR | Sürüm kontrollü PATCH, `aria-label`'lı. |
+| 21 | Onay diyaloğu | ÇALIŞIYOR | `ConfirmAction` (kullanım + kalan hak etkisi); native `confirm` yok. |
+| 22 | Yeniden aktifleştirme | ÇALIŞIYOR | `ACTIVATE_COUPON` denetimli. |
+| 23 | Düzenleme | ÇALIŞIYOR | PATCH; ilk kullanımdan sonra kod/tür/değer kilitli, limit kullanımın altına inemez, `updatedAt` ile iyimser eşzamanlılık (409 + yeniden yükleme). |
+| 24 | Arama / durum filtresi | ÇALIŞIYOR | Sayaçlı durum sekmeleri + kod araması, URL'de. |
+| 25 | Sayfalama / toplam | ÇALIŞIYOR | `{items,total,counts}`. |
+| 26 | Kullanım detayı | ÇALIŞIYOR | Çekmece: son 50 kullanan (kullanıcı 360 bağlantısı), 14 günlük seri, kutu dağıtımı, denetim zaman çizelgesi. |
+| 27 | Kuponun gerçek etkisi | ÇALIŞIYOR (dürüst çerçeve) | Otomatik indirim iddiası yok; kod sürpriz kutuyla müşteriye gerçekten ulaşıyor (sunucu doğrulamalı). Kasada doğrulama F2.5'te. |
+| 28 | Kapsam / hedefleme | KALDIRILDI (kapsam dışı) | Şemada alan yok → ŞEMA İSTEĞİ. |
+| 29 | Kullanıcı başına limit | KALDIRILDI (kapsam dışı) | `@@unique([userId,couponId])` sabit 1; alan yok → ŞEMA İSTEĞİ. |
+| 30 | Toplu kod üretimi | ÇALIŞIYOR | 1–500 tek kullanımlık `ÖNEK-XXXXXX` (karışmayan alfabe, `crypto.randomInt`), çakışmada yeniden dener, CSV indirme. |
+| 31 | Kodu kopyala | ÇALIŞIYOR | `IconButton` + kopyala → tik geçişi (azaltılmış harekette anında). |
+| 32 | CSV dışa aktarma | ÇALIŞIYOR | `GET /api/admin/coupons/export`: geçerli filtreyle, BOM + `;`, formül enjeksiyonuna karşı korumalı. |
+| 33 | i18n | ÇALIŞIYOR | Tam Türkçe karakterli metin (sayfada i18n anahtar düzeni yoktu). Bu yüzey artık `lib/admin-toast.ts` yerine sonner kullanıyor. |
+| 34 | Mobil yerleşim | ÇALIŞIYOR | Çift padding kalktı (`PanelPage`), tablo mobilde karta döner, dokunma hedefleri ≥44px. |
+| 35 | Erişilebilirlik | ÇALIŞIYOR | `id/htmlFor`, `aria-invalid/describedby`, adlandırılmış ikon butonlar, sonuç sayısı canlı bölgede. |
+| 36 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`; hareket yalnız durum değişiminde. |
+
+### Kapanan bulgular (10/11)
+1 (dürüst domain çerçevesi, `minPurchase` kaldırıldı, kutuyla dağıtım), 2 (sürpriz kutu yalnız gerçek, aktif ve hakkı yeten kuponu kabul ediyor; üç kavramdan biri bağlandı), 3, 4, 5 (tek şema, Türkçe, 0 limit/geçmiş tarih), 6 (tx + 409 + idempotent pasifleştirme), 7 (PATCH + yeniden etkinleştirme), 8 (kullanım görünürlüğü; FK olmadığı için kullanıcılar ayrı sorguyla), 9 (sunucu sayfalama, KPI ucu, react-query), 10 (a11y/onay/padding).
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `Coupon.startsAt`, `perUserLimit`, `scopeBusinessId?`, `segmentId?`, `createdById`, `batchId?`; `CouponRedemption.coupon/user @relation` + `@@index([couponId, createdAt])`. Toplu üretimin `batchId`'si bugün yalnız denetim kaydında.
+- Bulgu 11 (`coupon-redeem-card` olay adı): bileşen artık depoda yok. Müşteri kod giriş yüzeyi olmadığı için `usedCount` yalnız `/api/customer/redeem-coupon` üzerinden artabilir; bu ucun çağıranı yok. Kasada doğrulama + tek kod defteri F2.5'te.
+- `lib/validations.ts` içindeki ölü `createCouponSchema` paylaşılan dosyada duruyor; eklemeli değişiklik kuralı nedeniyle silinmedi (çağıranı yok).
+- `/api/customer/redeem-coupon` yanıt metni ("puanlık/tutarlık") müşteri tarafına ait; dokunulmadı.

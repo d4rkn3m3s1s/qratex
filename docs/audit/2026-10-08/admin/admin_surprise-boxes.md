@@ -231,3 +231,66 @@ Kod salt okunur incelendi; DB, build, test veya sunucu çalıştırılmadı. Her
   - **Yeniden üretim:** 5.000 müşterili bir platformda "rastgele 10" gönderimi her seferinde aynı yaklaşık 20 kişilik havuzdan seçilir. Aynı kişiler tekrar tekrar ödül alır.
   - **Öneri:** Seçim DB tarafında yapılmalı (`ORDER BY random() LIMIT N` veya `TABLESAMPLE`/id aralığı örnekleme). Bunun yerine segment tabanlı hedefleme ve dışlama kuralları (pasif hesaplar, son N günde kutu alanlar) eklenmeli.
 - **shadow_ban, çürütüldü:** `fraudStatus='shadow_ban'` değerini atayan tek kod `lib/fraud/engine.ts` (`checkFraudulentActivity`, `:53`). Bu modül hiçbir yerden import edilmiyor (`fraud/engine` grep sonucu boş). `shouldApplyReward` (`:95-97`) de hiçbir ödül yolunda kullanılmıyor. Bu nedenle canlıda shadow_ban durumuna düşen kullanıcı üreten bir akış yok. Olsa bile hiçbir puan yolu bu kuralı uygulamadığı için bu sayfaya özgü bir açık sayılmaz. Asıl sorun fraud motorunun bağlanmamış olması ve bu sistem genelinde ayrı bir bulgudur.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/surprise-boxes/page.tsx` sunucu bileşeni (KPI + ilk kampanya sayfası sunucuda, `initialData`) → `components/admin/a-kutu-kupon/boxes-center.tsx` (QDL v2 `PanelPage register="ops"`, `MetricTile`, `SectionTabs`, `FilterBar`, `DataTable`, `DetailSheet ?kampanya=`). Gönderim 3 adımlı sağ panel (`box-send-sheet.tsx`, `?gonder=1`; kuponlar sayfasından `&kupon=KOD` kısayolu). Sunucu çekirdeği `lib/admin-surprise-boxes/{contract,server}.ts`; yeni uçlar `defineRoute` ile: `GET /api/admin/surprise-box` (kampanya listesi), `GET …/stats`, `GET …/campaigns/[id]`, `POST …/campaigns/[id]/revoke`, `GET …/recipients?q=`, `GET …/coupons`. Gönderim ucu (`…/send`, P0-19 tavanları) korunur; eklenenler: kupon doğrulaması, İstanbul günü bütçesi, bildirim `href`. Testler: `__tests__/admin/a-kutu-kupon/kutu-kupon-server.test.ts` (13) + mevcut `__tests__/api/admin-surprise-box-send.test.ts` (9) yeşil.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Yetki: yalnız ADMIN | ÇALIŞIYOR | Yeni uçlar `defineRoute({ roles: ['ADMIN'] })` + rate limit; sayfa `requireAuth` ile DB'den. |
+| 2 | Modül kapısı | ÇALIŞIYOR | Gönderim sunucuda kapalı (403); liste/KPI kapalıyken de okunur. |
+| 3 | Başlık/açıklama | ÇALIŞIYOR | Kompakt `PageHeader`. |
+| 4 | Hero çipleri | KALDIRILDI | Bilgi taşımayan süs; yerine sekmeler + filtre. |
+| 5 | KPI "Liste" | ÇALIŞIYOR | "Bu ay gönderilen" (İstanbul ayı; kutu + kampanya), SQL'de. |
+| 6 | KPI "Açıldı" | ÇALIŞIYOR | "Açılma oranı (30 gün)" %, yalnız hediye kutuları. |
+| 7 | KPI "Bekleyen" | ÇALIŞIYOR | "Bekleyen puan yükümlülüğü" + açılmamış kutu + kalan günlük bütçe; ek KPI "Dağıtılan puan (30 gün)". |
+| 8 | Yenile | ÇALIŞIYOR | Sorgu geçersizleştirme. |
+| 9 | Başlık alanı | ÇALIŞIYOR | `maxLength` 200 + sayaç + alan altı hata. |
+| 10 | Mesaj alanı | ÇALIŞIYOR | Sayaç 2.000. |
+| 11 | Kupon kodu | ÇALIŞIYOR | Kupon seçici (aktif, süresi ve hakkı kalan); sunucu `validateBoxCoupon`: var mı, aktif mi, süresi, kalan hak ≥ alıcı sayısı. |
+| 12 | Puan alanı | ÇALIŞIYOR | 0–5.000 (P0-19 sunucu tavanı) + istemci doğrulaması; boş kutu engellenir. |
+| 13 | Hedef seçimi | ÇALIŞIYOR | `ChoiceChips` (Tek müşteri / Rastgele). |
+| 14 | E-posta ile tek kullanıcı | ÇALIŞIYOR | Müşteri arama kutusu (ad/e-posta/kimlik, büyük-küçük harf duyarsız, yalnız CUSTOMER; askı/anonim/inceleme gerekçesiyle işaretli). |
+| 15 | Kullanıcı ID ile tek kullanıcı | ÇALIŞIYOR | Aynı arama kutusu kimlikle de bulur; seçilen alıcı kartı gösterilir. |
+| 16 | Rastgele N müşteri | ÇALIŞIYOR | P0-19: `ORDER BY random()`, askı/anonim/gölge ban hariç. |
+| 17 | Rastgele sayı input'u | ÇALIŞIYOR | Serbestçe silinip yazılır, `inputMode="numeric"`, aralık hatası alan altında. |
+| 18 | İstemci doğrulaması | ÇALIŞIYOR | Adım bazlı, alan altı. |
+| 19 | Gönder + yükleniyor | ÇALIŞIYOR | `requestId` = kampanya kimliği; aynı kimlikle tekrar gönderim yeni kutu üretmez. |
+| 20 | Toplu gönderim onayı | ÇALIŞIYOR | 3. adım sunucu özeti (alıcı, toplam, bütçe çubuğu); ≥10.000 puanda "GÖNDER" yazdırma; sunucu `confirm` eşleşmesi (409 → güncel özet). |
+| 21 | Müşteri görünümü önizlemesi | ÇALIŞIYOR | `box-preview.tsx`: kademe (`boxTier`) ve içerik; 3B imza kutusu yalnız "Açılışı 3B oynat" ile lazy yüklenir, azaltılmış harekette oynatılmaz. |
+| 22 | `rewardType` seçimi | ÇALIŞIYOR | Sunucu içerikten türetir (points/coupon); elle seçim gereksiz olduğu için eklenmedi. |
+| 23 | Başarı bildirimi | ÇALIŞIYOR | Adet + toplam puan; yinelenen gönderim ayrı mesaj. |
+| 24 | Sıfırlama + yenileme | ÇALIŞIYOR | Gönderimden sonra yeni kampanyanın ayrıntısı açılır. |
+| 25 | Hata bildirimi | ÇALIŞIYOR | Zarf `details` alanlara eşlenir; kupon hatası 1. adımda alanın altında. |
+| 26 | Son gönderimler listesi | ÇALIŞIYOR | Kampanya bazlı (`metadata.campaignId`), `dayKey IS NULL`: günlük kutular karışmaz. |
+| 27 | Liste satırı | ÇALIŞIYOR | Gönderen mobil kartta da görünür; açılma çubuğu, bekleyen puan, kupon. |
+| 28 | Yükleniyor (liste) | ÇALIŞIYOR | Statik iskelet + sunucu ön yükleme. |
+| 29 | Boş durum | ÇALIŞIYOR | Filtreli/filtresiz ayrı, CTA'lı; hatayla karışmaz. |
+| 30 | Hata durumu | ÇALIŞIYOR | `QueryState`/`ErrorState` + "Tekrar dene". |
+| 31 | Modül kapalı uyarısı | ÇALIŞIYOR | Bant + "Modüller'den aç" + gönder düğmesi devre dışı. |
+| 32 | Arama/filtre | ÇALIŞIYOR | Başlık/kupon araması, durum filtresi, URL'de; kaynak ayrımı sekmeyle. |
+| 33 | Sayfalama | ÇALIŞIYOR | Sunucu sayfalama (toplam sayıyla). |
+| 34 | Kayıt detayı | ÇALIŞIYOR | Kampanya çekmecesi: mesaj, alıcılar (açılış zamanı, kullanıcı 360 bağlantısı), medyan açılış süresi, kademe, denetim zaman çizelgesi. |
+| 35 | İptal/geri alma | ÇALIŞIYOR | "Açılmamışları geri çek": gerekçe zorunlu, etki önizlemeli onay; koşullu silme (`openedAt: null`) açılışla yarışta güvenli, bildirimler temizlenir, anlık görüntü AuditLog'da. |
+| 36 | AuditLog | ÇALIŞIYOR | P0-19 gönderim + yeni `SURPRISE_BOX_REVOKE`. |
+| 37 | Alıcıya bildirim | ÇALIŞIYOR | Uygulama içi bildirim; `href: /customer/wallet/owned` eklendi. Push/e-posta yok (F2.6 pazarlama teslim servisinin işi). |
+| 38 | Açılma analitiği | ÇALIŞIYOR | Kampanya başına oran + medyan süre; 30 günlük oran KPI'ı. |
+| 39 | Zamanlama / son kullanma | KALDIRILDI (kapsam dışı) | Şemada alan yok → ŞEMA İSTEĞİ. |
+| 40 | Giriş animasyonları | ÇALIŞIYOR | ops kaydı: yoğun tabloda stagger yok (§4.2-3). |
+
+**Ek:** "Günlük kutular" sekmesi: 30 günlük üretim/açılma/basılan puan, son 14 gün grafiği (sr-only tabloyla) ve **olasılık tablosu doğrulaması**. Beklenen kademe dağılımı `DAILY_BOX_MIN/MAX_POINTS` + `boxTier`'dan türetilir (≈%39,8 / 34,8 / 19,9 / 5,5); gözlenen dağılım SQL'den gelir. En az 50 örnekte ki-kare testi (sd=3, p<0,01) sapma uyarısı verir.
+
+### Kapanan bulgular (13/13)
+1 (bütçe/onay: P0-19 + yazdırmalı eşik), 2 (audit), 3 (günlük kutu kirliliği, sunucu KPI'ları), 4 (rastgelelik: P0-19), 5 (rol/büyük harf + arama kutusu), 6 (kupon doğrulaması + seçici), 7 (hata/modül durumu), 8 (önizleme + onay + geri çekme), 9 (uygulama içi bildirim), 10 (form mikro hataları), 11 (sunucu sayfalama, açık `select`), 12 (çipler kaldırıldı, anlamlı KPI'lar), 13 (mobilde gönderen, detay çekmecesi). Bütçe günü artık Europe/Istanbul (eskiden UTC).
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `SurpriseBoxCampaign` tablosu + `UserSurpriseBox.campaignId/couponId/expiresAt/revokedAt/scheduledAt`. Kampanya bugün `metadata.campaignId` JSON yolu ile gruplanıyor (indeks yok). Geri çekme açılmamış kutuyu SİLİYOR (anlık görüntü denetimde); `revokedAt` gelince yumuşak geri çekmeye geçilmeli.
+- Segment tabanlı hedefleme ve CSV alıcı yükleme yapılmadı (segment çözümleyici başka yüzeyin; F2.6).
+- Push/e-posta kanalı yok (F2.6).
+- Velocity dedektörünün admin hediyesini ayırması: `openBox` zaten `meta.boxSource='gift'` yazıyor; dedektör tarafı bu yüzeyin dışında.
+- Müşteri açma ucundaki modül kapısı cüzdan yüzeyinin (`lib/wallet-rewards`, `boxesEnabled`) sorumluluğunda.

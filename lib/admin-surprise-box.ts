@@ -10,7 +10,7 @@
  * Kurallar:
  *  - Kutu başına puan 0–5.000 (tam sayı).
  *  - Kampanya toplamı (alıcı × puan) ≤ 100.000.
- *  - Gönderen admin başına UTC günü toplamı ≤ 250.000 (otomatik günlük kutular sayılmaz).
+ *  - Gönderen admin başına İstanbul günü toplamı ≤ 250.000 (otomatik günlük kutular sayılmaz).
  *  - Puanlı ya da çok alıcılı gönderimde sunucu tarafı onay: istemci önizlemede gördüğü
  *    alıcı sayısını ve toplam puanı geri yollamalı; değer tutmazsa 409 + güncel önizleme.
  *  - Aynı `requestId` ile ikinci gönderim yeni kutu üretmez (kampanya kimliği).
