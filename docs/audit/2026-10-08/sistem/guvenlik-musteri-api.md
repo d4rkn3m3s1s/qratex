@@ -314,3 +314,48 @@ Gerekçe: Atomik cüzdan ve escrow altyapısı sağlam (+), fakat doğrudan isti
 16. İmzalı oturum tokenı ve deterministik oyunlarda hamle-günlüğü doğrulaması; refleks oyunlarında makullük modeli.
 
 **Doğrulama:** Her faz için yarış testleri (aynı isteği 20 paralel gönderip bakiyenin tek kredi kadar arttığını doğrulayan entegrasyon testleri), rol matrisi testi (her uç × 4 rol × sahip/sahip değil), ve `points_credited` toplamı ile `User.points` değişiminin mutabakatını yapan günlük cron (fail-closed).
+
+---
+
+## Uygulama sonrası durum
+
+- **Tarih:** 2026-10-11 (dalga 3 sonrası yeniden denetim, `feat/platform-overhaul`)
+- **Yöntem:** Her bulgu şimdiki koda karşı yeniden okundu. Kapsam: `app/api/{customer,gamification,feedbacks,public,surveys}` (137 route) ve müşterinin doğrudan çağırdığı paylaşılan uçlar (`leaderboard`, `vip`, `birthday`, `referral`, `wallet`, `cards`, `wall`, `consent`, `campaigns`). Yapı denetimi kalıcı test olarak duruyor: `__tests__/security/customer-api-surface.test.ts`. Test şunları yakalar: çıplak `getServerSession`, rol listesiz `requireAuth()`, oran sınırı olmayan işleyici, şemasız gövde, `?userId=` IDOR, `progress` POST'un geri gelmesi ve izinsiz `public` uç. Son tur commit'i: `0defc5c`.
+
+| Bulgu | Durum | Kanıt |
+|---|---|---|
+| **K1** progress POST bedava rozet+puan | KAPANDI | `app/api/gamification/progress/route.ts` yalnız `GET` sunuyor (`requireAuth(['CUSTOMER','ADMIN'])`). Yapı testi POST'un geri gelmesini engelliyor. Rozet verme tek serviste: `lib/badges/award.ts` (`mintPoints`, anahtar `badge:<user>:<badge>`). |
+| **K2** STAFF platform geneli geri bildirim + e-posta | KAPANDI | `app/api/feedbacks/route.ts` GET açık rol listesi kullanıyor. CUSTOMER yalnız kendi kayıtlarını görür; diğer roller `resolveAiScope` ile kapsanır (STAFF yalnız DB'deki aktif bayisini görür, varsayılan reddet). `email` yalnız ADMIN'e gider (`email: isAdmin`). Süzgeçler beyaz listeyle sınırlı. |
+| **Y1** otomatik görevin `claim` ile ikinci ödemesi | KAPANDI | `lib/quests/claim.ts` + `lib/quests/reward.ts`: `rewardedAt` guard'lı `updateMany` + `mintPoints` defter anahtarı `quest:<userQuestId>`. Otomatik ödenen görev `QUEST_AUTO_REWARDED` (409) döner. Test: `__tests__/lib/quest-reward.test.ts` (onarıldı, 16/16). |
+| **Y2** `advanceAchievementProgress` yarış çift kredi | KAPANDI | `lib/achievements.ts`: tx içinde taze okuma + `completedAt/rewardedAt: null` guard + `mintPoints` (kullanıcı satırı `FOR UPDATE`). |
+| **Y3** kimliksiz `?userId=` IDOR | KAPANDI | `badges` ve `quests` GET, `resolveSubjectUserId` (yalnız `me`/ADMIN) ve `getOptionalSession` kullanıyor. Yapı testi `?userId=` okuyan her dosyada bu yardımcıyı zorunlu kılıyor. Genel liderlik ham id yerine HMAC opak id döndürüyor. |
+| **Y4** istemci skoru, tavansız oyun ekonomisi, hileli turnuva | KAPANDI (kısmi kalıntı aşağıda) | `games/[game]/complete` → `lib/game-session.ts`: HMAC deneme belirteci, sunucu saati ve saniye başına skor makullüğü denetleniyor. `implausible` deneme `failed` yazılır ve turnuvaya girmez. Ödül `mintPoints` ve `game` tavanıyla verilir (günde 600 / haftada 3.000, `lib/economy/caps.ts`). Turnuva eşitliği belirleyici biçimde çözülür (`rankWeekly`). Ayrı pacman uçları kaldırıldı. |
+| **Y5** yorum tavanı yarışı + metin kısaltma | KAPANDI | `consumptions/[id]/review`: `mintPoints` kullanıcıyı kilitlediği için tavan yarışı yok; ek işler `after()` ile çalışıyor. PUT'ta ayrıntılı yorum eşiğin altına kısaltılırsa ödül farkı tek seferlik `reversal` ile geri alınır (`consumption_review_shrink:<id>`). |
+| **Y6** telafi seçimi doğrulanmıyor | KAPANDI | `lib/remedy-offer-service.ts` seçimi `findRemedySelection(offer.options, …)` ile doğruluyor; geçersiz seçim `INVALID_SELECTION` döner. İşletme içindeki kişi puan telafisi alamaz (`isDealerInsider`). Test: `__tests__/lib/remedy-accept-abuse.test.ts` (personel reddi testi eklendi). |
+| **O1** rol serbest ekonomi, öz-değerlendirme, `dealerStaffId` | KAPANDI | Ekonomi uçları yalnız `['CUSTOMER']`: spin, görev, ödül, turnuva, sezon, kupon, bağış, hediye. Geri bildirim çekirdeği `lib/feedback-funnel/submit.ts` personelin kiracısını doğruluyor; çıkar çatışmasında (sahip/personel) puan verilmiyor. |
+| **O2** dar oran sınırı, spam uçları | KAPANDI | Kapsamdaki her işleyicide oran sınırı var (yapı testi denetliyor). Privacy-request istemciden e-posta almıyor; sınırı günde 3. Improvement 5/dk, experience-share 10/dk. A/B olayı yalnız aktif deneyde ve `public-write` sınırıyla yazılıyor. Klan davet kodu `crypto.getRandomValues` ile üretiliyor. Genel liderlik okuma tavanı bu turda eklendi. |
+| **O3** çıplak `getServerSession` / askı kontrolü | KAPANDI | `app/api/**` altında hiç kalmadı (ESLint `no-restricted-imports` + iki yapı testi). `requireAuth` her istekte DB oturum durumunu (`sessionVersion`, askı, güncel rol) ve token replay'i denetliyor. |
+| **O4** admin kapısı API'de yok | KAPANDI | `requireAuth`, ADMIN için `checkAdminElevation`'ı varsayılan olarak çalıştırıyor (`lib/api-auth.ts`). Gamification admin mutasyonları `requireAuth(['ADMIN'])` kullanıyor. |
+| **O5** gizlilik tercihleri uygulanmıyor | KAPANDI | Tek kaynak `lib/privacy/leaderboard-optout.ts`; oyun liderliği, turnuva, karakter liderliği, lig ve genel liderlik bunu kullanıyor. **Bu tur:** klan savaşı detayı (`squads/battles/[id]`) rakip katkıcıyı tam adla döndürüyordu (regresyon); artık ad maskeli. `battles/current` ve detay ucunda tercihi kapalı rakip "Gizli oyuncu" olarak ve avatarsız görünür. Test: `__tests__/api/squad-battle-detail-privacy.test.ts`. |
+| **O6** kimliksiz radar/nearby | KAPANDI | İki uç da `requireAuth(['CUSTOMER'])`, Keşfet kapısı ve 30/dk sınırı kullanıyor. Radar: `MIN_RADIUS_KM=2` ve k-anonimlik (en az 5 işletme, öğe başına en az 2). Nearby: mesafe 0,5 km kovasına yuvarlanıyor. |
+| **D1** zod'suz gövdeler, pasif ürün, anket, medya, limit yarışları | KAPANDI | Yapı testi şemasız `req.json()` bırakmıyor (bu tur: karakter, push, ödül oluşturma). Medya yalnız kendi R2 alanından kabul ediliyor (`lib/feedback-funnel/media.ts`). Anket soru, uzunluk ve yanıt sınırları `lib/survey-schema.ts`'te. Ödül `perUserLimit` sayımı kullanıcı kilidi altında (`lib/wallet-rewards/mutations.ts`). Tek klan kuralı kullanıcı ve klan satırı `FOR UPDATE` ile korunuyor (`lib/squads/membership.ts`). |
+| **D2** idempotency kullanıcıya bağlı değil | KAPANDI | `defineRoute` idempotency anahtarını `<ad>:<kullanıcı>` rotasına bağlıyor. Elle kullanan iki uç (feedbacks, quest claim) anahtarı göndericiye bağlıyor ve auth'tan sonra denetliyor. Ekonomik tekillik defter anahtarlarında. |
+| **D3** hijyen | KAPANDI | `badges/[id]` GET yalnız ADMIN'e açık. Pasif/arşivli görev ve ödül GET'i ADMIN dışına 404 döner. CORS üretim varsayılanı boş (`proxy.ts`). JWT `update` puan ve seviyeyi DB'den tazeliyor (`lib/auth.ts`). Public stats uydurma 4.9 yerine 503 döner. Streak GET yan etkisiz; yazma POST'ta. |
+
+**Bu turda ayrıca:** Şu testler kırıktı: `__tests__/api/{customer-shop-gift,redeem-coupon,customer-badges}` ve `__tests__/lib/{quest-reward,customer-voices,remedy-offer-service,remedy-accept-abuse}`. Nedenleri: `requireAuth` artık DB oturum durumunu okuyor, `isDealerInsider` için `dealerStaff` taklidi ve tercih sorgusu için `settings` taklidi eksikti. Hepsi onarıldı; müşteri kapsamı yeşil.
+
+**Kalanlar (bilinçli ya da başka boyutun işi):**
+1. **Hediye alıcı önizlemesi e-postanın kayıtlı olup olmadığını ele veriyor** (bulundu / bulunamadı). Bu, e-postayla alıcı seçen özelliğin doğal sonucu. Hafifletmeler: kişi başına 10 dakikada 30 arama, yalnız uygun müşteriler, maskeli ad ve e-posta. Kalıcı çözüm alıcıyı arkadaş listesinden veya handle ile seçmek (ürün kararı).
+2. **Oyun kanıtı çoğu oyunda isteğe bağlı** (13 doğrulayıcının 2'sinde `requireProof`). Kanıtsız denemede skor, makullük sınırı ve günlük 600 puan tavanıyla bağlı; ekonomik etki meşru oyuncunun üst sınırını aşamaz. Sahibi `oyun-ekosistemi` boyutu.
+3. Bu boyutun dosyası olmayan kırık testler: `admin-gate-outside-admin-api`, `data-safety-archive`, `remedy-integrity` (bayi ucu), `landing-public` ve önceden kırık olan `auth.test.ts`.
+
+### Yeni puan: **9.5 / 10**
+
+Gerekçe: Raporun 2 kritik, 6 yüksek, 6 orta ve 3 düşük bulgusunun hepsi kök nedeninden kapandı. Kapanışı taşıyan yapılar:
+
+- Tek ekonomi kapısı: `mintPoints`/`debitPoints`, defter anahtarı ve kategori tavanı.
+- Varsayılan olarak reddeden route fabrikası ve kapsam yardımcıları.
+- DB destekli oturum durumu ve admin kapısı.
+- Tek gizlilik kaynağı.
+
+Bu yapıların geri dönmesini yapı testleri, ESLint kuralı ve yarış/rol testleri engelliyor. Tam puanı iki bilinçli kalıntı engelliyor: kanıtı isteğe bağlı oyunlar (tavanla sınırlı, başka boyutun işi) ve e-postayla hediye aramasının ele verdiği kayıt bilgisi (oran sınırıyla hafifletilmiş).
