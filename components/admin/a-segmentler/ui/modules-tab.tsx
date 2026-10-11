@@ -174,7 +174,7 @@ function ReferralCard({ c, state }: { c: SegmentsCopy; state: ModulesState }) {
             <Input id={`${id}-b`} inputMode="numeric" value={redemptions} onChange={(e) => setRedemptions(e.target.value)} aria-invalid={b == null} className="min-h-11" />
           </div>
         </div>
-        {!valid && <InlineError>0–10.000 arası tam sayı girin.</InlineError>}
+        {!valid && <InlineError>{c.m.invalidRange}</InlineError>}
         <div className="flex gap-2">
           <Button type="submit" className="min-h-11" disabled={!valid || !dirty || busy}>
             {busy && <Loader2 aria-hidden className="mr-1.5 h-4 w-4 motion-safe:animate-spin" />}
