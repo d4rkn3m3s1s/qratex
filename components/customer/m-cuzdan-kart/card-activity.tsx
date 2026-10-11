@@ -63,7 +63,7 @@ export function PendingReviews({
       {more > 0 && (
         <p className="qx-caption mt-2 text-fg-muted">
           {copy.pendingMore(more)} ·{' '}
-          <Link href="/customer/wallet/activity" className="font-medium text-brand underline-offset-2 hover:underline">
+          <Link href="/customer/wallet/activity" className="font-medium text-brand-text underline-offset-2 hover:underline">
             {copy.allActivity}
           </Link>
         </p>
