@@ -276,3 +276,69 @@ Dört KRİTİK/YÜKSEK iddia, kod baştan okunarak çürütülmeye çalışıld�
 - **Yeniden üretim:** İki senkron arasında INBOX'a 41 veya daha fazla mail düşer. Örneğin `/admin/intern-emails`'ten toplu görev maili sonrası gelen otomatik yanıtlar, bounce'lar, stajyer yanıtları ve servis bildirimleri. Bir sonraki senkron yalnızca son 40'ı alır. En eski fazlalık hiçbir zaman çekilmez: sonraki senkronlar da yalnızca en yeni 40'a bakar. Stajyer yanıtı Gmail'de durur ama panelde ve `isFromIntern` eşleşmesinde görünmez. Hata ya da uyarı da yok. Ayrıca mail senkrondan önce Gmail'de arşivlenirse INBOX'tan çıkar ve hiç çekilmez.
 - **UIDVALIDITY:** Şemada benzersizlik yalnızca `@@unique([mailbox, uid])` (`prisma/schema.prisma:966`). `uidValidity` saklanmıyor. UIDVALIDITY değişirse yeni maillerin UID'leri eski kayıtlarla çakışır ve `exists` kontrolünde (`lib/mail-inbox.ts:76-78`) atlanır. Gmail'de nadir görülen ama kodda korunmayan bir durum.
 - **Öneri:** `Settings.inbox_sync_state = { uidValidity, lastUid }` tutulmalı ve `client.fetch({ uid: `${lastUid+1}:*` }, …, { uid: true })` ile UID artımlı çekilmeli. UIDVALIDITY değişince tam yeniden tarama yapılmalı ve şemaya `uidValidity` eklenerek unique `[mailbox, uidValidity, uid]` olmalı. Tek koşunun 60 sn bütçesini aşmamak için koşu başına üst sınır konulmalı ve imleç ilerletilmeli, böylece birikmiş mailler sonraki koşularda kaybolmadan çekilir. Cron sıklığı da artırılmalı (harici cron-job.org ile saatlik `inbox-sync`). `fetched == limit` durumunda durum paneline "pencere doldu, eksik olabilir" uyarısı yazılmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa yeniden yazıldı: ince sunucu `page.tsx` (sayaçlar + senkron durumu + ilk liste sayfası sunucuda, `?view=&q=&id=` derin bağlantı) → istemci adası `components/admin/a-iletisim/inbox/*` (QDL v2 `PanelPage`/`PageHeader`/`QueryState`, ops kaydı). İş kuralları `lib/mail-center/inbox.server.ts` + saf yardımcılar `lib/mail-center/mail-html.ts`; senkron `lib/mail-inbox.ts` (UID artımlı). Tüm uçlar `defineRoute` (ADMIN + kapı + zod + hız sınırı): `GET /api/admin/inbox`, `GET …/overview`, `POST …/sync`, `PUT …/settings`, `GET|PATCH|DELETE …/[id]`, `GET …/[id]/body`, `GET …/[id]/attachments/[n]`, `POST …/[id]/reply`. Şema değişmedi: arşiv ve giden yanıt mevcut `InboxMessage.mailbox` alanıyla ifade edilir (`INBOX` / `INBOX_ARCHIVED` / `QRATEX_SENT`), senkron imleci ve saklama süresi `Settings`'te. Testler: `__tests__/lib/mail-center-html.test.ts`, `__tests__/lib/mail-center-inbox.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero başlık + açıklama | ÇALIŞIYOR | Hesap adresi sabit değil, env'den (`inboxAccount()`). |
+| 2 | IMAP yapılandırma uyarısı | ÇALIŞIYOR | Bant + senkron düğmesi devre dışı. |
+| 3 | Stat: Toplam | ÇALIŞIYOR | Üç stat kartı kaldırıldı; sayılar görünüm rayında tek yerde (tekrar yok). |
+| 4 | Stat: Stajyerden | ÇALIŞIYOR | "Stajyerler" görünümü sayacı. |
+| 5 | Stat: Okunmadı | ÇALIŞIYOR | Sunucu sayacı + iyimser güncelleme; çift düşürme yarışı yok (sayaç sunucudan tazelenir). |
+| 6 | Arama | ÇALIŞIYOR | 250 ms debounce, istek iptali (AbortSignal), `keepPreviousData` (titreme yok); gövde önizlemesi, alıcı, departman da aranır; `/` kısayolu; etiketli. |
+| 7 | Senkron | ÇALIŞIYOR | UID artımlı imleç, parti + süre bütçesi, `hasMore` ile "Devam et"; kaydedilemeyen mail imleci durdurur. |
+| 8 | Filtre: Tümü | ÇALIŞIYOR | "Gelen" görünümü. |
+| 9 | Filtre: Stajyerler | ÇALIŞIYOR | |
+| 10 | "X okunmadı" etiketi | ÇALIŞIYOR | Gerçek "Okunmamış" görünümüne dönüştü (tıklanır, sayaçlı). |
+| 11 | Liste iskeleti | ÇALIŞIYOR | Yalnız ilk yüklemede; aramada önceki sonuç kalır. |
+| 12 | Boş durum | ÇALIŞIYOR | Hata artık boş liste gibi görünmez (`QueryState` hata + Tekrar dene); görünüme/aramaya özel boş metin. |
+| 13 | Liste öğesi | ÇALIŞIYOR | Tarih: bugün saat / bu yıl "12 Eki" / eski yıl "12.10.2025" (İstanbul). |
+| 14 | Okunmadı noktası | ÇALIŞIYOR | `sr-only` "Okunmadı". |
+| 15 | Bounce rozeti | ÇALIŞIYOR | Emoji yerine lucide ikon + metin; ayrıca "İletilemedi" görünümü. |
+| 16 | Thread sayısı | ÇALIŞIYOR | Sayım sunucuda tüm kutular üzerinden (`groupBy threadRoot`), giden yanıtlar dahil; References zinciri artık doğru (kök kaymıyor). |
+| 17 | Stajyer eşleşme rozeti | ÇALIŞIYOR | |
+| 18 | Sayfalama | ÇALIŞIYOR | `(sentAt,id)` imleçli, sonsuz kaydırma + "Daha fazla yükle" yedeği, "Listenin sonu" işareti, `matched` toplamı. |
+| 19 | Mail açma | ÇALIŞIYOR | GET yan etkisiz; okundu işaretlemesi açık PATCH; yarış yok (sorgu anahtarı = id); hata kartı + Tekrar dene (sonsuz spinner yok); açılınca odak başlığa. |
+| 20 | Mobil liste ↔ detay | ÇALIŞIYOR | Tam genişlik okuma; geri dönüşte odak satıra. |
+| 21 | Detay başlığı | ÇALIŞIYOR | Kime (`toEmail`) de gösteriliyor. |
+| 22 | Görev alıcısı rozeti | ÇALIŞIYOR | + "Bu stajyere giden görev şablonunu aç" (`/admin/intern-emails?t=`). |
+| 23 | Ekler | ÇALIŞIYOR | Yetkili uçtan akış (public URL istemciye verilmez); yalnız güvenli türler `inline`, HTML/SVG/XHTML ve diğerleri `attachment` + octet-stream + nosniff + CSP sandbox; senkron da aynı izin listesini kullanır. |
+| 24 | HTML gövde | ÇALIŞIYOR | HTTP başlıklı CSP (işaretlemeyle atlatılamaz), yalnız kendi yükseklik betiğimizin SHA-256'sı, sunucuda script/meta/base/iframe/form/on*/javascript: ayıklama, linkler yeni sekmede. |
+| 25 | iframe otomatik yükseklik | ÇALIŞIYOR | `postMessage` kaynağı doğrulanıyor. |
+| 26 | Düz metin yedeği | ÇALIŞIYOR | |
+| 27 | "İstemcide aç" (mailto) | ÇALIŞIYOR | "Re: Re:" yok (`replySubject`). |
+| 28 | Uygulama içi Yanıtla | ÇALIŞIYOR | Alıcı/konu/In-Reply-To/References sunucuda kurulur; konu 200'e kırpılır (İngilizce zod hatası yok); alıntı seçeneği; sade kişisel yanıt şablonu; giden kayıt (`QRATEX_SENT`) thread'de görünür; denetim kaydı; Idempotency-Key. |
+| 29 | Yanıt "Vazgeç" | ÇALIŞIYOR | Dolu taslakta onay (`ConfirmAction`). |
+| 30 | Okunmadı işaretle | ÇALIŞIYOR | Düğme + `u` kısayolu; PATCH hatası yutulmuyor. |
+| 31 | Arşivle / sil | ÇALIŞIYOR | Arşiv (geri alınabilir, "Geri al" toast'ı) + kalıcı silme (onaylı, ekler depodan da silinir, denetimli). Gmail'e yansıtma yok (bilinçli; metinde söyleniyor). Spam işaretleme KALDIRILDI: Gmail'e yazma yetkisi/akışı yok, yapılmayacak işi göstermemek için. |
+| 32 | Son senkron zamanı | ÇALIŞIYOR | Başlıkta "Son senkron · x önce · elle/otomatik", hata kırmızı, bekleyen mail uyarısı. |
+| 33 | Otomatik senkron | ÇALIŞIYOR | Cron artık imleçten devam ediyor (mail kaybı yok); sıklık günlük orkestratöre bağlı (aşağıda kalan açık). |
+| 34 | Okunmamış/bounce/ekli filtresi | ÇALIŞIYOR | + Yanıt bekleyen, Gönderilen, Arşiv görünümleri. |
+| 35 | Yetki | ÇALIŞIYOR | Admin kapısı artık `requireAuth` içinde (güvenlik dalgası); tüm uçlar `defineRoute`. |
+| 36 | Senkron hız sınırı | ÇALIŞIYOR | Kullanıcı başına dakikada 6. |
+| 37 | Boş okuma paneli | ÇALIŞIYOR | Kısayol ipucuyla. |
+| 38 | Klavye gezintisi | ÇALIŞIYOR | `j/k` gezin, `r` yanıtla, `e` arşiv, `u` okunmadı, `/` ara, `Esc` kapat; diyalog açıkken ve yazarken devre dışı. |
+| 39 | Konuşma görünümü | ÇALIŞIYOR | Okuma bölmesinde konuşmanın tamamı (gelen + giden), eskiler katlanır. |
+| 40 | Şablona bağ ("yanıt geldi") | ÇALIŞIYOR | Gelen mailden şablona bağlantı; şablon sayfası alıcı bazında yanıt sayısı + "gelen kutusunda aç". |
+| 41 | Saklama süresi / KVKK | ÇALIŞIYOR | Admin seçer (kapalı/90/180/365/730 gün, varsayılan kapalı, denetimli); `cron/inbox-sync` süresi dolanları ve eklerini siler. |
+| 42 | Okuma/yanıt denetim kaydı | ÇALIŞIYOR | Yanıt, arşiv, silme, saklama ayarı denetime yazılır. (Salt okuma denetlenmez: gürültü; gerekirse ayrı karar.) |
+
+**Sayım:** 42 satır · 42 ÇALIŞIYOR (spam alt özelliği kaldırıldı, gerekçesi #31'de).
+
+### Kapanan bulgular
+1 (CSP atlatma) · 2 (ek sunumu) · 3 (API kapısı — global düzeltme, burada `defineRoute` ile doğrulandı) · 4 (References zinciri) · 5 (40 mail penceresi + N+1) · 6 (yarışlar, sonsuz spinner) · 7 (yutulan hatalar) · 8 (konu sınırı, giden kayıt, denetim, alıntı) · 9 (sayfalama, sayaç tutarlılığı) · 10 (ölü veri: durum gösteriliyor, PATCH bağlı, `matchedTemplateId` kullanılıyor) · 11 (erişilebilirlik) · 12 (mobil + hareket: `useMotionPolicy`, yalnız eklenen/çıkan satır animasyonu, azaltılmış harekette statik) · 13 (uzak görsel bandı + yeni sekme linkler) · 14 (saklama) · 15 (iki sayfa arası yerel sekme + çift yönlü bağlantı) · 16 (küçük tutarlılık: "Re: Re:", yıl, emoji, Prisma tipleri, GET yan etkisi, postMessage kaynağı, Türkçe IMAP hataları).
+
+### Kalanlar
+- **UIDVALIDITY değişimi:** şema `[mailbox, uid]` benzersizliğinde kaldığı için UIDVALIDITY değişince Message-ID ile dedupe edilir; eski bir UID ile çakışan yeni mail `P2002` alıp imleci durdurur ve hata durumda görünür (sessiz kayıp yok). Kalıcı çözüm için **ŞEMA İSTEĞİ:** `InboxMessage.uidValidity String?` + benzersizlik `[mailbox, uidValidity, uid]`.
+- **Uzak görsel vekili (IP gizleme):** "Görselleri göster" doğrudan yükler; kullanıcıya IP'nin görünebileceği açıkça yazılıyor. Vekil uç ayrı iş.
+- **Senkron sıklığı:** cron günlük orkestratörde (`app/api/cron/daily/jobs.ts`, sahiplik dışı). İmleç sayesinde harici zamanlayıcı (cron-job.org) `GET /api/cron/inbox-sync`'i saatlik çağırabilir; kurulumu operasyon işi.
+- **R2 kovası hâlâ public:** ekler artık yetkili uçtan akıyor ve URL istemciye verilmiyor, ama eski nesnelerin kovası public. Özel kovaya taşıma altyapı işi.
+- **Atama/durum (ekip gelen kutusu), hazır yanıtlar/imza, tam metin arama (tsvector):** şema/ürün kararı gerektiriyor; bu dalgada yapılmadı.

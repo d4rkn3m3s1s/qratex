@@ -242,3 +242,73 @@ Salt okunur inceleme yapıldı; kod çalıştırılmadı, veritabanına dokunulm
 | 2 | Boş PUT varsayılan gerçek alıcıları yazıyor | Doğrulandı | Orta-Yüksek (ayrıca DB okuma hatasında fail-open) |
 | 3 | Kaynak kodda kişisel veri | Doğrulandı | Orta (depo herkese açıksa Yüksek) |
 | 4 | Toplu gönderim idempotent değil | Doğrulandı (gizli risk) | Orta-Yüksek |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa yeniden yazıldı: ince sunucu `page.tsx` (metadata "Mail şablonları"; şablonlar + istatistik + hatırlatma durumu sunucuda; `?t=<id>` derin bağlantı) → istemci adası `components/admin/a-iletisim/templates/*` (QDL v2, ops kaydı). İş kuralları `lib/mail-center/templates.server.ts`, tek doğrulama şeması `lib/mail-center/templates-contract.ts` (istemci formu ve PUT ucu aynı zod'u kullanır). Uçlar `defineRoute`: `GET|PUT|POST /api/admin/intern-emails`, `POST …/preview`, `GET …/sends`. Şema değişmedi: şablonlar `Settings[intern_task_emails]` = `{ version, updatedAt, updatedBy, templates }` (eski çıplak dizi okunur, ilk kayıtta yeni biçime geçer). Testler: `__tests__/lib/mail-center-templates.test.ts`, güncellenen `__tests__/lib/intern-task-emails.test.ts`, `__tests__/lib/intern-email-stats.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero | ÇALIŞIYOR | "Mail şablonları"; kayıt durumu meta satırında ("Kaydedildi · x önce · kim" / "Kaydedilmemiş"). |
+| 2 | Mail yapılandırma uyarısı | ÇALIŞIYOR | + piksel origin'i localhost ise ayrı uyarı (açılma takibi çalışmaz). |
+| 3 | Şablon + istatistik yükleme | ÇALIŞIYOR | Sunucuda ön yükleme; istatistik yalnız mevcut şablon id'leri için, satır tavanlı. |
+| 4 | Yükleniyor | ÇALIŞIYOR | `QueryState` iskeleti; boş seçim kartı yükleme sırasında görünmez. |
+| 5 | Yükleme hatası | ÇALIŞIYOR | Satır içi hata + Tekrar dene (fail-closed: DB hatası artık varsayılan listeye düşmez). |
+| 6 | Departman gruplama | ÇALIŞIYOR | Emoji eşlemesi UI'dan kaldırıldı (yalnız mail render'ında). |
+| 7 | Arama | ÇALIŞIYOR | Placeholder konuyu da söylüyor. |
+| 8 | Boş arama sonucu | ÇALIŞIYOR | |
+| 9 | Aynı isimde e-posta gösterimi | ÇALIŞIYOR | Ad yoksa ilk alıcı. |
+| 10 | Satır durum ikonları | ÇALIŞIYOR | Metinli `StatusBadge` ("2/3 açtı", "1 hata", "Alıcı yok", "N yanıt") — yalnız `title` değil. |
+| 11 | Tür emojisi | KALDIRILDI | Tür, düzenleyici başlığında metinle; emoji ikon diliyle çelişiyordu. |
+| 12 | "Yeni" tür menüsü | ÇALIŞIYOR | Radix `DropdownMenu` (Esc, ok tuşları, odak yönetimi). |
+| 13 | Türe göre başlangıç içeriği | ÇALIŞIYOR | |
+| 14 | Toplu gönderim | ÇALIŞIYOR | Alıcı sayısı (şablon değil), yeni/almış/hatalı ayrımı, varsayılan "yalnız yeni + hatalı". |
+| 15 | Kaydet | ÇALIŞIYOR | Tek zod şeması (geçersiz öğe sessizce düşmez, hatalı şablona odaklanır), boş liste meşru (varsayılan geri yazılmaz), iyimser kilit (409 + çakışma bandı), denetime alan bazlı fark. |
+| 16 | Kaydedilmemiş değişiklik uyarısı | ÇALIŞIYOR | Yapışkan kaydet çubuğu + `beforeunload`; satırda "Kaydedilmedi" rozeti. |
+| 17 | Gönderim özeti | ÇALIŞIYOR | + "Yanıtladı" (gelen kutusu eşleşmesi). |
+| 18 | Alıcı satırları | ÇALIŞIYOR | Hata metni görünür; "N yanıt · gelen kutusunda aç" bağlantısı. |
+| 19 | Tür seçici | ÇALIŞIYOR | `ChoiceChips` (radiogroup, ok tuşları). |
+| 20 | Alanlar | ÇALIŞIYOR | `useId` ile etiket bağı; çipli alıcı girişi + anında e-posta doğrulama (istemci ve sunucu). |
+| 21 | Son teslim | ÇALIŞIYOR | `datetime-local` (İstanbul), ISO saklanır, mailde "15 Ekim 2026, 17:00"; boşsa kart BASILMAZ (geçmiş varsayılan tarih yok); geçmiş tarih uyarısı; eski serbest metin için güncelleme uyarısı; hatırlatma aç/kapa anahtarı (cron uyar). |
+| 22 | Değişken ekleme | ÇALIŞIYOR | İmlecin olduğu yere; tanınmayan değişken uyarısı; boş kalan bilinen değişken mailde ham görünmez. |
+| 23 | Gövde editörü | ÇALIŞIYOR | Biçim kılavuzu (`1. Başlık`, `• madde`, boş satır). |
+| 24 | Şablon silme | ÇALIŞIYOR | Silme yerine ARŞİV (geri alınabilir, gönderim geçmişi korunur; arşivli şablon gönderilmez, hatırlatma almaz). `confirm()` kaldırıldı. |
+| 25 | Canlı önizleme | ÇALIŞIYOR | Sayfa içi (geniş ekranda yan panel, dar ekranda Sheet), 400 ms debounce, masaüstü/mobil genişlik, `{{email}}` ilk alıcıyla, piksel yok, `sandbox=""`. |
+| 26 | Test gönderimi | ÇALIŞIYOR | Ekrandaki TASLAK gönderilir (kaydedilmemiş yeni şablon dahil); test adresi doğrulanır; istatistik yenilemesi taslağa dokunmaz. |
+| 27 | Test durum paneli | ÇALIŞIYOR | Sonuçlar sekmesinde. |
+| 28 | "Yenile" | ÇALIŞIYOR | Ayrı düğme kaldırıldı; gönderim/test sonrası yalnız istatistik tazelenir, taslak korunur (Bulgu 1'in kökü). |
+| 29 | Tekli gönderim + kilit | ÇALIŞIYOR | Buton metni türe göre ("Görevi gönder", "Hatırlatmayı gönder", "Karşılama mailini gönder", "Gönder"); kaydedilmemişse kapalı ve nedeni yazılı. |
+| 30 | Tekli onay modalı | ÇALIŞIYOR | Alıcı listesi + grup sayıları + canlı satır durumu. |
+| 31 | Toplu onay modalı | ÇALIŞIYOR | Şablon/alıcı listesi, tahmini süre, "GÖNDER" yazarak onay, ilerleme çubuğu, Durdur. |
+| 32 | Toplu gönderim akışı | ÇALIŞIYOR | Şablon başına ayrı istek (60 sn sınırı aşılmaz), istek başına 40 sn bütçe + `remaining` ile yalnız kalan alıcılara devam, "yalnız yeni" ile tekrar denemede çift mail yok, Idempotency-Key, denetim kaydı. |
+| 33 | Hız sınırı | ÇALIŞIYOR | Gönderim 30/dk, PUT `mutation`, önizleme 120/dk. |
+| 34 | Açılma pikseli | ÇALIŞIYOR | Gönderimden < 10 sn sonraki açılma "otomatik olabilir" (MPP/tarayıcı) olarak ayrılıyor; piksel görünür 1×1 (display:none yok), origin `mailPublicOrigin()` (localhost değil), logo HTTPS. |
+| 35 | Yetki | ÇALIŞIYOR | `defineRoute` ADMIN + kapı. |
+| 36 | Denetim kaydı | ÇALIŞIYOR | Kayıt: eklenen/çıkarılan/değişen alanlar; gönderim: gönderilen/hata/atlanan/kalan. |
+| 37 | Mobil | ÇALIŞIYOR | Liste → düzenleyici drill-in + geri; önizleme Sheet; kaydet çubuğu güvenli alanlı. |
+| 38 | Erişilebilirlik | ÇALIŞIYOR | Etiket bağları, `aria-current`, radiogroup çipler, metinli durumlar, ≥44px hedefler, odak halkaları. |
+| 39 | Toast metinleri | ÇALIŞIYOR | `sonner` doğrudan; "Basarili:" öneki ve "✓" bu sayfada yok (global `lib/admin-toast` sahiplik dışı, dokunulmadı). |
+| 40 | Hatırlatma görünürlüğü | ÇALIŞIYOR | Sonuçlar sekmesinde bugünkü durum (gidecek / x alıcıya ulaştı / tamamlandı) + anahtar. |
+| 41 | Gönderim geçmişi | ÇALIŞIYOR | Sayfalı geçmiş (kim, ne zaman, test/gerçek, açılma, hata). |
+| 42 | Zamanlanmış gönderim | KALDIRILDI (yapılmadı) | Kalıcı iş kuyruğu/şema gerektiriyor; yarım "planla" düğmesi koymak yerine bırakıldı (aşağıda). |
+| 43 | CSV içe aktarma + doğrulama | ÇALIŞIYOR | Alıcı alanına CSV/liste/noktalı virgül yapıştırma, tekrar ayıklama, geçersiz adres listesi. |
+| 44 | Sayfa içi önizleme | ÇALIŞIYOR | #25. |
+| 45 | Eşzamanlı düzenleme koruması | ÇALIŞIYOR | Sürüm + karşılaştır-ve-yaz; 409'da çakışma bandı. |
+
+**Sayım:** 45 satır · 43 ÇALIŞIYOR · 2 KALDIRILDI (#11 bilinçli, #42 kapsam dışı).
+
+### Kapanan bulgular
+1 (Test/Yenile taslağı eziyor) · 2 (boş/bozuk PUT varsayılanları yazıyor + DB hatasında fail-open) · 3 (kaynak kodda kişisel veri: `DEFAULT_INTERN_TASK_EMAILS` boşaltıldı) · 4 (toplu gönderim idempotent değil / zaman aşımı) · 5 ("yanıtlamayın" altbilgisi: görev maili yanıta davet ediyor, cron hatırlatması da) · 6 (son teslim) · 7 (limitsiz GET) · 8 (toptan PUT eşzamanlılık/denetim — kilit + fark; ayrı model şema isteği olarak kalıyor) · 9 (erişilebilirlik) · 10 (mobil) · 11 (değişken imlece, biçim kılavuzu) · 12 (etiket/dil, metadata) · 13 (açılma güvenilirliği + yanıt sinyali).
+
+### Kalanlar
+- **Veri geçişi notu:** varsayılan şablon listesi artık boş. `Settings[intern_task_emails]` satırı hiç kaydedilmemiş bir ortamda liste boş görünür (eski 13 şablon git geçmişinde duruyor; gerekirse oradan elle girilir). Git geçmişinden kişisel verinin temizlenmesi (`filter-repo`) depo sahibinin kararı.
+- **Zamanlanmış gönderim:** kuyruk/iş kaydı gerekir. **ŞEMA İSTEĞİ:** `InternEmailTemplate` (Settings JSON yerine; sürüm geçmişi ve satır bazlı kilit için) ve `InternEmailBatch { id, createdBy, status, scheduledAt, total, sent, failed }` + `InternEmailSend.batchId`.
+- **Açılma User-Agent kaydı:** daha güçlü bot ayrımı için **ŞEMA İSTEĞİ:** `InternEmailSend.openUserAgent String?`. Şimdilik süre sezgisi (< 10 sn).
+- **Şablon sürüm geçmişi / geri alma:** denetim kaydında alan bazlı fark var; tam içerik geri yükleme ayrı model ister (yukarıdaki şema isteği).
+- **`lib/admin-toast` "Basarili:" öneki:** global modül, sahiplik dışı; bu yüzey artık onu kullanmıyor.
+- **`__tests__/api/cron-reminders.test.ts`:** bu dosyadaki mock'a `formatDeadlineLabel` eklendi; ancak suite, `team-task-due → lib/team/access → define-route → lib/auth → @auth/prisma-adapter` ESM zinciri yüzünden çalıştırılamıyor (bu yüzeyden bağımsız, önceden var olan kırılma).
