@@ -1,3 +1,4 @@
+import { jsonLdHtml } from '@/lib/landing/seo';
 import { sanitizeSeoString } from '@/lib/seo-settings';
 
 interface WebPageJsonLdProps {
@@ -19,7 +20,7 @@ export function WebPageJsonLd({ name, description, url, type = 'WebPage' }: WebP
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }}
     />
   );
 }
