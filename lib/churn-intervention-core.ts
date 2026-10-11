@@ -154,7 +154,8 @@ export async function runChurnInterventionForDealer(
       data: {
         count: fresh.length,
         offersCreated,
-        ...(cfg.autoFlashOffer && offersCreated > 0 ? { ctaPath: '/dealer/remedy-queue' } : {}),
+        // Taslak varsa onay kuyruğu; yoksa işaretlenen müşterilerin listelendiği Müşteriler → Risk sekmesi.
+        ctaPath: cfg.autoFlashOffer && offersCreated > 0 ? '/dealer/remedy-queue' : '/dealer/customers?tab=risk',
       },
     },
   });

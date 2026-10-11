@@ -1,5 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { checkPublicActionRateLimit } from '@/lib/rate-limit';
@@ -25,7 +25,7 @@ const paramsSchema = z.object({ id: z.string().trim().min(1).max(64) });
 
 async function sessionUserId(): Promise<string | null> {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     return session?.user?.id ?? null;
   } catch {
     return null; // oturum okunamazsa anonim akış

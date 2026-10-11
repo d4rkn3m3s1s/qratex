@@ -11,6 +11,9 @@ export async function initSentryServer(): Promise<void> {
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
     environment: process.env.NODE_ENV,
     enabled: true,
+    // mimari-api B4: fabrika dışı route'ların çoğu hatayı yalnız `console.error` ile yazıyor;
+    // bu entegrasyon onları da Sentry'ye taşır (yalnız `error` seviyesi — uyarılar gürültü olmasın).
+    integrations: [Sentry.captureConsoleIntegration({ levels: ['error'] })],
     beforeSend(event, hint) {
       if (event.user) {
         event.user.email = undefined;

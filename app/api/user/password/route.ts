@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { authOptions, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { reissueSessionCookie } from '@/lib/auth/session-version';
@@ -15,10 +15,9 @@ export const dynamic = 'force-dynamic';
 export async function PATCH(request: NextRequest) {
   try {
     const auditMeta = getAuditRequestMeta(request);
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     // Brute-force koruması: mevcut-şifre tahmini için oturum-içi deneme sınırı (8 / 5 dk).
     const rl = await checkRateLimitDb(`password_change:${session.user.id}`, 8, 300_000);

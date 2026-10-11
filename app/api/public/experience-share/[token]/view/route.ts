@@ -1,5 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { getUserAgent } from '@/lib/request-metadata';
@@ -23,7 +23,7 @@ export const POST = defineRoute(
   async ({ params, request, ip }) => {
     let viewerId: string | null = null;
     try {
-      viewerId = (await getServerSession(authOptions))?.user?.id ?? null;
+      viewerId = (await getOptionalSession())?.user?.id ?? null;
     } catch {
       viewerId = null;
     }

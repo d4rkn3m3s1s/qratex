@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOptionalSession } from '@/lib/api-auth';
 import { Prisma } from '@prisma/client';
 import { unstable_cache } from 'next/cache';
-import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
   try {
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     // P0-09: oturum ZORUNLU (eski kod opsiyoneldi → anonim kazıma).
     if (!session?.user?.id) {
       return NextResponse.json(

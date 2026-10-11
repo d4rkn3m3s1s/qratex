@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -74,7 +74,7 @@ export async function GET(
         { error: 'Bu kart bloklanmış', code: 'CARD_BLOCKED' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const viewerId = session?.user?.id ?? null;
     const isOwnCard = !!viewerId && !!card.customerId && card.customerId === viewerId;
     const hasOwner = !!card.customerId;

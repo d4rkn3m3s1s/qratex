@@ -1,5 +1,5 @@
 /**
- * Rate limiter. In-memory (per process) hızlı katman + DB-backed kalıcı katman.
+ * Rate limiter — PAYLAŞILAN sayaç (Redis öncelikli, DB'ye düşer). Bellek içi katman kaldırıldı.
  *
  * Serverless (Vercel) ortamında her Lambda kendi belleğinde olduğu ve cold
  * start sayaçları sıfırladığı için in-memory Map TEK başına güvenilir değildir.
@@ -9,7 +9,10 @@
  */
 import { prisma } from '@/lib/prisma';
 
-const store = new Map<string, { count: number; resetAt: number }>();
+// Giriş kilidi: 5 başarısız deneme = 15 dk blok (DB/Redis sayaçlı `*Db` varyantları).
+const LOCKOUT_MS = 15 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 5;
+
 
 // ───────────────────────── DB-backed atomic limiter ─────────────────────────
 
@@ -161,49 +164,8 @@ export async function clearFailedLoginAttemptsDb(identifier: string): Promise<vo
 }
 
 const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REGISTER = 5;
-const MAX_LOGIN = 10;
-const MAX_FEEDBACK = 20;
 const MAX_FEEDBACK_PER_QR_PER_WINDOW = 5;
 const MAX_SCAN_PER_IP_PER_MINUTE = 60; // QR scan abuse protection
-
-function getKey(prefix: string, identifier: string): string {
-  return `${prefix}:${identifier}`;
-}
-
-function cleanup(key: string): void {
-  const entry = store.get(key);
-  if (entry && Date.now() > entry.resetAt) store.delete(key);
-}
-
-export function checkRateLimit(
-  prefix: 'register' | 'login' | 'feedback',
-  identifier: string
-): { ok: boolean; remaining: number; retryAfterMs?: number } {
-  const key = getKey(prefix, identifier);
-  cleanup(key);
-
-  const max =
-    prefix === 'register' ? MAX_REGISTER : prefix === 'login' ? MAX_LOGIN : MAX_FEEDBACK;
-  let entry = store.get(key);
-
-  if (!entry) {
-    entry = { count: 1, resetAt: Date.now() + WINDOW_MS };
-    store.set(key, entry);
-    return { ok: true, remaining: max - 1 };
-  }
-
-  if (entry.count >= max) {
-    return {
-      ok: false,
-      remaining: 0,
-      retryAfterMs: Math.max(0, entry.resetAt - Date.now()),
-    };
-  }
-
-  entry.count += 1;
-  return { ok: true, remaining: max - entry.count };
-}
 
 export function getClientIdentifier(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -211,57 +173,9 @@ export function getClientIdentifier(request: Request): string {
   return ip || request.headers.get('x-real-ip') || 'unknown';
 }
 
-// --- Login lockout (5 failed attempts = 15 min block) ---
-const LOCKOUT_MS = 15 * 60 * 1000;
-const MAX_FAILED_ATTEMPTS = 5;
-const lockoutStore = new Map<
-  string,
-  { failedCount: number; lockedUntil: number }
->();
-
-function cleanupLockout(key: string): void {
-  const entry = lockoutStore.get(key);
-  if (entry && Date.now() > entry.lockedUntil) lockoutStore.delete(key);
-}
-
-export function getLoginLockout(identifier: string): { locked: boolean; retryAfterMs?: number } {
-  cleanupLockout(identifier);
-  const entry = lockoutStore.get(identifier);
-  if (!entry) return { locked: false };
-  if (entry.failedCount >= MAX_FAILED_ATTEMPTS && Date.now() < entry.lockedUntil) {
-    return {
-      locked: true,
-      retryAfterMs: Math.max(0, entry.lockedUntil - Date.now()),
-    };
-  }
-  if (Date.now() >= entry.lockedUntil) {
-    lockoutStore.delete(identifier);
-    return { locked: false };
-  }
-  return { locked: false };
-}
-
-export function recordFailedLoginAttempt(identifier: string): void {
-  cleanupLockout(identifier);
-  const entry = lockoutStore.get(identifier);
-  const now = Date.now();
-  if (!entry) {
-    lockoutStore.set(identifier, {
-      failedCount: 1,
-      lockedUntil: now + LOCKOUT_MS,
-    });
-    return;
-  }
-  const newCount = entry.failedCount + 1;
-  lockoutStore.set(identifier, {
-    failedCount: newCount,
-    lockedUntil: newCount >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_MS : entry.lockedUntil,
-  });
-}
-
-export function clearFailedLoginAttempts(identifier: string): void {
-  lockoutStore.delete(identifier);
-}
+// NOT (mimari-api B7): Bellek içi `checkRateLimit` / `getLoginLockout` / `recordFailedLoginAttempt` /
+// `clearFailedLoginAttempts` KALDIRILDI — serverless'te her Lambda kendi Map'ini saydığı için limit
+// N-kat gevşiyordu. Giriş kilidi `*Db` varyantlarında; route limitleri `defineRoute({ rateLimit })`.
 
 // --- Per-QR feedback throttle (abuse protection) — DB-backed ---
 export function checkFeedbackPerQrRateLimit(
@@ -276,47 +190,15 @@ export function checkScanRateLimit(ip: string): Promise<RateLimitResult> {
   return checkRateLimitDb(`scan:${ip}`, MAX_SCAN_PER_IP_PER_MINUTE, WINDOW_MS);
 }
 
-const MAX_ADMIN_SEO_PER_MINUTE = 30;
 const MAX_ADMIN_MUTATION_PER_MINUTE = 50;
 
-/** Admin SEO API: dakikada max istek (identifier = userId) */
-export function checkAdminSeoRateLimit(identifier: string): { ok: boolean; retryAfterMs?: number } {
-  const key = getKey('admin_seo', identifier);
-  cleanup(key);
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { count: 1, resetAt: Date.now() + WINDOW_MS };
-    store.set(key, entry);
-    return { ok: true };
-  }
-  if (entry.count >= MAX_ADMIN_SEO_PER_MINUTE) {
-    return {
-      ok: false,
-      retryAfterMs: Math.max(0, entry.resetAt - Date.now()),
-    };
-  }
-  entry.count += 1;
-  return { ok: true };
-}
-
-/** Admin mutation APIs (settings batch, feedbacks delete/restore, api-keys, webhooks, user bulk): dakikada max istek (identifier = userId) */
-export function checkAdminRateLimit(identifier: string): { ok: boolean; retryAfterMs?: number } {
-  const key = getKey('admin_mutation', identifier);
-  cleanup(key);
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { count: 1, resetAt: Date.now() + WINDOW_MS };
-    store.set(key, entry);
-    return { ok: true };
-  }
-  if (entry.count >= MAX_ADMIN_MUTATION_PER_MINUTE) {
-    return {
-      ok: false,
-      retryAfterMs: Math.max(0, entry.resetAt - Date.now()),
-    };
-  }
-  entry.count += 1;
-  return { ok: true };
+/**
+ * Admin mutasyon uçları (ayar toplu yazım, geri bildirim sil/geri al, kullanıcı toplu işlem,
+ * otomasyon): dakikada en fazla 50 istek (identifier = userId). Eskiden bellek içi Map'ti
+ * (serverless'te Lambda başına ayrı sayıyordu); artık PAYLAŞILAN sayaç — çağıran `await` etmeli.
+ */
+export function checkAdminRateLimit(identifier: string): Promise<RateLimitResult> {
+  return checkRateLimitDb(`admin_mutation:${identifier}`, MAX_ADMIN_MUTATION_PER_MINUTE, WINDOW_MS);
 }
 
 // --- QRA floating chat (/api/chat): müşteri sıkı, bayi/admin gevşek, anon IP parmak izi ---

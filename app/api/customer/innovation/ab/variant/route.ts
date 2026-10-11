@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import { defineRoute, ok } from '@/lib/http/define-route';
@@ -26,7 +26,7 @@ export const GET = defineRoute(
       return ok({ experimentId, variant: 'A' as const, active: false, copy: '', message: 'Deney kapalı veya bulunamadı' }, { legacySpread: true });
     }
 
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const ip = getClientIp(request) || '0';
     const ua = getUserAgent(request) || '';
     const stickySeed = session?.user?.id ?? `${ip}:${ua}`.slice(0, 200);

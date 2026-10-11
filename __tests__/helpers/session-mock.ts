@@ -32,8 +32,17 @@ export async function requireAuth(roles?: string[]) {
   return { session: current };
 }
 
+/** `getOptionalSession` sözleşmesi: geçerli oturum ya da null (asla hata yanıtı). */
+export async function getOptionalSession() {
+  return current?.user?.id ? current : null;
+}
+
+export const ANY_SIGNED_IN_ROLE = ['ADMIN', 'DEALER', 'STAFF', 'CUSTOMER'];
+
 export const nextAuthMock = { getServerSession: (...args: unknown[]) => (getServerSession as any)(...args) };
 export const apiAuthMock = {
   requireAuth: (...args: any[]) => requireAuth(...args),
+  getOptionalSession: () => getOptionalSession(),
+  ANY_SIGNED_IN_ROLE,
   STAFF_INACTIVE_CODE: 'STAFF_INACTIVE',
 };

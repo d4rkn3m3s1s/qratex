@@ -48,6 +48,7 @@ import { getClientIp } from '@/lib/request-metadata';
 import { resolveDealerScope, type DealerScope } from '@/lib/auth/scope';
 import { scheduleRouteMetric } from '@/lib/observability/route-metrics';
 import { normalizePath } from '@/lib/observability/histogram';
+import type { ModuleKey } from '@/lib/module-controls';
 
 // ───────────────────────────── Hata sözleşmesi ─────────────────────────────
 
@@ -293,8 +294,8 @@ export interface RouteDefinition<
   params?: P;
   tenant?: T;
   rateLimit?: RateLimitPolicyName | RateLimitPolicy;
-  /** `MODULE_CATALOG` anahtarı; kapalıysa 403 MODULE_DISABLED. */
-  module?: string;
+  /** `MODULE_CATALOG` anahtarı (`ModuleKey`, katalog dışı derlenmez); kapalıysa 403 MODULE_DISABLED. */
+  module?: ModuleKey;
   /** `Idempotency-Key` başlığı ile tekrar korumalı. */
   idempotent?: boolean;
   /** Gövde boyut sınırı (bayt). Varsayılan 1 MB. */

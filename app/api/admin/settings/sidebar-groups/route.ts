@@ -80,7 +80,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
-  const rl = checkAdminRateLimit(auth.session.user.id);
+  const rl = await checkAdminRateLimit(auth.session.user.id);
   if (!rl.ok) {
     return NextResponse.json(
       { success: false, error: 'Çok fazla istek.' },

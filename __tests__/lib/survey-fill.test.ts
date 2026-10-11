@@ -8,6 +8,13 @@ import { NextRequest } from 'next/server';
 const mockGetServerSession = jest.fn();
 jest.mock('next-auth', () => ({ __esModule: true, getServerSession: (...a: unknown[]) => mockGetServerSession(...a) }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
+// Doldurma ucu oturumu isteğe bağlı ama doğrulanmış okur (getOptionalSession).
+jest.mock('@/lib/api-auth', () => ({
+  getOptionalSession: async () => {
+    const s = (await mockGetServerSession()) as { user?: { id?: string } } | null;
+    return s?.user?.id ? s : null;
+  },
+}));
 jest.mock('@/lib/rate-limit', () => ({
   checkRateLimitDb: async () => ({ ok: true }),
   checkPublicActionRateLimit: async () => ({ ok: true }),

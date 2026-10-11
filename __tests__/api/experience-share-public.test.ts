@@ -14,7 +14,14 @@ const mockGetServerSession = jest.fn();
 jest.mock('next-auth', () => ({ __esModule: true, getServerSession: (...a: unknown[]) => mockGetServerSession(...a) }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 const mockRequireAuth = jest.fn();
-jest.mock('@/lib/api-auth', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
+jest.mock('@/lib/api-auth', () => ({
+  requireAuth: (...a: unknown[]) => mockRequireAuth(...a),
+  // İsteğe bağlı oturum (route artık çıplak getServerSession değil, doğrulanmış oturum okur).
+  getOptionalSession: async () => {
+    const s = (await mockGetServerSession()) as { user?: { id?: string } } | null;
+    return s?.user?.id ? s : null;
+  },
+}));
 const mockRate = jest.fn(async (_bucket: string, _max?: number, _windowMs?: number) => ({ ok: true }));
 jest.mock('@/lib/rate-limit', () => ({
   checkRateLimitDb: (bucket: string, max: number, windowMs: number) => mockRate(bucket, max, windowMs),

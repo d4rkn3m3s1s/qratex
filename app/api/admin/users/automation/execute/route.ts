@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return { statusCode: 401, body: { error: 'Yetkisiz' } };
     const { session } = auth;
-    const rl = checkAdminRateLimit(session.user.id);
+    const rl = await checkAdminRateLimit(session.user.id);
     if (!rl.ok) return { statusCode: 429, body: { error: 'Çok fazla istek' } };
 
     const body = await request.json().catch(() => null);

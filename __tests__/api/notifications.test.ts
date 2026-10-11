@@ -4,10 +4,16 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 
+// Route artık requireAuth (oturum durumu + replay) kullanıyor; oturum bu sahte ile verilir.
 const mockGetServerSession = jest.fn();
-jest.mock('next-auth', () => ({
-    __esModule: true,
-    getServerSession: (...args: unknown[]) => mockGetServerSession(...args),
+jest.mock('@/lib/api-auth', () => ({
+    ANY_SIGNED_IN_ROLE: ['ADMIN', 'DEALER', 'STAFF', 'CUSTOMER'],
+    requireAuth: async () => {
+        const session = await mockGetServerSession();
+        return session?.user?.id
+            ? { session }
+            : { error: new Response(JSON.stringify({ success: false, error: 'Oturum yok', code: 'UNAUTHENTICATED' }), { status: 401 }) };
+    },
 }));
 
 jest.mock('@/lib/auth', () => ({

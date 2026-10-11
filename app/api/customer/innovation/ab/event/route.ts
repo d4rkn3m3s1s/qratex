@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { recordInnovationAbEvent } from '@/lib/innovation-ab';
@@ -27,7 +27,7 @@ export const POST = defineRoute(
     const [cfg, controls] = await Promise.all([getInnovationPlatformConfig(), getModuleControls()]);
     const live = controls.ab_testing !== false && cfg.campaignAb.experiments.some((e) => e.id === body.experimentId && e.active);
     if (!live) return ok({ recorded: false }, { legacySpread: true });
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     await recordInnovationAbEvent(session?.user?.id ?? null, body.experimentId, body.variant, 'conversion');
     return ok({ recorded: true }, { legacySpread: true });
   }

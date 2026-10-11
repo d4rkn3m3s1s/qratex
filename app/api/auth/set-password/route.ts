@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -24,10 +23,10 @@ export const dynamic = 'force-dynamic';
  * PASSWORD_TOO_LONG · ALREADY_SET.
  */
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ code: 'UNAUTHENTICATED', error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-  }
+  // requireAuth: askı/silinme, sessionVersion, güncel rol, token replay (çıplak getServerSession değil).
+  const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+  if ('error' in auth) return auth.error;
+  const session = auth.session;
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { password: true, accounts: { select: { provider: true } } },
@@ -39,10 +38,10 @@ export async function GET() {
 const bodySchema = z.object({ password: z.string().max(256) });
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ code: 'UNAUTHENTICATED', error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-  }
+  // requireAuth: askı/silinme, sessionVersion, güncel rol, token replay (çıplak getServerSession değil).
+  const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+  if ('error' in auth) return auth.error;
+  const session = auth.session;
   const userId = session.user.id;
 
   const rl = await checkRateLimitDb(`set_password:${userId}`, 5, 300_000);

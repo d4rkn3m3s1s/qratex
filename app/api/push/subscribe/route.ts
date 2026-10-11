@@ -1,105 +1,74 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-
-// POST - Subscribe to push notifications
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+/**
+ * PANEL cihaz push aboneliği (bayi / personel / yönetici) — tüketici: `components/dealer/b-ayarlar/use-push-device.ts`.
+ * Müşteri cihazları AYRI uçtan kaydolur: `/api/customer/push` (mimari-api B11: iki uç rol ile ayrıştı).
+ *
+ * defineRoute: rol + oturum durumu/replay (çıplak getServerSession yok), zod gövde, Redis öncelikli
+ * oran sınırı, merkezi hata zarfı. Gövde `PushSubscription.toJSON()` biçimindedir.
+ */
+const PANEL_ROLES = ['DEALER', 'STAFF', 'ADMIN'] as const;
 
-    const subscription = await req.json();
-    const { endpoint, keys } = subscription;
+const SubscribeBody = z
+  .object({
+    endpoint: z.string().url().max(2048),
+    expirationTime: z.number().nullable().optional(),
+    keys: z.object({
+      p256dh: z.string().min(1).max(512),
+      auth: z.string().min(1).max(512),
+    }),
+  })
+  .strip();
 
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
-      return NextResponse.json({ error: 'Invalid subscription data' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+const UnsubscribeBody = z.object({ endpoint: z.string().max(2048).optional() }).strip().optional();
 
+export const POST = defineRoute(
+  { name: 'push.subscribe', roles: PANEL_ROLES, schema: SubscribeBody, rateLimit: 'mutation' },
+  async ({ body, user, request }) => {
     const existing = await prisma.pushSubscription.findUnique({
-      where: { endpoint },
+      where: { endpoint: body.endpoint },
       select: { userId: true },
     });
-    if (existing && existing.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'This push endpoint is already linked to another account' },
-        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    if (existing && existing.userId !== user.id) {
+      throw new ApiError('CONFLICT', 'Bu tarayıcı bildirim kaydı başka bir hesaba bağlı.');
     }
 
-    // Upsert subscription
+    const userAgent = request.headers.get('user-agent')?.slice(0, 500) || undefined;
     const pushSubscription = await prisma.pushSubscription.upsert({
-      where: { endpoint },
+      where: { endpoint: body.endpoint },
       update: {
-        userId: session.user.id,
-        p256dh: keys.p256dh,
-        auth: keys.auth,
-        userAgent: req.headers.get('user-agent') || undefined,
+        userId: user.id,
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+        userAgent,
         isActive: true,
         lastUsedAt: new Date(),
       },
       create: {
-        userId: session.user.id,
-        endpoint,
-        p256dh: keys.p256dh,
-        auth: keys.auth,
-        userAgent: req.headers.get('user-agent') || undefined,
+        userId: user.id,
+        endpoint: body.endpoint,
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+        userAgent,
       },
+      select: { id: true },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Push notifications enabled',
-      subscriptionId: pushSubscription.id,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('Error subscribing to push:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return ok({ message: 'Bildirimler açıldı', subscriptionId: pushSubscription.id }, { legacySpread: true });
   }
-}
+);
 
-// DELETE - Unsubscribe from push notifications
-export async function DELETE(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const { endpoint } = await req.json();
-
-    if (endpoint) {
-      await prisma.pushSubscription.updateMany({
-        where: { 
-          endpoint,
-          userId: session.user.id,
-        },
-        data: { isActive: false },
-      });
-    } else {
-      // Disable all subscriptions for user
-      await prisma.pushSubscription.updateMany({
-        where: { userId: session.user.id },
-        data: { isActive: false },
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Push notifications disabled',
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('Error unsubscribing from push:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+export const DELETE = defineRoute(
+  { name: 'push.unsubscribe', roles: PANEL_ROLES, schema: UnsubscribeBody, rateLimit: 'mutation' },
+  async ({ body, user }) => {
+    await prisma.pushSubscription.updateMany({
+      where: body?.endpoint ? { endpoint: body.endpoint, userId: user.id } : { userId: user.id },
+      data: { isActive: false },
+    });
+    return ok({ message: 'Bildirimler kapatıldı' }, { legacySpread: true });
   }
-}
+);

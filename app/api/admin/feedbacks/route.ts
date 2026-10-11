@@ -333,7 +333,7 @@ export async function DELETE(request: NextRequest) {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
-    const rl = checkAdminRateLimit(session.user.id);
+    const rl = await checkAdminRateLimit(session.user.id);
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },

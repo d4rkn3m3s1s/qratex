@@ -111,11 +111,8 @@ export async function loadUniverse(dealerId: string, now: Date = new Date()): Pr
       const at = r.calculatedAt instanceof Date ? r.calculatedAt : null;
       if (at && (!oldest || at < oldest)) oldest = at;
     }
-    universe = {
-      rows: persisted.map((r) => toStatRow(r as unknown as Record<string, unknown>)),
-      source: 'persisted',
-      calculatedAt: oldest,
-    };
+    const rows = persisted.map((r) => toStatRow(r as unknown as Record<string, unknown>));
+    universe = { rows: await mergeIntradayDelta(dealerId, rows, oldest, now), source: 'persisted', calculatedAt: oldest };
   } else {
     const live = await computeDealerCustomerStats(dealerId, { now });
     universe = { rows: live.map((s) => toStatRow(s as unknown as Record<string, unknown>)), source: 'live', calculatedAt: null };
@@ -137,6 +134,38 @@ export async function loadUniverse(dealerId: string, now: Date = new Date()): Pr
     );
   }
   return universe;
+}
+
+/** Gün içi delta için en fazla bu kadar müşteri canlı yeniden hesaplanır (aşarsa yarın). */
+const DELTA_MAX_CUSTOMERS = 500;
+
+/**
+ * Günlük özet (`calculatedAt`) sonrasında bu işletmede tüketimi olan müşterileri CANLI ve bayi
+ * kapsamlı yeniden hesaplayıp kalıcı satırların üstüne yazar. Böylece son hesaplamadan sonra ilk
+ * kez gelen müşteri listede/segmentte sessizce eksik kalmaz (customers #27, segment-actions Bulgu 6)
+ * ve bugün gelen müşteri hâlâ "uyuyor" görünmez. Hata olursa kalıcı satırlarla devam edilir.
+ */
+async function mergeIntradayDelta(dealerId: string, rows: StatRow[], since: Date | null, now: Date): Promise<StatRow[]> {
+  if (!since) return rows;
+  try {
+    const changed =
+      ((await prisma.consumption.groupBy({
+        by: ['customerId'],
+        where: { dealerId, createdAt: { gt: since, lte: now } },
+        take: DELTA_MAX_CUSTOMERS,
+        orderBy: { customerId: 'asc' },
+      })) as Array<{ customerId: string }> | undefined) ?? [];
+    if (changed.length === 0) return rows;
+    const fresh = await computeDealerCustomerStats(dealerId, { now, customerIds: changed.map((c) => c.customerId) });
+    const byId = new Map(fresh.map((f) => [f.customerId, toStatRow(f as unknown as Record<string, unknown>)]));
+    const merged = rows.map((r) => byId.get(r.customerId) ?? r);
+    const known = new Set(rows.map((r) => r.customerId));
+    for (const [id, r] of byId) if (!known.has(id)) merged.push(r);
+    return merged;
+  } catch (err) {
+    console.warn('[dealer-customers] gün içi delta hesaplanamadı; kalıcı özetle devam:', err);
+    return rows;
+  }
 }
 
 /* ───────────────────────── Kullanıcı görünümü ───────────────────────── */
@@ -295,6 +324,8 @@ export async function lastContactMap(dealerId: string, ids: ReadonlyArray<string
 
 /* ───────────────────────── 360 detay ───────────────────────── */
 
+/** AI aciliyet eşiği ("Acil" rozeti). */
+const URGENT_AT = 0.7;
 const SENTIMENT_TONE: Record<string, CustomerTimelineItem['tone']> = { positive: 'success', negative: 'danger', neutral: 'neutral' };
 const REMEDY_STATUS_TR: Record<string, string> = {
   pending: 'müşterinin seçimini bekliyor',
@@ -333,7 +364,7 @@ export async function getCustomerDetail(dealerId: string, customerId: string, no
       where: { qrCode: { dealerId }, userId: customerId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 10,
-      select: { id: true, rating: true, text: true, sentiment: true, churnRisk: true, dealerReply: true, createdAt: true, trustFlagged: true },
+      select: { id: true, rating: true, text: true, sentiment: true, churnRisk: true, intent: true, urgency: true, dealerReply: true, createdAt: true, trustFlagged: true },
     }),
     prisma.consumptionReview.findMany({
       where: { customerId, consumption: { dealerId }, deletedAt: null },
@@ -368,6 +399,8 @@ export async function getCustomerDetail(dealerId: string, customerId: string, no
         text: clip(f.text, 400),
         sentiment: f.sentiment,
         churnRisk: f.churnRisk,
+        intent: f.intent ?? null,
+        urgent: (f.urgency ?? 0) >= URGENT_AT,
         replied: !!f.dealerReply,
         reply: clip(f.dealerReply, 300),
         at: f.createdAt.toISOString(),
@@ -379,6 +412,8 @@ export async function getCustomerDetail(dealerId: string, customerId: string, no
       text: clip(r.text, 400),
       sentiment: r.sentiment,
       churnRisk: r.churnRisk,
+      intent: null,
+      urgent: false,
       replied: !!r.dealerReply,
       reply: clip(r.dealerReply, 300),
       at: r.createdAt.toISOString(),
@@ -500,7 +535,7 @@ export async function getRiskOverview(dealerId: string, now: Date = new Date()):
           where: { qrCode: { dealerId }, deletedAt: null, trustFlagged: false, userId: { in: ids }, churnRisk: { not: null } },
           orderBy: { createdAt: 'desc' },
           take: 400,
-          select: { id: true, userId: true, rating: true, text: true, sentiment: true, churnRisk: true, dealerReply: true, createdAt: true },
+          select: { id: true, userId: true, rating: true, text: true, sentiment: true, churnRisk: true, intent: true, urgency: true, dealerReply: true, createdAt: true },
         })
       : Promise.resolve([]),
     ids.length
@@ -554,12 +589,14 @@ export async function getRiskOverview(dealerId: string, now: Date = new Date()):
   for (const f of fbSignals ?? []) {
     consider(f.userId, {
       id: f.id, type: 'feedback', rating: f.rating, text: clip(f.text, 200), sentiment: f.sentiment, churnRisk: f.churnRisk,
+      intent: f.intent ?? null, urgent: (f.urgency ?? 0) >= URGENT_AT,
       replied: !!f.dealerReply, reply: null, at: f.createdAt.toISOString(),
     });
   }
   for (const r of crSignals ?? []) {
     consider(r.customerId, {
       id: r.id, type: 'review', rating: r.rating, text: clip(r.text, 200), sentiment: r.sentiment, churnRisk: r.churnRisk,
+      intent: null, urgent: false,
       replied: !!r.dealerReply, reply: null, at: r.createdAt.toISOString(),
     });
   }

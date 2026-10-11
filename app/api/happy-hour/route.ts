@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAuth, getOptionalSession } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -26,7 +25,7 @@ const MAX_ACTIVE_HAPPY_HOURS_PER_DEALER = 50;
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const { searchParams } = new URL(req.url);
     const list = searchParams.get('list') === '1';
 

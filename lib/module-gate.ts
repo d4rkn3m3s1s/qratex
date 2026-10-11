@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
+import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls, type ModuleKey } from '@/lib/module-controls';
 import {
   FEATURE_VISIBILITY_SETTINGS_KEY,
   MENU_VISIBILITY_SETTINGS_KEY,
@@ -90,7 +90,8 @@ const getVisibilitySettings = cache(() =>
   })()
 );
 
-export async function assertModuleEnabled(moduleKey: string, options: ModuleGateOptions = {}) {
+/** `moduleKey` katalogdan türetilmiş `ModuleKey` — katalog dışı anahtar derlenmez (mimari-api B8). */
+export async function assertModuleEnabled(moduleKey: ModuleKey, options: ModuleGateOptions = {}) {
   const controls = await getModuleControls();
   const visibility = await getVisibilitySettings();
   const explicitRole = options.role;

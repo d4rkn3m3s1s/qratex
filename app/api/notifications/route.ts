@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { clampNotificationListLimit, toPublicNotification } from '@/lib/notification-public-dto';
@@ -13,13 +12,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const { searchParams } = new URL(request.url);
     const limit = clampNotificationListLimit(searchParams.get('limit'));
@@ -82,13 +77,9 @@ export async function GET(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const body = await request.json();
     const { notificationId, markAllRead } = body;
@@ -163,13 +154,9 @@ export async function PATCH(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const { searchParams } = new URL(request.url);
     const notificationId = searchParams.get('id');

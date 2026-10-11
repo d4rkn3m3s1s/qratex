@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
-    const rl = checkAdminRateLimit(auth.session.user.id);
+    const rl = await checkAdminRateLimit(auth.session.user.id);
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },

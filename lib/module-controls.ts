@@ -14,7 +14,12 @@ export type ModuleControlsMap = Record<string, boolean>;
 
 export const MODULE_CONTROLS_SETTINGS_KEY = 'moduleControls';
 
-export const MODULE_CATALOG: ModuleControlItem[] = [
+/**
+ * Katalog `as const`: anahtarlar `ModuleKey` birleşim tipine dönüşür (mimari-api B8). `assertModuleEnabled`
+ * ve `defineRoute({ module })` yalnız bu anahtarları kabul eder — katalog dışı anahtar (yönetici
+ * panelinden kapatılamayan "hayalet" modül) DERLEME hatasıdır.
+ */
+const MODULE_CATALOG_ITEMS = [
   { key: 'donations', label: 'Bağışlar', description: 'Bağış toplama ve bağış geçmişi modülleri', scope: 'customer', severity: 'important', detailHref: '/customer/donations' },
   { key: 'referrals', label: 'Davetler / Referans', description: 'Arkadaş daveti ve referans ödülleri', scope: 'customer', severity: 'important', detailHref: '/customer/campaigns' },
   { key: 'customer_campaigns', label: 'Müşteri kampanyaları', description: 'Müşteri tarafı kampanya ve davet ekranı', scope: 'customer', severity: 'important', detailHref: '/customer/campaigns' },
@@ -58,7 +63,19 @@ export const MODULE_CATALOG: ModuleControlItem[] = [
   { key: 'admin_bootstrap', label: 'Demo Bootstrap', description: 'Demo veri üretim/silme ve demo merkez', scope: 'admin', severity: 'optional' },
   { key: 'audit_logs', label: 'Audit Kayıtları', description: 'Yönetim denetim kayıtları ve geri alma', scope: 'platform', severity: 'critical', detailHref: '/admin/audit' },
   { key: 'observability', label: 'Gözlemlenebilirlik', description: 'Sistem health, monitoring ve teknik özet ekranları', scope: 'platform', severity: 'important', detailHref: '/admin/observability' },
-];
+] as const satisfies ReadonlyArray<ModuleControlItem>;
+
+/** Katalogdaki modül anahtarları (tek kaynak). */
+export type ModuleKey = (typeof MODULE_CATALOG_ITEMS)[number]['key'];
+
+export const MODULE_CATALOG: ModuleControlItem[] = [...MODULE_CATALOG_ITEMS];
+
+const MODULE_KEY_SET: ReadonlySet<string> = new Set(MODULE_CATALOG_ITEMS.map((item) => item.key));
+
+/** Çalışma zamanı daraltıcı (ayar/URL gibi dış girdiler için). */
+export function isModuleKey(value: unknown): value is ModuleKey {
+  return typeof value === 'string' && MODULE_KEY_SET.has(value);
+}
 
 export function getDefaultModuleControls(): ModuleControlsMap {
   return MODULE_CATALOG.reduce<ModuleControlsMap>((acc, item) => {

@@ -26,6 +26,8 @@ import { GET as internDeadline } from '@/app/api/cron/intern-deadline/route';
 import { GET as teamTaskDue } from '@/app/api/cron/team-task-due/route';
 import { GET as inboxSync } from '@/app/api/cron/inbox-sync/route';
 import { GET as aiRetry } from '@/app/api/cron/ai-retry/route';
+import { GET as inboxQueues } from '@/app/api/cron/inbox-queues/route';
+import { GET as campaignDispatch } from '@/app/api/cron/campaign-dispatch/route';
 
 import { POST as analyticsEventCleanup } from '@/app/api/internal/inngest/analytics-event-cleanup/route';
 import { POST as featureFlagCleanup } from '@/app/api/internal/inngest/feature-flag-cleanup/route';
@@ -94,6 +96,8 @@ export const DAILY_JOBS: CronJobDefinition[] = [
   // ── 2 · Üretim (görev, CLV, churn, rozet) ────────────────────
   { name: 'team-daily-maintenance', priority: 2, cadence: DAILY, timeoutMs: 30_000, run: viaInternalPost(teamDailyMaintenance) },
   { name: 'negative-feedback-sla', priority: 2, cadence: DAILY, timeoutMs: 20_000, run: viaInternalPost(negativeFeedbackSla) },
+  // SLA vakalarından SONRA: yanıtlanmış yorumun vakasını kapatır; radar + telafi süresi + onay hatırlatması.
+  { name: 'inbox-queues', priority: 2, cadence: DAILY, timeoutMs: 45_000, run: viaCronGet(inboxQueues) },
   { name: 'calculate-clv', priority: 2, cadence: DAILY, timeoutMs: 45_000, run: viaInternalPost(calculateClv) },
   // CLV'den SONRA (riskli müşteri tespiti güncel CLV'yi okur).
   { name: 'churn-intervention', priority: 2, cadence: DAILY, timeoutMs: 30_000, run: viaInternalPost(churnIntervention) },
@@ -102,6 +106,9 @@ export const DAILY_JOBS: CronJobDefinition[] = [
   { name: 'ai-quality-sample', priority: 2, cadence: SUNDAY, timeoutMs: 10_000, run: viaInternalPost(aiQualitySample) },
 
   // ── 3 · Teslimat (mail / webhook / gelen kutusu) ─────────────
+  // Planlı bayi kampanyaları (gün hassasiyeti; bkz. components/dealer/b-kampanyalar/server/schedule.ts) —
+  // teslimatın başında: bütçe biterse gecikmesin, müşteriye planlanan sabah ulaşsın.
+  { name: 'campaign-dispatch', priority: 3, cadence: DAILY, timeoutMs: 45_000, run: viaCronGet(campaignDispatch) },
   { name: 'intern-deadline', priority: 3, cadence: DAILY, timeoutMs: 30_000, run: viaCronGet(internDeadline) },
   { name: 'team-task-due', priority: 3, cadence: DAILY, timeoutMs: 40_000, run: viaCronGet(teamTaskDue) },
   { name: 'inbox-sync', priority: 3, cadence: DAILY, timeoutMs: 30_000, run: viaCronGet(inboxSync) },

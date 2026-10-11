@@ -68,6 +68,16 @@ jest.mock('@/lib/auth/session-state', () => ({ invalidateSessionState: jest.fn(a
 const getServerSession = jest.fn();
 jest.mock('next-auth', () => ({ getServerSession: (...a: unknown[]) => getServerSession(...a) }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
+// set-password artık requireAuth (oturum durumu + replay) kullanıyor; oturum getServerSession sahtesinden.
+jest.mock('@/lib/api-auth', () => ({
+  ANY_SIGNED_IN_ROLE: ['ADMIN', 'DEALER', 'STAFF', 'CUSTOMER'],
+  requireAuth: async () => {
+    const s = (await getServerSession()) as { user?: { id?: string } } | null;
+    return s?.user?.id
+      ? { session: s }
+      : { error: new Response(JSON.stringify({ success: false, code: 'UNAUTHENTICATED' }), { status: 401 }) };
+  },
+}));
 jest.mock('@/lib/site-setting-bool', () => ({ getBooleanSiteSetting: jest.fn(async () => true) }));
 jest.mock('next/headers', () => ({ headers: async () => new Headers({ host: 'app.qratex.com', 'x-forwarded-proto': 'https' }) }));
 

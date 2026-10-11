@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { chatWithQRA, MODELS } from '@/lib/groq';
 import { prisma } from '@/lib/prisma';
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         { error: `Mesaj çok uzun (max ${INPUT_LIMITS.messageText} karakter)` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const userId = session?.user?.id;
     const role = session?.user?.role as string | undefined;
 

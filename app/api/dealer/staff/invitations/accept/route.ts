@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { authOptions } from '@/lib/auth';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const tooMany = await limited(request, 'staff-invite-preview', 30);
     if (tooMany) return tooMany;
     const token = request.nextUrl.searchParams.get('token');
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const preview = await previewStaffInvitation(token, {
       userId: session?.user?.id ?? null,
       email: session?.user?.email ?? null,
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const parsed = acceptSchema.safeParse(body);
     if (!parsed.success) return json({ success: false, error: 'Geçersiz istek' }, 400);
 
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     const result = await acceptStaffInvitation({
       plainToken: parsed.data.token,
       sessionUserId: session?.user?.id ?? null,

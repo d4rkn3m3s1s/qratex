@@ -122,6 +122,10 @@ export interface CustomerSignal {
   text: string | null;
   sentiment: string | null;
   churnRisk: number | null;
+  /** AI niyeti (yalnız QR geri bildirimi): complaint | question | suggestion | praise | general. */
+  intent: string | null;
+  /** AI aciliyeti ≥ 0,7. */
+  urgent: boolean;
   replied: boolean;
   reply: string | null;
   at: string;

@@ -18,6 +18,11 @@ jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 const mockRequireAuth = jest.fn();
 jest.mock('@/lib/api-auth', () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
+  // Doldurma ucu oturumu isteğe bağlı ama doğrulanmış okur (getOptionalSession).
+  getOptionalSession: async () => {
+    const s = (await mockGetServerSession()) as { user?: { id?: string } } | null;
+    return s?.user?.id ? s : null;
+  },
 }));
 
 jest.mock('@/lib/rate-limit', () => ({

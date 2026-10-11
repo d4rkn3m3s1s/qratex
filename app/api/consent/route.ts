@@ -8,7 +8,7 @@
  * `anonId` ile kaydedilir. Kayıt silinmez/güncellenmez; her karar yeni satırdır.
  */
 import { createHash, createHmac } from 'crypto';
-import { getServerSession } from 'next-auth';
+import { getOptionalSession } from '@/lib/api-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -31,7 +31,7 @@ const Body = z.object({
 
 async function optionalUserId(): Promise<string | null> {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getOptionalSession();
     return (session?.user?.id as string | undefined) ?? null;
   } catch {
     return null;

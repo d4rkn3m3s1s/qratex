@@ -14,7 +14,7 @@
  * alan hâlâ güncel tutulmalı, ama her istekte değil — en fazla TOUCH_INTERVAL_MS'te bir.
  */
 import { prisma } from '@/lib/prisma';
-import * as Sentry from '@sentry/nextjs';
+import { captureApiMessage } from '@/lib/capture-api-error';
 import { createHash } from 'crypto';
 import { redisGetJson, redisSetJson } from '@/lib/redis';
 
@@ -40,7 +40,7 @@ function keyFor(jti: string): string {
 
 function mismatchAlarm(jti: string): TokenReplayResult {
   const msg = `Token replay: jti=${jti.slice(0, 8)}... farklı IP/UA ile kullanıldı`;
-  Sentry.captureMessage(msg, 'warning');
+  captureApiMessage(msg, 'warning');
   return { ok: false, alarm: true, message: msg };
 }
 
