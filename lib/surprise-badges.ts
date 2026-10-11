@@ -39,7 +39,7 @@ export interface UserBadgeCounters {
   profileComplete: number;    // 0/1 — name+image+phone+biography dolu
   accountAgeDays: number;     // hesap yaşı (gün)
   chatMessagesCount: number;  // QraChatLog mesaj sayısı
-  activeDays: number;         // UserStreak.totalActiveDays
+  activeDays: number;         // ses verdiği ayrı İstanbul günü (QR yorumu + ziyaret yorumu)
   uniqueBusinesses: number;   // tüketim yapılan farklı işletme
   revisitBusinesses: number;  // >1 kez tüketim yapılan işletme
   leaderboardTop: number;     // 0/1 — isHallOfFame
@@ -120,6 +120,19 @@ function countEmojiTexts(texts: (string | null)[]): number {
 /** Kullanıcının güncel sayaçlarını toplar (tek turda paralel). */
 export async function loadUserBadgeCounters(userId: string): Promise<UserBadgeCounters> {
   // Gece penceresi (TR saati 00-06). Prisma'da saat filtresi yok → $queryRaw.
+  // Aktif gün: yorum bıraktığı AYRI İstanbul günleri. Eskiden yetim `UserStreak.totalActiveDays`
+  // okunuyordu — o tabloyu yazan yol yok (eski /api/streak kaldırıldı) → "aktif gün" rozetleri
+  // hiçbir müşteride ilerlemiyordu (oyunlaştırma-ekonomi O2).
+  const activeDaysQuery = prisma.$queryRaw<{ n: bigint }[]>`
+    SELECT count(DISTINCT d)::bigint AS n FROM (
+      SELECT ("createdAt" AT TIME ZONE 'Europe/Istanbul')::date AS d FROM "Feedback"
+       WHERE "userId" = ${userId} AND "deletedAt" IS NULL
+      UNION ALL
+      SELECT ("createdAt" AT TIME ZONE 'Europe/Istanbul')::date AS d FROM "ConsumptionReview"
+       WHERE "customerId" = ${userId} AND "deletedAt" IS NULL
+    ) days
+  `.then((r) => Number(r?.[0]?.n ?? 0)).catch(() => 0);
+
   const nightQuery = prisma.$queryRaw<{ n: bigint }[]>`
     SELECT count(*)::bigint AS n FROM "Feedback"
     WHERE "userId" = ${userId} AND "deletedAt" IS NULL
@@ -129,7 +142,7 @@ export async function loadUserBadgeCounters(userId: string): Promise<UserBadgeCo
   const [
     user, feedbackCount, referralCount, questsCompleted,
     fiveStarCount, lowRatingCount, positiveCount,
-    surpriseOpenedCount, chatMessagesCount, userStreak,
+    surpriseOpenedCount, chatMessagesCount, activeDays,
     feedbackTexts, consumptions, nightCount,
   ] = await Promise.all([
     prisma.user.findUnique({
@@ -147,7 +160,7 @@ export async function loadUserBadgeCounters(userId: string): Promise<UserBadgeCo
     prisma.feedback.count({ where: { userId, deletedAt: null, sentiment: 'positive' } }).catch(() => 0),
     prisma.userSurpriseBox.count({ where: { userId, openedAt: { not: null } } }).catch(() => 0),
     prisma.qraChatLog.count({ where: { userId } }).catch(() => 0),
-    prisma.userStreak.findUnique({ where: { userId }, select: { totalActiveDays: true } }).catch(() => null),
+    activeDaysQuery,
     // Foto (media dolu) + emoji için metin/media örneklemi (tek çekim).
     prisma.feedback.findMany({ where: { userId, deletedAt: null }, select: { text: true, media: true } }).catch(() => [] as { text: string | null; media: Prisma.JsonValue }[]),
     // İşletme çeşitliliği + tekrar-ziyaret için tüketimler.
@@ -192,7 +205,7 @@ export async function loadUserBadgeCounters(userId: string): Promise<UserBadgeCo
     profileComplete,
     accountAgeDays,
     chatMessagesCount,
-    activeDays: userStreak?.totalActiveDays ?? 0,
+    activeDays,
     uniqueBusinesses,
     revisitBusinesses,
     leaderboardTop: user?.isHallOfFame ? 1 : 0,
