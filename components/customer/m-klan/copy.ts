@@ -14,6 +14,16 @@ import {
 } from '@/lib/squads/rules';
 
 const pct = Math.round(SQUAD_POWER_SHARE * 100);
+/** Türkçe yüzde iyelik eki (%10'u, %5'i, %20'si): sayının okunuşunun son hecesine göre. */
+function trPctSuffix(n: number): string {
+  if (n % 100 === 0 && n > 0) return "'ü";
+  const tens: Record<number, string> = { 1: "'u", 2: "'si", 3: "'u", 4: "'ı", 5: "'si", 6: "'ı", 7: "'i", 8: "'i", 9: "'ı" };
+  const ones: Record<number, string> = { 1: "'i", 2: "'si", 3: "'ü", 4: "'ü", 5: "'i", 6: "'sı", 7: "'si", 8: "'i", 9: "'u" };
+  const o = n % 10;
+  if (o !== 0) return ones[o];
+  return tens[Math.floor(n / 10) % 10] ?? "'i";
+}
+const pctTr = `%${pct}${trPctSuffix(pct)}`;
 const rewards = [WEEKLY_GOAL_TIERS[1].reward, WEEKLY_GOAL_TIERS[3].reward];
 
 const tr = {
@@ -25,7 +35,7 @@ const tr = {
   noneBullets: [
     `Haftalık klan hedefi tamamlanınca katkı veren her üye ${rewards[0]}–${rewards[1]} puan ödül alır.`,
     'Savaşlarda geri bildirimlerinle kazandığın puanlar klanının skoruna yazılır.',
-    `Geri bildirimden kazandığın puanın %${pct}'i kadar klan gücü birikir; bakiyenden düşülmez.`,
+    `Geri bildirimden kazandığın puanın ${pctTr} kadar klan gücü birikir; bakiyenden düşülmez.`,
   ],
   createCta: 'Klan kur',
   createHint: 'Lider sen olursun; davet kodunu paylaşarak arkadaşlarını çağırırsın.',
@@ -181,7 +191,7 @@ const tr = {
   yourSquad: 'Senin klanın',
   // Güç
   powerTitle: 'Klan gücü',
-  powerDesc: `Üyelerin geri bildirimden kazandığı puanın %${pct}'i kadar birikir. Bakiyelerden düşülmez, harcanmaz; klan seviyesini belirler.`,
+  powerDesc: `Üyelerin geri bildirimden kazandığı puanın ${pctTr} kadar birikir. Bakiyelerden düşülmez, harcanmaz; klan seviyesini belirler.`,
   powerNext: (n: number) => `Sonraki seviyeye ${n.toLocaleString('tr-TR')} güç`,
   howTitle: 'Nasıl çalışır?',
   howItems: [
