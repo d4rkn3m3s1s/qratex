@@ -109,13 +109,22 @@ export const POST = defineRoute(
       affected = res.count;
       for (const r of target) activity.push({ taskId: r.id, actorId: viewer.userId, action: 'archived', detail: action.value ? 'Toplu: arşivledi' : 'Toplu: arşivden çıkardı' });
     } else if (action.op === 'tag_add') {
+      // Satır başına update (200 id'ye kadar sıralı tur) yerine: aynı sonuç etiket dizisine
+      // sahip satırlar tek updateMany ile yazılır; gruplar tek batch transaction'da gider.
+      const byTags = new Map<string, string[]>();
       for (const r of rows) {
         const set = new Set(parseTags(r.tags));
         if ([...set].some((t) => t.toLocaleLowerCase('tr') === action.value.toLocaleLowerCase('tr'))) continue;
         set.add(action.value);
-        await prisma.companyTask.update({ where: { id: r.id }, data: { tags: [...set].join(',') } });
+        const next = [...set].join(',');
+        byTags.set(next, [...(byTags.get(next) ?? []), r.id]);
         activity.push({ taskId: r.id, actorId: viewer.userId, action: 'edited', detail: `Toplu: #${action.value} etiketi ekledi` });
-        affected++;
+      }
+      if (byTags.size > 0) {
+        const results = await prisma.$transaction(
+          [...byTags].map(([tags, ids]) => prisma.companyTask.updateMany({ where: { id: { in: ids } }, data: { tags } }))
+        );
+        affected = results.reduce((s, x) => s + x.count, 0);
       }
     } else if (action.op === 'delete') {
       const notArchived = rows.filter((r) => !r.archivedAt);
