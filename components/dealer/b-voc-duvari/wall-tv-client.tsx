@@ -7,6 +7,7 @@ import type { WallFeedDto } from '@/lib/dealer/voc-wall/config';
 import { WallApiError, wallFetch } from './api';
 import { WallDisplay } from './wall-display';
 import { WallNotice } from './wall-notice';
+import { useVocCopy } from './copy';
 
 const POLL_MS = 30_000;
 const IDLE_MS = 3_000;
@@ -18,6 +19,7 @@ const IDLE_MS = 3_000;
  */
 export function WallTvClient({ token, initial }: { token: string; initial: WallFeedDto }) {
   const [updatedAt, setUpdatedAt] = useState(() => Date.now());
+  const c = useVocCopy().wall;
   const query = useQuery({
     queryKey: ['wall-display', token],
     queryFn: async () => {
@@ -71,10 +73,10 @@ export function WallTvClient({ token, initial }: { token: string; initial: WallF
 
   const err = query.error;
   if (err instanceof WallApiError && err.status === 404) {
-    return <WallNotice title="Bu ekran bağlantısı artık geçerli değil." description="İşletme bağlantıyı iptal etmiş olabilir. Yeni bir ekran bağlantısı için işletme yöneticisine başvurun." />;
+    return <WallNotice title={c.linkInvalid} description={c.linkInvalidHint} />;
   }
   if (err instanceof WallApiError && err.code === 'MODULE_DISABLED') {
-    return <WallNotice title="Müşteri sesi ekranı şu an kapalı." description="Bu özellik geçici olarak devre dışı." />;
+    return <WallNotice title={c.disabled} description={c.disabledHint} />;
   }
 
   return (
@@ -92,7 +94,7 @@ export function WallTvClient({ token, initial }: { token: string; initial: WallF
               className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control border border-white/20 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               {isFull ? <Minimize aria-hidden className="h-4 w-4" /> : <Maximize aria-hidden className="h-4 w-4" />}
-              {isFull ? 'Tam ekrandan çık' : 'Tam ekran'}
+              {isFull ? c.exitFull : c.full}
             </button>
           ) : null
         }

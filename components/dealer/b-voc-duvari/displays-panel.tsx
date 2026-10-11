@@ -11,8 +11,8 @@ import { ConfirmAction, QueryState } from '@/components/states';
 import { cn } from '@/lib/utils';
 import type { WallOverviewDto } from '@/lib/dealer/voc-wall/config';
 import { WallApiError, createDisplayLink, displaysKey, fetchDisplays, revokeDisplayLink } from './api';
+import { useVocCopy } from './copy';
 
-const dateFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Istanbul' });
 
 /**
  * Ekran bağlantıları: TV'ye bayi oturumu açmadan, salt-okunur ve iptal edilebilir bağlantı.
@@ -20,6 +20,9 @@ const dateFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short
  */
 export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
   const qc = useQueryClient();
+  const vc = useVocCopy();
+  const c = vc.displays;
+  const dateFmt = new Intl.DateTimeFormat(vc.locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Istanbul' });
   const query = useQuery({ queryKey: displaysKey, queryFn: fetchDisplays });
   const [label, setLabel] = useState('');
   const [qr, setQr] = useState('');
@@ -34,50 +37,50 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
       setLabel('');
       void qc.invalidateQueries({ queryKey: displaysKey });
     },
-    onError: (e) => toast.error(e instanceof WallApiError ? e.message : 'Bağlantı oluşturulamadı.'),
+    onError: (e) => toast.error(e instanceof WallApiError ? e.message : c.createFailed),
   });
 
   const revoke = useMutation({
     mutationFn: (id: string) => revokeDisplayLink(id),
     onSuccess: () => {
-      toast.success('Ekran bağlantısı iptal edildi. Ekran bir sonraki yenilemede kapanır.');
+      toast.success(c.revoked);
       void qc.invalidateQueries({ queryKey: displaysKey });
     },
-    onError: (e) => toast.error(e instanceof WallApiError ? e.message : 'İptal edilemedi.'),
+    onError: (e) => toast.error(e instanceof WallApiError ? e.message : c.revokeFailed),
   });
 
   const copy = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Bağlantı kopyalandı.');
+      toast.success(c.copied);
     } catch {
-      toast.error('Kopyalanamadı; bağlantıyı elle seçip kopyalayın.');
+      toast.error(c.copyFailed);
     }
   };
 
   return (
     <SectionCard
-      title="Ekran bağlantıları"
-      description="Şubedeki TV'de bu bağlantıyı açın. Oturum gerekmez, yalnız onaylı yorumları gösterir; istediğiniz an iptal edebilirsiniz."
+      title={c.title}
+      description={c.hint}
       density="compact"
       icon={<MonitorPlay aria-hidden className="h-4 w-4" />}
     >
       <div className="space-y-4">
         {fresh && (
           <div className="space-y-2 rounded-card border border-brand-border bg-brand-subtle p-3" role="status">
-            <p className="qx-small font-medium text-fg">“{fresh.label}” bağlantısı hazır. Bu bağlantı yalnız şimdi gösterilir; kaydedin.</p>
-            <Input readOnly value={fresh.url} onFocus={(e) => e.currentTarget.select()} aria-label="Ekran bağlantısı" className="min-h-11 font-mono text-xs" />
+            <p className="qx-small font-medium text-fg">{c.ready(fresh.label)}</p>
+            <Input readOnly value={fresh.url} onFocus={(e) => e.currentTarget.select()} aria-label={c.linkAria} className="min-h-11 font-mono text-xs" />
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" className="min-h-11" onClick={() => copy(fresh.url)}>
-                <Copy aria-hidden className="mr-1 h-4 w-4" /> Kopyala
+                <Copy aria-hidden className="mr-1 h-4 w-4" /> {c.copy}
               </Button>
               <Button asChild variant="outline" size="sm" className="min-h-11">
                 <a href={fresh.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink aria-hidden className="mr-1 h-4 w-4" /> Yeni sekmede aç
+                  <ExternalLink aria-hidden className="mr-1 h-4 w-4" /> {c.openNew}
                 </a>
               </Button>
               <Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={() => setFresh(null)}>
-                Kapat
+                {c.close}
               </Button>
             </div>
           </div>
@@ -92,13 +95,13 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
         >
           <div className="space-y-1.5">
             <label htmlFor={ids.label} className="qx-small font-medium text-fg">
-              Ekran adı
+              {c.name}
             </label>
-            <Input id={ids.label} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder="ör. Kasa üstü TV" className="min-h-11" />
+            <Input id={ids.label} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder={c.namePlaceholder} className="min-h-11" />
           </div>
           <div className="space-y-1.5">
             <label htmlFor={ids.qr} className="qx-small font-medium text-fg">
-              Gösterilecek QR / şube
+              {c.qr}
             </label>
             <select
               id={ids.qr}
@@ -106,7 +109,7 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
               onChange={(e) => setQr(e.target.value)}
               className="min-h-11 w-full rounded-control border border-input bg-background px-3 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             >
-              <option value="">Varsayılan kuralı izle</option>
+              <option value="">{c.followDefault}</option>
               {overview.qrCodes.map((q) => (
                 <option key={q.id} value={q.id}>
                   {q.location ? `${q.location} · ${q.name}` : q.name}
@@ -115,7 +118,7 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
             </select>
           </div>
           <Button type="submit" className="min-h-11" disabled={!label.trim() || create.isPending}>
-            <Plus aria-hidden className="mr-1 h-4 w-4" /> {create.isPending ? 'Oluşturuluyor…' : 'Bağlantı oluştur'}
+            <Plus aria-hidden className="mr-1 h-4 w-4" /> {create.isPending ? c.creating : c.create}
           </Button>
         </form>
 
@@ -123,7 +126,7 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
           query={query}
           skeleton="list"
           isEmpty={(d) => d.displays.length === 0}
-          empty={{ title: 'Henüz ekran bağlantısı yok', description: 'İlk bağlantıyı oluşturup TV tarayıcısında açın.', compact: true }}
+          empty={{ title: c.empty, description: c.emptyHint, compact: true }}
         >
           {(d) => (
             <ul className="divide-y divide-subtle">
@@ -132,7 +135,7 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
                   <div className="min-w-0">
                     <p className={cn('qx-small truncate font-medium', x.active ? 'text-fg' : 'text-fg-muted line-through')}>{x.label}</p>
                     <p className="qx-caption text-fg-muted">
-                      {x.active ? `Geçerli · ${dateFmt.format(new Date(x.expiresAt))} tarihine kadar` : 'İptal edildi ya da süresi doldu'}
+                      {x.active ? c.validUntil(dateFmt.format(new Date(x.expiresAt))) : c.inactive}
                       {x.qrCodeId && ` · ${overview.qrCodes.find((q) => q.id === x.qrCodeId)?.name ?? 'QR'}`}
                     </p>
                   </div>
@@ -145,7 +148,7 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
                       disabled={revoke.isPending}
                       onClick={() => setRevoking({ id: x.id, label: x.label })}
                     >
-                      İptal et
+                      {c.revoke}
                     </Button>
                   )}
                 </li>
@@ -159,10 +162,10 @@ export function DisplaysPanel({ overview }: { overview: WallOverviewDto }) {
           open
           onOpenChange={(o) => !o && setRevoking(null)}
           tone="warning"
-          title={`“${revoking.label}” bağlantısı iptal edilsin mi?`}
-          description="Bu bağlantıyı açık tutan ekran en geç 30 saniye içinde kapanır. İptal geri alınamaz; gerekirse yeni bağlantı oluşturursunuz."
+          title={c.revokeTitle(revoking.label)}
+          description={c.revokeBody}
           irreversibleNote={false}
-          confirmLabel="İptal et"
+          confirmLabel={c.revoke}
           onConfirm={() => revoke.mutateAsync(revoking.id).then(() => setRevoking(null))}
         />
       )}

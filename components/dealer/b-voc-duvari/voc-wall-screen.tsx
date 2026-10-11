@@ -16,15 +16,12 @@ import { fetchOverview, fetchPreview, overviewKey, previewKey, setActAsDealer } 
 import { CurationList } from './curation-list';
 import { RulesPanel } from './rules-panel';
 import { WallDisplay } from './wall-display';
+import { useVocCopy } from './copy';
 
 // Ekran bağlantıları paneli yalnız sahip için ve gerektiğinde yüklenir.
 const DisplaysPanel = dynamic(() => import('./displays-panel').then((m) => m.DisplaysPanel), { ssr: false });
 
-const RANGE_OPTIONS: Array<{ value: '7' | '30' | '90'; label: string }> = [
-  { value: '7', label: '7 gün' },
-  { value: '30', label: '30 gün' },
-  { value: '90', label: '90 gün' },
-];
+const RANGES = ['7', '30', '90'] as const;
 
 export interface VocWallScreenProps {
   role: 'DEALER' | 'STAFF' | 'ADMIN';
@@ -34,8 +31,9 @@ export interface VocWallScreenProps {
 }
 
 function Themes({ overview }: { overview: WallOverviewDto }) {
+  const c = useVocCopy().screen;
   if (overview.themes.length === 0) {
-    return <p className="qx-small text-fg-muted">Bu dönemde AI ile analiz edilmiş tema yok.</p>;
+    return <p className="qx-small text-fg-muted">{c.noThemes}</p>;
   }
   const max = Math.max(...overview.themes.map((t) => t.total));
   return (
@@ -45,7 +43,7 @@ function Themes({ overview }: { overview: WallOverviewDto }) {
           <div className="qx-small flex items-baseline justify-between gap-2">
             <span className="truncate font-medium text-fg">{t.theme}</span>
             <span className="qx-num shrink-0 text-fg-muted">
-              {t.total} · <span className="text-success">{t.positive} olumlu</span> · <span className="text-danger">{t.negative} olumsuz</span>
+              {t.total} · <span className="text-success">{c.positive(t.positive)}</span> · <span className="text-danger">{c.negative(t.negative)}</span>
             </span>
           </div>
           <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-surface-muted" aria-hidden style={{ width: `${Math.max(12, (t.total / max) * 100)}%` }}>
@@ -71,6 +69,8 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
   const [qrCodeId, setQrCodeId] = useState<string | null>(null);
   const isOwner = role === 'DEALER';
   const canModerate = role !== 'ADMIN';
+  const copy = useVocCopy();
+  const c = copy.screen;
 
   const overview = useQuery({
     queryKey: overviewKey(range, qrCodeId),
@@ -79,7 +79,7 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
   });
   const preview = useQuery({ queryKey: previewKey, queryFn: fetchPreview, refetchInterval: 60_000 });
 
-  const rangeLabel = `önceki ${range} güne göre`;
+  const rangeLabel = c.vsPrev(range);
   const o = overview.data;
   const delta = (cur: number | null | undefined, prev: number | null | undefined) =>
     cur != null && prev != null ? cur - prev : null;
@@ -89,13 +89,13 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
       register="ops"
       header={
         <PageHeader
-          title="Müşteri sesi duvarı"
-          description="Mağaza ekranında hangi yorumların görüneceğini belirleyin ve ekranı güvenli bir bağlantıyla TV'ye aktarın."
+          title={c.title}
+          description={c.description}
           icon={<MessageSquareQuote aria-hidden className="h-5 w-5" />}
           actions={
             <Button asChild variant="outline" className="min-h-11">
               <Link href="/dealer/analytics">
-                <BarChart3 aria-hidden className="mr-2 h-4 w-4" /> Ayrıntılı analiz
+                <BarChart3 aria-hidden className="mr-2 h-4 w-4" /> {c.analytics}
               </Link>
             </Button>
           }
@@ -104,14 +104,14 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
       toolbar={
         <div className="flex flex-wrap items-center gap-3">
           <ChoiceChips
-            aria-label="Dönem"
+            aria-label={c.period}
             size="sm"
-            options={RANGE_OPTIONS}
+            options={RANGES.map((v) => ({ value: v, label: c.range(v) }))}
             value={String(range) as '7'}
             onChange={(v) => v && setRange(Number(v) as WallRange)}
           />
           <label className="sr-only" htmlFor="voc-qr-filter">
-            QR / şube süzgeci
+            {c.qrFilter}
           </label>
           <select
             id="voc-qr-filter"
@@ -119,19 +119,19 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
             onChange={(e) => setQrCodeId(e.target.value || null)}
             className="min-h-11 rounded-control border border-input bg-background px-3 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
-            <option value="">Tüm QR kodlar</option>
+            <option value="">{copy.common.allQr}</option>
             {o?.qrCodes.map((q) => (
               <option key={q.id} value={q.id}>
                 {q.location ? `${q.location} · ${q.name}` : q.name}
               </option>
             ))}
           </select>
-          {role === 'ADMIN' && <span className="qx-caption text-fg-muted">Yönetici görünümü · salt-okunur</span>}
+          {role === 'ADMIN' && <span className="qx-caption text-fg-muted">{c.adminView}</span>}
         </div>
       }
       aside={
         <div className="space-y-6">
-          <SectionCard title="Ekran önizlemesi" description="TV'de görünen akışın aynısı." density="compact">
+          <SectionCard title={c.preview} description={c.previewHint} density="compact">
             <QueryState query={preview} skeleton="block">
               {(feed) => <WallDisplay feed={feed} variant="preview" />}
             </QueryState>
@@ -148,7 +148,7 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
           <div className={cn('space-y-6', overview.isPlaceholderData && 'opacity-70 transition-opacity')}>
             <MetricGrid cols={4}>
               <MetricTile
-                label="Ortalama puan"
+                label={c.avgRating}
                 icon={<Star aria-hidden className="h-4 w-4" />}
                 metric={{
                   value: ov.stats.avgRating,
@@ -159,7 +159,7 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
                 }}
               />
               <MetricTile
-                label="Geri bildirim"
+                label={c.feedback}
                 icon={<Megaphone aria-hidden className="h-4 w-4" />}
                 metric={{
                   value: ov.stats.count,
@@ -167,23 +167,23 @@ export function VocWallScreen({ role, actAsDealerId, initialRange }: VocWallScre
                 }}
               />
               <MetricTile
-                label="Olumlu oran"
+                label={c.positiveRate}
                 icon={<Smile aria-hidden className="h-4 w-4" />}
                 metric={{
                   value: ov.stats.positivePct,
                   format: 'percent',
                   delta: delta(ov.stats.positivePct, ov.stats.positivePctPrev) != null ? { value: delta(ov.stats.positivePct, ov.stats.positivePctPrev)!, kind: 'points', goodDirection: 'up', label: rangeLabel } : null,
                 }}
-                hint="AI duygu analizi yapılmış yorumlar içinde"
+                hint={c.positiveHint}
               />
               <MetricTile
-                label="Ekranda yayında"
+                label={c.live}
                 icon={<Pin aria-hidden className="h-4 w-4" />}
                 metric={{ value: ov.stats.liveCount }}
-                hint={`${ov.pinnedCount} sabit · ${ov.hiddenCount} gizli`}
+                hint={c.liveHint(ov.pinnedCount, ov.hiddenCount)}
               />
             </MetricGrid>
-            <SectionCard title="En çok konuşulan temalar" description={`Son ${ov.range} gün, AI tema analizi.`} density="compact">
+            <SectionCard title={c.themes} description={c.themesHint(ov.range)} density="compact">
               <Themes overview={ov} />
             </SectionCard>
             <CurationList qrCodeId={qrCodeId} canModerate={canModerate} />
