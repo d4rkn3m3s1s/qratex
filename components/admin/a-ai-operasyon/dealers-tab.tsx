@@ -24,6 +24,7 @@ import {
 import { aiOpsKeys, errorText, fetchDealers, patchDealerAi } from './api';
 import { useAiOps } from './hooks';
 import { Meter, budgetTone, fmtCompact, fmtInt, fmtPct } from './parts';
+import { AdminAiOperasyonText } from './copy';
 
 const SORTS: Array<{ value: DealerAiSort; label: string }> = [
   { value: 'usage', label: 'Dönem tokenı' },
@@ -79,7 +80,7 @@ export function DealersTab() {
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="font-medium text-fg">{row.original.name}</span>
           {row.original.isDemo ? <StatusBadge size="sm" icon={null} label="Demo" tone="neutral" /> : null}
-          {row.original.source === 'default' ? <span className="text-xs text-fg-muted">(varsayılan ayar)</span> : null}
+          {row.original.source === 'default' ? <span className="text-xs text-fg-muted"><AdminAiOperasyonText k="defaultSetting" /></span> : null}
         </span>
       ),
     },
@@ -226,7 +227,7 @@ export function DealersTab() {
                   : 'Arka plan analizi durur; bayinin kendi başlattığı AI özellikleri çalışmaya devam eder.'}{' '}
               Bayinin kendi ayar ekranında da bu değişiklik görünür.
               <label className="mt-3 block text-sm">
-                <span className="font-medium text-fg">Gerekçe (denetim kaydına yazılır)</span>
+                <span className="font-medium text-fg"><AdminAiOperasyonText k="reasonAudited" /></span>
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={300} className="mt-1" placeholder="Örn. bayinin talebi, kota aşımı" />
               </label>
             </>

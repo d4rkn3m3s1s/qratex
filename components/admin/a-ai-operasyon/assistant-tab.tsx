@@ -12,6 +12,7 @@ import { ASSISTANT_SUGGESTIONS, PERIOD_LABEL } from '@/lib/admin-ai-ops/contract
 import { askAssistant, errorText } from './api';
 import { useAiOps } from './hooks';
 import { fmtTime } from './parts';
+import { AdminAiOperasyonText } from './copy';
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string; at: string; sources?: string[] };
 
@@ -111,7 +112,7 @@ export default function AssistantTab() {
       <div ref={logRef} role="log" aria-live="polite" aria-relevant="additions" aria-label="Asistan sohbeti" className="max-h-[28rem] min-h-[12rem] space-y-3 overflow-y-auto rounded-lg border border-border bg-surface-0 p-3">
         {messages.length === 0 && !loading ? (
           <div className="py-6 text-center">
-            <p className="text-sm text-fg-muted">Önerilen sorular:</p>
+            <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="suggested" /></p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {ASSISTANT_SUGGESTIONS.map((s) => (
                 <button key={s} type="button" onClick={() => send(s)} className="min-h-[44px] rounded-full border border-border bg-surface-1 px-3 py-1.5 text-sm text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
@@ -182,7 +183,7 @@ export default function AssistantTab() {
         </label>
         <Button type="submit" disabled={loading || input.trim().length < 2} className="min-h-[44px]" aria-label="Soruyu gönder">
           <Send className="h-4 w-4" aria-hidden />
-          <span className="ml-1.5 hidden sm:inline">Gönder</span>
+          <span className="ml-1.5 hidden sm:inline"><AdminAiOperasyonText k="send" /></span>
         </Button>
       </form>
     </SectionCard>

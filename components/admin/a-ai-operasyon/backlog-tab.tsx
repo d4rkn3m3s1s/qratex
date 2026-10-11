@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { aiOpsKeys, errorText, fetchPending, runBacklog } from './api';
 import { useBacklog } from './hooks';
 import { fmtAgo, fmtDateTime, fmtInt } from './parts';
+import { AdminAiOperasyonText } from './copy';
 
 function resultText(r: BacklogActionResult): string {
   switch (r.action) {
@@ -60,7 +61,7 @@ export function BacklogTab() {
   const reasonOk = reason.trim().length >= 5;
   const reasonField = (
     <label className="mt-3 block text-sm">
-      <span className="font-medium text-fg">Gerekçe (denetim kaydına yazılır)</span>
+      <span className="font-medium text-fg"><AdminAiOperasyonText k="reasonAudited" /></span>
       <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={300} className="mt-1" placeholder="Örn. sağlayıcı kesintisi sonrası birikimi eritmek" />
     </label>
   );
@@ -210,7 +211,7 @@ function PendingCard() {
       meta: { mobile: 'actions', interactive: true, label: 'İşlemler' } satisfies DataTableColumnMeta,
       cell: ({ row }) =>
         state === 'blocked' ? (
-          <span className="text-xs text-fg-muted">Bayi ayarı kapalı</span>
+          <span className="text-xs text-fg-muted"><AdminAiOperasyonText k="dealerOff" /></span>
         ) : (
           <Button
             size="sm"

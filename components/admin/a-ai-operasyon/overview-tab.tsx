@@ -7,6 +7,7 @@ import { QueryState } from '@/components/states';
 import { HEALTH_META, deltaPct, type UsageReport } from '@/lib/admin-ai-ops/contract';
 import { useAiOps, useBacklog, useBudget, useSignals, useUsage } from './hooks';
 import { AttentionTile, Meter, budgetTone, bucketLabel, fmtAgo, fmtCompact, fmtInt, fmtMs, fmtPct } from './parts';
+import { AdminAiOperasyonText } from './copy';
 
 const UsageChart = lazyChart(() => import('./usage-chart'));
 
@@ -146,10 +147,10 @@ export function OverviewTab() {
                   </div>
                 ))}
                 <div className="border-t border-border pt-3">
-                  <p className="text-sm font-medium text-fg">En çok harcayan bayiler (bugün)</p>
+                  <p className="text-sm font-medium text-fg"><AdminAiOperasyonText k="topSpenders" /></p>
                   <p className="text-xs text-fg-muted">Bayi başı günlük tavan {fmtCompact(b.dealerLimit)} token</p>
                   {b.topDealers.length === 0 ? (
-                    <p className="mt-2 text-sm text-fg-muted">Bugün bayi adına AI çağrısı yok.</p>
+                    <p className="mt-2 text-sm text-fg-muted"><AdminAiOperasyonText k="noCallsToday" /></p>
                   ) : (
                     <ul className="mt-2 space-y-2">
                       {b.topDealers.map((d) => (

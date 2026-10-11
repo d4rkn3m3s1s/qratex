@@ -17,6 +17,7 @@ import {
 } from '@/lib/admin-ai-ops/contract';
 import { useAiOps, useSignals } from './hooks';
 import { CsvButton, DistList, KindBadge, Meter, fmtAgo, fmtInt, fmtPct } from './parts';
+import { AdminAiOperasyonText } from './copy';
 
 const SENT_TONES = { positive: 'success', neutral: 'neutral', negative: 'danger', mixed: 'warning' } as const;
 const URG_TONES = { low: 'success', medium: 'info', high: 'warning', critical: 'danger' } as const;
@@ -77,7 +78,7 @@ export function SignalsTab() {
 
           <SectionCard title="Riskli bayiler" description="Olumsuz oran, acil ve kayıp riski yoğunluğu ile düşük puandan türeyen skor (0-100); 20 kayıt altında güven düşürülür." icon={<ShieldAlert />} density="flush">
             {s.riskyDealers.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-fg-muted">Bu dönemde risk sinyali taşıyan bayi yok.</p>
+              <p className="px-4 pb-4 text-sm text-fg-muted"><AdminAiOperasyonText k="noRisk" /></p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
@@ -89,9 +90,9 @@ export function SignalsTab() {
                       <th scope="col" className="px-2 py-2 text-right font-medium">Geri bildirim</th>
                       <th scope="col" className="px-2 py-2 text-right font-medium">Olumsuz</th>
                       <th scope="col" className="px-2 py-2 text-right font-medium">Acil</th>
-                      <th scope="col" className="px-2 py-2 text-right font-medium">Kayıp riski</th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium"><AdminAiOperasyonText k="churnRisk" /></th>
                       <th scope="col" className="px-2 py-2 text-right font-medium">Ort. puan</th>
-                      <th scope="col" className="px-4 py-2"><span className="sr-only">İşlemler</span></th>
+                      <th scope="col" className="px-4 py-2"><span className="sr-only"><AdminAiOperasyonText k="actions" /></span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -127,7 +128,7 @@ export function SignalsTab() {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <SectionCard title="Temalar" description="Yıldız = o temayı taşıyan yorumların GERÇEK puan ortalaması (AI skoru değil)." icon={<Tags />} density="compact">
               {s.themes.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu dönemde tema çıkarılmış yorum yok.</p>
+                <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="noThemes" /></p>
               ) : (
                 <ul className="divide-y divide-border">
                   {s.themes.map((t) => (
@@ -156,7 +157,7 @@ export function SignalsTab() {
             </SectionCard>
             <SectionCard title="Varlıklar" description="Yorumlarda adı geçen ürün, kişi ve yerler." icon={<UserSearch />} density="compact">
               {s.entities.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu dönemde varlık çıkarılmış yorum yok.</p>
+                <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="noEntities" /></p>
               ) : (
                 <ul className="divide-y divide-border">
                   {s.entities.map((e) => (
@@ -183,7 +184,7 @@ export function SignalsTab() {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
             <SectionCard title="Aksiyon önerileri" description="AI önerileri kategoriye göre kümelenmiş; öncelik = kümedeki en yüksek." icon={<Lightbulb />} density="compact" className="xl:col-span-2">
               {s.actions.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu dönemde aksiyon önerisi yok.</p>
+                <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="noSuggestions" /></p>
               ) : (
                 <ul className="space-y-3">
                   {s.actions.map((a) => (
@@ -209,7 +210,7 @@ export function SignalsTab() {
             </SectionCard>
             <SectionCard title="Duygular" icon={<Heart />} density="compact">
               {s.emotions.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu dönemde duygu etiketi yok.</p>
+                <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="noSentiment" /></p>
               ) : (
                 <ul className="space-y-2 text-sm">
                   {s.emotions.map((e) => (
@@ -226,13 +227,13 @@ export function SignalsTab() {
           <SectionCard title="Puan × duygu" description="Tüm puanlar (metinsiz dahil); duygu yalnız analiz edilmiş yorumlarda. 5★ verip olumsuz yazanlar tutarsızlık işaretidir." icon={<Star />} density="flush">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
-                <caption className="sr-only">Puana göre duygu dağılımı</caption>
+                <caption className="sr-only"><AdminAiOperasyonText k="sentimentByRating" /></caption>
                 <thead className="border-b border-border text-left text-xs text-fg-muted">
                   <tr>
                     <th scope="col" className="px-4 py-2 font-medium">Puan</th>
                     <th scope="col" className="px-2 py-2 text-right font-medium">Adet</th>
                     <th scope="col" className="px-2 py-2 text-right font-medium">Olumlu</th>
-                    <th scope="col" className="px-2 py-2 text-right font-medium">Nötr</th>
+                    <th scope="col" className="px-2 py-2 text-right font-medium"><AdminAiOperasyonText k="neutral" /></th>
                     <th scope="col" className="px-2 py-2 text-right font-medium">Olumsuz</th>
                     <th scope="col" className="px-4 py-2"><span className="sr-only">Liste</span></th>
                   </tr>
@@ -264,7 +265,7 @@ export function SignalsTab() {
 
           <SectionCard title="Son analizler" description="Model rozeti analizin kaynağını gösterir: yapay zekâ, yerel yedek ya da sezgisel (sahte)." icon={<MessageSquareText />} density="compact">
             {s.recent.length === 0 ? (
-              <p className="text-sm text-fg-muted">Bu dönemde analiz edilmiş geri bildirim yok.</p>
+              <p className="text-sm text-fg-muted"><AdminAiOperasyonText k="noAnalyzed" /></p>
             ) : (
               <ul className="divide-y divide-border">
                 {s.recent.map((r) => (
