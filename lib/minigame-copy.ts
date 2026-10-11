@@ -205,10 +205,10 @@ export const GAME_COPY: Record<string, GameCopy> = {
   },
   'signal-pipe': {
     startCta: '🔧 Hattı Kur',
-    startHint: 'Boruları döndür, QR sinyalini kaynaktan sunucuya ulaştır! Akışı tamamla.',
+    startHint: 'Boruları döndür, sinyali sunucuya ulaştır! Süre ortak; az hamleyle yıldız topla.',
     winTitles: ['Sinyal Bağlandı! 🔧', 'Hat Kesintisiz!', 'Akış Tamam!'],
-    loseTitles: ['Hat Koptu 🔧', 'Sinyal Kayboldu', 'Boru Tıkandı'],
-    scoreLabel: 'Bağlanan hat',
+    loseTitles: ['Süre Doldu 🔧', 'Sinyal Kayboldu', 'Hat Yetişmedi'],
+    scoreLabel: 'Puan',
     comeBackNote: 'Yeni hat yarın kurulmayı bekliyor. 🔧',
   },
   'spam-breaker': {

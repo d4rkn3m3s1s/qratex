@@ -210,3 +210,25 @@ Yöntem: kod salt okunur yeniden okundu (`app/api/customer/tournament/route.ts`,
 - **Yeniden üretim:** Oturumlu CUSTOMER: `POST /api/customer/games/signal-pipe/start` → 10 sn bekle → `POST .../complete {sessionId, score:10, durationSec:10, won:true}` → 160 puan + 80 XP (+ günün ilk oyunuysa seri XP'si). Her gün tekrarlanabilir.
 - **Daha önemli alt bulgu (kesin):** `tooFast` olsa bile `won=true` ise durum `completed` ve `starsCollected=10` yazılıyor (`:99-105`). `weeklyRanking` yalnızca `status:'completed'` filtreliyor → 0 sn bekleyen betik ödülsüz ama **turnuvaya 10 ile giriyor**; seri hesabı da (`:133-137`) bu günleri sayıyor. Bu, Bulgu 1 ile birleşince her hafta 500/300/150'lik ödül havuzuna oynamadan aday olmayı mümkün kılıyor.
 - **Ölçek notu:** Günlük oyun ödülü, gerçek oyuncunun aynı gün alabileceğinin aynısı (oyun başına günde 1 hak, `@@unique([userId, gameType, dayKey])`); yani "sınırsız basım" değil, "oynamadan basım". Yüksek şiddetli kısım turnuva ve tooFast'ın sıralamaya yazılmasıdır. Önerilen tohum + hamle kaydı + paylaşılan saf çekirdek ile sunucu-tarafı doğrulama doğru yön; en kısa vadede `tooFast` oturumlar `failed`/`flagged` yazılmalı ve turnuvadan dışlanmalı.
+
+## Uygulama (Dalga 2)
+
+**Rota:** `/customer/games/signal-pipe` artık dinamik `/customer/games/[game]` (aynı kimlik) — eski statik `app/customer/games/signal-pipe/page.tsx` ve `components/customer/games/signal-pipe-game.tsx` silindi (statik klasör dinamik rotayı gölgeliyordu). Kabuk/mod/duraklatma/oturum/ödül GameHost'ta.
+
+**Yeni dosyalar:** `components/customer/games/signal-pipe/sim.ts` (saf, tohumlu, tamsayı sim + replay), `components/customer/games/signal-pipe/signal-pipe-game.tsx` (v2 bileşen), `lib/games/validators/signal-pipe.ts`, `lib/games/registry/signal-pipe(.server).ts` (v2 + deterministik doğrulayıcı), `__tests__/lib/signal-pipe.test.ts` (17 test). Sunucu kuralı `lib/minigame-config.ts`: maxScore 4.000, eşik 1.000, maxScorePerSec 120, minDurationSec 15.
+
+**Oyun tasarımı:** 10 seviye (5×5 → 6×6 → 7×7), kaynak sol kenardan anten, sunucu sağ kenarda (satır hizasında ağız işaretleri). Ortak süre 75 sn, her hat +15 sn (tavan 120), geçişte süre durur; süre biterse oyun biter → **garanti ödül yok**. Par (gereken en az saat yönü dokunuş) → seviye yıldızı (≤par 3, ≤⌈1,5×par⌉ 2, aksi 1); puan = yıldız × 100/120/150, hepsi bitince kalan sn × 2. Yan dallar, tuzak borular (ilerledikçe yoğun), 5. seviyeden itibaren kilitli (doğru yönde sabit) hücreler.
+
+**Kapatılan bulgular (12/14):**
+- #2 (failed→409 tuzağı) ve #8 (lobide durum, sonuç çıkışı), #4 (override'lar), #14 (sayfa kopyası) — ortak GameHost/dinamik rota + oyun `config` prop'undan eşik okur.
+- #3 skor/won istemci beyanı → tohum + girdi kaydı sunucuda adım adım replay; skor sunucunun; boş/kilitli/aralık dışı hücre, geçişte/insan üstü hızda dokunuş, bitmiş oyuna girdi, başka tohum → `proof_invalid`; hızlandırılmış betik → `implausible` (jest).
+- #1 (turnuva eşitliği, oyuna düşen kısım): tavan 10 → ince taneli puan (yıldız × kademe + süre bonusu); liderlik artık 10'larda doymaz. (Anlık görüntü/eşitlik bozucu turnuva sahibinde.)
+- #5 Bitir: HUD'da, basılı tut-onayla; 0 hamleyle bitirilemez.
+- #6 gerilim/eğri: süre, seviye büyümesi, par/yıldız, kilitli hücre, tuzak borular.
+- #7 erişilebilirlik: `role="grid"` + gezici tabindex, ok tuşları/Home/End, Enter/Boşluk = döndür, Q / Shift+Enter / sağ tık = ters; her hücreye dinamik etiket (şekil, açık uçlar, enerjili, kilitli, kaynak/sunucu); `aria-live` duyurular; renk tek ayırt edici değil (enerjili = kalın + dolu çekirdek, kilitli = kesikli kenar + desen + kilit ikonu, düşük süre = çizgili çubuk + ikon).
+- #11 başlangıçta çözülmüş seviye yok (üretici garanti + test), boş hücre döndürülemez/kayda girmez.
+- #12 azaltılmış hareket: dönüş/akış/nabız animasyonları, sarsıntı, ses, titreşim `useReducedMotionPref` + `fx` politikasına bağlı.
+- #13 ölü kod: `locked` gerçek mekanik oldu, dekoratif `taps` yerine par'a bağlı hamle sayacı; eski FxLayer kullanılmıyor.
+- Ek: yenilemede devam (sessionStorage, tohum anahtarlı replay), duraklatmada tahta bulanık (süre dışı düşünme yok), Pratik/Sıralı mod, ilk oynayışta öğretici, sonuç ekranı (yıldız, seviye ızgarası, en iyi, Wordle tarzı paylaşım, otomatik kaydet).
+
+**Kalan açıklar:** #9 ve #10 (turnuva kartı toast/tema) ve #1'in anlık görüntü kısmı ortak turnuva bileşeni/şema sahibinde. İpucu ekonomisi (puanla ipucu) eklenmedi — puan harcama akışı `lib/economy` sahibinin kararı.

@@ -397,15 +397,18 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'signal_pipe_game',
     title: 'Sinyal Bağla',
     description:
-      'Boruları döndürerek QR sinyalini kaynaktan sunucuya ulaştır! Kesintisiz hat kur, akışı tamamla.',
+      'Boruları döndür, sinyali kaynaktan sunucuya ulaştır! 10 seviye, ortak süre; az hamleyle yıldız topla.',
     emoji: '🔧',
     accent: '#06b6d4',
-    maxScore: 10,
-    rewardThreshold: 5,
+    // Skor = seviye yıldızı × kademe tabanı (100/120/150) + hepsi bitince kalan sn × 2 (v2, sunucu
+    // replay). Kuramsal tavan `MAX_TOTAL_SCORE` = 3.930 (components/customer/games/signal-pipe/sim.ts,
+    // testle hizalı). Eşik 1.000 ≈ 4-5 seviyeyi iyi yıldızla; süre biterse oyun biter (garanti yok).
+    maxScore: 4000,
+    rewardThreshold: 1000,
     rewardPoints: 160,
     rewardXp: 80,
-    minDurationSec: 10,
-    maxScorePerSec: 0.5,
+    minDurationSec: 15,
+    maxScorePerSec: 120,
     maxDurationSec: 1800,
   },
   {
@@ -502,9 +505,6 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 15,
     maxScorePerSec: 0.3,
     maxDurationSec: 900,
-    hidden: true,
-    release: 'building',
-    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 1 (§7.3).',
   },
   {
     gameType: 'match-three',
@@ -514,16 +514,16 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
       'Komşu rozetleri yer değiştirerek üç ve fazlasını eşleştir; seviye hedefini hamle bitmeden tamamla.',
     emoji: '💎',
     accent: '#ec4899',
-    maxScore: 60,
-    rewardThreshold: 24,
+    // Skor = günlük 5 seviyelik rotada geçilen seviyelerin (yıldız × 10 + min(artan hamle, 9))
+    // toplamı → tavan 5 × 39 = 195. Eşik 70 ≈ ilk üç seviyeyi iyi geçmek (açgözlü bot ~%30).
+    // Bir seviye en az birkaç takas (≥ 150 ms aralık) + animasyon sürer; 39 puan / ~15 sn → 3/sn tavan.
+    maxScore: 195,
+    rewardThreshold: 70,
     rewardPoints: 160,
     rewardXp: 80,
     minDurationSec: 30,
-    maxScorePerSec: 1.5,
-    maxDurationSec: 600,
-    hidden: true,
-    release: 'building',
-    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 2; memory-match’in yerini alır (§7.3).',
+    maxScorePerSec: 3,
+    maxDurationSec: 1200,
   },
   {
     gameType: 'venue-quiz',
