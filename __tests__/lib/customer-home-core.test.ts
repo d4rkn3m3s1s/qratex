@@ -228,6 +228,26 @@ describe('bekleyen işler', () => {
       { id: 'reviews', count: 2, href: HOME_LINKS.pendingReviews },
     ]);
   });
+
+  it('kullanılmayı bekleyen ödül KOD listesine, kutu Kutularım sekmesine gider (katalog değil)', () => {
+    const items = buildPendingActions({ reviews: 0, boxes: 2, rewards: 1, remedy: 0 }, ALL_ON);
+    expect(items).toEqual([
+      { id: 'rewards', count: 1, href: '/customer/wallet/owned' },
+      { id: 'boxes', count: 2, href: '/customer/wallet/owned?tab=boxes' },
+    ]);
+    expect(HOME_LINKS.ownedRewards).not.toBe(HOME_LINKS.rewards);
+  });
+});
+
+describe('HOME_LINKS', () => {
+  it('her hedef gerçek bir app/ rotasıdır (kırık link yok)', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    for (const href of Object.values(HOME_LINKS)) {
+      const pathname = href.split('?')[0];
+      expect(fs.existsSync(path.join(process.cwd(), 'app', ...pathname.split('/').filter(Boolean), 'page.tsx'))).toBe(true);
+    }
+  });
 });
 
 describe('safeBackgroundUrl', () => {

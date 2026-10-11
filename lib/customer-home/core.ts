@@ -28,13 +28,17 @@ import type {
  */
 export const HOME_LINKS = {
   scan: '/customer/scan',
-  pendingReviews: '/customer/consumptions?hasReview=false',
-  surpriseBoxes: '/customer/surprise-boxes',
-  rewards: '/customer/rewards',
-  remedy: '/customer/remedy',
+  pendingReviews: '/customer/wallet/activity?hasReview=false',
+  // Kutular sekmesi: `owned` varsayılanı kodlar/kuponlar ("passes") sekmesidir.
+  surpriseBoxes: '/customer/wallet/owned?tab=boxes',
+  /** Ödül KATALOĞU (puanla al). */
+  rewards: '/customer/wallet/rewards',
+  /** Alınmış, kullanılmayı bekleyen ödül KODLARI ("kodunu kasada göster"). */
+  ownedRewards: '/customer/wallet/owned',
+  remedy: '/customer/me/voices',
   games: '/customer/games',
   leaderboard: '/customer/leaderboard',
-  profile: '/customer/settings',
+  profile: '/customer/me/settings',
 } as const;
 
 // ───────────────────────────── Zaman ─────────────────────────────
@@ -291,7 +295,7 @@ export function buildPendingActions(counts: PendingCounts, sections: HomeSection
   const out: HomePendingAction[] = [];
   if (sections.remedy && counts.remedy > 0) out.push({ id: 'remedy', count: counts.remedy, href: HOME_LINKS.remedy });
   if (counts.reviews > 0) out.push({ id: 'reviews', count: counts.reviews, href: HOME_LINKS.pendingReviews });
-  if (sections.rewards && counts.rewards > 0) out.push({ id: 'rewards', count: counts.rewards, href: HOME_LINKS.rewards });
+  if (sections.rewards && counts.rewards > 0) out.push({ id: 'rewards', count: counts.rewards, href: HOME_LINKS.ownedRewards });
   if (sections.surpriseBoxes && counts.boxes > 0) out.push({ id: 'boxes', count: counts.boxes, href: HOME_LINKS.surpriseBoxes });
   return out;
 }

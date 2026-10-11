@@ -33,6 +33,7 @@ export function DailyGoals({
   onSpin: () => void;
 }) {
   const { copy } = useHomeCopy();
+  const policy = useMotionPolicy();
   const done = goals.filter((g) => g.done).length;
   const total = goals.length;
   const all = total > 0 && done === total;
@@ -58,7 +59,7 @@ export function DailyGoals({
         {all ? (
           <Motion.p
             key="all-done"
-            variants={popIn}
+            variants={policy.variants(popIn)}
             initial="hidden"
             animate="visible"
             exit="exit"

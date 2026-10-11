@@ -61,12 +61,14 @@ export default function SpinDialog({
   const [phase, setPhase] = useState<'idle' | 'requesting' | 'spinning' | 'done'>('idle');
   const [result, setResult] = useState<SpinResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Sunucu "hak bitti" dedi (başka sekme/cihazda çevrilmiş): buton bir daha istek atmaz. */
+  const [limitHit, setLimitHit] = useState(false);
   const pendingRef = useRef<SpinResult | null>(null);
 
   const prizes = spin.prizes;
   const count = Math.max(1, prizes.length);
   const seg = 360 / count;
-  const remaining = result ? result.remaining : spin.remaining;
+  const remaining = limitHit ? 0 : result ? result.remaining : spin.remaining;
   const busy = phase === 'requesting' || phase === 'spinning';
 
   const slices = useMemo(
@@ -123,7 +125,9 @@ export default function SpinDialog({
       }
     } catch (e) {
       setPhase('idle');
-      setError(e instanceof HomeFetchError && e.code === 'CONFLICT' ? copy.spinUsed : copy.spinError);
+      const used = e instanceof HomeFetchError && e.code === 'CONFLICT';
+      if (used) setLimitHit(true);
+      setError(used ? copy.spinUsed : copy.spinError);
     }
   };
 

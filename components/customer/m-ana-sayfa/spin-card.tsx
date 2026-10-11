@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { CountdownChip, GlowCard } from '@/components/ds/play';
 import type { HomeSpin } from '@/lib/customer-home/types';
 import { useHomeCopy } from './copy';
+import { useHomeCache } from './use-home';
 
 /** Çark girişi — durum BFF'ten gelir (ikinci bir GET yok). Diyalog tıklanınca yüklenir. */
 export function SpinCard({ spin, onOpen }: { spin: HomeSpin; onOpen: () => void }) {
   const { copy } = useHomeCopy();
+  const { refresh } = useHomeCache();
   const available = spin.remaining > 0;
 
   return (
@@ -28,7 +30,8 @@ export function SpinCard({ spin, onOpen }: { spin: HomeSpin; onOpen: () => void 
           {copy.spinOpen}
         </Button>
       ) : (
-        <CountdownChip className="mt-auto self-start" label={copy.spinNext} />
+        // Gece yarısı (İstanbul) yeni hak açılır: sayfa açık kalsa da kart kendini tazeler.
+        <CountdownChip className="mt-auto self-start" label={copy.spinNext} onExpire={() => void refresh()} />
       )}
     </GlowCard>
   );

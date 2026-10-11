@@ -66,12 +66,13 @@ function HomeContent({ data }: { data: CustomerHomeData }) {
     if (touchedRef.current) return;
     touchedRef.current = true;
     if (data.streak.countedToday) return;
-    let alive = true;
-    (async () => {
+    // `alive` bayrağı YOK: StrictMode'da efekt temizlenip tekrar çalışınca `touchedRef` ikinci
+    // isteği engeller; bayrak ilk isteğin sonucunu da atarsa kart "kaydediliyor"da asılı kalırdı.
+    // Sonuç önbelleğe yazılır (bileşen sökülse de doğru); söküldükten sonra setState no-op'tur.
+    void (async () => {
       try {
         const res = await fetch('/api/customer/streak', { method: 'POST', credentials: 'same-origin' });
         const s = await readEnvelope<StreakTouch>(res);
-        if (!alive) return;
         patch((prev) => ({
           ...prev,
           streak: {
@@ -93,12 +94,9 @@ function HomeContent({ data }: { data: CustomerHomeData }) {
       } catch {
         // Seri dokunuşu kritik değil: kart "kaydediliyor"dan çıkar, veri bir sonraki tazelemede gelir.
       } finally {
-        if (alive) setStreakSaving(false);
+        setStreakSaving(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
     // Yalnız ilk açılışta.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -7,6 +7,7 @@ import { CountdownChip, GlowCard } from '@/components/ds/play';
 import { HOME_LINKS } from '@/lib/customer-home/core';
 import type { HomeSurpriseBox } from '@/lib/customer-home/types';
 import { useHomeCopy } from './copy';
+import { useHomeCache } from './use-home';
 
 /**
  * Günlük sürpriz kutu girişi. Kutu açılışı (ve 3D sahnesi) kutular sayfasında; burada yalnız
@@ -14,6 +15,7 @@ import { useHomeCopy } from './copy';
  */
 export function SurpriseBoxCard({ box }: { box: HomeSurpriseBox }) {
   const { copy } = useHomeCopy();
+  const { refresh } = useHomeCache();
   const ready = !box.openedToday;
 
   return (
@@ -36,7 +38,7 @@ export function SurpriseBoxCard({ box }: { box: HomeSurpriseBox }) {
           </Link>
         </Button>
       ) : (
-        <CountdownChip className="mt-auto self-start" />
+        <CountdownChip className="mt-auto self-start" onExpire={() => void refresh()} />
       )}
     </GlowCard>
   );
