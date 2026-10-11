@@ -44,9 +44,9 @@ function RuleRow({ rule }: { rule: RadarRuleStatus }) {
 
   return (
     <li className="min-w-0 space-y-1.5 rounded-control border border-subtle bg-surface-2 p-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="qx-small min-w-0 truncate font-medium text-fg">{label}</span>
-        <span className={cn('qx-caption qx-num shrink-0', rule.level === 'alert' ? 'text-danger' : rule.level === 'watch' ? 'text-warning' : 'text-fg-muted')}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <span className="qx-small min-w-0 max-w-full truncate font-medium text-fg">{label}</span>
+        <span className={cn('qx-caption qx-num min-w-0', rule.level === 'alert' ? 'text-danger' : rule.level === 'watch' ? 'text-warning' : 'text-fg-muted')}>
           {valueText}
         </span>
       </div>

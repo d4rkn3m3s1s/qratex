@@ -11,6 +11,11 @@ function createPrismaClient() {
     }
     return new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      // Etkileşimli $transaction havuzdan bağlantı beklerken varsayılan 2 sn'de P2028 ("Unable to
+      // start a transaction in the given time") ile düşüyordu: Neon pooler + connection_limit=5
+      // altında eşzamanlı istek patlamasında vaka açma/çözme 500 verdi (e2e b-bugun-gelen).
+      // Yalnız bekleme süresi uzar; çağrı başına verilen seçenekler bunu yine ezer.
+      transactionOptions: { maxWait: 10_000 },
     });
   } catch (error) {
     console.error('Failed to create Prisma Client:', error);
