@@ -149,6 +149,9 @@ export async function GET() {
     return NextResponse.json(payload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching admin AI stats:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: false, code: 'INTERNAL', error: 'Yapay zekâ istatistikleri yüklenemedi.' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

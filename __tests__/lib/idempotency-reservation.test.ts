@@ -40,7 +40,7 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-import { withIdempotency } from '@/lib/idempotency';
+import { storeIdempotency, withIdempotency } from '@/lib/idempotency';
 
 const KEY = 'test-key-0123456789abcdef';
 const req = () => new Request('http://localhost/api/x', { method: 'POST', headers: { 'Idempotency-Key': KEY } });
@@ -89,5 +89,19 @@ describe('withIdempotency', () => {
     const res = await withIdempotency(req(), '/api/x', handler);
     expect(res.status).toBe(409);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('storeIdempotency süresi dolmamış BAŞKA rotanın (başka kullanıcının) kaydını ezmez (denetim D2)', async () => {
+    const victim = { key: KEY, route: 'quest-claim:userA', statusCode: 200, responseBody: '{"mine":true}', expiresAt: new Date(Date.now() + 60_000) };
+    rows.set(KEY, { ...victim });
+    await storeIdempotency(KEY, 'quest-claim:userB', 200, { mine: false });
+    expect(rows.get(KEY)).toEqual(victim);
+  });
+
+  it('storeIdempotency süresi dolmuş kaydı yeni rotayla yeniden yazar', async () => {
+    rows.set(KEY, { key: KEY, route: 'eski', statusCode: 200, responseBody: '{}', expiresAt: new Date(Date.now() - 1_000) });
+    await storeIdempotency(KEY, 'yeni', 201, { ok: 1 });
+    expect(rows.get(KEY)?.route).toBe('yeni');
+    expect(rows.get(KEY)?.statusCode).toBe(201);
   });
 });

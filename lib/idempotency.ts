@@ -60,8 +60,16 @@ export async function storeIdempotency(
   responseBody: unknown
 ): Promise<void> {
   if (!key) return;
-  const expiresAt = new Date();
+  const now = new Date();
+  const expiresAt = new Date(now);
   expiresAt.setHours(expiresAt.getHours() + TTL_HOURS);
+
+  // Anahtar global (`key` UNIQUE) ama yanıt ROTAYA (çağıranlar kullanıcıyı rotaya gömer) bağlı.
+  // Süresi dolmamış başka rotanın/kullanıcının kaydı EZİLMEZ (müşteri API denetimi D2): eskiden
+  // `upsert` gövdeyi değiştirip rotayı koruyordu → B kullanıcısı A'nın anahtarını yeniden
+  // kullanırsa A'nın tekrar isteğine B'nin yanıtı oynatılıyordu (ve A'nın işlemi hiç yapılmıyordu).
+  const existing = await prisma.idempotencyKey.findUnique({ where: { key }, select: { route: true, expiresAt: true } });
+  if (existing && existing.route !== route && existing.expiresAt > now) return;
 
   await prisma.idempotencyKey.upsert({
     where: { key },
@@ -73,6 +81,7 @@ export async function storeIdempotency(
       expiresAt,
     },
     update: {
+      route,
       statusCode,
       responseBody: JSON.stringify(responseBody),
       expiresAt,
