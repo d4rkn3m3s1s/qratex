@@ -8,6 +8,7 @@ import { isCustomerModuleBlocked } from '@/lib/customer-wallet/gate';
 import { getPointsHistory, getPointsOverview } from '@/lib/customer-wallet/activity/points-history';
 import { getPendingShelf, getReviewRewardPreview, getVisitStats, getVisitsPage } from '@/lib/customer-wallet/activity/visits';
 import { getSpendSummary } from '@/lib/customer-wallet/activity/spend-summary';
+import { getEarnGuide, type EarnGuide } from '@/lib/economy/earn-guide';
 import { ActivityView, type ActivityInitial } from '@/components/customer/m-cuzdan-hareketler/activity-view';
 import {
   getterFrom,
@@ -58,8 +59,13 @@ export default async function WalletActivityPage({
   const tab = readActivityTab(get, summaryEnabled);
   const initial: ActivityInitial = {};
 
-  const [pendingCount] = await Promise.all([
+  const [pendingCount, guide] = await Promise.all([
     prisma.consumption.count({ where: { customerId: userId, review: null } }).catch(() => null),
+    // Puan Rehberi (ödeyen kodun kaynaklarından); okunamazsa bölüm hiç gösterilmez (uydurma yok).
+    getEarnGuide(userId).catch((error): EarnGuide | null => {
+      console.error('[wallet/activity] puan rehberi hazırlanamadı', error);
+      return null;
+    }),
     (async () => {
       try {
         if (tab === 'points') {
@@ -89,5 +95,5 @@ export default async function WalletActivityPage({
     })(),
   ]);
 
-  return <ActivityView initial={initial} summaryEnabled={summaryEnabled} pendingCount={pendingCount} />;
+  return <ActivityView initial={initial} summaryEnabled={summaryEnabled} pendingCount={pendingCount} guide={guide} />;
 }

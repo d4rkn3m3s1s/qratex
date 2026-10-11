@@ -12,6 +12,7 @@ import { SectionTabs } from '@/components/ds/page';
 import { PanelErrorBoundary } from '@/components/ds/page';
 import type { SpendSummary } from '@/lib/customer-wallet/activity/spend-summary';
 import type { SummaryRange } from '@/lib/customer-wallet/periods';
+import type { EarnGuide } from '@/lib/economy/earn-guide';
 import type { PointsPage, VisitsPage } from './api';
 import { useMovesCopy } from './copy';
 import { readActivityTab, type ActivityTab, type PointsFilterValue, type VisitsFilterValue } from './filters';
@@ -36,10 +37,13 @@ export function ActivityView({
   initial,
   summaryEnabled,
   pendingCount,
+  guide = null,
 }: {
   initial: ActivityInitial;
   summaryEnabled: boolean;
   pendingCount: number | null;
+  /** Puan Rehberi (sunucuda üretilir); null → bölüm gösterilmez. */
+  guide?: EarnGuide | null;
 }) {
   const { copy } = useMovesCopy();
   const url = useSearchParamState();
@@ -73,7 +77,7 @@ export function ActivityView({
       {(active) => (
         <PanelErrorBoundary resetKeys={[active]}>
           {active === 'points' ? (
-            <PointsTab initial={initial.points} />
+            <PointsTab initial={initial.points} guide={guide} />
           ) : active === 'visits' ? (
             <VisitsTab initial={initial.visits} />
           ) : (

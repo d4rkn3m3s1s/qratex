@@ -24,8 +24,16 @@ import { InfiniteFooter } from './infinite-footer';
 import { GroupHeading, IconTile, StatStrip, iconForSource } from './parts';
 import { useSearchParamState } from './use-param';
 import { readPointsFilter } from './filters';
+import { EarnGuidePanel } from './earn-guide';
+import type { EarnGuide } from '@/lib/economy/earn-guide';
 
-export function PointsTab({ initial }: { initial?: { filter: PointsFilter; page: PointsPage } | null }) {
+export function PointsTab({
+  initial,
+  guide = null,
+}: {
+  initial?: { filter: PointsFilter; page: PointsPage } | null;
+  guide?: EarnGuide | null;
+}) {
   const { copy, locale } = useMovesCopy();
   const fmt = useFormatters(locale);
   const url = useSearchParamState();
@@ -77,6 +85,8 @@ export function PointsTab({ initial }: { initial?: { filter: PointsFilter; page:
           ) : null}
         </div>
       ) : null}
+
+      {guide ? <EarnGuidePanel guide={guide} /> : null}
 
       <div className="space-y-2">
         <ChoiceChips
