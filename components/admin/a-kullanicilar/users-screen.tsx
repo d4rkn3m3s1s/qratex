@@ -144,14 +144,14 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
         accessorKey: 'name',
         header: 'Kullanıcı',
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Kullanıcı' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: 'Kullanıcı', interactive: true } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const u = row.original;
           return (
             <div className="flex min-w-0 items-center gap-3">
               <UserAvatar name={u.name} email={u.email} image={u.image} size="sm" />
               <div className="min-w-0">
-                <Link href={`/admin/users/${u.id}`} className="block truncate font-medium text-fg underline-offset-4 hover:underline focus-visible:underline">
+                <Link href={`/admin/users/${u.id}`} className="block min-h-6 truncate font-medium leading-6 text-fg underline-offset-4 hover:underline focus-visible:underline">
                   {displayName(u)}
                 </Link>
                 <p className="truncate text-xs text-fg-muted">{u.email}</p>
