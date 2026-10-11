@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -64,7 +64,7 @@ function profileVersion(user: ProfileVersionFields): string {
 export async function PATCH(request: NextRequest) {
   try {
     const auditMeta = getAuditRequestMeta(request);
-    const auth = await requireAuth();
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
@@ -168,7 +168,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 

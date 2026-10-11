@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
+import { parseJsonBody } from '@/lib/http/parse-body';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
@@ -29,6 +31,11 @@ async function withSessionRotation(
 
 export const dynamic = 'force-dynamic';
 
+const TwoFactorBodySchema = z.object({
+  action: z.enum(['setup', 'verify', 'disable', 'recovery-codes'], { errorMap: () => ({ message: 'Geçersiz action' }) }),
+  code: z.string().max(32).optional(),
+});
+
 /**
  * 2FA yönetimi (oturum açık kullanıcı). TOTP lib/totp'te, kurtarma kodları
  * lib/two-factor'da. Login doğrulaması lib/auth authorize()'da yapılır.
@@ -50,7 +57,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // mimari-api B6: gövde zod ile (bozuk JSON / bilinmeyen eylem 500 değil 400).
+    const parsed = await parseJsonBody(request, TwoFactorBodySchema, { maxBytes: 4_096 });
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     if (body.action === 'setup') {
       const user = await prisma.user.findUnique({

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
+import { parseJsonBody } from '@/lib/http/parse-body';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { clampNotificationListLimit, toPublicNotification } from '@/lib/notification-public-dto';
@@ -75,14 +77,21 @@ export async function GET(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/notifications - Mark notifications as read
 // ─────────────────────────────────────────────────────────────
+const PatchBodySchema = z.object({
+  notificationId: z.string().trim().min(1, 'Geçersiz bildirim ID').max(64, 'Geçersiz bildirim ID').optional(),
+  markAllRead: z.boolean().optional(),
+});
+
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await requireAuth(ANY_SIGNED_IN_ROLE);
     if ('error' in auth) return auth.error;
     const session = auth.session;
 
-    const body = await request.json();
-    const { notificationId, markAllRead } = body;
+    // mimari-api B6: gövde zod ile (bozuk JSON 500 değil 400; kimlik uzunluğu sınırlı).
+    const parsed = await parseJsonBody(request, PatchBodySchema, { maxBytes: 4_096 });
+    if (!parsed.ok) return parsed.response;
+    const { notificationId, markAllRead } = parsed.data;
 
     if (markAllRead) {
       // Mark all notifications as read

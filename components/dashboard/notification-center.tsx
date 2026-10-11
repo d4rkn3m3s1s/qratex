@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { formatDistanceToNow, format } from 'date-fns';
 import { tr, enUS } from 'date-fns/locale';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { claimNotificationToast, markNotificationsSeen } from '@/lib/notification-toast-dedupe';
 
 // ─── Types ──────────────────────────────────────────────────
 export interface Notification {
@@ -112,15 +113,20 @@ export function NotificationCenter() {
     const fetchNotifications = useCallback(async () => {
         if (!session?.user?.id) return;
         try {
-            const res = await fetch('/api/notifications?limit=30', { credentials: 'same-origin' });
-            if (!res.ok) { setNotifications([]); setUnreadCount(0); return; }
+            const res = await fetch('/api/notifications?limit=30', { credentials: 'same-origin', cache: 'no-store' });
+            // Geçici hata (ağ/5xx/429) listeyi "bildirim yok" diye SİLMEZ: son bilinen liste kalır.
+            if (!res.ok) return;
             const data = await res.json().catch(() => ({}));
             if (data?.success && Array.isArray(data.notifications)) {
                 const items = data.notifications as Notification[];
-                // Toast for genuinely new notifications
-                if (!firstLoadRef.current && items.length > 0) {
+                if (firstLoadRef.current) {
+                    // İlk yükleme: mevcut bildirimler toast'sız "görüldü" sayılır.
+                    markNotificationsSeen(items.map((n) => n.id));
+                } else if (items.length > 0) {
+                    // Yeni bildirim toast'ı tek kez: SSE kanalı (bayi) önce gördüyse burada açılmaz.
                     const newOnes = items.filter((n) => !prevIdsRef.current.has(n.id));
                     newOnes.forEach((n) => {
+                        if (!claimNotificationToast(n.id)) return;
                         const Icon = getIcon(n.type);
                         toast(n.title, {
                             description: n.message,
@@ -133,19 +139,36 @@ export function NotificationCenter() {
                 setNotifications(items);
                 setUnreadCount(typeof data.unreadCount === 'number' ? data.unreadCount : 0);
                 firstLoadRef.current = false;
-            } else {
-                setNotifications([]); setUnreadCount(0);
             }
         } catch {
-            setNotifications((prev) => (prev.length ? prev : []));
+            /* ağ hatası: son bilinen liste korunur, bir sonraki turda yeniden denenir */
         }
     }, [session?.user?.id]);
 
+    // Yoklama yalnız GÖRÜNÜR sekmede (mimari-api B9): gizli sekme sunucuya istek atmaz;
+    // sekmeye dönüldüğünde hemen tazelenir.
     useEffect(() => {
         if (!session?.user?.id) return;
-        fetchNotifications();
-        const poll = setInterval(fetchNotifications, 20_000);
-        return () => clearInterval(poll);
+        let poll: ReturnType<typeof setInterval> | null = null;
+        const stop = () => {
+            if (poll) clearInterval(poll);
+            poll = null;
+        };
+        const start = () => {
+            stop();
+            fetchNotifications();
+            poll = setInterval(fetchNotifications, 20_000);
+        };
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') start();
+            else stop();
+        };
+        if (document.visibilityState === 'visible') start();
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            stop();
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
     }, [session?.user?.id, fetchNotifications]);
 
     // ── Actions ───

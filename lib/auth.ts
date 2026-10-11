@@ -570,7 +570,7 @@ export const authOptions: NextAuthOptions = {
             }
             if (s.customFrameColor !== undefined) token.customFrameColor = fresh.customFrameColor || null;
             if (wantsCosmetics && 'equippedCosmetics' in fresh && Array.isArray(fresh.equippedCosmetics)) {
-              const equipped = fresh.equippedCosmetics as Array<{ cosmetic: { type: string; imageUrl: string | null } }>;
+              const equipped = fresh.equippedCosmetics as unknown as Array<{ cosmetic: { type: string; imageUrl: string | null } }>;
               token.equippedFrame = equipped.find((c) => c.cosmetic.type === 'avatar_frame')?.cosmetic.imageUrl ?? null;
               token.equippedBackground = equipped.find((c) => c.cosmetic.type === 'profile_background')?.cosmetic.imageUrl ?? null;
             }

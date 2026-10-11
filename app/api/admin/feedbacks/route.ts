@@ -10,6 +10,20 @@ import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 
 export const dynamic = 'force-dynamic';
 
+/** Puan filtresi: 1-5 arası tam sayı, değilse filtre yok. */
+function ratingParam(raw: string | null): number | null {
+  if (raw == null || raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
+
+/** Tarih filtresi: geçerli tarih, değilse filtre yok. */
+function dateParam(raw: string | null): Date | null {
+  if (!raw || raw.length > 40) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
@@ -25,10 +39,12 @@ export async function GET(request: NextRequest) {
     const { page, pageSize, search: searchTrim } = queryParsed.success ? queryParsed.data : { page: 1, pageSize: 20, search: undefined as string | undefined };
     const sentiment = searchParams.get('sentiment');
     const dealerId = searchParams.get('dealerId');
-    const minRating = searchParams.get('minRating');
-    const maxRating = searchParams.get('maxRating');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    // mimari-api B6: sayısal/tarih filtreleri güvenli çözülür (eskiden `?minRating=abc` → NaN,
+    // `?startDate=x` → Invalid Date → Prisma 500). Geçersiz değer filtreyi yok sayar.
+    const minRating = ratingParam(searchParams.get('minRating'));
+    const maxRating = ratingParam(searchParams.get('maxRating'));
+    const startDate = dateParam(searchParams.get('startDate'));
+    const endDate = dateParam(searchParams.get('endDate'));
     const type = searchParams.get('type'); // 'all' | 'qr' | 'consumption'
     const maxFraudScore = searchParams.get('maxFraudScore'); // 0-1; sahte yorum filtre (madde 41)
     const needsReview = searchParams.get('needsReview') === 'true'; // P2-27: intentScore < 0.7 manuel inceleme
@@ -41,10 +57,10 @@ export async function GET(request: NextRequest) {
       const v = parseFloat(maxFraudScore);
       if (!Number.isNaN(v)) qrWhere.fraudScore = { lte: v };
     }
-    if (minRating) qrWhere.rating = { ...qrWhere.rating, gte: parseInt(minRating) };
-    if (maxRating) qrWhere.rating = { ...qrWhere.rating, lte: parseInt(maxRating) };
-    if (startDate) qrWhere.createdAt = { ...qrWhere.createdAt, gte: new Date(startDate) };
-    if (endDate) qrWhere.createdAt = { ...qrWhere.createdAt, lte: new Date(endDate) };
+    if (minRating != null) qrWhere.rating = { ...qrWhere.rating, gte: minRating };
+    if (maxRating != null) qrWhere.rating = { ...qrWhere.rating, lte: maxRating };
+    if (startDate) qrWhere.createdAt = { ...qrWhere.createdAt, gte: startDate };
+    if (endDate) qrWhere.createdAt = { ...qrWhere.createdAt, lte: endDate };
     if (searchTrim) {
       qrWhere.OR = [
         { text: { contains: searchTrim, mode: 'insensitive' } },
@@ -101,10 +117,10 @@ export async function GET(request: NextRequest) {
     if (type === 'all' || type === 'consumption' || !type) {
       // Moderasyonla kaldırılmış (soft-delete) tüketim yorumları listede ve istatistikte yok (P0-23).
       const cw: any = { deletedAt: null };
-      if (minRating) cw.rating = { ...cw.rating, gte: parseInt(minRating) };
-      if (maxRating) cw.rating = { ...cw.rating, lte: parseInt(maxRating) };
-      if (startDate) cw.createdAt = { ...cw.createdAt, gte: new Date(startDate) };
-      if (endDate) cw.createdAt = { ...cw.createdAt, lte: new Date(endDate) };
+      if (minRating != null) cw.rating = { ...cw.rating, gte: minRating };
+      if (maxRating != null) cw.rating = { ...cw.rating, lte: maxRating };
+      if (startDate) cw.createdAt = { ...cw.createdAt, gte: startDate };
+      if (endDate) cw.createdAt = { ...cw.createdAt, lte: endDate };
       if (searchTrim) {
         cw.OR = [
           { text: { contains: searchTrim, mode: 'insensitive' } },

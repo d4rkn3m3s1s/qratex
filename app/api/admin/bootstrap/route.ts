@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { demoSeedGate } from '@/lib/data-safety/demo-guard';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
+import { parseJsonBody } from '@/lib/http/parse-body';
 
 
 export const dynamic = 'force-dynamic';
@@ -45,12 +47,16 @@ type ConfigAction = (typeof CONFIG_ACTIONS)[number];
 type DemoAction = (typeof DEMO_ACTIONS)[number];
 type BootstrapAction = ConfigAction | DemoAction;
 
-function isBootstrapAction(v: string): v is BootstrapAction {
-  return (CONFIG_ACTIONS as readonly string[]).includes(v) || (DEMO_ACTIONS as readonly string[]).includes(v);
-}
 function isDemoAction(v: BootstrapAction): v is DemoAction {
   return (DEMO_ACTIONS as readonly string[]).includes(v);
 }
+
+const BootstrapBodySchema = z.object({
+  action: z.enum([...CONFIG_ACTIONS, ...DEMO_ACTIONS], {
+    errorMap: () => ({ message: 'Geçersiz action' }),
+  }),
+  dryRun: z.boolean().optional(),
+});
 
 const BOOTSTRAP_TRACKER_KEY = 'admin_bootstrap_tracker_v1';
 
@@ -464,12 +470,11 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session } = auth;
 
-  const body = (await request.json().catch(() => ({}))) as { action?: unknown; dryRun?: unknown } | null;
-  const action = String(body?.action || '');
-  const dryRun = body?.dryRun === true;
-  if (!isBootstrapAction(action)) {
-    return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
+  // mimari-api B6: gövde zod ile (eylem kapalı listeden; bozuk JSON 400).
+  const parsed = await parseJsonBody(request, BootstrapBodySchema, { maxBytes: 4_096 });
+  if (!parsed.ok) return parsed.response;
+  const action: BootstrapAction = parsed.data.action;
+  const dryRun = parsed.data.dryRun === true;
 
   if (isDemoAction(action)) {
     const gate = demoSeedGate();

@@ -1,71 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-
+import { defineRoute, ok } from '@/lib/http/define-route';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/dealer/products
- * Ürünleri listele (bayiye özel + global)
+ * GET /api/dealer/products?categoryId= — aktif ürünler (global + bu işletmeye özel).
+ *
+ * Kiracı `defineRoute({ tenant: 'dealer' })` ile çözülür (mimari-api B2): DEALER kendisi,
+ * STAFF bağlı olduğu AKTİF işletme, ADMIN yalnız açık `?dealerId=` ile (salt-okunur). Eskiden
+ * ADMIN kendi kullanıcı kimliğini bayi sayıyordu.
  */
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
+const querySchema = z.object({
+  categoryId: z.string().trim().min(1).max(64).optional(),
+  dealerId: z.string().optional(),
+});
 
-    const { searchParams } = new URL(request.url);
-    const categoryIdRaw = searchParams.get('categoryId');
-    const categoryId =
-      categoryIdRaw && categoryIdRaw.length <= 64 ? categoryIdRaw.trim() : null;
-    if (categoryIdRaw && categoryIdRaw.length > 64) {
-      return NextResponse.json(
-        { error: 'Geçersiz kategori' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const where: Prisma.ProductWhereInput = {
-      OR: [
-        { dealerId: null }, // Global ürünler
-        { dealerId: session.user.id }, // Bayiye özel
-      ],
-      isActive: true,
-    };
-
-    if (categoryId) {
-      where.categoryId = categoryId;
-    }
-
+export const GET = defineRoute(
+  { name: 'dealer.products.list', roles: ['DEALER', 'STAFF', 'ADMIN'], tenant: 'dealer', query: querySchema, rateLimit: 'read' },
+  async ({ tenant, query }) => {
     const products = await prisma.product.findMany({
-      where,
+      where: {
+        OR: [{ dealerId: null }, { dealerId: tenant.dealerId }],
+        isActive: true,
+        ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      },
       orderBy: { name: 'asc' },
       take: 500,
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-            icon: true,
-          },
-        },
-      },
+      include: { category: { select: { id: true, name: true, icon: true } } },
     });
-
-    return NextResponse.json({
-      success: true,
-      products,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    return NextResponse.json(
-      { error: 'Ürünler getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return ok({ products }, { legacySpread: true });
   }
-}
+);
 
 // Yazma: /api/dealer/catalog/products (defineRoute; kuruş fiyat, görsel alanı, aynı ad 409).

@@ -31,7 +31,10 @@ export function authorizeInternalJobRequest(req: NextRequest): boolean {
 }
 
 export function unauthorizedInternalJob(): NextResponse {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return NextResponse.json(
+    { ok: false, success: false, code: 'UNAUTHENTICATED', error: 'İç iş yetkisi doğrulanamadı.' },
+    { status: 401 }
+  );
 }
 
 export function internalJobAuthHeaders(): Record<string, string> {

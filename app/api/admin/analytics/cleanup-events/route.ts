@@ -1,56 +1,60 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import {
   deleteAnalyticsEventsOlderThan,
   countAnalyticsEventsOlderThan,
   DEFAULT_RETENTION_DAYS,
+  MIN_RETENTION_DAYS,
+  RETAINED_ANALYTICS_EVENTS,
 } from '@/lib/analytics-event-retention';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET - Kaç kayıt silinebilir (retention dışı) bilgisini döner.
- * POST - Eski AnalyticsEvent kayıtlarını siler (admin only).
+ * GET  — saklama süresi dışında kalan (silinebilir) olay sayısı.
+ * POST — saklama süresi dışındaki olayları siler (yalnız ADMIN, denetime yazılır).
+ *
+ * mimari-api B6/B11: gövde/sorgu zod ile (`olderThanDays` tamsayı, [30, 365]); eskiden şemasız
+ * okunuyor ve 1 güne kadar inilebiliyordu. Ekonomi/sahtekârlık olayları (`points_credited` …)
+ * hiçbir koşulda silinmez (`RETAINED_ANALYTICS_EVENTS`).
  */
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
+const days = z.coerce
+  .number({ invalid_type_error: 'Gün sayısı sayı olmalı.' })
+  .int('Gün sayısı tam sayı olmalı.')
+  .min(MIN_RETENTION_DAYS, `En az ${MIN_RETENTION_DAYS} gün saklanmalı.`)
+  .max(365, 'En fazla 365 gün seçilebilir.');
 
-  const { searchParams } = new URL(request.url);
-  const days = Math.min(365, Math.max(1, parseInt(searchParams.get('olderThanDays') || String(DEFAULT_RETENTION_DAYS), 10) || DEFAULT_RETENTION_DAYS));
+const querySchema = z.object({ olderThanDays: days.default(DEFAULT_RETENTION_DAYS) });
+const bodySchema = z.object({ olderThanDays: days.default(DEFAULT_RETENTION_DAYS) }).strict().default({});
 
-  try {
-    const count = await countAnalyticsEventsOlderThan(days);
-    return NextResponse.json({
-      success: true,
-      olderThanDays: days,
-      deletableCount: count,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (e) {
-    console.error('Analytics cleanup count error:', e);
-    return NextResponse.json({ success: false, error: 'Sayılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+export const GET = defineRoute(
+  { name: 'admin.analytics.cleanup-events.count', roles: ['ADMIN'], query: querySchema, rateLimit: 'read' },
+  async ({ query }) => {
+    const deletableCount = await countAnalyticsEventsOlderThan(query.olderThanDays);
+    return ok(
+      { olderThanDays: query.olderThanDays, deletableCount, retainedEvents: RETAINED_ANALYTICS_EVENTS },
+      { legacySpread: true }
+    );
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
-
-  const body = await request.json().catch(() => ({}));
-  const days = typeof body.olderThanDays === 'number'
-    ? Math.min(365, Math.max(1, body.olderThanDays))
-    : DEFAULT_RETENTION_DAYS;
-
-  try {
-    const deleted = await deleteAnalyticsEventsOlderThan(days);
-    return NextResponse.json({
-      success: true,
-      deletedCount: deleted,
-      olderThanDays: days,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (e) {
-    console.error('Analytics cleanup delete error:', e);
-    return NextResponse.json({ success: false, error: 'Temizlik yapılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+export const POST = defineRoute(
+  { name: 'admin.analytics.cleanup-events.run', roles: ['ADMIN'], schema: bodySchema, rateLimit: 'sensitive' },
+  async ({ body, session, request }) => {
+    const deletedCount = await deleteAnalyticsEventsOlderThan(body.olderThanDays);
+    await prisma.auditLog.create({
+      data: auditEntry(
+        actorFromSession(session),
+        {
+          action: 'ANALYTICS_EVENTS_CLEANUP',
+          entity: 'AnalyticsEvent',
+          newData: { olderThanDays: body.olderThanDays, deletedCount, retainedEvents: RETAINED_ANALYTICS_EVENTS },
+        },
+        request
+      ),
+    });
+    return ok({ deletedCount, olderThanDays: body.olderThanDays }, { legacySpread: true });
   }
-}
+);

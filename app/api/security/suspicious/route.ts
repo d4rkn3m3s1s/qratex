@@ -1,41 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { reportSuspiciousActivity } from '@/lib/security';
-import {
-  PRIVATE_NO_STORE_HEADERS,
-  clampPageParam,
-  clampPageSizeParam,
-  paginationSkip,
-} from '@/lib/api-http';
+import { PRIVATE_NO_STORE_HEADERS, paginationSkip } from '@/lib/api-http';
 import { requireCronSecretOrAdmin } from '@/lib/internal-cron-or-admin';
-
-// GET - Get suspicious activities (admin only)
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { parseJsonBody } from '@/lib/http/parse-body';
+import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 
 export const dynamic = 'force-dynamic';
 
-const LIST_DEFAULT_PAGE_SIZE = 20;
-const LIST_MAX_PAGE_SIZE = 100;
+/**
+ * Şüpheli etkinlik kayıtları.
+ *  - GET   (ADMIN): sayfalı liste + özet.
+ *  - POST  (iç iş / ADMIN): kayıt bildir.
+ *  - PATCH (ADMIN): çözüldü olarak işaretle (denetime yazılır).
+ *
+ * mimari-api B5/B6: sorgu ve gövdeler zod ile (eskiden POST gövdesi doğrulanmadan `type`,
+ * `severity`, `metadata` olarak yazılıyor, PATCH'te eksik `id` Prisma 500'üne düşüyordu); hata
+ * mesajları Türkçe zarf v2.
+ */
+const SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
-export async function GET(req: NextRequest) {
-  try {
-    // P0-01: yönetici ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
+const listQuery = z.object({
+  severity: z.enum(SEVERITIES).optional().catch(undefined),
+  resolved: z.enum(['true', 'false']).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).max(10_000).catch(1),
+  limit: z.coerce.number().int().min(1).max(100).catch(20),
+});
 
-    const { searchParams } = new URL(req.url);
-    const severity = searchParams.get('severity');
-    const resolved = searchParams.get('resolved');
-    const page = clampPageParam(searchParams.get('page'));
-    const limit = clampPageSizeParam(searchParams.get('limit'), LIST_DEFAULT_PAGE_SIZE, LIST_MAX_PAGE_SIZE);
-    const skip = paginationSkip(page, limit);
+const reportBody = z.object({
+  userId: z.string().trim().min(1).max(64).optional(),
+  dealerId: z.string().trim().min(1).max(64).optional(),
+  cardId: z.string().trim().min(1).max(64).optional(),
+  type: z.string().trim().min(1, 'Tür gerekli').max(64),
+  severity: z.enum(SEVERITIES).default('MEDIUM'),
+  description: z.string().trim().min(1, 'Açıklama gerekli').max(2_000),
+  metadata: z.record(z.unknown()).optional(),
+  ipAddress: z.string().trim().max(64).optional(),
+  userAgent: z.string().trim().max(512).optional(),
+});
 
-    const where: Record<string, unknown> = {};
-    if (severity) where.severity = severity;
-    if (resolved !== null && resolved !== '') where.isResolved = resolved === 'true';
+const resolveBody = z.object({
+  id: z.string().trim().min(1, 'Kayıt kimliği gerekli').max(64),
+  resolution: z.string().trim().max(2_000).optional(),
+});
 
-    const [activities, total] = await Promise.all([
+export const GET = defineRoute(
+  { name: 'security.suspicious.list', roles: ['ADMIN'], query: listQuery, rateLimit: 'read' },
+  async ({ query }) => {
+    const where: { severity?: string; isResolved?: boolean } = {};
+    if (query.severity) where.severity = query.severity;
+    if (query.resolved) where.isResolved = query.resolved === 'true';
+    const skip = paginationSkip(query.page, query.limit);
+
+    const [activities, total, stats] = await Promise.all([
       prisma.suspiciousActivity.findMany({
         where,
         include: {
@@ -44,98 +63,63 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: query.limit,
       }),
       prisma.suspiciousActivity.count({ where }),
+      prisma.suspiciousActivity.groupBy({ by: ['severity', 'isResolved'], _count: true }),
     ]);
 
-    // Stats
-    const stats = await prisma.suspiciousActivity.groupBy({
-      by: ['severity', 'isResolved'],
-      _count: true,
-    });
-
-    return NextResponse.json(
+    return ok(
       {
-        success: true,
         activities,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: limit > 0 ? Math.ceil(total / limit) : 0,
-        },
+        pagination: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
         stats,
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    console.error('Error fetching suspicious activities:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+      { legacySpread: true }
     );
   }
-}
+);
 
-// POST - Report suspicious activity (internal use)
+// İç iş (cron sırrı) ya da ADMIN: defineRoute'un rol modeline sığmadığı için elle.
 export async function POST(req: NextRequest) {
+  const denied = await requireCronSecretOrAdmin(req);
+  if (denied) return denied;
+  const parsed = await parseJsonBody(req, reportBody, { maxBytes: 32_000 });
+  if (!parsed.ok) return parsed.response;
   try {
-    const denied = await requireCronSecretOrAdmin(req);
-    if (denied) return denied;
-
-    const body = await req.json();
-    const { userId, dealerId, cardId, type, severity, description, metadata, ipAddress, userAgent } = body;
-
-    const activity = await reportSuspiciousActivity({
-      userId,
-      dealerId,
-      cardId,
-      type,
-      severity: severity || 'MEDIUM',
-      description,
-      metadata,
-      ipAddress,
-      userAgent,
-    });
-
-    return NextResponse.json({ success: true, activity }, { headers: PRIVATE_NO_STORE_HEADERS });
+    const activity = await reportSuspiciousActivity(parsed.data);
+    return NextResponse.json({ ok: true, success: true, activity }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
-    console.error('Error reporting suspicious activity:', error);
+    console.error('Şüpheli etkinlik kaydedilemedi:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { ok: false, success: false, code: 'INTERNAL', error: 'Şüpheli etkinlik kaydedilemedi.' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
 
-// PATCH - Resolve suspicious activity
-export async function PATCH(req: NextRequest) {
-  try {
-    // P0-01: yönetici ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    const body = await req.json();
-    const { id, resolution } = body;
-
-    const activity = await prisma.suspiciousActivity.update({
-      where: { id },
-      data: {
-        isResolved: true,
-        resolvedBy: session.user.id,
-        resolvedAt: new Date(),
-        resolution,
-      },
+export const PATCH = defineRoute(
+  { name: 'security.suspicious.resolve', roles: ['ADMIN'], schema: resolveBody, rateLimit: 'mutation' },
+  async ({ body, session, request }) => {
+    const activity = await prisma.$transaction(async (tx) => {
+      const updated = await tx.suspiciousActivity.update({
+        where: { id: body.id },
+        data: { isResolved: true, resolvedBy: session.user.id, resolvedAt: new Date(), resolution: body.resolution },
+      });
+      await tx.auditLog.create({
+        data: auditEntry(
+          actorFromSession(session),
+          {
+            action: 'SUSPICIOUS_ACTIVITY_RESOLVED',
+            entity: 'SuspiciousActivity',
+            entityId: updated.id,
+            newData: { resolution: body.resolution ?? null },
+          },
+          request
+        ),
+      });
+      return updated;
     });
-
-    return NextResponse.json({ success: true, activity }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Error resolving suspicious activity:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ activity }, { legacySpread: true });
   }
-}
+);

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
+import { parseJsonBody } from '@/lib/http/parse-body';
+import { PASSWORD_MAX_LENGTH, passwordPolicyError } from '@/components/auth/p-auth/password-policy';
 import { authOptions, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { reissueSessionCookie } from '@/lib/auth/session-version';
@@ -11,6 +14,16 @@ import { checkRateLimitDb } from '@/lib/rate-limit';
 
 
 export const dynamic = 'force-dynamic';
+
+const ChangePasswordBody = z.object({
+  currentPassword: z
+    .string({ required_error: 'Mevcut şifre ve yeni şifre gereklidir', invalid_type_error: 'Mevcut şifre ve yeni şifre gereklidir' })
+    .min(1, 'Mevcut şifre ve yeni şifre gereklidir')
+    .max(PASSWORD_MAX_LENGTH * 2, 'Mevcut şifre hatalı'),
+  newPassword: z
+    .string({ required_error: 'Mevcut şifre ve yeni şifre gereklidir', invalid_type_error: 'Mevcut şifre ve yeni şifre gereklidir' })
+    .min(1, 'Mevcut şifre ve yeni şifre gereklidir'),
+});
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -28,18 +41,25 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { currentPassword, newPassword } = body;
+    // mimari-api B6: gövde zod ile; yeni şifre kayıt/sıfırlama/OAuth şifresiyle AYNI politikadan
+    // geçer (eskiden burada yalnız 8-200 uzunluk vardı: aynı hesap için iki ayrı politika).
+    const parsed = await parseJsonBody(request, ChangePasswordBody, { maxBytes: 4_096 });
+    if (!parsed.ok) return parsed.response;
+    const { currentPassword, newPassword } = parsed.data;
 
-    // Tip zorlaması: sayı/obje gelirse .length atlanmasını önle (aksi halde zayıf şifre geçebilir).
-    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
+    const policy = passwordPolicyError(newPassword);
+    if (policy) {
       return NextResponse.json(
-        { error: 'Mevcut şifre ve yeni şifre gereklidir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (newPassword.length < 8 || newPassword.length > 200) {
-      return NextResponse.json(
-        { error: 'Yeni şifre 8-200 karakter olmalıdır' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        {
+          success: false,
+          code: policy,
+          error:
+            policy === 'PASSWORD_TOO_LONG'
+              ? `Şifre en fazla ${PASSWORD_MAX_LENGTH} karakter olabilir.`
+              : 'Şifre en az 8 karakter olmalı; küçük harf, büyük harf ve rakam içermeli.',
+        },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Get user with password

@@ -53,7 +53,7 @@ jest.mock('@/lib/redis', () => ({
 
 jest.mock('@/lib/token-replay', () => ({ checkTokenReplay: jest.fn(async () => ({ ok: true })) }));
 
-import { requireAuth } from '@/lib/api-auth';
+import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { signElevation } from '@/lib/admin-elevation';
 import { evaluateSessionState, invalidateSessionState, loadSessionState } from '@/lib/auth/session-state';
 import { hashGateAnswer } from '@/lib/admin-gate';
@@ -92,7 +92,7 @@ beforeEach(() => {
 describe('P0-07 oturum durumu', () => {
   it('oturum yoksa 401', async () => {
     mockGetServerSession.mockResolvedValue(null);
-    expect((await status(await requireAuth())).status).toBe(401);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(401);
   });
 
   it('SALDIRI: şifre sıfırlandı (sv 0 → 1) → eski oturum 401 SESSION_REVOKED', async () => {
@@ -127,7 +127,7 @@ describe('P0-07 oturum durumu', () => {
   it('askıya alınan hesap 403 ACCOUNT_SUSPENDED', async () => {
     mockGetServerSession.mockResolvedValue(session('u1', 'CUSTOMER'));
     mockUserFindUnique.mockResolvedValue(dbUser({ suspendedAt: new Date() }));
-    const r = await status(await requireAuth());
+    const r = await status(await requireAuth(ANY_SIGNED_IN_ROLE));
     expect(r.status).toBe(403);
     expect(r.body.code).toBe('ACCOUNT_SUSPENDED');
   });
@@ -135,13 +135,13 @@ describe('P0-07 oturum durumu', () => {
   it('SALDIRI: anonimleştirilen kullanıcı profiline yeniden yazamaz (401)', async () => {
     mockGetServerSession.mockResolvedValue(session('u1', 'CUSTOMER'));
     mockUserFindUnique.mockResolvedValue(dbUser({ anonymizedAt: new Date() }));
-    expect((await status(await requireAuth())).status).toBe(401);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(401);
   });
 
   it('silinen kullanıcının token\'ı 401', async () => {
     mockGetServerSession.mockResolvedValue(session('u1', 'CUSTOMER'));
     mockUserFindUnique.mockResolvedValue(null);
-    expect((await status(await requireAuth())).status).toBe(401);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(401);
   });
 
   it('SALDIRI: işten çıkarılan personel (isActive=false) personel ucunda 403 STAFF_INACTIVE', async () => {
@@ -152,12 +152,21 @@ describe('P0-07 oturum durumu', () => {
     expect(r.body.code).toBe('STAFF_INACTIVE');
   });
 
-  it('pasif personel genel uçta (rol listesi yok) geçer ama dealerId SİLİNİR', async () => {
+  it('pasif personel genel uçta (müşteri dahil her rol) geçer ama dealerId SİLİNİR', async () => {
     mockGetServerSession.mockResolvedValue(session('s1', 'STAFF', { user: { id: 's1', role: 'STAFF', dealerId: 'd1' } }));
     mockUserFindUnique.mockResolvedValue(dbUser({ role: 'STAFF', staffProfile: { dealerId: 'd1', isActive: false } }));
-    const r = await requireAuth();
+    const r = await requireAuth(ANY_SIGNED_IN_ROLE);
     expect('session' in r).toBe(true);
     expect('session' in r && (r.session.user as { dealerId?: string }).dealerId).toBeUndefined();
+  });
+
+  it('mimari-api B1: boş rol listesi (ya da çalışma anında eksik liste) her rolü REDDEDER', async () => {
+    mockGetServerSession.mockResolvedValue(session('a1', 'ADMIN'));
+    mockUserFindUnique.mockResolvedValue(dbUser({ role: 'ADMIN' }));
+    expect((await status(await requireAuth([]))).status).toBe(403);
+    // Tip sistemi rol listesiz çağrıyı derlemez; JS'ten gelen eksik argüman da varsayılan reddeder.
+    const untyped = requireAuth as unknown as () => ReturnType<typeof requireAuth>;
+    expect((await status(await untyped())).status).toBe(403);
   });
 
   it('aktif personelin dealerId\'si DB\'den gelir (token\'daki değer yok sayılır)', async () => {
@@ -170,7 +179,7 @@ describe('P0-07 oturum durumu', () => {
   it('DB erişilemezse 503 (tahminle yetki verilmez)', async () => {
     mockGetServerSession.mockResolvedValue(session('u1', 'CUSTOMER'));
     mockUserFindUnique.mockRejectedValue(new Error('P1001'));
-    expect((await status(await requireAuth())).status).toBe(503);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(503);
   });
 
   it('Redis sıcak katman: ikinci istek DB\'ye gitmez; invalidateSessionState anında bayatlatır', async () => {
@@ -190,14 +199,14 @@ describe('P0-07 oturum durumu', () => {
     // Önbellek sv=0 ile dolu.
     mockUserFindUnique.mockResolvedValue(dbUser());
     mockGetServerSession.mockResolvedValue(session('u7', 'CUSTOMER', { sv: 0 }));
-    expect((await status(await requireAuth())).status).toBe(200);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(200);
     // DB'de sv=1 oldu (bumpSessionVersion), önbellek bayatlatılmadı; bu tarayıcıya sv=1 verildi.
     mockUserFindUnique.mockResolvedValue(dbUser({ sessionVersion: 1 }));
     mockGetServerSession.mockResolvedValue(session('u7', 'CUSTOMER', { sv: 1 }));
-    expect((await status(await requireAuth())).status).toBe(200);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(200);
     // Başka cihazdaki eski token (sv=0) artık reddedilir.
     mockGetServerSession.mockResolvedValue(session('u7', 'CUSTOMER', { sv: 0 }));
-    expect((await status(await requireAuth())).status).toBe(401);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(401);
   });
 
   it('evaluateSessionState: bilinmeyen rol 403', () => {
@@ -227,7 +236,7 @@ describe('P0-01 admin kapısı API\'de zorunlu', () => {
   });
 
   it('SALDIRI: rol listesiz genel uçta da ADMIN kapısız yetki kazanamaz', async () => {
-    expect((await status(await requireAuth())).status).toBe(403);
+    expect((await status(await requireAuth(ANY_SIGNED_IN_ROLE))).status).toBe(403);
   });
 
   it('geçerli imzalı çerez → geçer', async () => {

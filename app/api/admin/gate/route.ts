@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -17,8 +18,13 @@ import {
   verifyGateAnswer,
 } from '@/lib/admin-gate';
 import { elevationCookieOptions, signElevation } from '@/lib/admin-elevation';
+import { parseJsonBody } from '@/lib/http/parse-body';
 
 export const dynamic = 'force-dynamic';
+
+const GateBodySchema = z.object({
+  answer: z.string({ required_error: 'Cevap gerekli', invalid_type_error: 'Cevap gerekli' }).trim().max(64, 'Cevap çok uzun'),
+});
 
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: PRIVATE_NO_STORE_HEADERS });
@@ -97,8 +103,10 @@ export async function POST(request: NextRequest) {
     return json({ success: false, code: 'RATE_LIMITED', error: 'Çok hızlı deniyorsun. Biraz bekle.' }, 429);
   }
 
-  const body = await request.json().catch(() => ({}));
-  const answer = typeof body?.answer === 'string' ? body.answer.trim() : '';
+  // mimari-api B6: gövde zod ile (bozuk JSON / eksik alan deneme hakkı yemez, 400 döner).
+  const parsed = await parseJsonBody(request, GateBodySchema, { maxBytes: 4_096 });
+  if (!parsed.ok) return parsed.response;
+  const answer = parsed.data.answer;
 
   let outcome: AttemptOutcome;
   try {

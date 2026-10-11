@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getOptionalSession } from '@/lib/api-auth';
-import { authOptions } from '@/lib/auth';
+import { parseJsonBody } from '@/lib/http/parse-body';
 import { chatWithQRA, MODELS } from '@/lib/groq';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -51,19 +52,20 @@ function snapshotRole(role: string | undefined, userId: string | undefined): str
   return role || 'CUSTOMER';
 }
 
+/** mimari-api B6: gövde zod ile (bozuk JSON 500 değil 400; geçmiş öğeleri ayrıca süzülür). */
+const chatBodySchema = z.object({
+  message: z
+    .string({ required_error: 'Mesaj gerekli', invalid_type_error: 'Mesaj gerekli' })
+    .min(1, 'Mesaj gerekli')
+    .max(INPUT_LIMITS.messageText, `Mesaj çok uzun (max ${INPUT_LIMITS.messageText} karakter)`),
+  conversationHistory: z.array(z.unknown()).max(200).optional(),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { message, conversationHistory } = body;
-
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json({ error: 'Mesaj gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (message.length > INPUT_LIMITS.messageText) {
-      return NextResponse.json(
-        { error: `Mesaj çok uzun (max ${INPUT_LIMITS.messageText} karakter)` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    const parsed = await parseJsonBody(request, chatBodySchema, { maxBytes: 200_000 });
+    if (!parsed.ok) return parsed.response;
+    const { message, conversationHistory } = parsed.data;
 
     const session = await getOptionalSession();
     const userId = session?.user?.id;

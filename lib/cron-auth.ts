@@ -29,10 +29,16 @@ export function verifyCronBearer(authHeader: string | null | undefined, secret: 
 export function requireCronAuth(req: Request): NextResponse | null {
   const secret = process.env.CRON_SECRET;
   if (!secret || !secret.trim()) {
-    return NextResponse.json({ error: 'CRON_SECRET ayarlı değil; cron devre dışı.' }, { status: 503 });
+    return NextResponse.json(
+      { ok: false, success: false, code: 'SERVICE_UNAVAILABLE', error: 'CRON_SECRET ayarlı değil; cron devre dışı.' },
+      { status: 503 }
+    );
   }
   if (!verifyCronBearer(req.headers.get('authorization'), secret)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, success: false, code: 'UNAUTHENTICATED', error: 'Zamanlanmış iş yetkisi doğrulanamadı.' },
+      { status: 401 }
+    );
   }
   return null;
 }

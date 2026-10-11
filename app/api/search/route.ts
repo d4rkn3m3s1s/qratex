@@ -1,178 +1,139 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { defineRoute, ok } from '@/lib/http/define-route';
 import { INPUT_LIMITS } from '@/lib/input-limits';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Global search API - tüm varlıklarda arama (kullanıcılar, geri bildirimler, ürünler, QR kodları)
+ * GET /api/search?q= — panel başlığındaki komut paletinin veri araması (admin/bayi/müşteri).
+ *
+ * Rol başına KAPSAM (varsayılan reddet — mimari-api B1/B2):
+ *  - ADMIN: kullanıcılar, tüm geri bildirimler, ürünler, QR kodları.
+ *  - DEALER: yalnız kendi geri bildirimleri/ürünleri (+ global ürünler)/QR kodları.
+ *  - CUSTOMER: yalnız kendi geri bildirimleri + aktif ürün adları.
+ * Eskiden rol listesiz `requireAuth()` vardı: STAFF (ve ileride eklenecek her rol) ne bayi ne
+ * müşteri filtresine düşüp BÜTÜN işletmelerin geri bildirim metinlerini görüyordu. Artık rol
+ * listesi açık; STAFF'ın paneli bu paleti kullanmaz → 403.
  */
 const LIMIT_PER_TYPE = 5;
 
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth();
-  if ('error' in auth) return auth.error;
-  const { session } = auth;
+const querySchema = z.object({
+  q: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? '').trim().slice(0, INPUT_LIMITS.searchQuery)),
+});
 
-  const { searchParams } = new URL(request.url);
-  const raw = (searchParams.get('q') || '').trim();
-  const q = raw.slice(0, INPUT_LIMITS.searchQuery);
-  if (q.length < 2) {
-    return NextResponse.json({ success: true, results: { users: [], feedbacks: [], products: [], qrCodes: [] } }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
+type Results = {
+  users: { id: string; name: string | null; email: string; businessName: string | null; role: string; href: string }[];
+  feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
+  products: { id: string; name: string; categoryName?: string; href: string }[];
+  qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
+};
 
-  const role = session.user?.role as string;
-  const dealerId = role === 'DEALER' ? session.user?.id : undefined;
-  const userId = role === 'CUSTOMER' ? session.user?.id : undefined;
+const EMPTY: Results = { users: [], feedbacks: [], products: [], qrCodes: [] };
 
-  const results: {
-    users: { id: string; name: string | null; email: string; businessName: string | null; role: string; href: string }[];
-    feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
-    products: { id: string; name: string; categoryName?: string; href: string }[];
-    qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
-  } = {
-    users: [],
-    feedbacks: [],
-    products: [],
-    qrCodes: [],
-  };
+export const GET = defineRoute(
+  { name: 'search.global', roles: ['ADMIN', 'DEALER', 'CUSTOMER'], query: querySchema, rateLimit: 'read' },
+  async ({ query, user }) => {
+    const q = query.q;
+    if (q.length < 2) return ok({ results: EMPTY }, { legacySpread: true });
 
-  try {
+    const role = user.role as 'ADMIN' | 'DEALER' | 'CUSTOMER';
+    const isAdmin = role === 'ADMIN';
     const searchContains = { contains: q, mode: 'insensitive' as const };
+    // Kapsam filtresi rol başına AÇIK; bilinmeyen rol buraya hiç gelmez (roles listesi).
+    const feedbackScope = isAdmin ? {} : role === 'DEALER' ? { qrCode: { dealerId: user.id } } : { userId: user.id };
+    const productScope = role === 'DEALER' ? { OR: [{ dealerId: user.id }, { dealerId: null }] } : {};
+    const enc = encodeURIComponent(q);
 
-    // ADMIN: users, feedbacks, products, qrCodes
-    // DEALER: feedbacks (own), products (own), qrCodes (own)
-    // CUSTOMER: feedbacks (own), products (visible)
     const [usersResult, feedbacksResult, productsResult, qrCodesResult] = await Promise.all([
-      role === 'ADMIN'
+      isAdmin
         ? prisma.user.findMany({
-            where: {
-              OR: [
-                { name: searchContains },
-                { email: searchContains },
-                { businessName: searchContains },
-              ],
-            },
+            where: { OR: [{ name: searchContains }, { email: searchContains }, { businessName: searchContains }] },
             take: LIMIT_PER_TYPE,
             select: { id: true, name: true, email: true, businessName: true, role: true },
           })
         : Promise.resolve([]),
-      prisma.feedback
-        .findMany({
-          where: {
-            deletedAt: null,
-            text: { not: null },
-            OR: [
-              { text: searchContains },
-              ...(role === 'ADMIN' ? [{ user: { name: searchContains } }, { user: { email: searchContains } }] : []),
-            ],
-            ...(dealerId ? { qrCode: { dealerId } } : {}),
-            ...(userId ? { userId } : {}),
-          },
-          take: LIMIT_PER_TYPE,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            text: true,
-            rating: true,
-            sentiment: true,
-            createdAt: true,
-            qrCode: { select: { dealerId: true } },
-          },
-        })
-        .then((f) =>
-          f.map((fb) => ({
-            id: fb.id,
-            text: fb.text?.slice(0, 80) ?? null,
-            rating: fb.rating,
-            sentiment: fb.sentiment,
-            createdAt: fb.createdAt.toISOString(),
-            href:
-              role === 'ADMIN'
-                ? `/admin/feedbacks?search=${encodeURIComponent(q)}`
-                : role === 'DEALER'
-                  ? `/dealer/inbox?search=${encodeURIComponent(q)}`
-                  : `/customer/me/voices?search=${encodeURIComponent(q)}`,
-          }))
-        ),
-      prisma.product
-        .findMany({
-          where: {
-            isActive: true,
-            name: searchContains,
-            ...(dealerId ? { OR: [{ dealerId }, { dealerId: null }] } : {}),
-          },
-          take: LIMIT_PER_TYPE,
-          select: {
-            id: true,
-            name: true,
-            dealerId: true,
-            category: { select: { name: true } },
-          },
-        })
-        .then((p) =>
-          p.map((pr) => ({
-            id: pr.id,
-            name: pr.name,
-            categoryName: pr.category?.name,
-            href:
-              role === 'ADMIN'
-                ? `/admin/feedbacks?search=${encodeURIComponent(q)}`
-                : role === 'DEALER'
-                  ? `/dealer/products?search=${encodeURIComponent(q)}`
-                  : `/customer/wallet/activity?search=${encodeURIComponent(q)}`,
-          }))
-        ),
-      (role === 'ADMIN' || role === 'DEALER')
+      prisma.feedback.findMany({
+        where: {
+          deletedAt: null,
+          text: { not: null },
+          OR: [
+            { text: searchContains },
+            ...(isAdmin ? [{ user: { name: searchContains } }, { user: { email: searchContains } }] : []),
+          ],
+          ...feedbackScope,
+        },
+        take: LIMIT_PER_TYPE,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, text: true, rating: true, sentiment: true, createdAt: true },
+      }),
+      prisma.product.findMany({
+        where: { isActive: true, name: searchContains, ...productScope },
+        take: LIMIT_PER_TYPE,
+        select: { id: true, name: true, category: { select: { name: true } } },
+      }),
+      role === 'ADMIN' || role === 'DEALER'
         ? prisma.qRCode.findMany({
             where: {
               isActive: true,
               OR: [
                 { name: searchContains },
                 { code: searchContains },
-                ...(role === 'ADMIN' ? [{ dealer: { businessName: searchContains } }, { dealer: { name: searchContains } }] : []),
+                ...(isAdmin ? [{ dealer: { businessName: searchContains } }, { dealer: { name: searchContains } }] : []),
               ],
-              ...(dealerId ? { dealerId } : {}),
+              ...(role === 'DEALER' ? { dealerId: user.id } : {}),
             },
             take: LIMIT_PER_TYPE,
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              dealer: { select: { businessName: true, name: true } },
-            },
+            select: { id: true, name: true, code: true, dealer: { select: { businessName: true, name: true } } },
           })
-        .then((qr) =>
-          qr.map((c) => ({
-            id: c.id,
-            name: c.name,
-            code: c.code,
-            businessName: c.dealer?.businessName ?? c.dealer?.name ?? null,
-            href: `/dealer/qr-codes?search=${encodeURIComponent(q)}`,
-          }))
-        )
         : Promise.resolve([]),
     ]);
 
-    results.users = usersResult.map((u) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      businessName: u.businessName,
-      role: u.role,
-      href: `/admin/users?id=${u.id}`,
-    }));
-    results.feedbacks = feedbacksResult;
-    results.products = productsResult;
-    results.qrCodes = qrCodesResult;
-  } catch (err) {
-    console.error('Global search error:', err);
-    const db = responseIfDatabaseUnavailable(err);
-    if (db) return db;
-    return NextResponse.json({ error: 'Arama hatası' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
+    const feedbackHref = isAdmin
+      ? `/admin/feedbacks?search=${enc}`
+      : role === 'DEALER'
+        ? `/dealer/inbox?search=${enc}`
+        : `/customer/me/voices?search=${enc}`;
+    const productHref = isAdmin
+      ? `/admin/feedbacks?search=${enc}`
+      : role === 'DEALER'
+        ? `/dealer/products?search=${enc}`
+        : `/customer/wallet/activity?search=${enc}`;
 
-  return NextResponse.json({ success: true, results }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+    const results: Results = {
+      users: usersResult.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        businessName: u.businessName,
+        role: u.role,
+        href: `/admin/users?id=${u.id}`,
+      })),
+      feedbacks: feedbacksResult.map((fb) => ({
+        id: fb.id,
+        text: fb.text?.slice(0, 80) ?? null,
+        rating: fb.rating,
+        sentiment: fb.sentiment,
+        createdAt: fb.createdAt.toISOString(),
+        href: feedbackHref,
+      })),
+      products: productsResult.map((pr) => ({
+        id: pr.id,
+        name: pr.name,
+        categoryName: pr.category?.name,
+        href: productHref,
+      })),
+      qrCodes: qrCodesResult.map((c) => ({
+        id: c.id,
+        name: c.name,
+        code: c.code,
+        businessName: c.dealer?.businessName ?? c.dealer?.name ?? null,
+        href: `/dealer/qr-codes?search=${enc}`,
+      })),
+    };
+    return ok({ results }, { legacySpread: true });
+  }
+);

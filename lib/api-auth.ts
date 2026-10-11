@@ -45,7 +45,7 @@ export async function getSessionOr401(): Promise<Session | NextResponse> {
  */
 export function requireRole(
   session: Session,
-  allowedRoles: AllowedRole[]
+  allowedRoles: ReadonlyArray<AllowedRole>
 ): NextResponse | null {
   const role = session.user?.role as string | undefined;
   if (!role || !allowedRoles.includes(role as AllowedRole)) {
@@ -87,9 +87,14 @@ function authError(status: number, error: string, code: string): NextResponse {
  *  4. Rol kontrolü (DB rolüyle).
  *  5. Pasif personel: STAFF'a açık iş uçlarında (`STAFF` var, `CUSTOMER` yok) 403.
  *  6. ADMIN gizli kapı: imzalı + süreli + güncel sürümlü kapı çerezi ZORUNLU (P0-01).
+ *
+ * `allowedRoles` ZORUNLU (mimari-api B1, varsayılan reddet): rol listesiz çağrı derlenmez, boş
+ * liste her rolü reddeder. Oturumlu her rol için `ANY_SIGNED_IN_ROLE` verin. Eskiden rol listesiz
+ * `requireAuth()` rol kontrolünü atlıyordu; STAFF gibi "ne bayi ne müşteri" rolü kapsam
+ * filtresine düşmeyip kiracılar arası veri görebiliyordu (`/api/search`).
  */
 export async function requireAuth(
-  allowedRoles?: AllowedRole[],
+  allowedRoles: ReadonlyArray<AllowedRole>,
   options: RequireAuthOptions = {}
 ): Promise<
   | { session: Session }
@@ -150,19 +155,18 @@ export async function requireAuth(
   else delete mutableUser.dealerId;
   mutableUser.staffActive = verdict.staffActive;
 
-  if (allowedRoles?.length) {
-    const forbidden = requireRole(session, allowedRoles);
-    if (forbidden) return { error: forbidden };
-    if (
-      verdict.role === 'STAFF' &&
-      verdict.staffActive === false &&
-      allowedRoles.includes('STAFF') &&
-      !allowedRoles.includes('CUSTOMER')
-    ) {
-      return {
-        error: authError(403, 'Personel hesabınız pasif durumda. İşletme yöneticinizle iletişime geçin.', STAFF_INACTIVE_CODE),
-      };
-    }
+  const roles: ReadonlyArray<AllowedRole> = Array.isArray(allowedRoles) ? allowedRoles : [];
+  const forbidden = requireRole(session, roles);
+  if (forbidden) return { error: forbidden };
+  if (
+    verdict.role === 'STAFF' &&
+    verdict.staffActive === false &&
+    roles.includes('STAFF') &&
+    !roles.includes('CUSTOMER')
+  ) {
+    return {
+      error: authError(403, 'Personel hesabınız pasif durumda. İşletme yöneticinizle iletişime geçin.', STAFF_INACTIVE_CODE),
+    };
   }
 
   if (verdict.role === 'ADMIN' && options.adminGate !== false) {

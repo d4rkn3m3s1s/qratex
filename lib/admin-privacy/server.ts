@@ -8,7 +8,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { CONSENT_VERSION } from '@/lib/consent/types';
 import { DSR_LEGAL_DAYS, OPEN_DSR_STATUSES, daysRemaining, effectiveDueAt } from '@/lib/dsr-workflow';
 import { PII_REGISTRY, registryKey, retentionEntries } from '@/lib/pii-registry';
-import { DEFAULT_RETENTION_DAYS as ANALYTICS_RETENTION_DAYS } from '@/lib/analytics-event-retention';
+import { DEFAULT_RETENTION_DAYS as ANALYTICS_RETENTION_DAYS, retentionWhere } from '@/lib/analytics-event-retention';
 import { maskIpAddress } from '@/lib/request-metadata';
 import type {
   ComplianceCheck,
@@ -313,7 +313,8 @@ export async function getRetentionView(db: Db, now = new Date()): Promise<Retent
   let analyticsPending: number | null = null;
   try {
     analyticsPending = await db.analyticsEvent.count({
-      where: { createdAt: { lt: new Date(now.getTime() - ANALYTICS_RETENTION_DAYS * DAY_MS) } },
+      // Saklama temizliğiyle AYNI filtre (ekonomi/sahtekârlık olayları korunur).
+      where: retentionWhere(ANALYTICS_RETENTION_DAYS, now),
     });
   } catch {
     errors.push('AnalyticsEvent: sayılamadı');

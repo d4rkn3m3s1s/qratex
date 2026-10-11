@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
@@ -75,16 +76,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    // mimari-api B2: QR yalnız işletme adına oluşturulur. Eskiden ADMIN de kabul ediliyor ve
+    // `dealerId: <admin id>` ile kotasız "sahte bayi" QR'ı yazılıyordu (admin bayi adına QR
+    // açacaksa bayi paneli/destek akışı kullanılır).
+    const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
-
-    if (session.user.role !== 'DEALER' && session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Sadece işletmeler QR kod oluşturabilir' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const limited = await enforceRouteRateLimit('qr-codes.create', session.user.id, 'mutation');
+    if (limited) return limited;
 
     const body = await request.json().catch(() => null);
     const validatedData = createQRCodeSchema.safeParse(body);
@@ -109,13 +108,11 @@ export async function POST(request: NextRequest) {
     // Plan kotası (P0-24 / F12): kontrol + oluşturma AYNI transaction'da, bayi başına
     // advisory kilit altında. Eskiden önce `count` sonra `create` yapılıyordu: paralel N istek
     // aynı "2/3" sayısını görüp limiti birlikte aşabiliyordu. Kota CANLI kodları sayar
-    // (iptal/arşiv hariç); arşivden geri alma da aynı kilitten geçer. ADMIN limitsiz.
+    // (iptal/arşiv hariç); arşivden geri alma da aynı kilitten geçer.
     const qrCode = await prisma.$transaction(async (tx) => {
-      if (session.user.role === 'DEALER') {
-        await lockDealerQrQuota(tx, session.user.id);
-        const verdict = await checkLiveQrQuota(tx, session.user.id, 1);
-        if (!verdict.allowed) throw new QrQuotaExceededError(verdict);
-      }
+      await lockDealerQrQuota(tx, session.user.id);
+      const verdict = await checkLiveQrQuota(tx, session.user.id, 1);
+      if (!verdict.allowed) throw new QrQuotaExceededError(verdict);
       return tx.qRCode.create({
         data: {
           code,
