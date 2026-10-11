@@ -277,3 +277,96 @@ Dört KRİTİK/YÜKSEK iddiayı çürütmeye çalıştım. Bunun için çağıra
 - Admin listesi `fetch('/api/gamification/quests')` çağırıyor (`page.tsx:103`). Uç `where: { isActive: true }` ile filtreliyor (`quests/route.ts:29`). Düzenleme dialog'unda Switch kapatılınca (:353-355 → PATCH `isActive:false`) görev listeden kayboluyor. UI'da onu geri getirecek bir yol yok. Claim de :53'te `!quest.isActive` görevleri reddediyor, dolayısıyla tamamlanmış ama ödülü alınmamış haklar donuyor.
 - Silme: `page.tsx:525-532` onay istemeden doğrudan DELETE çağırıyor. Buton :515'te `opacity-0 group-hover:opacity-100` içinde. Görünmüyor ama tıklanabilir/dokunulabilir durumda. Dokunmatik cihazda kart üzerindeki o bölgeye dokunmak silmeyi tetikliyor. `[id]/route.ts:111` hard delete yapıyor. `prisma/schema.prisma:673` `onDelete: Cascade` nedeniyle tüm `UserQuest` satırları siliniyor. Sadece `DELETE_QUEST` audit kaydında görevin `oldData`'sı kalıyor, kullanıcı ilerlemeleri geri getirilemiyor.
 - **Yeniden üretim:** Mobilde kartın sağ alt köşesine dokunulur → "Görev silindi" mesajı çıkar. O göreve ait ilerleme ve alınmamış ödül hakları kalıcı olarak silinir.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/quests/page.tsx` artık bir sunucu bileşeni. KPI'lar ve URL'deki görünümün ilk sayfası sunucuda paralel çekiliyor. `settle` sarmalayıcısı bir kaynak düşerse hatayı yutmuyor, istemcide görünür hâle getiriyor. İstemci adası `components/admin/a-gorevler/` altında: `quests-center`, `quest-editor`, `quest-preview`, `quest-detail`, `quest-actions`, `api`, `format`.
+
+- **Sözleşme:** `lib/admin-quests/contract.ts`. Saf modül; form ve API aynı zod şemasını kullanıyor.
+- **Sunucu:** `lib/admin-quests/server.ts`.
+- **BFF uçları:** `defineRoute` ile yazıldı (ADMIN rolü, rate limit, zod; mutasyonlarda `Idempotency-Key`). Hepsi modül kapısından muaf.
+  - `GET/POST /api/admin/quests`
+  - `GET /api/admin/quests/stats`
+  - `GET /api/admin/quests/options`
+  - `GET/PATCH /api/admin/quests/[id]`
+  - `POST /api/admin/quests/[id]/actions`
+  - `POST /api/admin/quests/achievements`
+- **Puan:** Bu yüzey hiç puan basmaz. Ödülü müşteri tarafında claim motoru (`lib/quests/claim.ts` → `lib/economy` `mintPoints`) ya da otomatik yollar (`rewardQuestOnce`) öder. Panel puan defterini (PointsLedger) yalnızca okur.
+- **Test:** `__tests__/admin/a-gorevler/quests-server.test.ts` (19 test).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa hero'su | ÇALIŞIYOR | QDL `PageHeader` (ops kaydı). Metin tamamen Türkçe; "Gamification" kaldırıldı. |
+| 2 | Görev listesini yükleme | ÇALIŞIYOR | `/api/admin/quests` pasif, süresi dolmuş ve arşivdeki görevler dahil tüm durumları döndürüyor. Sayfalama sunucuda. |
+| 3 | Yükleniyor iskeleti | ÇALIŞIYOR | Sunucuda Suspense iskeleti, tabloda `DataTable` iskeleti. |
+| 4 | Boş durum | ÇALIŞIYOR | Filtre sonucu boş, durum sekmesi boş ve ilk kullanım ayrı gösteriliyor. İlk kullanımda "Şablondan başla" CTA'sı var. |
+| 5 | Hata durumu | ÇALIŞIYOR | `QueryState`/`ErrorState` ve "Tekrar dene". `success:false` artık sessizce boş liste gibi görünmüyor. |
+| 6 | Arama | ÇALIŞIYOR | Sunucuda ad, açıklama ve kimlik üzerinde arıyor. Etiketli `FilterBar`; arama URL'de kalıcı. |
+| 7 | "Varsayılan Görevleri Ekle" | KALDIRILDI | Yerini 8 şablonluk galeri aldı. Hepsi motoru olan mekaniklerden, ödüller puan matrisinden türetiliyor. Bozuk toast'lı ve ilerlemeyen görev üreten düğme kalmadı. |
+| 8 | "Başarımları Ekle" | ÇALIŞIYOR | "Eksik başarımları ekle" yalnızca eksik başarım varsa görünüyor. Var olan kayıtları ezmiyor, eksikleri duraklatılmış oluşturuyor ve `BULK_CREATE_QUEST` denetim kaydı yazıyor. `seedAchievements` da artık `update: {}` kullanıyor. |
+| 9 | Yeni görev diyaloğunu açma | ÇALIŞIYOR | Sağdan açılan geniş `EntityEditorSheet`. Kaydedilmemiş değişiklik varsa kapatmadan önce soruyor. |
+| 10 | Form: Görev adı | ÇALIŞIYOR | RHF ve paylaşılan zod şeması; 2–50 karakter. Odak kaybı yok. |
+| 11 | Form: Açıklama | ÇALIŞIYOR | Zorunlu olarak işaretli, 5–200 karakter. Hata alanın altında gösteriliyor. |
+| 12 | Form: Tür | ÇALIŞIYOR | Artık "Dönem" çipleri: Günlük, Haftalık, Aylık, Tek seferlik. Bunlar motorun (`lib/quests/period.ts`) gerçekten uyguladığı dört dönem. Yalnızca tek seferlik olabilen mekaniklerde seçim kilitli. |
+| 13 | Form: Hedef | ÇALIŞIYOR | `NumberField`, 1–10.000 arası, birimli (ör. "farklı işletme"). |
+| 14 | Form: Mekanik | ÇALIŞIYOR | Yalnızca motoru olan 7 mekanik seçilebiliyor: 5 canlı sayılan, ziyaret ve Yönetici onaylı. Her biri açıklamalı. Katılımcısı olan görevde kilitli. |
+| 15 | Form: Kategori | ÇALIŞIYOR | Serbest metin yerine bayilerin gerçek `businessCategory` listesi, işletme sayısıyla birlikte. Sunucu, işletmesi olmayan kategoriyi reddediyor. |
+| 16 | Form: Ödül | ÇALIŞIYOR | Puan ve XP ayrı alanlar. Puan Matrisi varsayılanı gösteriliyor ve "Varsayılanı kullan" düğmesi var. Varsayılanın 5 katını aşan ödülde ekonomi uyarısı çıkıyor. Üst sınırlar ve dönem başına ödeme kuralı formda yazılı. |
+| 17 | Form: Bitiş tarihi | ÇALIŞIYOR | Tarih ve saat Europe/Istanbul olarak giriliyor, sunucuya mutlak ISO gidiyor. Geçmiş bir bitiş reddediliyor. Değişmeyen bitiş tarihi sunucuya gönderilmiyor. |
+| 18 | Form: Aktif switch (oluşturmada) | ÇALIŞIYOR | "Hemen yayınla" gerçekten `isActive` yazıyor. Kapalıysa görev taslak (duraklatılmış) olarak oluşuyor. |
+| 19 | Form: İkon | ÇALIŞIYOR | Emoji çipleri ve özel emoji alanı. Simge tabloda, detayda ve önizlemede görünüyor. |
+| 20 | Form: İptal | ÇALIŞIYOR | Form değiştirilmişse "Değişiklikleri at" onayı istiyor. |
+| 21 | Form: Oluştur | ÇALIŞIYOR | Gönderim sırasında buton kilitli, `Idempotency-Key` gönderiliyor. Sunucu hataları alan bazında gösteriliyor; 409'da çakışma bandı çıkıyor. |
+| 22 | Kart: başlık + tip rozeti | ÇALIŞIYOR | Tablo satırında simge, ad ve açıklama. Dönem değeri büyük/küçük harften bağımsız normalize ediliyor. |
+| 23 | Kart: aktif/pasif ikonu | ÇALIŞIYOR | Metinli `StatusBadge`: Yayında, Duraklatıldı, Süresi doldu, Arşivde. |
+| 24 | Kart: açıklama | ÇALIŞIYOR | |
+| 25 | Kart: ilerleme çubuğu | ÇALIŞIYOR | Sabit `value={0}` yerine tamamlayanların ne kadarının ödül aldığını gösteriyor. |
+| 26 | Kart: hedef sayısı | ÇALIŞIYOR | Mekanik, dönem, hedef ve kategori (işletme sayısıyla) birlikte gösteriliyor. |
+| 27 | Kart: ödül puanı | ÇALIŞIYOR | Puan ve XP birlikte. |
+| 28 | Kart: katılımcı sayısı | ÇALIŞIYOR | Katılım, tamamlayan ve ödül alan sayıları. Ayrıca puan defterinden son 30 günün ödeme sayısı ve basılan puan. |
+| 29 | Kart: bitiş tarihi | ÇALIŞIYOR | Tarih-saat ve "x gün kaldı / süresi doldu". 3 günden az kalınca uyarı. "Süresi doldu" ayrı bir sekme. Müşteri ucu süresi dolan görevi zaten gizliyor (Dalga 1 görev panosu). |
+| 30 | Kart: Düzenle | ÇALIŞIYOR | Her zaman görünür. Kısmi PATCH ve `baseUpdatedAt` ile iyimser kilit; XP ve mekanik artık ezilmiyor. Başarımlarda yalnızca metin, simge, ödül ve bitiş düzenlenebiliyor. |
+| 31 | Edit: Aktif switch | ÇALIŞIYOR | Yerini adlandırılmış geçişler aldı: Duraklat ve Yayına al (koşullu yazım; süresi dolmuşsa 409). Duraklatılan görev "Duraklatıldı" sekmesinde görünüyor. |
+| 32 | Kart: Sil | ÇALIŞIYOR (arşiv) | Kalıcı silme yok. Arşivleme gerekçe istiyor ve etkisini anlatan bir diyalogla yapılıyor. "Arşivden çıkar" ile geri alınabiliyor. Kullanıcı ilerlemeleri ve ödeme kayıtları korunuyor. |
+| 33 | Kart giriş animasyonu (stagger) | KALDIRILDI | Yoğun tablo ekranında gecikme algısı yaratıyordu (yeniden tasarım vizyonu). Kalan hareket: KPI sayılarında count-up (azaltılmış harekette kapalı), Sheet girişi ve önizlemede müşteri satırının kendi geçişi. |
+| 34 | Sayfa yetkisi | ÇALIŞIYOR | Proxy'ye ek olarak sunucu bileşeninde `requireAuth(['ADMIN'])`; yetki DB'den okunuyor. |
+| 35 | API yetkisi | ÇALIŞIYOR | `defineRoute` → `requireAuth` (gizli kapı + DB rolü), rate limit ve zod. |
+| 36 | Modül kapısı etkileşimi | ÇALIŞIYOR | Admin uçları kapıdan muaf. Modül kapalıysa "müşterilere kapalı — Modüller'den aç" bandı gösteriliyor (`getModuleControls`). |
+| 37 | Toast metinleri | ÇALIŞIYOR | Sonner; Türkçe karakterler doğru. Sunucunun hata mesajı doğrudan gösteriliyor. |
+| 38 | Aksiyon çubuğu mobil yerleşim | ÇALIŞIYOR | `flex-wrap` ve en az 44px dokunma hedefleri. Tablo mobilde karta dönüyor; ⋯ menüsü `mobile: 'actions'` konumunda. |
+| 39 | Filtre (tip/durum/mekanik) | ÇALIŞIYOR | Sayaçlı durum sekmeleri ile mekanik ve dönem filtreleri; hepsi URL'de. |
+| 40 | Sıralama / sayfalama | ÇALIŞIYOR | Sunucu tarafında; oluşturma, ad, bitiş ve güncelleme tarihine göre. Sayfa boyutu 10–100. |
+| 41 | Görev performans analitiği | ÇALIŞIYOR | KPI şeridinde son 7 ve 30 günde basılan görev puanı ve 14 günlük seri. Detayda huni (kayıt → tamamlayan → ödül alan) ve 14 günlük ödeme serisi. Görüntülenme adımı yok, çünkü bu veri toplanmıyor. |
+| 42 | Görev değişiklik geçmişi | ÇALIŞIYOR | Detay çekmecesinde denetim zaman çizelgesi. Düzenlemelerde değişen alanlar, gerekçe ve işlemi yapan kişi görünüyor. |
+| 43 | Manuel ilerletme / görev atama | ÇALIŞIYOR | "Yönetici onaylı" görevde "Kullanıcıyı tamamla" (e-posta/kimlik ve gerekçe). Bu işlem yalnızca `completedAt` yazar ve müşteriye bildirim gönderir. Puanı, müşteri "Al" dediğinde claim motoru tek seferlik öder. Aynı dönemde ikinci işaretleme 409 döner. |
+
+### Kapanan bulgular
+
+1. **KRİTİK, çift ödül:** Dalga 1'de kapandı (P0-15: `rewardedAt` tek kaynak, `lib/quests/claim.ts`). Bu dalgada panel defteri okuyarak ödemeleri görünür kıldı.
+2. **KRİTİK, odak kaybı:** Editör RHF ile modül seviyesinde yazıldı. Regresyon testi artık yeni editör dosyasını tarıyor.
+3. **KRİTİK, tür/tarih 500:** Tek bir `QUEST_CADENCES` sabiti, ISO tarih ve alan bazlı 400 yanıtı.
+4. **YÜKSEK, motorsuz mekanikler:** Form yalnızca motoru olan mekanikleri sunuyor. "Manuel" artık gerçek bir akış (Kullanıcıyı tamamla + claim). Motorun tanımadığı eski kayıtlar "Mekaniği tanınmıyor" uyarısı alıyor ve "Dikkat gerektiren" KPI'sında sayılıyor. Günlük, haftalık ve aylık dönemleri Dalga 1 motoru gerçekten uyguluyor.
+5. **YÜKSEK, pasif görev kayboluyor:** Durum sekmeleri ve "Yayına al" geçişi.
+6. **YÜKSEK, onaysız cascade silme:** Gerekçeli ve geri alınabilir arşiv. Eski DELETE ucu da arşivliyor.
+7. **YÜKSEK, IDOR:** Dalga 1'de kapandı (P0-09, `resolveSubjectUserId`). Admin artık ayrı uç kullanıyor.
+8. **YÜKSEK, gizli alanların ezilmesi:** Kısmi PATCH; `baseUpdatedAt` ve koşullu `updateMany` ile 409; XP ayrı alan; başarım tohumlaması `update: {}`. Eski `/api/gamification/quests/[id]` PATCH ucu da artık zod ile doğrulanıyor ve kısmi güncelliyor.
+9. **ORTA, modül kapalıyken sessiz boş ekran:** Admin uçları kapıdan muaf; sayfada bilgilendirme bandı var.
+10. **ORTA, sahte ilerleme çubuğu:** Gerçek huni ve defter metrikleri.
+11. **ORTA, UTC gece yarısı:** İstanbul duvar saati ISO'ya çevriliyor (`istanbulWallToIso`, testli).
+12. **ORTA, erişilebilirlik:** Her zaman görünür, `aria-label`'lı ⋯ menüsü. `Field` ile etiketli alanlar (id ve `aria-describedby`). Metinli durum rozeti, sarabilen aksiyon çubuğu, en az 44px hedefler.
+13. **ORTA, çift gönderim:** Oluşturma ve eylemlerde buton kilidi ve `Idempotency-Key`. Durum geçişleri koşullu yazımla yapılıyor.
+14. **DÜŞÜK, mojibake/ASCII:** Tüm metin Türkçe karakterli; emojili düğme yok.
+15. **DÜŞÜK, toplu oluşturma denetimsiz:** Artık `BULK_CREATE_QUEST`, `QUEST_DUPLICATE`/`QUEST_DUPLICATED_FROM` ve `QUEST_MANUAL_COMPLETE` kayıtları yazılıyor.
+16. **DÜŞÜK, kapı API katmanında yok:** Dalga 1 P0-01 ve `defineRoute` → `requireAuth` ile kapandı.
+
+### Kalanlar
+
+- **Planlı başlangıç (`startsAt`) ve segment/şehir hedeflemesi:** Şemada alan yok. Müşteri panosu (`lib/quests/board.ts`, başka yüzey) da bunları uygulamıyor. Bu yüzden panele sahte alan konmadı. **ŞEMA İSTEĞİ:** `Quest.startsAt DateTime?` ve `Quest.audience Json?` (segment/şehir/kategori); pano ve claim tarafında bunlara göre süzme.
+- **A/B ödül deneyi, economy-sim'e metrik besleme, Playbook'un taslak görev üretmesi:** Başka yüzeylerin işi (`/admin/playbooks`, `/admin/economy-sim`).
+- **Görüntülenme adımı:** Görev görüntülenme olayı toplanmıyor; huni kayıt, tamamlama ve ödülle sınırlı.
+- **Canlı mekaniklerde "başlayan" sayısı:** UserQuest satırı ilk ödül alımında açılıyor. Bu yüzden ilerleyip ödülü henüz almamış kullanıcılar görünmüyor; detayda bu durum açıkça yazıyor.
+- `app/admin/quests/quest-form-model.ts` yalnızca eski regresyon testi (`quest-create-validation.test.ts`) için duruyor; sayfa artık kullanmıyor.
