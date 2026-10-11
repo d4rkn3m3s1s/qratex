@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import type { CronJobView } from '@/lib/admin-privacy/contract';
 import { fetchRetention } from './api';
 import { formatDateTime, formatDays, formatNumber, relativeFromNow } from './format';
+import { AdminKvkkText } from './copy';
 
 function jobTone(j: CronJobView): { tone: Tone; label: string; Icon: typeof CheckCircle2 } {
   if (!j.lastRunAt) return { tone: 'neutral', label: 'Kayıt yok', Icon: HelpCircle };
@@ -41,7 +42,7 @@ export function RetentionTab() {
 
           <SectionCard title="Temizlik işleri" description="Günlük orkestratörün son çalışmaları (Europe/Istanbul)." density="flush">
             {d.jobs.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-fg-muted">İş durumu okunamadı.</p>
+              <p className="px-4 pb-4 text-sm text-fg-muted"><AdminKvkkText k="jobUnreadable" /></p>
             ) : (
               <ul className="divide-y divide-border">
                 {d.jobs.map((j) => {
@@ -75,11 +76,11 @@ export function RetentionTab() {
           >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <caption className="sr-only">Otomatik saklama kuralları</caption>
+                <caption className="sr-only"><AdminKvkkText k="autoRetention" /></caption>
                 <thead className="border-y border-border bg-surface-muted/50 text-left text-xs text-fg-muted">
                   <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">Kayıt</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Süre</th>
+                    <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="records" /></th>
+                    <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="duration" /></th>
                     <th scope="col" className="px-4 py-2 text-right font-medium">Bekleyen</th>
                     <th scope="col" className="hidden px-4 py-2 font-medium sm:table-cell">Hukuki sebep</th>
                   </tr>
@@ -101,13 +102,13 @@ export function RetentionTab() {
                   <tr>
                     <th scope="row" className="px-4 py-3 text-left font-normal">
                       <code className="font-mono text-xs text-fg">AnalyticsEvent</code>
-                      <span className="block text-[11px] text-fg-subtle">analitik ve erişim engeli olayları</span>
+                      <span className="block text-[11px] text-fg-subtle"><AdminKvkkText k="analyticsEvents" /></span>
                     </th>
                     <td className="px-4 py-3 text-fg">{formatDays(d.analytics.days)}</td>
                     <td className={cn('px-4 py-3 text-right tabular-nums', d.analytics.pending ? 'text-warning' : 'text-fg')}>
                       {d.analytics.pending == null ? 'sayılamadı' : formatNumber(d.analytics.pending)}
                     </td>
-                    <td className="hidden px-4 py-3 text-xs text-fg-muted sm:table-cell">Meşru menfaat (m.5/2-f)</td>
+                    <td className="hidden px-4 py-3 text-xs text-fg-muted sm:table-cell"><AdminKvkkText k="legitInterest" /></td>
                   </tr>
                 </tbody>
               </table>
@@ -120,7 +121,7 @@ export function RetentionTab() {
             density="flush"
           >
             {d.policies.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-fg-muted">Politika-yalnız süre yok; bütün süreler otomatik uygulanıyor.</p>
+              <p className="px-4 pb-4 text-sm text-fg-muted"><AdminKvkkText k="allAutomatic" /></p>
             ) : (
               <ul className="divide-y divide-border">
                 {d.policies.map((p) => (

@@ -14,6 +14,7 @@ import { EmptyState, TONE_CHIP } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { PII_CATEGORY_LABELS, PII_REGISTRY, registryKey, type PiiCategory, type PiiSubject } from '@/lib/pii-registry';
 import { ERASE_LABELS, LEGAL_CATEGORY_ORDER, retentionText } from '@/lib/legal/inventory-view';
+import { AdminKvkkText, useAdminKvkkCopy } from './copy';
 
 const SUBJECT_LABELS: Record<PiiSubject, string> = {
   self: 'Kişinin kendi verisi',
@@ -24,6 +25,7 @@ const SUBJECT_LABELS: Record<PiiSubject, string> = {
 type SubjectFilter = PiiSubject | 'all';
 
 export function InventoryTab() {
+  const tx = useAdminKvkkCopy();
   const [subject, setSubject] = useState<SubjectFilter>('self');
   const [category, setCategory] = useState<PiiCategory | ''>('');
   const [q, setQ] = useState('');
@@ -101,7 +103,7 @@ export function InventoryTab() {
               aria-label="Veri kategorisi"
               className="h-11 rounded-md border border-border bg-background px-2 text-sm text-fg sm:h-9"
             >
-              <option value="">Tüm kategoriler</option>
+              <option value="">{tx.allCategories}</option>
               {LEGAL_CATEGORY_ORDER.map((c) => (
                 <option key={c} value={c}>
                   {PII_CATEGORY_LABELS[c]}
@@ -121,13 +123,13 @@ export function InventoryTab() {
             {/* Masaüstü: tablo */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
-                <caption className="sr-only">Kişisel veri envanteri</caption>
+                <caption className="sr-only"><AdminKvkkText k="inventory" /></caption>
                 <thead className="border-y border-border bg-surface-muted/50 text-left text-xs text-fg-muted">
                   <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">Kayıt</th>
+                    <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="records" /></th>
                     <th scope="col" className="px-4 py-2 font-medium">Kategori</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Kişisel alanlar</th>
-                    <th scope="col" className="px-4 py-2 font-medium">Dışa aktarım</th>
+                    <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="personalFields" /></th>
+                    <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="export" /></th>
                     <th scope="col" className="px-4 py-2 font-medium">Silme talebinde</th>
                     <th scope="col" className="px-4 py-2 font-medium">Saklama</th>
                     <th scope="col" className="px-4 py-2 font-medium">Hukuki sebep</th>

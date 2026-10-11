@@ -18,6 +18,7 @@ import { InlineError } from '@/components/states';
 import { DSR_TYPE_LABELS, type DsrType } from '@/lib/dsr-workflow';
 import { DSR_CHANNEL_LABELS, type ManualDsrInput } from '@/lib/admin-privacy/contract';
 import { createManualDsr } from './api';
+import { AdminKvkkText } from '../copy';
 
 function todayIstanbul(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
@@ -76,7 +77,7 @@ export function ManualRequestDialog({
     <Dialog open={open} onOpenChange={(o) => (!o && !pending ? onClose() : undefined)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Başvuruyu kuyruğa al</DialogTitle>
+          <DialogTitle><AdminKvkkText k="queueRequest" /></DialogTitle>
           <DialogDescription>
             Müşteri ekranı dışından gelen başvuruyu kaydedin. Yasal süre başvurunun alındığı günden başlar; başvurana makbuz gönderilir.
           </DialogDescription>
@@ -91,7 +92,7 @@ export function ManualRequestDialog({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor={`${uid}-type`}>Talep türü</Label>
+              <Label htmlFor={`${uid}-type`}><AdminKvkkText k="requestType" /></Label>
               <select
                 id={`${uid}-type`}
                 value={type}
@@ -106,7 +107,7 @@ export function ManualRequestDialog({
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${uid}-channel`}>Geldiği kanal</Label>
+              <Label htmlFor={`${uid}-channel`}><AdminKvkkText k="channel" /></Label>
               <select
                 id={`${uid}-channel`}
                 value={channel}
@@ -122,7 +123,7 @@ export function ManualRequestDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-email`}>Başvuranın e-postası</Label>
+            <Label htmlFor={`${uid}-email`}><AdminKvkkText k="applicantEmail" /></Label>
             <Input
               id={`${uid}-email`}
               type="email"
@@ -139,7 +140,7 @@ export function ManualRequestDialog({
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-date`}>Başvurunun alındığı gün</Label>
+            <Label htmlFor={`${uid}-date`}><AdminKvkkText k="receivedDay" /></Label>
             <Input
               id={`${uid}-date`}
               type="date"
@@ -150,7 +151,7 @@ export function ManualRequestDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-msg`}>Başvuru metni (isteğe bağlı)</Label>
+            <Label htmlFor={`${uid}-msg`}><AdminKvkkText k="requestText" /></Label>
             <Textarea id={`${uid}-msg`} value={message} onChange={(e) => setMessage(e.target.value)} rows={4} maxLength={4000} />
           </div>
           {error ? <InlineError>{error}</InlineError> : null}

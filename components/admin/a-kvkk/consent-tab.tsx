@@ -14,6 +14,7 @@ import { CONSENT_CATEGORY_LABELS } from '@/lib/consent/types';
 import { CONSENT_WINDOWS, type ConsentStats, type ConsentWindow } from '@/lib/admin-privacy/contract';
 import { fetchConsent } from './api';
 import { formatDate, formatNumber, formatPercent } from './format';
+import { AdminKvkkText } from './copy';
 
 const SOURCE_LABELS: Record<string, string> = {
   banner: 'Çerez bandı',
@@ -65,7 +66,7 @@ function DailyBars({ daily }: { daily: ConsentStats['daily'] }) {
         <span>{formatDate(daily[daily.length - 1]?.day)}</span>
       </figcaption>
       <table className="sr-only">
-        <caption>Günlük rıza kararları</caption>
+        <caption><AdminKvkkText k="dailyConsent" /></caption>
         <tbody>
           {daily.map((d) => (
             <tr key={d.day}>
@@ -157,7 +158,7 @@ export function ConsentTab() {
                     <li key={v.version} className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
                       <span className="text-fg">
                         Sürüm {v.version}
-                        {v.current ? <span className={cn('ml-2 rounded-full px-2 py-0.5 text-xs', TONE_CHIP.success)}>güncel</span> : null}
+                        {v.current ? <span className={cn('ml-2 rounded-full px-2 py-0.5 text-xs', TONE_CHIP.success)}><AdminKvkkText k="current" /></span> : null}
                       </span>
                       <span className="tabular-nums text-fg">{formatNumber(v.count)}</span>
                     </li>

@@ -28,6 +28,7 @@ import {
 } from '@/lib/admin-privacy/contract';
 import { downloadLogsCsv, fetchLogs } from './api';
 import { formatDateTime } from './format';
+import { AdminKvkkText } from './copy';
 
 const FILTER_LABELS: Record<LogSourceFilter, string> = {
   all: 'Tümü',
@@ -161,22 +162,22 @@ export function LogsTab() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
-              <Label htmlFor="logs-q">İşlem / varlık</Label>
+              <Label htmlFor="logs-q"><AdminKvkkText k="actionEntity" /></Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
                 <Input id="logs-q" type="search" value={text} onChange={(e) => setText(e.target.value)} className="h-11 pl-8 sm:h-9" placeholder="ör. dsr_, login" />
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="logs-user">Kullanıcı</Label>
+              <Label htmlFor="logs-user"><AdminKvkkText k="user" /></Label>
               <Input id="logs-user" type="search" value={user} onChange={(e) => setUser(e.target.value)} className="h-11 sm:h-9" placeholder="Ad ya da e-posta" />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="logs-from">Başlangıç</Label>
+              <Label htmlFor="logs-from"><AdminKvkkText k="start" /></Label>
               <Input id="logs-from" type="date" value={query.from ?? ''} max={query.to} onChange={(e) => set({ from: e.target.value || null })} className="h-11 sm:h-9" />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="logs-to">Bitiş</Label>
+              <Label htmlFor="logs-to"><AdminKvkkText k="end" /></Label>
               <Input id="logs-to" type="date" value={query.to ?? ''} min={query.from} onChange={(e) => set({ to: e.target.value || null })} className="h-11 sm:h-9" />
             </div>
           </div>
@@ -225,16 +226,16 @@ export function LogsTab() {
             <>
               <div className="hidden overflow-x-auto md:block" aria-busy={list.isFetching}>
                 <table className="w-full text-sm">
-                  <caption className="sr-only">5651 erişim kayıtları</caption>
+                  <caption className="sr-only"><AdminKvkkText k="accessLogs" /></caption>
                   <thead className="border-y border-border bg-surface-muted/50 text-left text-xs text-fg-muted">
                     <tr>
                       <th scope="col" className="px-4 py-2 font-medium">Zaman</th>
                       <th scope="col" className="px-4 py-2 font-medium">Kaynak</th>
-                      <th scope="col" className="px-4 py-2 font-medium">İşlem</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Kullanıcı</th>
+                      <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="operation" /></th>
+                      <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="user" /></th>
                       <th scope="col" className="px-4 py-2 font-medium">IP</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Tarayıcı</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Önem</th>
+                      <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="browser" /></th>
+                      <th scope="col" className="px-4 py-2 font-medium"><AdminKvkkText k="severity" /></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">

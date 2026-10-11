@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import type { CheckStatus, PrivacyOverview } from '@/lib/admin-privacy/contract';
 import { fetchOverview } from './api';
 import { formatDateTime, formatPercent, relativeFromNow } from './format';
+import { AdminKvkkText } from './copy';
 
 const CHECK_META: Record<CheckStatus, { tone: Tone; label: string; Icon: typeof CheckCircle2 }> = {
   ok: { tone: 'success', label: 'Uygun', Icon: CheckCircle2 },
@@ -152,14 +153,14 @@ export function OverviewTab({ initial }: { initial: PrivacyOverview | null }) {
                     <dd className="text-xl font-semibold tabular-nums text-fg">{formatPercent(d.logCoverage.withIpPercent)}</dd>
                   </div>
                   <div>
-                    <dt className="text-fg-muted">Tarayıcı ile</dt>
+                    <dt className="text-fg-muted"><AdminKvkkText k="withBrowser" /></dt>
                     <dd className="text-xl font-semibold tabular-nums text-fg">{formatPercent(d.logCoverage.withUaPercent)}</dd>
                   </div>
                 </dl>
                 <p className="mt-2 text-xs text-fg-muted">{d.logCoverage.total.toLocaleString('tr-TR')} kayıt ölçüldü.</p>
                 {d.logCoverage.missingIpTop.length > 0 ? (
                   <div className="mt-3">
-                    <p className="text-xs font-medium text-fg">IP'siz yazan işlemler</p>
+                    <p className="text-xs font-medium text-fg"><AdminKvkkText k="noIpWriters" /></p>
                     <ul className="mt-1 space-y-1 text-xs">
                       {d.logCoverage.missingIpTop.map((m) => (
                         <li key={m.action} className="flex justify-between gap-2">

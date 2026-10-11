@@ -72,6 +72,7 @@ import {
   type DsrListStatus,
 } from './api';
 import { ManualRequestDialog } from './manual-request-dialog';
+import { AdminKvkkText, useAdminKvkkCopy } from '../copy';
 
 const STATUS_TABS: Array<{ key: DsrListStatus; label: string }> = [
   { key: 'open', label: 'Açık' },
@@ -272,7 +273,7 @@ function EvidenceChecklist({ detail }: { detail: DsrDetailResponse }) {
     return (
       <div className={cn('flex items-start gap-2 rounded-xl border p-3 text-sm', TONE_CALLOUT.success)}>
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-        <span>Talep yürütme kanıtıyla kapandı.</span>
+        <span><AdminKvkkText k="closedFulfilled" /></span>
       </div>
     );
   }
@@ -280,13 +281,13 @@ function EvidenceChecklist({ detail }: { detail: DsrDetailResponse }) {
     return (
       <div className={cn('flex items-start gap-2 rounded-xl border p-3 text-sm', TONE_CALLOUT.neutral)}>
         <ShieldQuestion className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
-        <span>Talep gerekçeyle reddedildi.</span>
+        <span><AdminKvkkText k="closedRejected" /></span>
       </div>
     );
   }
   return (
     <div className={cn('rounded-xl border p-3 text-sm', TONE_CALLOUT.info)}>
-      <p className="font-medium">Kapanış için gereken kanıt</p>
+      <p className="font-medium"><AdminKvkkText k="proofRequired" /></p>
       <ul className="mt-2 space-y-1">
         {detail.missingEvidence.length === 0 ? (
           <li className="flex items-center gap-2">
@@ -307,7 +308,7 @@ function EvidenceChecklist({ detail }: { detail: DsrDetailResponse }) {
 
 function Timeline({ events }: { events: DsrDetailResponse['events'] }) {
   if (events.length === 0) {
-    return <p className="text-sm text-fg-muted">Henüz kayıtlı adım yok.</p>;
+    return <p className="text-sm text-fg-muted"><AdminKvkkText k="noSteps" /></p>;
   }
   return (
     <ol className="relative space-y-4 border-l border-border pl-5">
@@ -423,20 +424,20 @@ function DetailPanel({ id, onClose }: { id: string | null; onClose: () => void }
                   Başvuran
                 </h3>
                 <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
-                  <dt className="text-fg-muted">Başvuru e-postası</dt>
+                  <dt className="text-fg-muted"><AdminKvkkText k="applicationEmail" /></dt>
                   <dd className="break-all text-fg">{r.email}</dd>
                   <dt className="text-fg-muted">Hesap</dt>
                   <dd className="break-all text-fg">
                     {r.account ? (
                       r.account.anonymized ? (
-                        <Chip tone="neutral">Anonimleştirilmiş hesap</Chip>
+                        <Chip tone="neutral"><AdminKvkkText k="anonymized" /></Chip>
                       ) : (
                         <>
                           {r.account.email} · {r.account.role}
                         </>
                       )
                     ) : (
-                      <Chip tone="warning">Hesaba bağlı değil</Chip>
+                      <Chip tone="warning"><AdminKvkkText k="notLinked" /></Chip>
                     )}
                   </dd>
                 </dl>
@@ -660,6 +661,7 @@ function useRequestsUrlState() {
 }
 
 export function RequestsPanel() {
+  const tx = useAdminKvkkCopy();
   const url = useRequestsUrlState();
   const [search, setSearch] = useState(url.q);
   const debounced = useDebounced(search.trim(), 300);
@@ -729,7 +731,7 @@ export function RequestsPanel() {
               aria-label="Talep türü"
               className="h-11 rounded-md border border-border bg-background px-2 text-sm text-fg sm:h-9"
             >
-              <option value="">Tüm türler</option>
+              <option value="">{tx.allTypes}</option>
               {(Object.keys(DSR_TYPE_LABELS) as DsrType[]).map((t) => (
                 <option key={t} value={t}>
                   {DSR_TYPE_LABELS[t]}
