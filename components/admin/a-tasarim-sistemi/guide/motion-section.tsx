@@ -24,6 +24,7 @@ import {
   subscribeReducedMotion,
   useMotionPolicy,
 } from '@/lib/motion';
+import { useDesignSystemCopy } from '../copy';
 
 type PresetKey = 'fadeUp' | 'fadeIn' | 'scaleIn' | 'popIn' | 'sheet' | 'stagger';
 
@@ -47,6 +48,7 @@ function usePolicySources() {
 }
 
 export function MotionSection() {
+  const dx = useDesignSystemCopy();
   const policy = useMotionPolicy();
   const sources = usePolicySources();
   const [active, setActive] = useState<PresetKey>('fadeUp');
@@ -111,7 +113,7 @@ export function MotionSection() {
           </div>
 
           <div className="space-y-3">
-            <h3 className="qx-overline text-fg-muted">Ön ayar oynatıcı</h3>
+            <h3 className="qx-overline text-fg-muted">{dx.presetPlayer}</h3>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Varyant ön ayarı">
               {PRESETS.map((p) => (
                 <button

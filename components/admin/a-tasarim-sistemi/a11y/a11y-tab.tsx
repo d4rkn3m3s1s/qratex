@@ -24,6 +24,7 @@ import {
 import { THEME_FAMILIES, contrastChecks, resolvePaletteTokens } from '@/lib/design-system/theme-model';
 import type { ChecklistData, PrefsSummary } from '@/lib/design-system/a11y.server';
 import { dsKeys, errorText, fetchA11y, formatIstanbul, isConflict, patchChecklist } from '../api';
+import { useDesignSystemCopy } from '../copy';
 
 type A11yData = { prefs: PrefsSummary; checklist: ChecklistData };
 
@@ -39,6 +40,7 @@ const STATUS_STYLE: Record<CheckStatus, string> = {
 };
 
 function PrefsCard({ prefs }: { prefs: PrefsSummary }) {
+  const dx = useDesignSystemCopy();
   const t = prefs.totals;
   const tiles = [
     { k: 'Yüksek kontrast', v: t.highContrast },
@@ -64,16 +66,16 @@ function PrefsCard({ prefs }: { prefs: PrefsSummary }) {
         </dl>
         <div className="overflow-x-auto rounded-control border">
           <table className="w-full min-w-[36rem] text-left">
-            <caption className="sr-only">Rol kırılımı</caption>
+            <caption className="sr-only">{dx.roleBreakdown}</caption>
             <thead className="bg-surface-muted">
               <tr className="qx-caption text-fg-muted">
-                <th scope="col" className="px-3 py-2 font-medium">Rol</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Kullanıcı</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Tercih kaydeden</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Kontrast</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Hareket</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Renk körü</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Büyük yazı</th>
+                <th scope="col" className="px-3 py-2 font-medium">{dx.role}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.users}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.savedPrefs}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.contrast}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.motion}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.colorBlind}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{dx.largeText}</th>
               </tr>
             </thead>
             <tbody>
@@ -274,6 +276,7 @@ function ChecklistCard({ data, onSaved }: { data: ChecklistData; onSaved: (d: Ch
 
 /** Tüm hazır paletlerin kritik çiftleri — yayın öncesi hangi temanın sorunlu olduğu bir bakışta. */
 function PresetContrastCard() {
+  const dx = useDesignSystemCopy();
   const rows = useMemo(
     () =>
       THEME_FAMILIES.map((f) => {
@@ -291,9 +294,9 @@ function PresetContrastCard() {
         <table className="w-full min-w-[34rem] text-left">
           <thead className="bg-surface-muted">
             <tr className="qx-caption text-fg-muted">
-              <th scope="col" className="px-3 py-2 font-medium">Palet</th>
-              <th scope="col" className="px-3 py-2 font-medium">Açık mod</th>
-              <th scope="col" className="px-3 py-2 font-medium">Koyu mod</th>
+              <th scope="col" className="px-3 py-2 font-medium">{dx.palette}</th>
+              <th scope="col" className="px-3 py-2 font-medium">{dx.lightMode}</th>
+              <th scope="col" className="px-3 py-2 font-medium">{dx.darkMode}</th>
             </tr>
           </thead>
           <tbody>
@@ -305,7 +308,7 @@ function PresetContrastCard() {
                 {[light, dark].map((fails, i) => (
                   <td key={i} className="qx-caption px-3 py-2">
                     {fails.length === 0 ? (
-                      <span className="font-medium text-success">Tümü geçer</span>
+                      <span className="font-medium text-success">{dx.allPass}</span>
                     ) : (
                       <span className="text-danger">{fails.map((c) => c.label).join(', ')}</span>
                     )}
@@ -327,6 +330,7 @@ const REFS = [
 ];
 
 function GuideCard() {
+  const dx = useDesignSystemCopy();
   return (
     <SectionCard title="Rehber ve referanslar" icon={<BookOpen />} description="Bu ekran hukuki bir uygunluk denetiminin yerine geçmez.">
       <div className="space-y-4">
@@ -346,14 +350,14 @@ function GuideCard() {
                   <a href={r.href} target="_blank" rel="noopener noreferrer">
                     {r.label}
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                    <span className="sr-only"> (yeni sekmede açılır)</span>
+                    <span className="sr-only">{dx.newTab}</span>
                   </a>
                 </Button>
               </li>
             ))}
             <li>
               <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
-                <Link href="/admin/observability#rum-web-vitals">Panel RUM örnekleri</Link>
+                <Link href="/admin/observability#rum-web-vitals">{dx.rumSamples}</Link>
               </Button>
             </li>
           </ul>

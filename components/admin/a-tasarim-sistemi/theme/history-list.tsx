@@ -15,6 +15,7 @@ import {
   type ThemeSnapshot,
 } from '@/lib/design-system/theme-model';
 import { dsKeys, errorText, fetchHistory, formatIstanbul, rollbackTheme, type PublishResult } from '../api';
+import { useDesignSystemCopy } from '../copy';
 
 function Mini({ s }: { s: ThemeSnapshot | null }) {
   if (!s) return <span className="qx-caption text-fg-subtle">—</span>;
@@ -45,6 +46,7 @@ export function HistoryList({
   version: string | null;
   onRolledBack: (r: PublishResult) => void | Promise<void>;
 }) {
+  const dx = useDesignSystemCopy();
   const [page, setPage] = useState(1);
   const q = useQuery({ queryKey: dsKeys.history(page), queryFn: ({ signal }) => fetchHistory(page, signal), staleTime: 15_000 });
   const pages = q.data ? Math.max(1, Math.ceil(q.data.total / q.data.size)) : 1;
@@ -110,7 +112,7 @@ export function HistoryList({
                         }}
                       />
                     ) : (
-                      <span className="qx-caption text-fg-subtle">Önceki hâl geçerli bir tema değil</span>
+                      <span className="qx-caption text-fg-subtle">{dx.invalidPrev}</span>
                     )}
                   </li>
                 );

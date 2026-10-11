@@ -20,6 +20,7 @@ import {
   StatTile,
   type QueryLike,
 } from '@/components/states';
+import { useDesignSystemCopy } from '../copy';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -31,6 +32,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function PrimitivesSection() {
+  const dx = useDesignSystemCopy();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('ornek@');
   const [on, setOn] = useState(true);
@@ -41,14 +43,14 @@ export function PrimitivesSection() {
       <div className="space-y-5">
         <Row label="Button">
           <Button>Birincil</Button>
-          <Button variant="secondary">İkincil</Button>
-          <Button variant="outline">Çerçeve</Button>
+          <Button variant="secondary">{dx.secondary}</Button>
+          <Button variant="outline">{dx.outline}</Button>
           <Button variant="ghost">Hayalet</Button>
           <Button variant="destructive">
             <Trash2 className="h-4 w-4" aria-hidden />
             Sil
           </Button>
-          <Button variant="link">Bağlantı</Button>
+          <Button variant="link">{dx.link}</Button>
         </Row>
         <Row label="Button loading">
           <Button
@@ -60,28 +62,28 @@ export function PrimitivesSection() {
           >
             Kaydet
           </Button>
-          <span className="qx-caption text-fg-muted">Etiket korunur, genişlik zıplamaz, aria-busy.</span>
+          <span className="qx-caption text-fg-muted">{dx.loadingNote}</span>
         </Row>
         <Row label="Badge">
-          <Badge>Varsayılan</Badge>
+          <Badge>{dx.defaultLabel}</Badge>
           <Badge variant="brand">Marka</Badge>
           <Badge variant="success">Aktif</Badge>
           <Badge variant="warning">Beklemede</Badge>
           <Badge variant="danger">Hata</Badge>
           <Badge variant="info">Bilgi</Badge>
-          <Badge variant="outline">Çerçeve</Badge>
+          <Badge variant="outline">{dx.outline}</Badge>
         </Row>
         <Row label="Alert">
           <div className="grid w-full gap-2 lg:grid-cols-2">
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" aria-hidden />
-              <AlertTitle>Ödeme alınamadı</AlertTitle>
+              <AlertTitle>{dx.paymentFailed}</AlertTitle>
               <AlertDescription>Kart bilgilerinizi kontrol edip tekrar deneyin.</AlertDescription>
             </Alert>
             <Alert variant="success">
               <Activity className="h-4 w-4" aria-hidden />
-              <AlertTitle>Kampanya yayında</AlertTitle>
-              <AlertDescription>İlk 24 saatte 128 tarama.</AlertDescription>
+              <AlertTitle>{dx.campaignLive}</AlertTitle>
+              <AlertDescription>{dx.firstDayScans}</AlertDescription>
             </Alert>
           </div>
         </Row>
@@ -151,6 +153,7 @@ function demoQuery(kind: DemoKind, refetch: () => void): QueryLike<typeof ROWS> 
 }
 
 export function StatesSection() {
+  const dx = useDesignSystemCopy();
   const [kind, setKind] = useState<DemoKind>('ready');
   const [visits, setVisits] = useState(12480);
   const [failNext, setFailNext] = useState(false);
@@ -281,7 +284,7 @@ export function StatesSection() {
             }
           />
           <ConfirmAction
-            trigger={<Button variant="outline">Bildirimi gönder</Button>}
+            trigger={<Button variant="outline">{dx.sendNotification}</Button>}
             tone="brand"
             title="Bildirim 1.204 müşteriye gönderilsin mi?"
             impact={[

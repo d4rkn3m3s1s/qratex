@@ -11,6 +11,7 @@ import {
   type ThemeDraft,
   type ResolvedTokens,
 } from '@/lib/design-system/theme-model';
+import { useDesignSystemCopy } from '../copy';
 
 const hsl = (t: string) => `hsl(${t})`;
 
@@ -19,6 +20,7 @@ const hsl = (t: string) => `hsl(${t})`;
  * yalnız bu tuvale çizer. Belge köküne hiçbir şey yazılmaz → kaydetmeden çıkınca sızıntı yok.
  */
 function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
+  const dx = useDesignSystemCopy();
   const label = mode === 'dark' ? 'Koyu mod' : 'Açık mod';
   return (
     <figure className="min-w-0 space-y-1.5">
@@ -37,13 +39,13 @@ function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
           </div>
           <div className="min-w-0 flex-1 space-y-3 p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold">Panel özeti</span>
+              <span className="text-sm font-semibold">{dx.panelSummary}</span>
               <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: hsl(t.accent), color: hsl(t.accentFg) }}>
                 Yeni
               </span>
             </div>
             <div className="space-y-2 rounded-xl border p-3" style={{ background: hsl(t.card), borderColor: hsl(t.border) }}>
-              <p className="text-sm font-medium">Haftalık geri bildirim</p>
+              <p className="text-sm font-medium">{dx.weeklyFeedback}</p>
               <p className="text-xs" style={{ color: hsl(t.mutedFg) }}>
                 İkincil metin bu renkte okunur.
               </p>

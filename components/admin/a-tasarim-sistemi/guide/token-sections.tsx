@@ -20,6 +20,7 @@ import {
   contrastContract,
 } from '@/lib/design/tokens';
 import { useLiveTokens } from './use-live-tokens';
+import { useDesignSystemCopy } from '../copy';
 
 const ALL_COLOR_NAMES = [
   'background',
@@ -69,6 +70,7 @@ function Swatch({ name, value, label, utility }: { name: string; value?: string;
 }
 
 export function ColorTokensSection() {
+  const dx = useDesignSystemCopy();
   const v = useLiveTokens(ALL_COLOR_NAMES);
   const c = (a: string, b: string) => contrastRatio(v[a] ?? '', v[b] ?? '');
 
@@ -80,7 +82,7 @@ export function ColorTokensSection() {
       <div className="space-y-8">
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-3">
-            <h3 className="qx-overline text-fg-muted">Yüzeyler</h3>
+            <h3 className="qx-overline text-fg-muted">{dx.surfaces}</h3>
             {SURFACE_TOKENS.map((t) => (
               <Swatch key={t.name} name={t.name} value={v[t.name]} label={t.label} utility={t.utility} />
             ))}
@@ -95,7 +97,7 @@ export function ColorTokensSection() {
             ))}
           </div>
           <div className="space-y-3">
-            <h3 className="qx-overline text-fg-muted">Kenarlık</h3>
+            <h3 className="qx-overline text-fg-muted">{dx.border}</h3>
             {BORDER_TOKENS.map((t) => (
               <div key={t.name} className="flex items-center justify-between gap-2">
                 <Swatch name={t.name} value={v[t.name]} label={t.label} utility={t.utility} />
@@ -106,7 +108,7 @@ export function ColorTokensSection() {
         </div>
 
         <div className="space-y-3">
-          <h3 className="qx-overline text-fg-muted">Anlam rolleri — dolgu · zemin üstü metin · açık zemin rozeti</h3>
+          <h3 className="qx-overline text-fg-muted">{dx.semanticRoles}</h3>
           <div className="overflow-x-auto rounded-control border">
             <table className="w-full min-w-[40rem] text-left">
               <thead className="bg-surface-muted">
@@ -175,7 +177,7 @@ export function ColorTokensSection() {
         </div>
 
         <div className="space-y-3">
-          <h3 className="qx-overline text-fg-muted">Kimlik renkleri (play: rozet kategorisi, oyun, grafik serisi — metin değil)</h3>
+          <h3 className="qx-overline text-fg-muted">{dx.identityColors}</h3>
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {CATEGORY_TOKENS.map((t) => (
               <div key={t.name} className="space-y-1 text-center">

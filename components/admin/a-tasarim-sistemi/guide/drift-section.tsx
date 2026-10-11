@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SectionCard, EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import type { DriftArea, DriftReport } from '@/lib/design-system/drift-scan';
+import { useDesignSystemCopy } from '../copy';
 
 const AREA_LABEL: Record<DriftArea, string> = {
   admin: 'Yönetim paneli',
@@ -30,6 +31,7 @@ function formatDate(iso: string) {
  * canlı değil, ölçüm anının fotoğrafıdır.
  */
 export function DriftSection({ report }: { report: DriftReport | null }) {
+  const dx = useDesignSystemCopy();
   const [showAll, setShowAll] = useState(false);
   if (!report || report.totals.files === 0) {
     return (
@@ -68,7 +70,7 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
         </dl>
 
         <div className="space-y-2">
-          <h3 className="qx-overline text-fg-muted">Alan bazında uyum</h3>
+          <h3 className="qx-overline text-fg-muted">{dx.areaCompliance}</h3>
           <ul className="space-y-2.5">
             {areas.map((a) => {
               const p = pct(a.clean, a.files);
@@ -95,20 +97,20 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
         </div>
 
         <div className="space-y-2">
-          <h3 className="qx-overline text-fg-muted">En çok ihlal içeren dosyalar</h3>
+          <h3 className="qx-overline text-fg-muted">{dx.topViolations}</h3>
           {top.length === 0 ? (
-            <p className="qx-small text-success">İhlal bulunmadı.</p>
+            <p className="qx-small text-success">{dx.noViolations}</p>
           ) : (
             <div className="overflow-x-auto rounded-control border">
               <table className="w-full min-w-[36rem] text-left">
-                <caption className="sr-only">Dosya başına ihlal sayıları</caption>
+                <caption className="sr-only">{dx.perFileCaption}</caption>
                 <thead className="bg-surface-muted">
                   <tr className="qx-caption text-fg-muted">
-                    <th scope="col" className="px-3 py-2 font-medium">Dosya</th>
+                    <th scope="col" className="px-3 py-2 font-medium">{dx.file}</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">Hex</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Palet</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Küçük metin</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Toplam</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">{dx.palette}</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">{dx.smallText}</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">{dx.total}</th>
                   </tr>
                 </thead>
                 <tbody>

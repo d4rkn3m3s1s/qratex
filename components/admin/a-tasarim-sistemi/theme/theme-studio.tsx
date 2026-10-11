@@ -33,6 +33,7 @@ import { FamilyPicker } from './family-picker';
 import { ColorField } from './color-field';
 import { PreviewCanvas } from './preview-canvas';
 import { HistoryList } from './history-list';
+import { useDesignSystemCopy } from '../copy';
 
 const MODE_ICON: Record<DefaultMode, React.ReactNode> = {
   system: <Monitor className="h-4 w-4" aria-hidden />,
@@ -97,6 +98,7 @@ function ModeControl({ value, onChange }: { value: DefaultMode; onChange: (m: De
 }
 
 function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: CustomColors) => void }) {
+  const dx = useDesignSystemCopy();
   const set = (patch: Partial<CustomColors>) => onChange({ ...value, ...patch });
   const setSurface = (mode: 'light' | 'dark', patch: { background?: string; foreground?: string } | null) => {
     const modes = { ...(value.modes ?? {}) };
@@ -129,7 +131,7 @@ function CustomEditor({ value, onChange }: { value: CustomColors; onChange: (c: 
               </>
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="qx-caption text-fg-muted">Platformun varsayılan zemini ve metni kullanılır (önerilen).</p>
+                <p className="qx-caption text-fg-muted">{dx.platformDefault}</p>
                 <Button
                   type="button"
                   size="sm"
@@ -162,6 +164,7 @@ async function copy(text: string, what: string) {
  * Belge köküne hiçbir şey yazılmaz; yayın sonrası sağlayıcı yanıttaki satırlarla güncellenir.
  */
 export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
+  const dx = useDesignSystemCopy();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: dsKeys.theme, queryFn: ({ signal }) => fetchTheme(signal), initialData: initial ?? undefined, staleTime: 30_000 });
   const live = q.data;
@@ -251,7 +254,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                   </div>
                 )}
                 {data.seasonalUnknown && (
-                  <p className="qx-caption text-fg-muted">Dönemsel konsept durumu okunamadı; bir konsept paleti bu temayı geçici olarak ezebilir.</p>
+                  <p className="qx-caption text-fg-muted">{dx.seasonalUnknown}</p>
                 )}
               </div>
             </SectionCard>
@@ -348,7 +351,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                     className="pointer-events-auto mx-auto flex max-w-4xl flex-col gap-3 rounded-card border bg-surface-1 p-3 qx-elevation-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="qx-small font-semibold text-fg">Yayınlanmamış değişiklik</p>
+                      <p className="qx-small font-semibold text-fg">{dx.unpublished}</p>
                       <p className="qx-caption text-fg-muted">
                         {describeDraft(draft)} · {DEFAULT_MODE_LABEL[draft.defaultMode]}
                         {report && report.failing > 0 ? ` · ${report.failing} kontrast uyarısı` : ' · kontrast temiz'}
@@ -376,7 +379,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                         title="Tema tüm kullanıcılara yayınlansın mı?"
                         description={
                           <span className="block space-y-3">
-                            <span className="block">Müşteri, bayi, personel, yönetim ve landing arayüzleri bu palete geçer. Sürüm geçmişinden geri alınabilir.</span>
+                            <span className="block">{dx.publishScope}</span>
                             <span className="block space-y-1">
                               <label htmlFor="ds-theme-note" className="qx-small font-medium text-fg">
                                 Not (isteğe bağlı)
