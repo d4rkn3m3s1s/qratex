@@ -14,7 +14,7 @@ export function ReadingProgress() {
   const { scrollYProgress } = useScroll();
   const smooth = useSpring(scrollYProgress, { stiffness: 220, damping: 40, mass: 0.3 });
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-1 print:hidden">
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-overlay h-1 print:hidden">
       <Motion.div className="h-full origin-left bg-brand" style={{ scaleX: reduce ? scrollYProgress : smooth }} />
     </div>
   );

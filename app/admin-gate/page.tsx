@@ -189,7 +189,7 @@ export default function AdminGatePage() {
   return (
     <div
       style={{ background: 'radial-gradient(ellipse at center, #0a0a1f 0%, #05050f 60%, #000 100%)' }}
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden text-white"
+      className="fixed inset-0 z-modal flex flex-col items-center justify-center overflow-hidden text-white"
     >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
 

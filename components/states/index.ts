@@ -1,5 +1,5 @@
 /**
- * QDL durum ve sayfa bileşenleri. Canlı örnekler: /admin/design-language
+ * QDL durum ve sayfa bileşenleri. Canlı örnekler: /admin/design-system (Rehber). Panel `error.tsx` gövdesi: `./panel-route-error` (Sentry içerdiği için barrel dışı).
  *
  *   import { QueryState, PageHeader, SectionCard, StatTile, ConfirmAction } from '@/components/states';
  */

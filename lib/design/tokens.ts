@@ -116,9 +116,10 @@ export const Z_SCALE = [
   { token: '--z-sticky', utility: 'z-sticky', value: 20 },
   { token: '--z-header', utility: 'z-header', value: 30 },
   { token: '--z-overlay', utility: 'z-overlay', value: 40 },
+  { token: '--z-floating', utility: 'z-floating', value: 45 },
   { token: '--z-modal', utility: 'z-modal', value: 50 },
-  { token: '--z-popover', utility: 'z-popover', value: 60 },
   { token: '--z-toast', utility: 'z-toast', value: 70 },
+  { token: '--z-popover', utility: 'z-popover', value: 80 },
   { token: '--z-skip', utility: 'z-skip', value: 100 },
 ] as const;
 

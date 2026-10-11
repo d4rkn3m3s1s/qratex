@@ -31,7 +31,6 @@ const config: Config = {
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  safelist: ['z-[40]', 'z-[45]', 'z-[70]', 'z-[100]'],
   theme: {
     container: {
       center: true,
@@ -156,6 +155,7 @@ const config: Config = {
         sticky: 'var(--z-sticky)',
         header: 'var(--z-header)',
         overlay: 'var(--z-overlay)',
+        floating: 'var(--z-floating)',
         modal: 'var(--z-modal)',
         popover: 'var(--z-popover)',
         toast: 'var(--z-toast)',

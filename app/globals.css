@@ -137,15 +137,17 @@
     --elevation-2: 0 4px 12px -2px hsl(var(--shadow-color) / 0.14), 0 2px 4px -2px hsl(var(--shadow-color) / 0.08);
     --elevation-3: 0 16px 40px -8px hsl(var(--shadow-color) / 0.22), 0 6px 12px -6px hsl(var(--shadow-color) / 0.12);
 
-    /* z-index katmanları */
+    /* z-index katmanları (tek ölçek; sayfa üstü katmanda keyfi z-[N] yok — __tests__/design).
+       Açılır menü/popover modal VE banner/toast üstünde (dialog içindeki select, çerez bandı). */
     --z-base: 0;
     --z-raised: 10;
     --z-sticky: 20;
     --z-header: 30;
     --z-overlay: 40;
+    --z-floating: 45;
     --z-modal: 50;
-    --z-popover: 60;
     --z-toast: 70;
+    --z-popover: 80;
     --z-skip: 100;
 
     /* Motion — lib/motion/tokens.ts ile birebir aynı */

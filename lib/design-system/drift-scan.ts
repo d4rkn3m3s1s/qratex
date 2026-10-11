@@ -68,6 +68,8 @@ function walk(dir: string, out: string[]) {
   for (const e of entries) {
     if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
     const full = path.join(dir, e.name);
+    // app/lab: git'te izlenmeyen atılabilir deneme dizini (ürün değil) — sayımı çarpıtmasın.
+    if (e.isDirectory() && e.name === 'lab' && path.basename(dir) === 'app') continue;
     if (e.isDirectory()) walk(full, out);
     else if (e.name.endsWith('.tsx')) out.push(full);
   }

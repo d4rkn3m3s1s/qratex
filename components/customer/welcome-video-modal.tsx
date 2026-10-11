@@ -88,7 +88,7 @@ export function WelcomeVideoModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-[70] overflow-y-auto bg-black/70 backdrop-blur-md"
+          className="fixed inset-0 z-toast overflow-y-auto bg-black/70 backdrop-blur-md"
           onClick={close}
         >
           <div className="flex min-h-full items-center justify-center p-4">
