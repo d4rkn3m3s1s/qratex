@@ -43,14 +43,36 @@ const STRIP_SINGLE = /<\/?(script|iframe|object|embed|form|frame|frameset|applet
 const EVENT_ATTR = /\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
 const JS_URL_ATTR = /\s+(href|src|action|formaction|xlink:href)\s*=\s*("\s*(?:javascript|vbscript|data:text\/html)[^"]*"|'\s*(?:javascript|vbscript|data:text\/html)[^']*'|(?:javascript|vbscript):[^\s>]*)/gi;
 
-/** Gönderici HTML'inden çalıştırılabilir/gezinme yapan parçaları ayıklar (derinlemesine savunma). */
-export function scrubMailHtml(html: string): string {
+const TARGET_ATTR = /\s+(target|srcdoc|formaction|ping)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+/** Ayıklama sonrası HÂLÂ kalan tehlikeli etiket açılışı (ör. bozuk/iç içe yazımdan) → metne çevrilir. */
+const DANGEROUS_OPEN = /<(?=\/?\s*(?:script|iframe|object|embed|form|frame|frameset|applet|base|meta|link|noscript|template|portal)(?![a-z0-9-]))/gi;
+
+function scrubOnce(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(STRIP_BLOCKS, '')
     .replace(STRIP_SINGLE, '')
     .replace(EVENT_ATTR, '')
+    .replace(TARGET_ATTR, '')
     .replace(JS_URL_ATTR, ' $1="#"');
+}
+
+/**
+ * Gönderici HTML'inden çalıştırılabilir/gezinme yapan parçaları ayıklar (derinlemesine savunma).
+ * Tek geçiş iç içe yazımla atlatılabilir (`<me<meta>ta http-equiv=refresh ...>` → ayıklandıktan
+ * sonra `<meta ...>` kalır; meta refresh CSP ile ENGELLENMEZ ve çerçeveyi saldırgan sayfaya
+ * götürür). Bu yüzden sabit noktaya kadar tekrarlanır, sonra kalan açılışlar metne çevrilir.
+ * `target` kaldırılır (base `_blank` geçerli olsun; `_self/_top/_parent` ile çerçeve/üst gezinme
+ * olmasın) ve tüm linklere `rel="noopener noreferrer"` ÖNE eklenir (yinelenen öznitelikte ilki kazanır).
+ */
+export function scrubMailHtml(html: string): string {
+  let out = html;
+  for (let i = 0; i < 10; i++) {
+    const next = scrubOnce(out);
+    if (next === out) break;
+    out = next;
+  }
+  return out.replace(DANGEROUS_OPEN, '&lt;').replace(/<(a|area)(?=[\s>/])/gi, '<$1 rel="noopener noreferrer"');
 }
 
 /** Gövdede uzak görsel/arka plan var mı (bant göstermek için). */

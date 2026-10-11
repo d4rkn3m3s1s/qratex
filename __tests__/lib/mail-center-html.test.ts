@@ -133,3 +133,36 @@ describe('attachmentDisposition (ek sunumu)', () => {
     expect(r.disposition).not.toMatch(/[\r\n]/);
   });
 });
+
+describe('scrubMailHtml — atlatma regresyonu (güvenlik incelemesi)', () => {
+  it('iç içe yazımla meta refresh / base / script geri kurulamaz', () => {
+    const out = scrubMailHtml(
+      '<me<meta>ta http-equiv="refresh" content="0;url=https://evil.example">' +
+        '<ba<base>se href="https://evil.example/">' +
+        '<scr<script>ipt>alert(1)</scr</script>ipt>' +
+        '<ifr<iframe>ame srcdoc="x"></iframe>'
+    );
+    expect(out).not.toMatch(/<\s*meta/i);
+    expect(out).not.toMatch(/<\s*base/i);
+    expect(out).not.toMatch(/<\s*script/i);
+    expect(out).not.toMatch(/<\s*iframe/i);
+  });
+
+  it('target (_top/_parent/_self) ve srcdoc/formaction kaldırılır, linklere rel=noopener eklenir', () => {
+    const out = scrubMailHtml(
+      '<a href="https://x.example" target="_top">a</a><a target=_self href="https://y">b</a><area target=\'_parent\' href="https://z"><button formaction="https://e">c</button>'
+    );
+    expect(out).not.toMatch(/target\s*=/i);
+    expect(out).not.toMatch(/formaction/i);
+    expect(out.match(/rel="noopener noreferrer"/g)).toHaveLength(3);
+    expect(out).toContain('<a rel="noopener noreferrer" href="https://x.example"');
+  });
+
+  it('a ile başlayan diğer etiketlere (abbr/address) rel eklenmez', () => {
+    expect(scrubMailHtml('<abbr>x</abbr><address>y</address>')).toBe('<abbr>x</abbr><address>y</address>');
+  });
+
+  it('meta/base içermeyen benzer adlı etiketler (metadata değil, metro) bozulmaz', () => {
+    expect(scrubMailHtml('<p>metro <b>base</b></p>')).toBe('<p>metro <b>base</b></p>');
+  });
+});
