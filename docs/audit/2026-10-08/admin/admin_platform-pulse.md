@@ -229,3 +229,62 @@ Dosyalar:
 **Yeniden üretim:** Rolü ADMIN yapılmış ama gizli cevabı bilmeyen bir hesapla giriş yapılır. `/admin`'e gidince `/admin-gate`'e yönlendirilir (sayfa koruması çalışıyor). Aynı sekmede konsola `await (await fetch('/api/admin/platform-pulse')).json()` yazılır: 200 döner, denetim akışındaki e-posta/rol/entityId bilgileri gelir. Daha kötüsü, `fetch('/api/admin/settings/admin-gate')` aynı oturumla **gate cevabının kendisini** düz metin döndürür (`app/api/admin/settings/admin-gate/route.ts:19-26`, `answer: gate.answer`). Bu yüzden kapı API üzerinden yalnızca atlanmakla kalmıyor, sayfa tarafında da tek istekle açılabiliyor.
 
 **Önem notu:** Saldırgan zaten ADMIN rolünde bir oturuma sahip olmalı; bu bir rol yükseltme açığı değil, ikinci bir faktörün etkisiz kalması. Gate'in kendi tehdit modeli (`proxy.ts:76-78`) bu senaryoyu hedeflediği için "YÜKSEK" seviyesi yerinde. Bulgu bu sayfaya özgü değil, sistem geneli; tek noktadan düzeltilmeli. Ek gözlem (bu iddianın kapsamı dışında, ayrı raporlarda da geçiyor): `lib/admin-gate-edge.ts:14-21` proxy'de HMAC'i doğrulamıyor, yalnız `<userId>.<64 hex>` biçimine bakıyor. Bu yüzden API'ye gate eklerken edge'deki biçim kontrolü yeterli değil; doğrulama Node tarafında `lib/admin-gate.ts` HMAC'iyle (`requireAuth` içinde, cevap kısa TTL ile Redis'te önbelleklenerek) yapılmalı. `/api/admin/gate` GET/POST açık bir muafiyet listesinde tutulmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/platform-pulse` **Komuta Merkezi**'ne (`/admin`) birleşti; sayfa sorgu parametrelerini koruyan `permanentRedirect` oldu. `app/admin/platform-pulse/layout.tsx`, `app/api/admin/platform-pulse/route.ts`, `components/admin/platform-pulse-daily-trends-chart.tsx` (recharts) ve `lib/utc-calendar-day-buckets.ts` silindi. Yerini `GET /api/admin/command-center` (`defineRoute`, yalnız ADMIN + kapı) ve tek canvas "Platform nabzı" şeridi aldı (`components/admin/a-komuta/pulse-strip.tsx`). Ayrıntı: `admin.md` → Uygulama (Dalga 2).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa koruması | ÇALIŞIYOR | `/admin` sunucuda `requireAuth(['ADMIN'])`. |
+| 2 | API yetkisi | ÇALIŞIYOR | `defineRoute` → `requireAuth` kapıyı da doğrular. |
+| 3 | Metadata | ÇALIŞIYOR | "Komuta Merkezi". |
+| 4 | Hero ("canlı okunur") | KALDIRILDI | Kompakt başlık; "canlı" iddiası yok, veri yaşı gösteriliyor. |
+| 5 | Anlık görüntü çipi | ÇALIŞIYOR | "Veri x önce hesaplandı" (sunucu `generatedAt`, göreli). |
+| 6 | Yükleniyor | ÇALIŞIYOR | Veri SSR'da; yalnız SSR düşerse iskelet (`QueryState`, `role=status`). |
+| 7 | Hata durumu | ÇALIŞIYOR | Bölüm başına `ErrorState` + Tekrar dene; hata ≠ boş. |
+| 8 | Boş durum | ÇALIŞIYOR | Her bölümde ayrı, dürüst boş durum. |
+| 9 | CSV indir | ÇALIŞIYOR | Nabız kovaları CSV (BOM, `;`, gecikmeli `revokeObjectURL`), satır başına kova (tablo biçimi). |
+| 10 | 24 sa denetim kaydı | KALDIRILDI | Karışık tanımlı sayı; yerine aktör filtreli "Son olaylar". |
+| 11 | 24 sa geri bildirim | ÇALIŞIYOR | "Geri bildirim" KPI'sı, 24 sa seçiminde; QR + tüketim yorumu. |
+| 12 | 24 sa tüketim | ÇALIŞIYOR | "Tüketim" KPI'sı. |
+| 13 | 24 sa yeni kullanıcı | ÇALIŞIYOR | "Yeni kullanıcı" KPI'sı; rol kırılımı Ekosistem kartında. |
+| 14 | 7 g geri bildirim | ÇALIŞIYOR | Dönem seçici 7 gün. |
+| 15 | 7 g tüketim | ÇALIŞIYOR | Aynı. |
+| 16 | 7 g yeni kullanıcı | ÇALIŞIYOR | Aynı. |
+| 17 | 7 g denetim kartı (eksik) | KALDIRILDI | Denetim sayacı yerine akış (bkz. #10). |
+| 18 | 7 günlük trend grafiği | ÇALIŞIYOR | Canvas nabız: İstanbul kovaları, kartlarla AYNI kovalar (toplam eşleşir, testli), son kova "sürüyor" (soluk + kesikli). |
+| 19 | Lazy grafik | KALDIRILDI | recharts yok; saf canvas, ek chunk gerekmez. |
+| 20 | Tooltip + legend | ÇALIŞIYOR | Lejant + canlı döküm satırı (fare/klavye), TR tarih biçimi. |
+| 21 | X ekseni etiketleri | ÇALIŞIYOR | `Intl` TR ("8 Eki", "14:00"), İstanbul saat dilimi. |
+| 22 | Entity dağılımı | KALDIRILDI | Bölünen ham çubuklar yerine akışta normalize entity etiketi (`settings`/`Settings` → "Ayarlar"). |
+| 23 | Entity boş durumu | KALDIRILDI | #22 ile. |
+| 24 | Denetim akışı | ÇALIŞIYOR | İnsan dilinde ("Ayşe güncelledi: Ayarlar"), 60 sn'de bir tazelenir (sekme görünürken). |
+| 25 | Akış boş durumu | ÇALIŞIYOR | "Bu süzgeçte olay yok". |
+| 26 | Satır detayı | KISMİ | Ham action/entity/entityId ipucunda; tam fark görünümü `/admin/audit`'te (o yüzeyin sahipliği). |
+| 27 | Tüm denetim günlüğü | ÇALIŞIYOR | Akışın altında. |
+| 28 | Ekosistem linki | KALDIRILDI | Döngü bitti; ekosistem aynı ekranda. |
+| 29 | Geri bildirimler linki | ÇALIŞIYOR | "Geri bildirim" KPI'sı `/admin/feedbacks`'e gider. |
+| 30 | Kullanıcılar linki | ÇALIŞIYOR | "Yeni kullanıcı" KPI'sı `/admin/users`'a gider. |
+| 31 | Yenile / otomatik yenile | ÇALIŞIYOR | Yenile (`fresh=1`) + görünürken periyodik tazeleme. |
+| 32 | Zaman aralığı seçici | ÇALIŞIYOR | 24 sa / 7 g / 30 g, URL'de. |
+| 33 | Delta + sparkline | ÇALIŞIYOR | Her KPI'da önceki pencereye göre işaretli delta + sparkline. |
+| 34 | i18n | KISMİ | Tam Türkçe; EN çevirisi yok, veri değerleri TR etiketli. |
+| 35 | Locale biçim | ÇALIŞIYOR | `tr-TR` + İstanbul. |
+| 36 | Redis önbelleği | ÇALIŞIYOR | Bölüm başına anahtar + TTL; `?fresh=1` bypass. |
+| 37 | DB erişilemezken | ÇALIŞIYOR | `defineRoute` 503 retryable; bölüm hataları ayrı. |
+| 38 | Mobil | ÇALIŞIYOR | İç kaydırma alanı yok; akış sayfalı "Daha fazla göster". |
+| 39 | Azaltılmış hareket | ÇALIŞIYOR | Yükseliş animasyonu tercihle kapanır; spinner `motion-reduce`. |
+| 40 | Grafik metin alternatifi | ÇALIŞIYOR | `role="img"` özet + ok tuşları + `aria-live` + açılır veri tablosu. |
+| 41 | API sözleşmesi | ÇALIŞIYOR | `lib/admin-command/types.ts` sunucu ve istemcide ortak. |
+
+### Kapanan bulgular
+1 (kapı `requireAuth`'ta) · 2 (entity normalizasyonu, testli) · 3 (tek kova modeli, testli) · 4 · 5 (aktör filtresi: Yönetim / Bayi-personel / Müşteri / Sistem) · 6 · 7 (30 sorgu → KPI için 3 toplu SQL) · 8 · 9 · 10 (KPI ve kuyruk satırları derin linkli; denetim satırı detayı `/admin/audit`'te) · 11 · 12 · 13 · 14 — **14/14**.
+
+### Kalanlar
+- Anomali uyarısı (z-skoru) ve DAU/WAU: yapılmadı; DAU için güvenilir "son etkinlik" alanı şemada yok (ŞEMA: `User.lastActiveAt` gerekir).
+- `User @@index([createdAt])`: şema dalgası kapalı; yeni kullanıcı sayımı pencereyle sınırlı ve önbellekli.

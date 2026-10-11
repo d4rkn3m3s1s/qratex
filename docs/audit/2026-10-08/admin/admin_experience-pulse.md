@@ -181,3 +181,26 @@ Yeniden üretim senaryosu (salt mantıksal, çalıştırılmadı):
 - Kısa vade: Bu iki uç istemcisiz ölü kod olduğu için raporun "Çakışmalar / birleştirme" bölümündeki kaldırma önerisiyle birlikte sil. Saklanacaksa: görüntülenme kaydını sunucudan çıkar, istemci tarafı PostHog olayına taşı; ya da Upstash Redis üzerinde `SET pulse_view:{userId}:{yyyy-mm-dd} NX EX 86400` ile kullanıcı-gün tekilleştirmesi yap ve yalnızca ilk görüntülemede yaz.
 - Kapı tutarlılığı: `assertModuleEnabled` imzasını `ModuleKey = (typeof MODULE_CATALOG)[number]['key']` tipine daralt (katalog `as const` olmalı); böylece `dealer_shift_pulse` gibi katalogda olmayan anahtarlar derleme hatası verir. Müşteri ucunda boş `if` bloğunu ve ölü import'u kaldır ya da gerçek bir `experience_pulse` müşteri modül anahtarı ekle.
 - Sistem geneli: `lib/api-auth.ts` `requireAuth` üstüne isteğe bağlı, Upstash tabanlı kullanıcı başı kayan pencere limiti (`@upstash/ratelimit`) ekle ve analitik yazan GET uçlarına uygula; bu bulgu tek sayfalık değil, 33 uçluk bir sınıf olarak ele alınmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Karar uygulandı (**KALDIR**, yol haritası §6.3): editörün çıktısını gösteren hiçbir yüzey yoktu. Silinenler: sayfa gövdesi (artık `/admin`'e sorgu parametrelerini koruyan `permanentRedirect`), `app/api/admin/settings/experience-pulse/route.ts`, iki ölü tüketici GET ucu `app/api/customer/experience-pulse/route.ts` ve `app/api/dealer/experience-pulse/route.ts` (her çağrıda kısıtsız `AnalyticsEvent` yazıyordu), `lib/experience-pulse-settings.ts` ve `lib/module-controls.ts` içindeki `experience_pulse_studio` modül satırı. `Settings.experiencePulseStudio` satırı (varsa) zararsız veri olarak kalır; okuyan kod yok.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Gerekçe |
+|---|---|---|---|
+| 1-36 | Tüm özellikler (editör, form alanları, mood, ipuçları, CTA, kaydet/yenile, API kartı, tüketici uçları, modül kapıları, audit) | KALDIRILDI | Tüketicisi olmayan ayar yoktur (§4.4-8); içerik hiçbir müşteri/bayi ekranında gösterilmiyordu. |
+| 25 | "Görüntülemeler analytics'e düşer" | KALDIRILDI | Olay yazan uçlar silindi; yazma-şişirme yüzeyi kapandı. |
+| 26-27 | Ölü tüketici uçları | KALDIRILDI | Silindi. |
+| 28 | `experience_pulse_studio` sahte modül | KALDIRILDI | Katalogdan çıkarıldı. |
+| 29 | "Vardiya ritmi" keşif tipi | KALDIRILDI | Bu yüzeyden link yoktu; bayi keşif sayfasındaki tip/çeviri anahtarı o yüzeyin sahipliğinde. |
+
+### Kapanan bulgular
+1 · 2 · 3 · 4 · 5 (açık yönlendirme yüzeyi kod ile birlikte gitti) · 6 · 7 · 8 — **8/8**.
+
+### Kalanlar
+- `messages/{tr,en}.json → adminExperiencePulse` anahtarları ve `lib/navigation/legacy-nav.ts`'teki eski satır paylaşılan dosyalarda; okuyan sayfa yok, navigasyon ajanı / i18n temizliği kaldıracak. Kayıtta `redirectFrom` zaten `/admin`.
+- Ürün bu vitrini isterse genel bir "Vitrin blokları" sistemiyle, önce tüketici bileşeni yazılarak yeniden kurulmalı.

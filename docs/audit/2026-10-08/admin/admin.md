@@ -278,3 +278,102 @@ Abartılı alt madde:
 
 - **Yeniden üretim:** Son 30 günde kayıt sayısı önceki 30 güne göre düşsün (`userGrowth = -20`). Dark temada hero "-20%"yi zümrüt yeşili, "Büyüme özeti" kartı her iki temada yeşil gösterir. "Toplam (30 gün)" kartı platformun tüm kullanıcı sayısını gösterir. "Aktif Kartlar" kartı, oranı %80 olunca "+80% son 30 gün" yazar.
 - **Öneri:** Tek bir `Metric` sözleşmesi tanımlayın: `{ value, unit: 'count'|'percent'|'rating', window: '30d'|'all', delta?: { value, basis: 'prev_period', direction: 'up_good'|'down_good' } }`. Uç bunu üretsin, `StatsCard`/Hero/Analytics bileşenleri etiket, birim ve rengi buradan türetsin (renk ve işaret kodda elle yazılmasın). Delta yoksa (`Tüketimler`) rozet hiç gösterilmesin. Oranlar (aktivasyon) ayrı bir "oran" göstergesi olarak sunulsun. Geri bildirim hacmi için ortak `getFeedbackVolume(range)` (QR + tüketim, `deletedAt IS NULL`) tüm kartlarda kullanılsın. Önem: YÜKSEK (operatör kararını doğrudan yanıltır), güvenlik değil.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin` artık **Komuta Merkezi**: `/admin/platform-pulse` ve `/admin/ecosystem` buraya birleşti (eski sayfalar sorgu parametrelerini koruyan `permanentRedirect`), `/admin/experience-pulse` kaldırıldı. Sunucu önce: `app/admin/page.tsx` yetkiyi DB'den alır (`requireAuth(['ADMIN'])`, yönetici kapısı dahil), genel bakış ve sağlığı BFF ile **aynı** yükleyicilerden (`lib/admin-command/server.ts`) React Query önbelleğine gömer. İstemci adası `components/admin/a-komuta/**`. Yeni uçlar `defineRoute` ile: `GET /api/admin/command-center?section=overview|health&range=24h|7d|30d&fresh=1` ve `GET /api/admin/command-center/events?actor=&cursor=`. Kaldırılan uçlar: `/api/admin/dashboard`, `/api/admin/tech-summary` (yalnız bu sayfa kullanıyordu). Test: `__tests__/lib/admin-command.test.ts` (16 test).
+
+Bilgi sırası: Kuyruklar (DSR SLA, vakalar, inceleme + "acil" şeridi) → 6 KPI (değer + doğru işaretli delta + sparkline + derin link) → tek canvas "Platform nabzı" şeridi + Platform sağlığı → Son olaylar + Ekosistem + En çok geri bildirim alan bayiler. Bölüm başına Redis önbelleği (sağlık 15 sn, kuyruk 30 sn, KPI 60-120 sn, ekosistem/sıralama 5 dk).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | "Komuta Merkezi" başlığı. |
+| 2 | Sayfa erişimi | ÇALIŞIYOR | Sunucuda ayrıca `requireAuth(['ADMIN'])`; yetkisizde `ErrorState forbidden`. |
+| 3 | API yetkisi | ÇALIŞIYOR | Yeni uçlar `defineRoute({roles:['ADMIN']})` → `requireAuth` yönetici kapısını da doğruluyor (Faz 0); 13 uç → 2 uç. |
+| 4 | Route `loading.tsx` | ÇALIŞIYOR | Paylaşılan; istemci iskelet zinciri kalktı (veri SSR'da). |
+| 5 | Hata sınırı | ÇALIŞIYOR | Değişmedi. |
+| 6 | İstemci iskeleti | ÇALIŞIYOR | Yalnız SSR düşerse `QueryState` iskeleti; çift iskelet yok. |
+| 7 | Tam sayfa hata | ÇALIŞIYOR | `QueryState` (401/403/ağ ayrımı) + Tekrar dene. |
+| 8 | Otomatik yenileme | ÇALIŞIYOR | React Query: genel bakış 2 dk, sağlık 30 sn, olaylar 60 sn; sekme gizliyken yoklama yok, AbortSignal ile iptal, dedupe. |
+| 9 | "Son güncelleme" | ÇALIŞIYOR | Sunucunun `generatedAt`'i ("Veri x önce hesaplandı"). |
+| 10 | Yenile | ÇALIŞIYOR | `fresh=1` ile sunucu önbelleğini atlar. |
+| 11 | Hata toast'ları | KALDIRILDI | Stale-closure toast spam'i yok; hata bölüm içinde görünür, toast yalnız elle Yenile başarısızsa. |
+| 12 | Bölüm bazlı hata | ÇALIŞIYOR | Her bölüm `SectionResult`; düşen bölüm kendi `ErrorState`'ini gösterir (testli). |
+| 13 | Ambient arka plan | KALDIRILDI | ops kaydı: dekor yok. |
+| 14 | Selamlama | KALDIRILDI | Kompakt başlık. |
+| 15 | Avatar + kalkan | KALDIRILDI | Değer taşımıyordu. |
+| 16 | Hover "Ayarlar" linki | KALDIRILDI | Klavyede erişilemezdi; sidebar'da mevcut. |
+| 17 | "Canlı veri" ping rozeti | KALDIRILDI | Yerine gerçek "Platform: Sağlıklı/Dikkat/Sorun" rozeti + veri yaşı. |
+| 18 | Hero büyüme metni | KALDIRILDI | KPI delta rozetleri (yön + işaret + renk tek kaynaktan, `DeltaBadge`). |
+| 19 | 3 sayaç çipi | KALDIRILDI | Tekrardı. |
+| 20 | "Anlık özet" kartı | KALDIRILDI | Tekrardı. |
+| 21 | Spotlight | KALDIRILDI | Geçersiz renkti; ops'ta dekor yok. |
+| 22 | FloatingOrbs | KALDIRILDI | Azaltılmış harekette sürmeyen döngü yok. |
+| 23 | Toplam kullanıcı + değişim | ÇALIŞIYOR | "Yeni kullanıcı" KPI'sı: pencere içi + önceki pencere deltası (işaretli). Toplam hesap Ekosistem kartında. |
+| 24 | Toplam yorum + değişim | ÇALIŞIYOR | "Geri bildirim" = QR + tüketim yorumu, ikisi de `deletedAt IS NULL`; tek tanım. |
+| 25 | Aktif kartlar sahte trendi | KALDIRILDI | Oran trend gibi gösterilmiyor; yerine "Aktif bayi" gerçek dönemsel değişimle. |
+| 26 | Tüketim sabit 0 trendi | ÇALIŞIYOR | "Tüketim" KPI'sı gerçek önceki pencere deltasıyla. |
+| 27 | Install-to-value | KALDIRILDI | Ham dakika + tüm bayi dizisi; bayi sağlığı yüzeyinin konusu (uç yerinde). |
+| 28 | Install-to-value tooltip | KALDIRILDI | #27 ile. |
+| 29 | Aksiyon tamamlama KPI | KALDIRILDI | Bağlamsız; bayi aksiyonları bayi panelinde. |
+| 30 | Tenant health KPI | KALDIRILDI | Yanıltıcı ortalama; yerine "Aktif bayi" + "Açık bayi vakası" kuyruğu + `/admin/dealers-health` linkleri. |
+| 31 | Sunucu durumu | ÇALIŞIYOR | DB gecikmesi + Redis yaz/oku sınaması + cron son koşu (26 sa eşiği) + olay kuyruğu (bekleyen/DLQ) + AI hata oranı + posta; okunamayan kontrol "Bilinmiyor"; uç düşerse kart hata durumuyla görünür kalır. |
+| 32 | E-posta rozeti | ÇALIŞIYOR | Sağlık satırı. |
+| 33 | Ayar özeti kartı | KALDIRILDI | 5000 ayar satırını (kapı cevabı dahil) tarayıcıya taşıyordu; çağrı yok. |
+| 34 | CSAT | ÇALIŞIYOR | QR + tüketim yorumu birleşik, pencere içi, yüzde puanı deltası, n + düşük örneklem (minN 20). |
+| 35 | Acil AI toplamı | KALDIRILDI | Çift sayım + etiketsiz tavan; AI operasyon yüzeyinde. |
+| 36 | 7 gün mini bar | KALDIRILDI | Nabız şeridi tek grafik. |
+| 37 | Ana özellikler (7 kart) | KALDIRILDI | Sidebar + ⌘K. |
+| 38 | Kullanıcı büyüme kartı | KALDIRILDI | KPI ile birleşti. |
+| 39 | Geri bildirim büyüme kartı | KALDIRILDI | İki kaynaklı tutarsızlık; tek KPI. |
+| 40 | Ortalama puan | KALDIRILDI | CSAT + bayi satırında ortalama. |
+| 41 | Rol bazlı kullanıcılar | ÇALIŞIYOR | Ekosistem kartı: 4 rol ayrı (STAFF = Personel), yığılmış çubuk + yüzde. |
+| 42 | Puan dağılımı | KALDIRILDI | Analitik yüzeyinin konusu. |
+| 43 | 14 gün trend | ÇALIŞIYOR | Nabız şeridi: İstanbul kovaları (`AT TIME ZONE`), klavye + canlı döküm + veri tablosu. |
+| 44 | Duygu dağılımı kartı | KALDIRILDI | Yüzde/adet karışıklığı; analitik yüzeyinde. |
+| 45 | Son 7 gün toplamı | KALDIRILDI | Tekrar. |
+| 46 | Büyüme özeti | KALDIRILDI | Koşulsuz yeşildi; delta rozetleri. |
+| 47 | "Toplam (30 gün)" | KALDIRILDI | Yanlış etiketti; tüm zaman toplamı Ekosistem'de açıkça "Toplam hesap". |
+| 48 | "Tüm analitik" linki | ÇALIŞIYOR | CSAT/Tüketim KPI'ları `/admin/analytics`'e gider. |
+| 49 | AI 4 sayaç | KALDIRILDI | AI operasyon yüzeyi; sağlıkta AI hata oranı. |
+| 50 | Intent dağılımı | KALDIRILDI | Aynı. |
+| 51 | Son AI analizleri | KALDIRILDI | Aynı. |
+| 52 | AI Kontrol Merkezi linki | ÇALIŞIYOR | Sağlıktaki AI satırı `/admin/ai`'ye gider. |
+| 53 | Duygu çubuğu | KALDIRILDI | Hedefte uygulanmayan derin link. |
+| 54 | Duygu kartları | KALDIRILDI | Aynı. |
+| 55 | Boşta 33/33/34 | KALDIRILDI | Sahte dağılım yok; boş veri dürüst boş durum. |
+| 56 | En iyi işletmeler | ÇALIŞIYOR | SQL `ORDER BY COUNT DESC, AVG DESC LIMIT 8`, pencere içi, silinmişler hariç, QR + tüketim yorumu; satır → bayi sağlığı. |
+| 57 | Son yapılanlar | ÇALIŞIYOR | "Son olaylar": denetim akışı insan diliyle, aktör filtresi, imleçli "Daha fazla göster". |
+| 58 | Tüm kullanıcılar/geri bildirimler | ÇALIŞIYOR | KPI kutuları bu sayfalara gider. |
+| 59 | Platform özeti | KALDIRILDI | Tekrar. |
+| 60 | Kartlar özeti | KALDIRILDI | Ayrı istek; kart yüzeyinin işi. |
+| 61 | "Kartlar" linki | KALDIRILDI | Sidebar. |
+| 62 | Teknoloji özeti | KALDIRILDI | Entegrasyonlar yüzeyi; `tech-summary` ucu silindi. |
+| 63 | "Ekle" butonu | KALDIRILDI | `/admin/tech/add` §6.3'te kaldırılıyor. |
+| 64 | Segment rozetleri | KALDIRILDI | 10.000 müşteriyi her 45 sn sayıyordu; "Segment önerisi" kuyruğu kaldı. |
+| 65 | Uyumluluk özeti | ÇALIŞIYOR | KVKK kuyruğu (açık, 7 günde dolacak, süresi geçen). |
+| 66 | Şüpheli aktivite uyarısı | ÇALIŞIYOR | Vakalar kuyruğu (yüksek/kritik ayrı) → `/admin/trust`. |
+| 67 | Son denetim kayıtları | ÇALIŞIYOR | #57 akışına birleşti; ham kod ipucunda. |
+| 68 | Tüm denetim günlüğü | ÇALIŞIYOR | Akışın altında. |
+| 69 | Hızlı erişim (36) | KALDIRILDI | Sidebar kopyası. |
+| 70 | Mobil yerleşim | ÇALIŞIYOR | KPI 2 sütun, bölümler tek sütun, kısayol kaydırması yok, dokunma hedefleri ≥ 44 px. |
+| 71 | Azaltılmış hareket | ÇALIŞIYOR | Sonsuz döngü yok; nabız yükselişi ve sayı sayacı tercihle kapanır. |
+| 72 | Semantik / klavye | ÇALIŞIYOR | İç içe `<main>` yok, listeler `ol/ul > li`, odak halkaları, canvas `role="img"` + ok tuşları + `aria-live` döküm + tablo. |
+| 73 | i18n | KISMİ | Bütün metin tam Türkçe (EN karışıklığı kalmadı); EN çevirisi yok. |
+| 74 | Dönem seçici | ÇALIŞIYOR | 24 sa / 7 gün / 30 gün, URL'de (`?range=`), önceki pencereyle kıyas. Özel aralık yok (derin analiz `/admin/analytics`). |
+| 75 | Dikkat merkezi | ÇALIŞIYOR | Kuyruklar + "acil müdahale" şeridi (süresi geçen DSR + yüksek vaka + güvenlik uyarısı). |
+| 76 | Ekonomi sağlığı | KISMİ | Basılan/harcanan puan KPI'sı + bekletilen puan hareketi kuyruğu; escrow ve oyun reddi oranı Ekonomi Stüdyosu'nda. |
+| 77 | Dışa aktarma | ÇALIŞIYOR | Nabız verisi CSV (BOM, `;`) + veri tablosu. |
+| 78 | Kişiselleştirme | KALDIRILDI | Kapsam dışı; sabit öncelik sırası bilinçli tercih. |
+
+### Kapanan bulgular
+1 (bu sayfa ayar/kapı cevabını artık çekmiyor; API kapısı Faz 0'da `requireAuth`'ta) · 2 · 3 · 4 · 5 · 6 (sağlık genişledi, KPI'lar derin linkli; tenant-health skor düzeltmesi bayi sağlığı yüzeyine devredildi) · 7 (duygu panodan çıktı, sahte dağılım yok) · 8 · 9 (bu yüzeydeki tüm geri bildirim sorguları `deletedAt IS NULL`) · 10 · 11 · 12 · 13 — **13/13**.
+
+### Kalanlar
+- EN çevirisi (#73): admin tek dilli; metinler i18n anahtarlarına taşınmadı.
+- Tenant-health "aktivite yok" cezası ve install-to-value biçimi: bayi sağlığı yüzeyinin sahipliğinde.
+- Görsel doğrulama: dev server ve `next build` bu dalgada yasak olduğu için headless ekran görüntüsü alınmadı; `tsc` 0 hata, jest 16/16.

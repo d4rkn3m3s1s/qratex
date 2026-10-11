@@ -152,3 +152,45 @@ Not: Sayfada mock/rastgele/"yakında" verisi **yok**; gösterilen her sayı ger�
 - **`/admin` (ana pano)** — `user.count()` ve rol bazlı bayi sayımı zaten var (`app/api/admin/dashboard/route.ts:42,83`). Toplam kullanıcı KPI'ı üçüncü kez tekrarlanıyor.
 - **Hızlı bağlantılar** — `sidebar.tsx:159-180` ve `admin-utils.ts:91-120` (HIZLI_ERISIM) zaten aynı hedefleri listeliyor; sayfadaki 7 bağlantılık ızgara üçüncü bir navigasyon kopyası.
 - Kenar çubuğunda "Pano / Ekosistem özeti / Platform nabzı" art arda üç "genel bakış" girişi (`sidebar.tsx:159-161`) — birleştirme sonrası ikiye iner.
+
+---
+
+## Uygulama (Dalga 2)
+
+Karar uygulandı (**birleştir**): `/admin/ecosystem` Komuta Merkezi'ne (`/admin`) sorgu parametrelerini koruyan `permanentRedirect` oldu. `app/admin/ecosystem/layout.tsx`, `app/api/admin/ecosystem-summary/route.ts` ve `lib/admin-ecosystem-types.ts` silindi. Tek özgün içerik (rol dağılımı) "Ekosistem" kartı olarak `/admin`'de; 7 günlük metrikler KPI şeridinde (tek tanım, tek önbellek).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | `/admin` başlığı. |
+| 2 | Sayfa yetkisi | ÇALIŞIYOR | Sunucuda `requireAuth(['ADMIN'])`. |
+| 3 | API yetkisi | ÇALIŞIYOR | `defineRoute` → `requireAuth` (kapı dahil). |
+| 4 | Hero | KALDIRILDI | Kompakt başlık. |
+| 5 | Veri çekme | ÇALIŞIYOR | SSR + React Query; istemci round-trip'i yok. |
+| 6 | Yükleniyor | ÇALIŞIYOR | `QueryState` iskeleti yalnız SSR düşerse. |
+| 7 | Hata toast'ı | KALDIRILDI | Bölüm içi `ErrorState`; "Dikkat:" öneki yok. |
+| 8 | Hata/boş metni | ÇALIŞIYOR | Hata ve boş ayrı; Tekrar dene var; 401/403 ayrı sınıflanır. |
+| 9 | Toplam kullanıcı | ÇALIŞIYOR | "Toplam N hesap" + işaretli / gölge yasaklı / anonimleştirilmiş sayıları açıkça. |
+| 10 | Geri bildirim (7 g) | ÇALIŞIYOR | KPI şeridi (QR + tüketim yorumu, delta + sparkline). |
+| 11 | Tüketim (7 g) | ÇALIŞIYOR | KPI şeridi. |
+| 12 | Anlık görüntü zamanı | ÇALIŞIYOR | Başlıkta "Veri x önce hesaplandı"; KPI slotu harcanmıyor. |
+| 13 | Rol rozetleri | ÇALIŞIYOR | Yığılmış oran çubuğu + sayı + yüzde (STAFF = Personel). |
+| 14 | Rol açıklaması | ÇALIŞIYOR | "Kayıtlı hesapların rol dağılımı." (tam TR). |
+| 15 | Hızlı bağlantılar | KALDIRILDI | Sidebar + KPI/kuyruk derin linkleri. |
+| 16 | Yerelleştirme | ÇALIŞIYOR | `tr-TR`. |
+| 17 | Mobil | ÇALIŞIYOR | Kart sağ sütunda, mobilde tek sütun. |
+| 18 | Azaltılmış hareket | ÇALIŞIYOR | Animasyon yok. |
+| 19 | Navigasyon girişleri | ÇALIŞIYOR | Kayıtta `redirectFrom` (navigasyon ajanı); döngü yok. |
+| 20 | Redis önbelleği | ÇALIŞIYOR | 5 dk. |
+| 21 | Yenile | ÇALIŞIYOR | Başlıktaki Yenile. |
+| 22 | Önceki dönem kıyası | ÇALIŞIYOR | KPI deltaları. |
+| 23 | Dönem seçici | ÇALIŞIYOR | 24 sa / 7 g / 30 g. |
+| 24 | CSV | ÇALIŞIYOR | Nabız CSV'si. |
+| 25 | Otomatik test | ÇALIŞIYOR | `__tests__/lib/admin-command.test.ts` (ekosistem dahil). |
+
+### Kapanan bulgular
+1 · 2 · 3 · 4 · 5 · 6 · 7 · 8 · 9 — **9/9**.
+
+### Kalanlar
+- Yok (rota emekli). `lib/data/admin-api-catalog.json` üretilmiş bir dosya; `scripts/generate-admin-api-catalog.mjs` bu dalgada çalıştırılamadığı için eski uç girdileri bir sonraki üretimde düşecek.
