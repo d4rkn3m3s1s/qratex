@@ -174,7 +174,7 @@ if (SKIP.has('e2e')) for (const g of E2E_GATES) skipped(g, '0', 'GATES_SKIP');
 else if (E2E_DEV) await runE2e(DEV_URL);
 
 // ── 4. Lighthouse (üretim derlemesi, mobil) ───────────────────────────────────
-const LH_ROUTES = [
+const LH_ROUTES_ALL = [
   ['/', null],
   ['/auth/login', null],
   ['/auth/register', null],
@@ -188,6 +188,9 @@ const LH_ROUTES = [
   ['/dealer', 'dealer'],
   ['/admin', 'admin'],
 ];
+// GATES_LH_ROUTES=/a,/b: yalnız bu rotaları ölç (hedefli doğrulama; GATES.md yazılmaz).
+const LH_ONLY = (process.env.GATES_LH_ROUTES ?? '').split(',').filter(Boolean);
+const LH_ROUTES = LH_ONLY.length ? LH_ROUTES_ALL.filter(([r]) => LH_ONLY.includes(r)) : LH_ROUTES_ALL;
 
 async function waitFor(url, ms) {
   const until = Date.now() + ms;
@@ -219,20 +222,55 @@ async function loginOnLh(chromium, device, role) {
   try {
     const context = await browser.newContext({ ...device, baseURL: LH_URL });
     const page = await context.newPage();
-    await page.goto(`/auth/login?callbackUrl=${encodeURIComponent(acc.home)}`, { waitUntil: 'domcontentloaded' });
-    await page.locator('input[type=email],input[name=email]').first().fill(acc.email);
-    await page.locator('input[type=password]').first().fill(acc.password);
-    await page.locator('input[type=password]').first().press('Enter');
-    await page.waitForURL((u) => !u.pathname.startsWith('/auth/'), { timeout: 90_000 });
+    // Kök neden (ölçüldü): form React hidrate olmadan doldurulup Enter'a basılınca yerel HTML
+    // gönderimi çalışıyor → GET /auth/login?email=…&password=… (oturum yok, şifre URL'de) ve
+    // 90 sn sonra düşüyordu (customer + admin; dealer yalnız sunucu ısındığı için şans eseri geçti).
+    // Hidrasyon işareti: istemcinin kendi GET /api/auth/session çağrısı. Bekle, sonra dene; olmazsa yinele.
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      const hydrated = page
+        .waitForResponse((r) => r.url().includes('/api/auth/session'), { timeout: 60_000 })
+        .catch(() => null);
+      await page.goto(`/auth/login?callbackUrl=${encodeURIComponent(acc.home)}`, { waitUntil: 'load', timeout: 120_000 });
+      await hydrated;
+      const reject = page.getByRole('button', { name: /tümünü reddet/i }).first();
+      if (await reject.isVisible().catch(() => false)) await reject.click().catch(() => {});
+      await page.locator('input[type=email],input[name=email]').first().fill(acc.email);
+      await page.locator('input[type=password]').first().fill(acc.password);
+      await page.locator('input[type=password]').first().press('Enter');
+      ok = await page
+        .waitForURL((u) => !u.pathname.startsWith('/auth/'), { timeout: 60_000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+    if (!ok) throw new Error(`giriş tamamlanmadı (${new URL(page.url()).pathname})`);
     if (role === 'admin') {
-      if (!page.url().includes('/admin-gate')) await page.goto('/admin-gate', { waitUntil: 'domcontentloaded' });
+      // Kapı sayfasında da aynı hidrasyon sorunu: sayfanın GET /api/admin/gate çağrısını bekle,
+      // POST yanıtını (HMAC çerezi) doğrula.
+      const gateHydrated = page
+        .waitForResponse((r) => r.url().includes('/api/admin/gate') && r.request().method() === 'GET', { timeout: 60_000 })
+        .catch(() => null);
+      if (!page.url().includes('/admin-gate')) await page.goto('/admin-gate', { waitUntil: 'load', timeout: 120_000 });
       if (page.url().includes('/admin-gate')) {
+        await gateHydrated;
         const input = page.locator('input').first();
         await input.waitFor({ state: 'visible', timeout: 30_000 });
-        await input.click();
-        await page.keyboard.type(process.env.E2E_ADMIN_GATE ?? '7', { delay: 80 });
-        await page.keyboard.press('Enter');
-        await page.waitForURL((u) => !u.pathname.startsWith('/admin-gate'), { timeout: 30_000 });
+        const reject = page.getByRole('button', { name: /tümünü reddet/i }).first();
+        if (await reject.isVisible().catch(() => false)) await reject.click().catch(() => {});
+        let passed = false;
+        for (let attempt = 0; attempt < 3 && !passed; attempt++) {
+          await input.focus();
+          const post = page
+            .waitForResponse((r) => r.url().includes('/api/admin/gate') && r.request().method() === 'POST', { timeout: 30_000 })
+            .catch(() => null);
+          await page.keyboard.type(process.env.E2E_ADMIN_GATE ?? '7', { delay: 80 });
+          await page.keyboard.press('Enter');
+          const res = await post;
+          if (res && res.ok()) passed = true;
+          else if (res && res.status() !== 400) throw new Error(`admin-gate POST ${res.status()}`);
+        }
+        if (!passed) throw new Error('admin-gate: kapı cevabı gönderilemedi');
+        await page.waitForURL((u) => !u.pathname.startsWith('/admin-gate'), { timeout: 60_000, waitUntil: 'commit' }).catch(() => {});
       }
     }
     const cookies = await context.cookies(LH_URL);
@@ -430,6 +468,9 @@ const md = [
   ...gates.filter((g) => g.pass === null).flatMap((g) => [`### ${g.name}`, '', ...g.detail.map((d) => `- ${d}`), '']),
 ].join('\n');
 fs.mkdirSync(path.join(ROOT, 'docs', 'quality'), { recursive: true });
-fs.writeFileSync(path.join(ROOT, 'docs', 'quality', 'GATES.md'), md);
-log(`docs/quality/GATES.md yazıldı — ${green} yeşil, ${red} kırmızı`);
+if (LH_ONLY.length) log(`GATES_LH_ROUTES: kısmi ölçüm, GATES.md yazılmadı — ${green} yeşil, ${red} kırmızı`);
+else {
+  fs.writeFileSync(path.join(ROOT, 'docs', 'quality', 'GATES.md'), md);
+  log(`docs/quality/GATES.md yazıldı — ${green} yeşil, ${red} kırmızı`);
+}
 process.exit(red ? 1 : 0);
