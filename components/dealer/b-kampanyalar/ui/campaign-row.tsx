@@ -101,7 +101,7 @@ export function CampaignRow({ item, readOnly, busy, performanceHref, onAction }:
             item.title
           )}
         </h3>
-        <p className="qx-small line-clamp-2 whitespace-pre-line break-words text-fg-muted">{item.message}</p>
+        <p className="qx-small line-clamp-2 break-words text-fg-muted">{item.message}</p>
         <p className="qx-caption flex flex-wrap items-center gap-x-3 gap-y-1 text-fg-muted">
           <span>{when}</span>
           {sent && <span className="qx-num">{c.row.reach(fmtNumber(item.sentCount, locale))}</span>}

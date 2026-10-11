@@ -219,6 +219,7 @@ export function CampaignEditor({ target, dealerId, onClose, onSaved }: CampaignE
               placeholder={c.editor.messagePlaceholder}
               aria-describedby={`${ids.messageHelp}${messageError ? ` ${ids.messageErr}` : ''}`}
               aria-invalid={messageError ? true : undefined}
+              className={messageError ? 'border-destructive focus-visible:ring-destructive' : undefined}
             />
             <p id={ids.messageHelp} className="qx-caption text-fg-muted">
               {message.length > MESSAGE_RECOMMENDED ? c.editor.overRecommended : c.editor.messageHelp(MESSAGE_RECOMMENDED)}
