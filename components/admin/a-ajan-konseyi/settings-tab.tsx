@@ -23,6 +23,7 @@ import {
 } from '@/lib/council/contract';
 import { CouncilApiError, councilKeys, errorText, fetchSettings, saveSettings } from './api';
 import { AgentAvatar, RelativeTime } from './parts';
+import { AdminAjanKonseyiText } from './copy';
 
 /**
  * Ayarlar — yalnız motorun gerçekten okuduğu parametreler. Kaydedilen değer sonraki oturumların
@@ -98,7 +99,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
           ) : null}
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-fg">Tartışma turu</legend>
+            <legend className="text-sm font-medium text-fg"><AdminAjanKonseyiText k="rounds" /></legend>
             <ChoiceChips
               aria-label="Tartışma turu sayısı"
               options={[
@@ -109,11 +110,11 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
               value={String(draft.rounds)}
               onChange={(v) => v && setDraft((d) => ({ ...d, rounds: Number(v) }))}
             />
-            <p className="text-xs text-fg-muted">Sentezden önce kaç tur tartışılacağı. Fazla tur daha derin ama daha yavaş ve pahalıdır.</p>
+            <p className="text-xs text-fg-muted"><AdminAjanKonseyiText k="roundsHint" /></p>
           </fieldset>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-fg">Konuşan uzmanlar</legend>
+            <legend className="text-sm font-medium text-fg"><AdminAjanKonseyiText k="speakers" /></legend>
             <ChoiceChips
               mode="multiple"
               aria-label="Konuşan uzmanlar"
@@ -121,7 +122,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
               value={draft.specialists}
               onChange={(v) => setDraft((d) => ({ ...d, specialists: SPECIALISTS.filter((s) => (v as Specialist[]).includes(s)) }))}
             />
-            <p className="text-xs text-fg-muted">Kaptan her zaman açıktır (turları toparlar ve kararı yazar). En az bir uzman gerekir.</p>
+            <p className="text-xs text-fg-muted"><AdminAjanKonseyiText k="speakersHint" /></p>
             <ul className="mt-2 space-y-1 text-xs text-fg-muted">
               {SPECIALISTS.map((a) => (
                 <li key={a}>
@@ -145,7 +146,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
 
           <div className="space-y-2">
             <label htmlFor={guidanceId} className="text-sm font-medium text-fg">
-              Kurum talimatı <span className="font-normal text-fg-muted">(isteğe bağlı)</span>
+              Kurum talimatı <span className="font-normal text-fg-muted"><AdminAjanKonseyiText k="optional" /></span>
             </label>
             <textarea
               id={guidanceId}
@@ -179,7 +180,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
               <RotateCcw aria-hidden className="h-4 w-4" /> Varsayılanlar
             </Button>
             <span role="status" className="text-xs text-fg-muted">
-              {dirty ? 'Kaydedilmemiş değişiklik var.' : data.updatedAt ? <>Son kayıt <RelativeTime iso={data.updatedAt} /></> : 'Varsayılan ayarlar kullanılıyor.'}
+              {dirty ? 'Kaydedilmemiş değişiklik var.' : data.updatedAt ? <><AdminAjanKonseyiText k="lastSaved" /> <RelativeTime iso={data.updatedAt} /></> : 'Varsayılan ayarlar kullanılıyor.'}
             </span>
           </div>
         </form>
@@ -192,7 +193,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
               {data.ai.provider} · <span className="font-medium">{data.ai.model}</span>
             </p>
           ) : (
-            <p className="text-sm text-danger">Yapılandırılmamış. Konsey oturumu başlatılamaz.</p>
+            <p className="text-sm text-danger"><AdminAjanKonseyiText k="notConfigured" /></p>
           )}
           <p className="mt-1 text-xs text-fg-muted">
             Model platform genelinde ayarlanır.{' '}
@@ -204,7 +205,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
 
         <SectionCard title="Son 90 günde öne çıkanlar" headingLevel="h2" density="compact" icon={<Trophy aria-hidden />} description={`${data.completed90d} tamamlanan oturum`}>
           {data.winners.length === 0 ? (
-            <p className="text-sm text-fg-muted">Henüz tamamlanmış oturum yok.</p>
+            <p className="text-sm text-fg-muted"><AdminAjanKonseyiText k="noSessions" /></p>
           ) : (
             <ul className="space-y-2">
               {data.winners.map((w) => (
@@ -224,7 +225,7 @@ function SettingsBody({ data }: { data: CouncilSettingsPayload }) {
 
         <SectionCard title="Değişiklik geçmişi" headingLevel="h2" density="compact" icon={<History aria-hidden />}>
           {data.history.length === 0 ? (
-            <p className="text-sm text-fg-muted">Ayarlar henüz değiştirilmedi.</p>
+            <p className="text-sm text-fg-muted"><AdminAjanKonseyiText k="noChanges" /></p>
           ) : (
             <ol className="space-y-3 text-sm">
               {data.history.map((h) => (

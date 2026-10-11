@@ -10,6 +10,7 @@ import { InlineError } from '@/components/states';
 import { PRIORITIES, PRIORITY_LABEL, type DealerOption, type Priority, type SessionDetail } from '@/lib/council/contract';
 import { errorText, publishActions } from './api';
 import { DealerPicker } from './parts';
+import { AdminAjanKonseyiText } from './copy';
 
 type Draft = { key: string; selected: boolean; title: string; detail: string; priority: Priority };
 
@@ -92,7 +93,7 @@ export function PublishDialog({
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Aksiyonları bayi kuyruğuna yayınla</DialogTitle>
+          <DialogTitle><AdminAjanKonseyiText k="publishActions" /></DialogTitle>
           <DialogDescription>
             Bayi yalnız başlığı ve açıklamayı görür. Konsey sorusu ve ajan adları bayiye gitmez. Aynı aksiyon aynı bayiye ikinci kez yazılmaz.
           </DialogDescription>
@@ -124,7 +125,7 @@ export function PublishDialog({
                       aria-label={`Aksiyon ${i + 1}: yayınla`}
                     />
                     <div className="min-w-0 flex-1 space-y-2">
-                      {done ? <p className="text-xs font-medium text-success">Bu bayiye zaten yayınlandı.</p> : null}
+                      {done ? <p className="text-xs font-medium text-success"><AdminAjanKonseyiText k="alreadyPublished" /></p> : null}
                       <label htmlFor={`${fid}-title`} className="sr-only">
                         Aksiyon {i + 1} başlığı
                       </label>

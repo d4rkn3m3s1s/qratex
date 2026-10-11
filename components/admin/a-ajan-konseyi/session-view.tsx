@@ -43,6 +43,7 @@ import { CouncilApiError, councilKeys, errorText, fetchSession, sessionAction, s
 import { AgentAvatar, RelativeTime, SessionStatusBadge } from './parts';
 import { PublishDialog } from './publish-dialog';
 import { autoRunRequested, clearAutoRun, setComposerPrefill } from './session-store';
+import { AdminAjanKonseyiText } from './copy';
 
 const ACTION_STATUS_LABEL: Record<string, string> = {
   pending: 'Bekliyor',
@@ -77,7 +78,7 @@ export function SessionView({
     <QueryState
       query={query}
       skeleton="detail"
-      error={{ title: 'Oturum açılamadı', action: <Button variant="outline" onClick={onBack}>Yeni oturuma dön</Button> }}
+      error={{ title: 'Oturum açılamadı', action: <Button variant="outline" onClick={onBack}><AdminAjanKonseyiText k="backToNew" /></Button> }}
     >
       {(s) => (
         <SessionBody
@@ -455,10 +456,10 @@ function DataPackCard({ s }: { s: SessionDetail }) {
               </div>
             ))}
           </dl>
-          <p className="mt-2 text-xs text-fg-muted">Uzmanlara yalnız bu sayılar verildi; başka sayı kullanmaları istemde yasak.</p>
+          <p className="mt-2 text-xs text-fg-muted"><AdminAjanKonseyiText k="numbersOnly" /></p>
         </details>
       ) : (
-        <p className="text-sm text-fg-muted">Bu oturum veri paketi olmadan çalıştı (ayarlarda kapalıydı); tartışma nitel.</p>
+        <p className="text-sm text-fg-muted"><AdminAjanKonseyiText k="noDataPack" /></p>
       )}
     </SectionCard>
   );
@@ -487,7 +488,7 @@ const DecisionPanel = ({ s, onPublish, ref }: { s: SessionDetail; onPublish: () 
             {pct != null ? (
               <div className="mt-3">
                 <div className="flex justify-between text-xs text-fg-muted">
-                  <span id={`conf-${s.id}`}>Güven (modelin kendi değerlendirmesi)</span>
+                  <span id={`conf-${s.id}`}><AdminAjanKonseyiText k="confidence" /></span>
                   <span className="tabular-nums">%{pct}</span>
                 </div>
                 <div
@@ -505,7 +506,7 @@ const DecisionPanel = ({ s, onPublish, ref }: { s: SessionDetail; onPublish: () 
           </div>
           {d.dissent.length ? (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Karşı görüşler ve riskler</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-muted"><AdminAjanKonseyiText k="counterpoints" /></h4>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-fg">
                 {d.dissent.map((x, i) => (
                   <li key={i}>{x}</li>

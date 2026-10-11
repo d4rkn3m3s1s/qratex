@@ -21,6 +21,7 @@ import {
 import { councilKeys, createSession, errorText, fetchSessions, fetchSettings } from './api';
 import { DealerPicker, RelativeTime, SessionStatusBadge } from './parts';
 import { requestAutoRun, takeComposerPrefill } from './session-store';
+import { AdminAjanKonseyiText } from './copy';
 
 const EXAMPLES = [
   'Negatif geri bildirim oranı yükselen bayiler için önümüzdeki iki haftada ne yapmalıyız?',
@@ -169,7 +170,7 @@ export function Composer({
               value={scopeKind}
               onChange={(v) => v && setScopeKind(v as 'platform' | 'dealer')}
             />
-            <p className="text-xs text-fg-muted">Kapsam, konseye verilen veri paketini belirler (bayi seçilirse yalnız o bayinin verisi).</p>
+            <p className="text-xs text-fg-muted"><AdminAjanKonseyiText k="scopeNote" /></p>
             {scopeKind === 'dealer' ? <DealerPicker value={dealer} onChange={setDealer} invalid={!!error && !dealer} /> : null}
           </fieldset>
 

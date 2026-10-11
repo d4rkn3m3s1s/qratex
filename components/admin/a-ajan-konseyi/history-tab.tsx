@@ -11,6 +11,7 @@ import { EmptyState, QueryState } from '@/components/states';
 import { STATUS_LABEL, agentLabel, scopeLabel, type SessionPage, type SessionStatus } from '@/lib/council/contract';
 import { councilKeys, fetchSessions } from './api';
 import { AgentAvatar, RelativeTime, SessionStatusBadge } from './parts';
+import { AdminAjanKonseyiText } from './copy';
 
 const FILTERS = ['all', 'running', 'completed', 'failed', 'cancelled', 'archived'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -123,7 +124,7 @@ export function HistoryTab({ initial, onOpenSession }: { initial: SessionPage | 
                               <Send aria-hidden className="h-3 w-3" /> {s.publishedCount} aksiyon yayınlandı
                             </span>
                           ) : null}
-                          {s.legacy ? <span>Eski biçim</span> : null}
+                          {s.legacy ? <span><AdminAjanKonseyiText k="legacyFormat" /></span> : null}
                           <span>
                             {s.createdByName ?? 'Bilinmeyen yönetici'} · <RelativeTime iso={s.createdAt} />
                           </span>
