@@ -290,7 +290,9 @@ async function adjustInTx(
 export async function adjustPointsByAdmin(db: EconomyDb, input: AdminAdjustInput): Promise<AdminAdjustResult> {
   const v = validate(input);
   if (isRootClient(db)) {
-    return db.$transaction((tx) => adjustInTx(tx, input, v));
+    // Tx ~10 sorgu (yetki, defter, an motoru, analitik, denetim); Neon gecikmesinde
+    // varsayılan 5 sn aşılıp P2028 → 500 dönüyordu. Tek kullanıcılı kısa iş; 20 sn güvenli.
+    return db.$transaction((tx) => adjustInTx(tx, input, v), { maxWait: 10_000, timeout: 20_000 });
   }
   return adjustInTx(db, input, v);
 }

@@ -65,7 +65,9 @@ export async function creditPointsAndXp(
       id: updatedUser.id,
       points: updatedUser.points,
       xp: updatedUser.xp,
-      level: nextLevel,
+      // Seviye yalnız YUKARI yazılır (guard `lt`). Hesaplanan seviye kayıtlıdan düşükse
+      // (ör. yönetici seviyesi) DB değişmez; yanıt da kayıtlı seviyeyi söylemeli.
+      level: bump.count > 0 ? nextLevel : Math.max(updatedUser.level, nextLevel),
       isLevelUp: bump.count > 0,
     };
   } else {

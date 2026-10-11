@@ -78,7 +78,12 @@ function AdjustForm({ user: u, onChanged }: { user: User360; onChanged: () => vo
   const after = u.gamification.points + (Number.isFinite(delta) ? delta : 0);
   const overDraft = direction === 'debit' && validAmount && after < 0;
   const bigOne = validAmount && n > ADJUST_SECOND_APPROVAL_ABOVE;
-  const valid = validAmount && note.trim().length >= 5 && !overDraft;
+  const approvalNeeded = needsApproval || bigOne;
+  // Dört göz: onay ancak BAŞKA bir etkin yöneticiden gelebilir. Hiç yoksa belirteç alanı
+  // boşuna beklenmesin — dürüst bir açıklama gösterilir ve gönderim kapanır.
+  const otherAdmins = useQuery({ queryKey: usersKeys.catalog('admins'), queryFn: fetchAdmins, enabled: approvalNeeded, staleTime: 5 * 60_000 });
+  const noSecondAdmin = approvalNeeded && otherAdmins.isSuccess && otherAdmins.data.items.length === 0;
+  const valid = validAmount && note.trim().length >= 5 && !overDraft && !noSecondAdmin;
   const err = (p: string) => fieldError(error, p);
 
   const reset = () => {
@@ -176,7 +181,12 @@ function AdjustForm({ user: u, onChanged }: { user: User360; onChanged: () => vo
         <FormField htmlFor={`${id}-note`} label="Açıklama" error={err('note')} hint="En az 5 karakter; kullanıcıya bildirimde de gösterilir.">
           <Textarea id={`${id}-note`} rows={2} value={note} maxLength={400} onChange={(e) => setNote(e.target.value)} />
         </FormField>
-        {needsApproval || bigOne ? (
+        {noSecondAdmin ? (
+          <InlineError>
+            Sistemde onay verebilecek başka etkin bir yönetici yok. {fmtNumber(ADJUST_SECOND_APPROVAL_ABOVE)} puanın üzerindeki düzeltmeler ikinci
+            yönetici olmadan yapılamaz; tutarı {fmtNumber(ADJUST_SECOND_APPROVAL_ABOVE)} veya altına indirin ya da önce ikinci bir yönetici atayın.
+          </InlineError>
+        ) : approvalNeeded ? (
           <FormField
             htmlFor={`${id}-token`}
             label="İkinci onay belirteci"
@@ -259,6 +269,9 @@ function ApprovalIssuer({ user: u }: { user: User360 }) {
           }
         }}
       >
+        {admins.isSuccess && admins.data.items.length === 0 ? (
+          <InlineError>Sistemde sizden başka etkin bir yönetici yok; onay belirteci yalnız başka bir yöneticinin talebi için üretilebilir.</InlineError>
+        ) : null}
         <FormField htmlFor={`${id}-req`} label="Talep eden yönetici">
           <Select value={requesterId} onValueChange={setRequesterId} disabled={admins.isLoading}>
             <SelectTrigger id={`${id}-req`} className="min-h-11">
