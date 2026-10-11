@@ -65,7 +65,7 @@ export async function loadScanSummary(userId: string): Promise<ScanSummary> {
     sumEarnedInWindow(prisma, { userId, rule: ECONOMY_CAPS.feedback }),
     prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
     prisma.feedback.findMany({
-      where: { userId },
+      where: { deletedAt: null, userId },
       orderBy: { createdAt: 'desc' },
       take: RECENT_FEEDBACK_WINDOW,
       select: {

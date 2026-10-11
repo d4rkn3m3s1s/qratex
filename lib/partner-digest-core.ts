@@ -24,6 +24,7 @@ export async function buildPartnerDigestPayload(dealerIdFilter: string | null): 
   const feedbacks = await prisma.feedback.findMany({
     where: {
       createdAt: { gte: since },
+      deletedAt: null,
       ...(dealerIdFilter ? { qrCode: { dealerId: dealerIdFilter } } : {}),
     },
     select: { npsScore: true, rating: true, qrCode: { select: { dealerId: true } } },

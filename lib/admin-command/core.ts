@@ -117,14 +117,6 @@ export function cronHealth(snapshot: CronSnapshot, now: Date = new Date()): Pick
   return { status: 'ok', detail: `Son koşu ${when}, sorunsuz` };
 }
 
-export function outboxHealth(backlog: number, dead: number): Pick<HealthCheck, 'status' | 'detail'> {
-  if (dead > 0 || backlog > 50) {
-    return { status: dead > 0 && backlog > 50 ? 'error' : 'warn', detail: `${backlog} bekleyen olay (15 dk+), ${dead} kalıcı başarısız` };
-  }
-  if (backlog > 0) return { status: 'warn', detail: `${backlog} olay 15 dakikadan uzun süredir bekliyor` };
-  return { status: 'ok', detail: 'Kuyruk boş' };
-}
-
 export function aiHealth(total: number, failed: number): Pick<HealthCheck, 'status' | 'detail'> {
   if (total === 0) return { status: 'unknown', detail: 'Son 24 saatte AI çağrısı yok' };
   const rate = failed / total;

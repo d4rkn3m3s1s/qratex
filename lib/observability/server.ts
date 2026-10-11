@@ -54,8 +54,8 @@ export async function loadHealthView(opts: { fresh?: boolean } = {}): Promise<He
     loadCommandHealth({ fresh: opts.fresh }),
     cachedJson('obs:webhooks24h:v1', 60, webhookStats24h).catch(() => null),
   ]);
-  // outbox: üreticisi yok (kalıcı "0 bekliyor" yanıltıcıydı) · cron: ayrıntılı iş kartı/sorun ayrıca gösterilir.
-  const checks = health.data.checks.filter((c) => c.id !== 'outbox' && c.id !== 'cron');
+  // cron: ayrıntılı iş kartı/sorun ayrıca gösterilir. (Olay kuyruğu kontrolü kaynağında kaldırıldı.)
+  const checks = health.data.checks.filter((c) => c.id !== 'cron');
   const rank = { ok: 0, unknown: 1, warn: 2, error: 3 } as const;
   const overall = checks.reduce<HealthView['overall']>((w, c) => (rank[c.status] > rank[w] ? c.status : w), 'ok');
   return {

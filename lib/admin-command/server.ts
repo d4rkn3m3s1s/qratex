@@ -7,7 +7,7 @@
  *    `deletedAt IS NULL` (admin B3, B9); kovalar İstanbul saatinde (platform-pulse B3).
  *  - Gerçek "en iyi bayiler": sıralama SQL'de, pencere içinde (admin B2).
  *  - 30 sorgu → bölüm başına 1-3 sorgu; bölüm başına Redis önbelleği (platform-pulse B7).
- *  - Sağlık: DB + Redis + cron + outbox + AI + posta; okunamayan kontrol "bilinmiyor",
+ *  - Sağlık: DB + Redis + cron + AI + posta; okunamayan kontrol "bilinmiyor",
  *    asla sessizce yeşil değil (admin B5/B6).
  *  - Bölümler `Promise.allSettled` ile bağımsız: biri düşerse yalnız o bölüm hata gösterir.
  * GET yan etkisizdir, LLM çağırmaz.
@@ -28,7 +28,6 @@ import {
   dbStatus,
   entityLabel,
   fillSeries,
-  outboxHealth,
   overallHealth,
   pctChange,
   queueTone,
@@ -426,16 +425,12 @@ async function readCron(): Promise<CronSnapshot> {
 
 export async function computeHealth(now: Date = new Date()): Promise<HealthSection> {
   const since24h = new Date(now.getTime() - 86_400_000);
-  const stale = new Date(now.getTime() - 15 * 60_000);
-  const week = new Date(now.getTime() - 7 * 86_400_000);
-  const [dbMs, redis, cron, outbox, ai] = await Promise.all([
+  // Olay kuyruğu (OutboxEvent) kontrolü KALDIRILDI (veri modeli B9): üreticisi yoktu, kalıcı
+  // "Kuyruk boş" yeşili sahte güvenceydi.
+  const [dbMs, redis, cron, ai] = await Promise.all([
     probeDb(),
     probeRedis(),
     readCron(),
-    Promise.all([
-      prisma.outboxEvent.count({ where: { processedAt: null, deadAt: null, createdAt: { lt: stale } } }),
-      prisma.outboxEvent.count({ where: { deadAt: { gte: week } } }),
-    ]).catch(() => null),
     Promise.all([
       prisma.aIUsageLog.count({ where: { createdAt: { gte: since24h } } }),
       prisma.aIUsageLog.count({ where: { createdAt: { gte: since24h }, success: false } }),
@@ -454,12 +449,6 @@ export async function computeHealth(now: Date = new Date()): Promise<HealthSecti
     },
     { id: 'redis', label: 'Önbellek (Redis)', ...redis, href: '/admin/observability' },
     { id: 'cron', label: 'Günlük iş (cron)', ...cronHealth(cron, now), href: '/admin/jobs' },
-    {
-      id: 'outbox',
-      label: 'Olay kuyruğu',
-      ...(outbox ? outboxHealth(outbox[0], outbox[1]) : { status: 'unknown' as const, detail: 'Okunamadı' }),
-      href: '/admin/jobs',
-    },
     {
       id: 'ai',
       label: 'AI sağlayıcı',

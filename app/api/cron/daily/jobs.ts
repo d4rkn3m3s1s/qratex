@@ -28,6 +28,7 @@ import { GET as inboxSync } from '@/app/api/cron/inbox-sync/route';
 import { GET as aiRetry } from '@/app/api/cron/ai-retry/route';
 import { GET as inboxQueues } from '@/app/api/cron/inbox-queues/route';
 import { GET as campaignDispatch } from '@/app/api/cron/campaign-dispatch/route';
+import { GET as economyReconcile } from '@/app/api/cron/economy-reconcile/route';
 
 import { POST as analyticsEventCleanup } from '@/app/api/internal/inngest/analytics-event-cleanup/route';
 import { POST as featureFlagCleanup } from '@/app/api/internal/inngest/feature-flag-cleanup/route';
@@ -84,6 +85,8 @@ const FIRST_OF_MONTH = { kind: 'monthly', day: 1 } as const;
 export const DAILY_JOBS: CronJobDefinition[] = [
   // ── 0 · Ekonomi ─────────────────────────────────────────────
   { name: 'squad-battles', priority: 0, cadence: DAILY, timeoutMs: 25_000, run: viaCronGet(squadBattles) },
+  // Savaş ödemelerinden SONRA: defter ↔ bakiye / bağış / kupon mutabakatı (yalnız SecurityAlert).
+  { name: 'economy-reconcile', priority: 0, cadence: DAILY, timeoutMs: 20_000, run: viaCronGet(economyReconcile) },
 
   // ── 1 · Temizlik / saklama ───────────────────────────────────
   { name: 'cleanup-counters', priority: 1, cadence: DAILY, timeoutMs: 10_000, run: viaCronGet(cleanupCounters) },

@@ -137,10 +137,10 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
     sections.surpriseBoxes ? prisma.userSurpriseBox.count({ where: { userId, openedAt: null } }) : Promise.resolve(0),
     sections.rewards ? prisma.userReward.count({ where: { userId, claimedAt: null } }) : Promise.resolve(0),
     sections.remedy ? prisma.remedyOffer.count({ where: { userId, status: 'pending' } }) : Promise.resolve(0),
-    prisma.feedback.findFirst({ where: { userId, createdAt: { gte: todayStart } }, select: { id: true } }),
-    prisma.consumptionReview.findFirst({ where: { customerId: userId, createdAt: { gte: todayStart } }, select: { id: true } }),
-    prisma.feedback.findFirst({ where: { userId }, select: { id: true } }),
-    prisma.consumptionReview.findFirst({ where: { customerId: userId }, select: { id: true } }),
+    prisma.feedback.findFirst({ where: { deletedAt: null, userId, createdAt: { gte: todayStart } }, select: { id: true } }),
+    prisma.consumptionReview.findFirst({ where: { deletedAt: null, customerId: userId, createdAt: { gte: todayStart } }, select: { id: true } }),
+    prisma.feedback.findFirst({ where: { deletedAt: null, userId }, select: { id: true } }),
+    prisma.consumptionReview.findFirst({ where: { deletedAt: null, customerId: userId }, select: { id: true } }),
     sections.spin
       ? prisma.dailySpin.findUnique({ where: { userId_day: { userId, day: dayKeyToDbDate(today) } }, select: { count: true } })
       : Promise.resolve(null),

@@ -178,7 +178,7 @@ export async function getDealerDetail(id: string): Promise<DealerDetail> {
     prisma.aIFeedbackCorrection.findMany({ where: { dealerId: id }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, field: true, oldValue: true, newValue: true, note: true, createdAt: true } }),
     prisma.aIUsageLog.aggregate({ where: { dealerId: id, createdAt: { gte: since } }, _count: { _all: true }, _sum: { inputTokens: true, outputTokens: true } }),
     prisma.aIUsageLog.count({ where: { dealerId: id, createdAt: { gte: since }, success: false } }),
-    prisma.feedback.count({ where: { qrCode: { dealerId: id }, text: { not: null } } }),
+    prisma.feedback.count({ where: { deletedAt: null, qrCode: { dealerId: id }, text: { not: null } } }),
   ]);
   return {
     id: user.id,
@@ -244,7 +244,7 @@ export async function updateDealerPolicy(id: string, patch: DealerPolicyPatch, a
 export async function refreshDealerProfile(id: string, actor: AuditActor, request?: RequestLike): Promise<DealerDetail> {
   const dealer = await prisma.user.findFirst({ where: { id, role: 'DEALER' }, select: { id: true } });
   if (!dealer) throw new ApiError('NOT_FOUND', 'Bayi bulunamadı.');
-  const feedbackWithText = await prisma.feedback.count({ where: { qrCode: { dealerId: id }, text: { not: null } } });
+  const feedbackWithText = await prisma.feedback.count({ where: { deletedAt: null, qrCode: { dealerId: id }, text: { not: null } } });
   if (feedbackWithText < DEALER_PROFILE_MIN_FEEDBACK) {
     throw new ApiError('INSUFFICIENT_DATA', `Profil için en az ${DEALER_PROFILE_MIN_FEEDBACK} metinli geri bildirim gerekir (şu an ${feedbackWithText}).`, { status: 422 });
   }

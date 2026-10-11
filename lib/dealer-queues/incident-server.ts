@@ -609,7 +609,7 @@ export async function createTaskFromIncident(
     // İlk kanıt yorum (varsa ve bu bayiye aitse) göreve bağlanır.
     let feedbackId: string | null = null;
     if (meta.feedbackIds.length) {
-      const fb = await tx.feedback.findFirst({ where: { id: { in: meta.feedbackIds }, qrCode: { dealerId } }, select: { id: true } });
+      const fb = await tx.feedback.findFirst({ where: { deletedAt: null, id: { in: meta.feedbackIds }, qrCode: { dealerId } }, select: { id: true } });
       feedbackId = fb?.id ?? null;
     }
     const text = cleanText(input.text ?? null, 1000) ?? row.title;

@@ -28,7 +28,7 @@ const USER_LB_SELECT = {
   image: true,
   points: true,
   level: true,
-  _count: { select: { feedbacks: true, badges: true, referralsMade: true } },
+  _count: { select: { feedbacks: { where: { deletedAt: null } }, badges: true, referralsMade: true } },
 } as const;
 
 /**
@@ -301,6 +301,7 @@ export async function GET(request: NextRequest) {
       const feedbackPoints = await prisma.feedback.groupBy({
         by: ['userId'],
         where: {
+          deletedAt: null,
           createdAt: { gte: startDate },
           userId: { not: null },
         },
@@ -327,7 +328,7 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true, referralsMade: true },
+              select: { feedbacks: { where: { deletedAt: null } }, badges: true, referralsMade: true },
             },
           },
           orderBy: { points: 'desc' },
@@ -371,7 +372,7 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true, referralsMade: true },
+              select: { feedbacks: { where: { deletedAt: null } }, badges: true, referralsMade: true },
             },
           },
           take: MAX_LEADERBOARD_FETCH,
@@ -386,6 +387,7 @@ export async function GET(request: NextRequest) {
                      SUM(CASE WHEN length("text") > 50 THEN 100 ELSE 50 END)::bigint AS points
               FROM "Feedback"
               WHERE "createdAt" >= ${startDate}
+                AND "deletedAt" IS NULL
                 AND "userId" IN (${Prisma.join(userIds)})
               GROUP BY "userId"
             `)
@@ -453,7 +455,7 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true, referralsMade: true },
+              select: { feedbacks: { where: { deletedAt: null } }, badges: true, referralsMade: true },
             },
           },
         });

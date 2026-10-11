@@ -77,7 +77,7 @@ const LIST_SELECT = {
   createdAt: true,
   pricingPlan: { select: { name: true } },
   staffProfile: { select: { dealer: { select: { businessName: true, name: true } } } },
-  _count: { select: { feedbacks: true, badges: true } },
+  _count: { select: { feedbacks: { where: { deletedAt: null } }, badges: true } },
 } satisfies Prisma.UserSelect;
 
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;

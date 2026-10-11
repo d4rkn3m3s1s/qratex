@@ -16,6 +16,8 @@ const chatSchema = z.object({
 
 // Rate limit: DB-backed (serverless'te in-memory Map cold start'ta sıfırlanıyordu).
 const AI_CHAT_LIMIT_PER_MIN = 10;
+/** Saklanan sohbet geçmişi tavanı (satır boyutu sınırsız büyümesin). */
+const MAX_STORED_MESSAGES = 200;
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,11 +51,11 @@ export async function POST(request: NextRequest) {
     const { question, conversationId } = validated.data;
     const userId = session.user.id;
 
-    let ownedConversation: { messages: unknown } | null = null;
+    let ownedConversation: { messages: unknown; updatedAt: Date } | null = null;
     if (conversationId) {
       ownedConversation = await prisma.aIConversation.findUnique({
         where: { id: conversationId, dealerId: userId },
-        select: { messages: true },
+        select: { messages: true, updatedAt: true },
       });
       if (!ownedConversation) {
         return NextResponse.json(
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Müşterinin kendi feedback verilerini topla
     const feedbacks = await prisma.feedback.findMany({
-      where: { userId, text: { not: null } },
+      where: { deletedAt: null, userId, text: { not: null } },
       select: {
         text: true,
         rating: true,
@@ -152,20 +154,34 @@ export async function POST(request: NextRequest) {
     let savedConversationId = conversationId;
     try {
       if (conversationId && ownedConversation) {
-        const msgs =
-          (ownedConversation.messages as { role: string; content: string; timestamp: string }[]) || [];
-        msgs.push(
+        // Veri modeli B11: sohbet tek JSON dizisi; eskiden koşulsuz oku-ekle-yaz eşzamanlı iki
+        // soruda birinin mesajlarını SİLİYORDU ve dizi sınırsız büyüyordu. Artık iyimser kilit
+        // (updatedAt) + bir kez güncel diziyle yeniden deneme + son MAX_STORED_MESSAGES mesaj.
+        const turn = [
           { role: 'user', content: question, timestamp: new Date().toISOString() },
-          { role: 'assistant', content: answer || '', timestamp: new Date().toISOString() }
-        );
-        await prisma.aIConversation.updateMany({
-          where: { id: conversationId, dealerId: userId },
-          data: { messages: msgs, updatedAt: new Date() },
-        });
+          { role: 'assistant', content: answer || '', timestamp: new Date().toISOString() },
+        ];
+        let base: { messages: unknown; updatedAt: Date } | null = ownedConversation;
+        for (let attempt = 0; attempt < 2 && base; attempt++) {
+          const prev = Array.isArray(base.messages) ? (base.messages as unknown[]) : [];
+          const msgs = [...prev, ...turn].slice(-MAX_STORED_MESSAGES);
+          const res = await prisma.aIConversation.updateMany({
+            where: { id: conversationId, dealerId: userId, updatedAt: base.updatedAt },
+            data: { messages: msgs as object[], updatedAt: new Date() },
+          });
+          if (res.count > 0) break;
+          base = await prisma.aIConversation.findUnique({
+            where: { id: conversationId, dealerId: userId },
+            select: { messages: true, updatedAt: true },
+          });
+        }
       } else {
         const conv = await prisma.aIConversation.create({
           data: {
-            dealerId: userId, // AIConversation dealerId alanı userId olarak kullanılır
+            // Şema `dealerId` adını taşır ama sahip kimliğidir; müşteri sohbeti `context.owner`
+            // ile ayrılır (bayi asistanı listeleri kendi kimliğiyle süzdüğü için karışmaz).
+            dealerId: userId,
+            context: { owner: 'customer' },
             title: question.slice(0, 100),
             messages: [
               { role: 'user', content: question, timestamp: new Date().toISOString() },

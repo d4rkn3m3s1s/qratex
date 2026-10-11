@@ -1091,8 +1091,8 @@ export async function replyToInboxItem(params: {
   if (count === 0) {
     const latest =
       parsed.source === 'qr'
-        ? await prisma.feedback.findFirst({ where: { id: parsed.id }, select: { dealerReply: true, dealerRepliedAt: true } })
-        : await prisma.consumptionReview.findFirst({ where: { id: parsed.id }, select: { dealerReply: true, dealerRepliedAt: true } });
+        ? await prisma.feedback.findFirst({ /* soft-delete: silinmiş dahil — kapsamı az önce doğrulanmış kaydın 409 için güncel yanıtı */ where: { id: parsed.id }, select: { dealerReply: true, dealerRepliedAt: true } })
+        : await prisma.consumptionReview.findFirst({ /* soft-delete: silinmiş dahil — kapsamı az önce doğrulanmış kaydın 409 için güncel yanıtı */ where: { id: parsed.id }, select: { dealerReply: true, dealerRepliedAt: true } });
     throw conflict(latest);
   }
 

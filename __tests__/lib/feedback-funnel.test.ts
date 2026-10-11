@@ -205,8 +205,9 @@ describe('submitFeedback', () => {
     expect(data.userId).toBeNull();
     expect(data.text).toBe(`Garson ilgisizdi\n\n${STORED_TAG_PREFIX}Hizmet yavaştı`);
     expect(data.attributionSource).toBe('qr');
-    // analytics + webhook + ısı haritası + AI yönlendirmesi kuyrukta (üye işleri yok).
-    expect(afterQueue.length).toBe(4);
+    // analytics + webhook + AI yönlendirmesi kuyrukta (üye işleri yok). Isı haritası kovası
+    // (HeatmapData) artık yazılmıyor — yoğunluk ekranı olay tablolarından hesaplanıyor.
+    expect(afterQueue.length).toBe(3);
   });
 
   it('ÜYE: kayıt + mintPoints (feedback:<id> anahtarı) aynı transaction, gerçek kredi döner', async () => {
@@ -223,7 +224,7 @@ describe('submitFeedback', () => {
     expect(res.reward).toMatchObject({ status: 'credited', points: 50, xp: 25, level: 2, squadContribution: 5 });
     expect(mockTrust).toHaveBeenCalledWith('fb1', { userId: 'u1', dealerId: 'dealer1', rating: 5 });
     // Üyeye özel rozet/davet işleri de kuyrukta.
-    expect(afterQueue.length).toBe(7);
+    expect(afterQueue.length).toBe(6);
   });
 
   it('Bulgu 6: etiketler detaylı ödülü AÇMAZ; yalnız kullanıcının kendi metni sayılır', async () => {

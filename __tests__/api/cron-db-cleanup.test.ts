@@ -10,12 +10,14 @@ const mockAuthDelete = jest.fn();
 const mockRlDelete = jest.fn();
 const mockNotifDelete = jest.fn();
 const mockMomentDelete = jest.fn();
+const mockVtDelete = jest.fn();
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     authEmailToken: { deleteMany: (...a: unknown[]) => mockAuthDelete(...a) },
     rateLimitCounter: { deleteMany: (...a: unknown[]) => mockRlDelete(...a) },
     notification: { deleteMany: (...a: unknown[]) => mockNotifDelete(...a) },
     customerMoment: { deleteMany: (...a: unknown[]) => mockMomentDelete(...a) },
+    verificationToken: { deleteMany: (...a: unknown[]) => mockVtDelete(...a) },
   },
 }));
 // KVKK saklama adımı (P0-34) kendi testinde (`lib/gdpr-core`) doğrulanır; burada etkisiz.
@@ -36,6 +38,7 @@ beforeEach(() => {
   mockAuthDelete.mockResolvedValue({ count: 1 });
   mockRlDelete.mockResolvedValue({ count: 2 });
   mockNotifDelete.mockResolvedValue({ count: 3 });
+  mockVtDelete.mockResolvedValue({ count: 6 });
   mockMomentDelete.mockResolvedValueOnce({ count: 4 }).mockResolvedValueOnce({ count: 5 });
 });
 
@@ -64,6 +67,7 @@ describe('GET /api/cron/db-cleanup', () => {
     const body = await res.json();
     expect(body.deleted).toEqual({
       authTokens: 1,
+      legacyVerificationTokens: 6,
       rateLimitBuckets: 2,
       oldNotifications: 3,
       momentsSeen: 4,

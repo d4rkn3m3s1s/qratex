@@ -31,7 +31,7 @@ export async function GET() {
       prisma.aIQualitySample.count({ where: { notes: '[bootstrap-demo]' } }),
       prisma.user.count({ where: { isDemo: true } }),
       prisma.user.count({ where: { role: 'DEALER', isDemo: false, businessCategory: { startsWith: 'demo-' } } }),
-      prisma.feedback.count({ where: { aiModelUsed: 'bootstrap-heuristic', qrCode: { dealer: { isDemo: false } } } }),
+      prisma.feedback.count({ /* soft-delete: silinmiş dahil — demo-dışı bayide sentetik AI izi sayımı (kirlilik tespiti; moderasyon durumu önemsiz) */ where: { aiModelUsed: 'bootstrap-heuristic', qrCode: { dealer: { isDemo: false } } } }),
       prisma.dealerFlashOffer.count({
         where: {
           dealer: { isDemo: false },

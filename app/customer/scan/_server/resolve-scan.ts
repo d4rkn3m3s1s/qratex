@@ -63,7 +63,7 @@ async function venueResolution(userId: string, qr: QrRow, now: Date): Promise<Sc
   const status = venueStatusOf(qr, now);
   if (status !== 'ok') return { kind: 'venue', status, code: qr.code };
 
-  const last = await prisma.feedback.findFirst({
+  const last = await prisma.feedback.findFirst({ /* soft-delete: silinmiş dahil — kötüye kullanım bekleme süresi; silinen spam süreyi sıfırlamamalı */
     where: { userId, qrCode: { dealerId: qr.dealerId } },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },

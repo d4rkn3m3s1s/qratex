@@ -119,7 +119,7 @@ async function loadSignals(db: Db, now: Date): Promise<Signals> {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
   const [feedbacks, reviews] = await Promise.all([
     db.feedback.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { deletedAt: null, createdAt: { gte: thirtyDaysAgo } },
       select: { rating: true, qrCodeId: true },
       orderBy: { createdAt: 'desc' },
       take: FEEDBACK_CAP,

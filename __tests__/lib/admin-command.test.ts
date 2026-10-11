@@ -17,7 +17,6 @@ import {
   fillSeries,
   istanbulKey,
   normalizeEntity,
-  outboxHealth,
   overallHealth,
   pctChange,
   ratioPct,
@@ -103,9 +102,7 @@ describe('sağlık sınıflandırması', () => {
     expect(aiHealth(100, 8).status).toBe('warn');
     expect(aiHealth(100, 1).status).toBe('ok');
   });
-  it('outbox ve genel durum en kötüyü alır', () => {
-    expect(outboxHealth(0, 0).status).toBe('ok');
-    expect(outboxHealth(3, 0).status).toBe('warn');
+  it('genel durum en kötüyü alır', () => {
     expect(overallHealth(['ok', 'unknown', 'warn'])).toBe('warn');
     expect(overallHealth(['ok', 'error', 'warn'])).toBe('error');
   });

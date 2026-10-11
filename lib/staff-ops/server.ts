@@ -271,14 +271,14 @@ export async function getTeamHub(dealerId: string, opts: { week?: string | null;
     staffIds.length
       ? prisma.feedback.groupBy({
           by: ['dealerStaffId'],
-          where: { dealerStaffId: { in: staffIds }, createdAt: { gte: since30 } },
+          where: { deletedAt: null, dealerStaffId: { in: staffIds }, createdAt: { gte: since30 } },
           _avg: { rating: true },
           _count: { _all: true },
         })
       : Promise.resolve([] as Array<{ dealerStaffId: string | null; _avg: { rating: number | null }; _count: { _all: number } }>),
     staffIds.length
       ? prisma.feedback.aggregate({
-          where: { dealerStaffId: { in: staffIds }, createdAt: { gte: since30 } },
+          where: { deletedAt: null, dealerStaffId: { in: staffIds }, createdAt: { gte: since30 } },
           _avg: { rating: true },
           _count: { _all: true },
         })
@@ -522,21 +522,21 @@ export async function getStaffToday(userId: string, dealerId: string, opts: { no
     }),
     staffId
       ? prisma.feedback.aggregate({
-          where: { dealerStaffId: staffId, createdAt: { gte: since30 } },
+          where: { deletedAt: null, dealerStaffId: staffId, createdAt: { gte: since30 } },
           _avg: { rating: true },
           _count: { _all: true },
         })
       : Promise.resolve(null),
     staffId
       ? prisma.feedback.aggregate({
-          where: { dealerStaffId: staffId, createdAt: { gte: since60, lt: since30 } },
+          where: { deletedAt: null, dealerStaffId: staffId, createdAt: { gte: since60, lt: since30 } },
           _avg: { rating: true },
           _count: { _all: true },
         })
       : Promise.resolve(null),
     staffId
       ? prisma.feedback.findMany({
-          where: { dealerStaffId: staffId, isToxic: false, text: { not: null } },
+          where: { deletedAt: null, dealerStaffId: staffId, isToxic: false, text: { not: null } },
           select: { rating: true, text: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
           take: 3,

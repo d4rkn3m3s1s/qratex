@@ -62,8 +62,8 @@ export async function previewUserErasure(
   if (!target) return null;
 
   const [feedbacks, reviews, consumptions, qrCodes] = await Promise.all([
-    prisma.feedback.count({ where: { userId } }),
-    prisma.consumptionReview.count({ where: { customerId: userId } }),
+    prisma.feedback.count({ /* soft-delete: silinmiş dahil — silme etkisi önizlemesi kişinin bütün kayıtlarını sayar */ where: { userId } }),
+    prisma.consumptionReview.count({ /* soft-delete: silinmiş dahil — silme etkisi önizlemesi kişinin bütün kayıtlarını sayar */ where: { customerId: userId } }),
     prisma.consumption.count({ where: { OR: [{ customerId: userId }, { dealerId: userId }] } }),
     target.role === 'DEALER' ? prisma.qRCode.count({ where: { dealerId: userId, archivedAt: null } }) : Promise.resolve(0),
   ]);

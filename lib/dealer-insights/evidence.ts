@@ -95,7 +95,7 @@ export async function loadEvidence(
   if (page.length === 0) return { items: [], nextCursor: null, total: matched.length };
 
   const details = await prisma.feedback.findMany({
-    where: { id: { in: page.map((p) => p.id) }, qrCode: { dealerId } },
+    where: { deletedAt: null, id: { in: page.map((p) => p.id) }, qrCode: { dealerId } },
     select: {
       id: true,
       rating: true,

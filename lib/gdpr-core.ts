@@ -436,6 +436,14 @@ export async function anonymizeUser(userId: string, opts: AnonymizeOptions = {})
     const purge = await purgeRegistryPersonalData(tx, userId);
     const counts: Record<string, number> = { ...purge.counts };
 
+    // Kişiye bağlı Settings satırları (FK'siz anahtar-değer; veri modeli B7/B10): dil, erişilebilirlik,
+    // liderlik görünürlüğü ve bayi tercihleri anahtarla bağlı olduğu için cascade ile gitmez,
+    // yetim kalıyordu. Anonimleştirmede kişiyle birlikte silinir.
+    const settingsRows = await tx.settings.deleteMany({
+      where: { key: { in: [`user_settings_${userId}`, `innovation_dealer_prefs_${userId}`] } },
+    });
+    counts['Settings.key'] = settingsRows?.count ?? 0;
+
     let archivedQrCodes = 0;
     if (String(user.role) === 'DEALER') {
       // QR silinmez (Feedback.qrCode onDelete: Restrict, P0-24): arşivlenir, yorumlar kalır.

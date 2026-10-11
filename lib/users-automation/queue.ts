@@ -26,22 +26,27 @@ export async function enqueueAutomationJob(input: {
   idempotencyKey?: string;
   payload: AutomationJobPayload;
 }) {
-  const existing = input.idempotencyKey
-    ? await prisma.automationJob.findFirst({
-        where: { idempotencyKey: input.idempotencyKey, status: { in: ['queued', 'processing', 'completed'] } },
-      })
-    : null;
-  if (existing) return existing;
+  const data = {
+    ruleId: input.ruleId || null,
+    runId: input.runId || null,
+    idempotencyKey: input.idempotencyKey,
+    payload: input.payload,
+    status: 'queued',
+    nextRunAt: new Date(),
+  };
+  const key = input.idempotencyKey;
+  if (!key) return prisma.automationJob.create({ data });
 
-  return prisma.automationJob.create({
-    data: {
-      ruleId: input.ruleId || null,
-      runId: input.runId || null,
-      idempotencyKey: input.idempotencyKey,
-      payload: input.payload,
-      status: 'queued',
-      nextRunAt: new Date(),
-    },
+  // Veri modeli B14: `idempotencyKey` DB'de unique değil; bul-sonra-oluştur yarışında aynı
+  // anahtarla İKİ iş oluşabiliyordu → iki ayrı iş kimliği = iki ayrı tek-kez kökü = çift puan.
+  // Anahtar başına işlem kilidi bul+oluştur'u tekilleştirir (şema isteği: kısmi unique index).
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`automation-job:${key}`}))`;
+    const existing = await tx.automationJob.findFirst({
+      where: { idempotencyKey: key, status: { in: ['queued', 'processing', 'completed'] } },
+    });
+    if (existing) return existing;
+    return tx.automationJob.create({ data });
   });
 }
 

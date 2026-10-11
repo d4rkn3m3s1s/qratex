@@ -87,15 +87,6 @@ export function scheduleFeedbackSideEffects(ev: FeedbackCreatedEvent): void {
     }
   });
 
-  after(async () => {
-    try {
-      const { recordHeatmapHit } = await import('@/lib/heatmap-track');
-      await recordHeatmapHit(ev.dealerId, ev.createdAt, 0);
-    } catch (err) {
-      console.error('[feedback-funnel] ısı haritası güncellenemedi', err);
-    }
-  });
-
   // AI analizi (bayi politikası taze + fail-closed) ya da yalnız otomatik yanıt — P0-32 hattı.
   after(async () => {
     try {

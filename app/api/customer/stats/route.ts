@@ -30,7 +30,7 @@ export async function GET() {
         where: { id: userId },
         select: { id: true, name: true, email: true, image: true, points: true, xp: true, level: true, createdAt: true, loginStreakCount: true, loginStreakLastDay: true },
       }),
-      prisma.feedback.count({ where: { userId } }),
+      prisma.feedback.count({ where: { deletedAt: null, userId } }),
       prisma.userBadge.count({ where: { userId } }),
       prisma.userQuest.findMany({
         where: { userId, completedAt: null },
@@ -38,7 +38,7 @@ export async function GET() {
         take: 5,
       }),
       prisma.feedback.findMany({
-        where: { userId },
+        where: { deletedAt: null, userId },
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { qrCode: { select: { name: true, dealer: { select: { businessName: true } } } } },
@@ -68,7 +68,7 @@ export async function GET() {
           take: 200,
         }),
         prisma.consumption.count({ where: { customerId: userId } }),
-        prisma.consumptionReview.count({ where: { customerId: userId } }),
+        prisma.consumptionReview.count({ where: { deletedAt: null, customerId: userId } }),
         prisma.consumption.findMany({
           where: { customerId: userId },
           orderBy: { createdAt: 'desc' },

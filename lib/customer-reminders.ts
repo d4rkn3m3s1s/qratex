@@ -110,17 +110,18 @@ export async function runCustomerReminderNudges(): Promise<{
     if (!isChannelEnabled(customer.notificationPrefs, REMINDER_GROUP, 'app')) continue;
     const [lastQrFeedback, lastConsumptionReview, pendingReviewedWithoutComment] = await Promise.all([
       prisma.feedback.findFirst({
-        where: { userId: customer.id },
+        where: { deletedAt: null, userId: customer.id },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
       }),
       prisma.consumptionReview.findFirst({
-        where: { customerId: customer.id },
+        where: { deletedAt: null, customerId: customer.id },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
       }),
       prisma.consumptionReview.findFirst({
         where: {
+          deletedAt: null,
           customerId: customer.id,
           createdAt: { gte: daysAgo(MISSING_COMMENT_LOOKBACK_DAYS) },
           OR: [{ text: null }, { text: '' }],

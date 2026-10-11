@@ -393,7 +393,7 @@ export async function getQualityMetrics(now: Date = new Date()): Promise<Quality
       select: { createdAt: true, newData: true, actorType: true, actorSnapshot: true },
     }),
     prisma.feedback.findMany({
-      where: { aiQualitySamples: { some: {} } },
+      where: { deletedAt: null, aiQualitySamples: { some: {} } },
       distinct: ['aiModelUsed'],
       select: { aiModelUsed: true },
       take: 50,

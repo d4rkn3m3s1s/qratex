@@ -297,7 +297,7 @@ export async function pickCharacterInCategory(
 
   // Bu kategorideki TÜKETİM YORUMLARINDAN örneklem (AI'ın karakteri seçmesi için).
   const reviews = await prisma.consumptionReview.findMany({
-    where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
+    where: { deletedAt: null, customerId: userId, characterCategory: categoryKey, text: { not: null } },
     select: { text: true, rating: true },
     orderBy: { createdAt: 'desc' },
     take: 12,
@@ -572,13 +572,13 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
     let totalReviews: number;
     if (minLen > 0) {
       const rows = await tx.consumptionReview.findMany({
-        where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
+        where: { deletedAt: null, customerId: userId, characterCategory: categoryKey, text: { not: null } },
         select: { text: true },
       });
       totalReviews = rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length;
     } else {
       totalReviews = await tx.consumptionReview.count({
-        where: { customerId: userId, characterCategory: categoryKey },
+        where: { deletedAt: null, customerId: userId, characterCategory: categoryKey },
       });
     }
     // Eşik hâlâ tüketilebilir mi? (total - takenNow*threshold >= threshold). Değilse iptal.

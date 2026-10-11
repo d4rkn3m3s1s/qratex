@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
           xp: true,
           _count: {
             select: {
-              feedbacks: true,
+              feedbacks: { where: { deletedAt: null } },
               quests: true,
               badges: true,
             },

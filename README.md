@@ -187,11 +187,10 @@ npm run start
 # Linting
 npm run lint
 
-# Database push (schema sync)
-npm run db:push
-
-# Database migration
-npm run db:migrate
+# Şema değişikliği = göç dosyası (prisma/migrations/). `db:push` KAPALIDIR (lokal .env canlı DB'yi gösterebilir).
+# Geliştirme DB'sinde (Neon dev branch) yeni göç üretmek:
+QRATEX_DB_TARGET=dev DATABASE_URL=<dev-branch-url> npm run db:migrate
+# Canlıya uygulama: docs/audit/2026-10-08/DEPLOY-RUNBOOK.md (migrate deploy / migrate resolve)
 
 # Database seed
 npm run db:seed

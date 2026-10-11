@@ -87,7 +87,7 @@ export type QueueSection = { groups: QueueGroup[]; attention: number };
 export type HealthStatus = 'ok' | 'warn' | 'error' | 'unknown';
 
 export type HealthCheck = {
-  id: 'database' | 'redis' | 'cron' | 'outbox' | 'ai' | 'mail';
+  id: 'database' | 'redis' | 'cron' | 'ai' | 'mail';
   label: string;
   status: HealthStatus;
   /** Kısa açıklama ("142 ms", "Son koşu 3 sa önce"). */

@@ -29,6 +29,7 @@ export async function computeWeeklyBriefForDealer(dealerId: string): Promise<Wee
   const [feedbacks, reviews] = await Promise.all([
     prisma.feedback.findMany({
       where: {
+        deletedAt: null,
         createdAt: { gte: since },
         qrCode: { dealerId },
       },
@@ -36,6 +37,7 @@ export async function computeWeeklyBriefForDealer(dealerId: string): Promise<Wee
     }),
     prisma.consumptionReview.findMany({
       where: {
+        deletedAt: null,
         createdAt: { gte: since },
         consumption: { dealerId },
       },

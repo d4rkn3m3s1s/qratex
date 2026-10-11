@@ -106,7 +106,7 @@ export async function loadCustomerBadgeCollection(userId: string, now: Date = ne
     prisma.userCosmetic.count({ where: { userId, isPinned: true } }),
     getCategoryProgress(userId),
     prisma.feedback.count({ where: { userId, deletedAt: null } }),
-    prisma.consumptionReview.count({ where: { customerId: userId } }),
+    prisma.consumptionReview.count({ where: { deletedAt: null, customerId: userId } }),
   ]);
 
   const ownedIds = owned.map((o) => o.badgeId);

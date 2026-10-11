@@ -128,7 +128,7 @@ export async function getUser360(userId: string, viewerId: string, now = new Dat
       staffProfile: {
         select: { dealerId: true, jobTitle: true, isActive: true, dealer: { select: { businessName: true, name: true } } },
       },
-      _count: { select: { feedbacks: true, badges: true, rewards: true, customerConsumptions: true, staffMembers: true } },
+      _count: { select: { feedbacks: { where: { deletedAt: null } }, badges: true, rewards: true, customerConsumptions: true, staffMembers: true } },
     },
   });
   if (!u) return null;

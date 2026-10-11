@@ -29,7 +29,7 @@ export async function GET(_request: NextRequest) {
         xp: true,
         _count: {
           select: {
-            feedbacks: true,
+            feedbacks: { where: { deletedAt: null } },
             badges: true,
             quests: true,
           },
@@ -56,12 +56,14 @@ export async function GET(_request: NextRequest) {
     const [weeklyFeedbacks, monthlyFeedbacks] = await Promise.all([
       prisma.feedback.count({
         where: {
+          deletedAt: null,
           userId: userId,
           createdAt: { gte: thisWeekStart },
         },
       }),
       prisma.feedback.count({
         where: {
+          deletedAt: null,
           userId: userId,
           createdAt: { gte: thisMonthStart },
         },
@@ -76,7 +78,7 @@ export async function GET(_request: NextRequest) {
 
     // Calculate streak from recent feedbacks
     const recentFeedbacks = await prisma.feedback.findMany({
-      where: { userId: userId },
+      where: { deletedAt: null, userId: userId },
       orderBy: { createdAt: 'desc' },
       take: 30,
       select: { createdAt: true },

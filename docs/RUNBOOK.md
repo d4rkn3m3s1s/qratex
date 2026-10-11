@@ -7,7 +7,8 @@ Sık karşılaşılan senaryolar için adım adım çözüm rehberi.
 1. Vercel/hosting loglarını kontrol et.
 2. Prisma connection string doğruluğunu doğrula.
 3. Database provider dashboard'dan health check yap.
-4. Gerekirse `prisma db push` veya migration resolve.
+4. Şema sorunu ise `prisma db push` KULLANMA (göç geçmişi dışı canlı değişiklik); göç durumu için
+   docs/audit/2026-10-08/DEPLOY-RUNBOOK.md (`migrate deploy` / `migrate resolve`) izlenir.
 
 ## Inngest Durdu
 

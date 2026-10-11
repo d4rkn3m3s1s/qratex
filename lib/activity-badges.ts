@@ -27,7 +27,7 @@ import { EMOJI_BADGE_TEXTS } from '@/lib/emoji-badge-texts';
 async function totalReviewCount(userId: string): Promise<number> {
   const [fb, cr] = await Promise.all([
     prisma.feedback.count({ where: { userId, deletedAt: null } }),
-    prisma.consumptionReview.count({ where: { customerId: userId } }),
+    prisma.consumptionReview.count({ where: { deletedAt: null, customerId: userId } }),
   ]);
   return fb + cr;
 }
@@ -42,7 +42,7 @@ async function averageWordCount(userId: string): Promise<{ avgWords: number; sam
       orderBy: { createdAt: 'desc' },
     }),
     prisma.consumptionReview.findMany({
-      where: { customerId: userId, text: { not: null } },
+      where: { deletedAt: null, customerId: userId, text: { not: null } },
       select: { text: true },
       take: 200,
       orderBy: { createdAt: 'desc' },
@@ -62,7 +62,7 @@ async function emojiRatio(userId: string): Promise<{ ratio: number; sample: numb
       select: { text: true }, take: 100, orderBy: { createdAt: 'desc' },
     }),
     prisma.consumptionReview.findMany({
-      where: { customerId: userId, text: { not: null } },
+      where: { deletedAt: null, customerId: userId, text: { not: null } },
       select: { text: true }, take: 100, orderBy: { createdAt: 'desc' },
     }),
   ]);
@@ -83,7 +83,7 @@ async function repetitionRatio(userId: string): Promise<{ ratio: number; sample:
       select: { text: true }, take: 100, orderBy: { createdAt: 'desc' },
     }),
     prisma.consumptionReview.findMany({
-      where: { customerId: userId, text: { not: null } },
+      where: { deletedAt: null, customerId: userId, text: { not: null } },
       select: { text: true }, take: 100, orderBy: { createdAt: 'desc' },
     }),
   ]);
@@ -163,7 +163,7 @@ export async function awardActivityBadges(userId: string): Promise<ActivityBadge
           orderBy: { createdAt: 'desc' }, take: 500,
         }),
         prisma.consumptionReview.findMany({
-          where: { customerId: userId }, select: { createdAt: true },
+          where: { deletedAt: null, customerId: userId }, select: { createdAt: true },
           orderBy: { createdAt: 'desc' }, take: 500,
         }),
         prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),

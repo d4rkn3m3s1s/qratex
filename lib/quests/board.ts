@@ -163,7 +163,7 @@ async function loadSeasonChallenge(db: Db, userId: string, now: Date): Promise<S
   const [current, claim] = await Promise.all([
     spec.type === 'games_played'
       ? db.miniGameSession.count({ where: { userId, status: 'completed', completedAt: range } })
-      : db.consumptionReview.count({ where: { customerId: userId, createdAt: range } }),
+      : db.consumptionReview.count({ where: { deletedAt: null, customerId: userId, createdAt: range } }),
     db.seasonalChallengeClaim.findUnique({
       where: { userId_campaignId: { userId, campaignId: campaign.id } },
       select: { id: true },

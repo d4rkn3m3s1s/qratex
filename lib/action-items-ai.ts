@@ -88,7 +88,7 @@ export async function generateFromDealerContext(dealerId: string): Promise<numbe
     await Promise.all([
       prisma.qRCode.findMany({
         where: { dealerId },
-        select: { id: true, name: true, scanCount: true, isActive: true, _count: { select: { feedbacks: true } } },
+        select: { id: true, name: true, scanCount: true, isActive: true, _count: { select: { feedbacks: { where: { deletedAt: null } } } } },
       }),
       prisma.feedback.findMany({
         where: { deletedAt: null, qrCode: { dealerId }, createdAt: { gte: last30 } },

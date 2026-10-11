@@ -41,7 +41,7 @@ export async function computeDealerHealthV2(dealerId: string): Promise<HealthV2B
       select: { userId: true },
     }),
     prisma.feedback.findMany({
-      where: { qrCode: { dealerId }, createdAt: { gte: since30 }, userId: { not: null } },
+      where: { deletedAt: null, qrCode: { dealerId }, createdAt: { gte: since30 }, userId: { not: null } },
       select: { userId: true },
     }),
   ]);

@@ -47,6 +47,15 @@ export async function GET(req: Request) {
     errors
   );
 
+  // 1b) Süresi geçmiş ESKİ doğrulama token'ları (NextAuth VerificationToken; ham saklanır).
+  //     Yeni token üretilmiyor (AuthEmailToken hash'li); kalan eski satırlar yalnız tüketimde
+  //     siliniyordu, tıklanmayanlar sonsuza kadar kalıyordu (veri modeli B7/B14).
+  result.legacyVerificationTokens = await step(
+    'legacyVerificationTokens',
+    async () => (await prisma.verificationToken.deleteMany({ where: { expires: { lt: now } } })).count,
+    errors
+  );
+
   // 2) Ölü rate-limit kovaları (penceresi geçmiş). AKTİF login kilidi olan kova SİLİNMEZ
   //    (denetim D2: eski `resetAt < now` koşulu süren kilitleri de kaldırıyordu; kural
   //    `cleanup-counters` ile aynı).

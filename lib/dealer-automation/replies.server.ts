@@ -388,7 +388,7 @@ export async function loadReplyRuns(dealerId: string, ruleId: string, limit = 20
   ];
   const fbs = ids.length
     ? await prisma.feedback.findMany({
-        where: { id: { in: ids }, qrCode: { dealerId } },
+        where: { deletedAt: null, id: { in: ids }, qrCode: { dealerId } },
         select: { id: true, rating: true, text: true },
       })
     : [];

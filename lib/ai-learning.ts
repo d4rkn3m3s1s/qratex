@@ -319,7 +319,7 @@ export async function updateAdaptiveProfile(dealerId: string) {
   await refreshAiModelRouting();
   const learningModel = getRoutedModel('dealerLearning') ?? LEARNING_MODEL;
   const feedbacks = await prisma.feedback.findMany({
-    where: { qrCode: { dealerId }, text: { not: null } },
+    where: { deletedAt: null, qrCode: { dealerId }, text: { not: null } },
     select: { text: true, sentiment: true, intent: true, topics: true, themes: true, entities: true, actionSuggestions: true },
     orderBy: { createdAt: 'desc' },
     take: 200,
@@ -446,6 +446,7 @@ export async function getLearningRetrainSuggestion(dealerId: string): Promise<{
 
   const newFeedbackCount = await prisma.feedback.count({
     where: {
+      deletedAt: null,
       qrCode: { dealerId },
       text: { not: null },
       createdAt: { gt: lastTrainedAt },
@@ -495,6 +496,7 @@ export async function maybeTriggerAdaptiveUpdate(dealerId: string) {
     const lastTrainedAt = profile?.lastTrainedAt || new Date(0);
     const newFeedbackCount = await prisma.feedback.count({
       where: {
+        deletedAt: null,
         qrCode: { dealerId },
         text: { not: null },
         createdAt: { gt: lastTrainedAt },

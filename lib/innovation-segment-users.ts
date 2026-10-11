@@ -19,7 +19,7 @@ export async function resolveInnovationSegmentUserIds(
 
   const [allFb, allCons, recentFb, recentCons] = await Promise.all([
     prisma.feedback.findMany({
-      where: { qrCode: { dealerId }, userId: { not: null } },
+      where: { deletedAt: null, qrCode: { dealerId }, userId: { not: null } },
       select: { userId: true },
     }),
     prisma.consumption.findMany({
@@ -28,6 +28,7 @@ export async function resolveInnovationSegmentUserIds(
     }),
     prisma.feedback.findMany({
       where: {
+        deletedAt: null,
         qrCode: { dealerId },
         userId: { not: null },
         createdAt: { gte: recentSince },

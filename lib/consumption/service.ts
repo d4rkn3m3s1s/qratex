@@ -473,9 +473,12 @@ export async function createConsumption(
 }
 
 /**
- * Yanıt sonrası yan etkiler (ısı haritası kovası + ziyaret görevleri + bekleyen davetin
- * nitelendirilmesi). Hata yutulur ve loglanır — tüketim kaydı zaten commit'lendi. Route bunu
- * `after()` içinde çağırmalı.
+ * Yanıt sonrası yan etkiler (ziyaret görevleri + bekleyen davetin nitelendirilmesi). Hata
+ * yutulur ve loglanır — tüketim kaydı zaten commit'lendi. Route bunu `after()` içinde çağırmalı.
+ *
+ * Isı haritası kovası (`HeatmapData`) artık YAZILMAZ (veri modeli B9/B13): yoğunluk ekranı
+ * olay tablolarından `Europe/Istanbul` saatiyle hesaplanıyor; UTC kovayı okuyan kod kalmamıştı,
+ * her tüketim ölü bir tabloya ek upsert yapıyordu. `revenue`/`at` imza uyumu için duruyor.
  *
  * Davet (P0-16): kart tüketimi "ilk QR olayı" sayılır; e-postası doğrulanmış ve bekleyen
  * daveti olan müşteri yalnız tüketim yapıyorsa (yorum/geri bildirim yazmadan) daveti hiç
@@ -488,9 +491,6 @@ export async function runConsumptionSideEffects(params: {
   at: Date;
 }): Promise<void> {
   await Promise.all([
-    import('@/lib/heatmap-track')
-      .then(({ recordHeatmapHit }) => recordHeatmapHit(params.dealerId, params.at, params.revenue))
-      .catch((err) => console.error('[HEATMAP] consumption track failed:', err)),
     import('@/lib/visit-missions')
       .then(({ advanceVisitMissions }) => advanceVisitMissions(params.customerId, params.dealerId))
       .catch((err) => console.error('[VISIT_MISSION] advance failed:', err)),

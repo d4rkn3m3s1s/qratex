@@ -12,10 +12,8 @@ jest.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
 const mockRateLimit = jest.fn();
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: (...a: unknown[]) => mockRateLimit(...a) }));
 const mockQualify = jest.fn();
-const mockHeatmap = jest.fn();
 const mockVisit = jest.fn();
 jest.mock('@/lib/referral', () => ({ maybeQualifyReferral: (...a: unknown[]) => mockQualify(...a) }));
-jest.mock('@/lib/heatmap-track', () => ({ recordHeatmapHit: (...a: unknown[]) => mockHeatmap(...a) }));
 jest.mock('@/lib/visit-missions', () => ({ advanceVisitMissions: (...a: unknown[]) => mockVisit(...a) }));
 
 import {
@@ -358,7 +356,6 @@ describe('createConsumption — clientOpId idempotency (P0-18)', () => {
 describe('runConsumptionSideEffects — bekleyen davet (P0-16)', () => {
   beforeEach(() => {
     mockQualify.mockReset().mockResolvedValue(undefined);
-    mockHeatmap.mockReset().mockResolvedValue(undefined);
     mockVisit.mockReset().mockResolvedValue({ completed: 0 });
   });
 
@@ -366,7 +363,6 @@ describe('runConsumptionSideEffects — bekleyen davet (P0-16)', () => {
     await runConsumptionSideEffects({ dealerId: DEALER, customerId: CUSTOMER, revenue: 120, at: NOW });
     expect(mockQualify).toHaveBeenCalledWith(CUSTOMER);
     expect(mockVisit).toHaveBeenCalledWith(CUSTOMER, DEALER);
-    expect(mockHeatmap).toHaveBeenCalledWith(DEALER, NOW, 120);
   });
 
   it('davet kancası hata verse de diğer yan etkiler çalışır ve hata yutulur', async () => {
