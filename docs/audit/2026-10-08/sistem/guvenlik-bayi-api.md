@@ -499,3 +499,58 @@ requireTenant(request, { roles, permission? })
 | O6 | Orta | Admin gate API'de yok | `proxy.ts:78-87` | S |
 | O7 | Orta | Plan kotaları uygulanmıyor | `locations/route.ts:54`, `lib/plan-limits.ts:74` | S-M |
 | D1-D6 | Düşük | Token-replay atlama, k-anonimlik, sayım sızıntısı, puantaj/PIN, sınırsız alanlar, e-posta işgali | bkz. bölüm 3 | S |
+
+---
+
+## Uygulama sonrası durum
+
+**Tarih:** 2026-10-11 · **Dal:** `feat/platform-overhaul` · **Kod commit'i:** `4ff4bf4 fix(guvenlik-bayi-api): dalga 3 kalite turu`
+
+Her bulgu güncel koda karşı yeniden kontrol edildi. Kapsam bu sürede 90 uçtan **185 uca** (bayi 175 + personel 10) çıktı. Uçların büyük kısmı `defineRoute`'a taşındı. Bu fabrika rol listesini zorunlu tutuyor, kiracıyı `resolveDealerScope` ile çözüyor (varsayılan reddet), zod uyguluyor ve 415/413 sınırlarını koyuyor.
+
+### Bulgu bulgu
+
+| # | Durum | Kanıt (güncel kod) |
+|---|---|---|
+| K1 | **KAPANDI** | `POST /api/dealer/staff` artık bir **davet** oluşturuyor. Şemada `password` yok ve var olan hiçbir kullanıcıya yazılmıyor (`app/api/dealer/staff/route.ts`, `lib/staff-invitations.ts`). Davetli daveti kendisi kabul ediyor. ADMIN/DEALER hesapları personele dönüştürülemiyor (`ROLES_NEVER_CONVERTED`, kontrol tx içinde yeniden yapılıyor). Rol değişince `sessionVersion++` yapılıyor. Saatte 20 davet sınırı var, denetim kaydı yazılıyor. |
+| K2 | **KAPANDI** (kalan risk düşük) | Mutlu saat zod şeması çarpanı [1,3] aralığında tutuyor; okuma tarafında da kırpılıyor (`lib/points-multipliers.ts`). Çarpan şelalesi en fazla 4×. Tüketim tek servisten geçiyor (`lib/consumption/service.ts`): `mintPoints(source:'dealer_passive')` aynı tx'te `points_credited` yazıyor ve tavanları uyguluyor (tüketim başına 300, müşteri×bayi×gün 300, müşteri×gün 600). Kendine puan basma (kendi kartı, personelin kartı) reddediliyor. Kart durumu ve ürün sahipliği doğrulanıyor, kart+bayi başına dakikada 5 sınırı var. *Kalan:* müşterinin fiziksel olarak orada olduğunu kanıtlayan tarama nonce'u (ürün kararı). Tavanlar etkiyi sınırlıyor. |
+| Y1 | **KAPANDI** | Müşteri listesi ve segmentler yalnızca bu işletmenin verisinden hesaplanıyor (`DealerCustomerStats`, `lib/dealer-customers/server.ts`). Bayi uçlarında global `customerLifetimeValue` okuması yok. `trustScore: null` dönüyor, e-posta maskeli, ham id yerine şifreli `ref` kullanılıyor. |
+| Y2 | **KAPANDI** | `offline-sync` PATCH yalnızca kimlik listesi alıyor ve içeriği DB'den okuyor. CAS ile sahipleniyor (`status ∈ {PENDING,FAILED}` + `retries`). İşleme ortak `createConsumption` ve `clientOpId=offline:<id>` ile yapılıyor; böylece `@@unique` aynı öğeden ikinci tüketimi engelliyor. `SCAN_CARD` kaldırıldı, uç yalnızca DEALER'a açık. Bu turda GET ve PATCH'e oran sınırı da eklendi. |
+| Y3 | **KAPANDI** | `Feedback.qrCode onDelete: Restrict`. QR "silme" artık arşivleme (`archivedAt`/`revokedAt`); toplu `delete` 410 dönüyor. Kota canlı QR'ları sayıyor ve arşivden geri alma da kotadan geçiyor (`lib/plan-limits.ts`, `lib/qr-quota.ts`). |
+| Y4 | **KISMEN** | *Kapanan:* `requireAuth` her istekte DB'deki rolü, `sessionVersion`'ı ve personel bağını doğruluyor (Redis 60 sn). Pasif personel STAFF uçlarında 403 `STAFF_INACTIVE` alıyor. Kiracı STAFF için DB'deki **aktif** `DealerStaff`'tan geliyor (`lib/auth/scope.ts`). PIN bcrypt ile saklanıyor, `field-ping` emekliye ayrıldı (410). Toplu CSV dışa aktarımları (müşteri, işlem, katalog, **gelen kutusu — bu tur**) personele kapalı. E-postalar her yerde maskeli. *Kalan:* personel izin matrisi (Kasiyer/Şef/Müdür). Bunun için şema gerekiyor; istek `SCHEMA-REQUESTS.md`'de (`DealerStaff.permissions`). |
+| Y5 | **KAPANDI** (plan kademesi hariç) | Bütün LLM ve embedding yolları `guardAiCall` → çağrı → `recordAiCostUsage` sırasıyla ilerliyor (`lib/ai-engine.ts`, `lib/groq.ts`, `lib/ai-learning.ts`, `lib/action-items-ai.ts`). Bayi başına günlük token bütçesi, görev başına global bütçe (QRA, sistem öğrenmesi), kapsamsız bütçe ve görev başına dakikalık sınır var. Uçlarda `rateLimit: 'ai'` uygulanıyor. `action-items` GET'te LLM yan etkisi yok. Ekip tavanı 50. *Kalan:* plan bazlı AI bütçesi (`PricingPlan.aiDailyTokens`, şema isteği) ve kiracı başına eşzamanlılık sınırı. |
+| Y6 | **KAPANDI** | Sistem öğrenmesi anonim toplulaştırmayla çalışıyor. Önerisi `pendingProposal` olarak **admin onayı** bekliyor, sürüm iyimser kilitle korunuyor (`lib/ai-learning.ts`). Bayi `customPrompt`'u zod ile sınırlı, injection taramasından geçiyor ve yalnızca o bayinin çağrısında kullanılıyor. Müşteri metinleri `wrapUntrusted` sınırlayıcısı ile `<veri>` bloğunda veriliyor. |
+| Y7 | **KAPANDI** | Kampanya, win-back, kişisel teklif ve segment önerisi gönderimleri `lib/marketing-delivery.ts` kapısından geçiyor: kanal bazlı "Kampanya" tercihi (tercih okunamazsa gönderim yapılmıyor) ve `data.kind`. Frekans tavanı 7 günde 2 ileti. Bayi başına günlük 10 gönderim. Kampanya PATCH şemalı. |
+| O1 | **KAPANDI** | `validateAssignee` yalnızca bayiyi ve onun **aktif** personelini kabul ediyor (aksiyon, olay, kuyruk uçları). Atanan kişinin e-postası maskeli (`assigneeDto`). Liderlik tablosu opak `lb_` kimliği kullanıyor. |
+| O2 | **KAPANDI** | E-posta şablonu satırları `escapeEmailText` ile kaçışlanıyor (`lib/notify-email.ts`). Yanıt e-postası yalnızca **ilk** yanıtta gidiyor, düzenleme e-posta tetiklemiyor (`lib/dealer-inbox/server.ts`). Yanıt ucunda `rateLimit: 'mutation'` var. |
+| O3 | **KAPANDI** | Müşterinin telafi seçimi teklifteki seçeneklerle sunucuda doğrulanıyor (`describeRemedyOffer`), seçilen değer sunucunun döndürdüğü değer. |
+| O4 | **KAPANDI** | Kasa kart sorgusu (`dealer.kasa.lookup`) maskeli dönüyor: ad "Ayşe K.", e-posta/telefon ve ham id yok, puan yok. Aktör başına dakikada 60 sorgu, `SCANNED` denetimi var, kendi kartı reddediliyor. |
+| O5 | **KAPANDI** (bu tur) | SSE için kullanıcı başına dakikada 6 açılış (paylaşılan sayaç). Akış ömrü 55 sn, `bye` olayıyla imleçli yeniden bağlanıyor. `since` 24 saate kırpılıyor. İstemci 3 sn'den 60 sn'ye üstel geri çekilme yapıyor (`lib/notification-stream-policy.ts`, `lib/use-notification-stream.ts`). |
+| O6 | **KAPANDI** (bu tur tamamlandı) | Gizli kapı `requireAuth` içinde API'de zorunlu. Kiracılar arası yönetici erişimi `ADMIN_TENANT_ACCESS` denetim kaydına yazılıyor (`lib/auth/admin-tenant-audit.ts`): `resolveDealerScope` ve `defineRoute` bunu uç adıyla yapıyor; tüm işletmeleri kapsayan eski listeler (aksiyon, olay, QR, mutlu saat) ve `[id]` okuma/yazmaları da kayıtlı. Yönetici artık kendi kimliğini bayi sayamıyor (inovasyon uçları). |
+| O7 | **KISMEN** | Şube kotası `maxBranches` kilit altında uygulanıyor (`/api/dealer/qr-codes/locations`). QR kotası canlı kodları sayıyor. Ekip tavanı 50, kampanya günlük 10. *Kalan:* plan bazlı personel/AI kotası. Şema isteği: `PricingPlan.maxStaff`, `aiDailyTokens`. |
+| D1 | **KAPANDI** | `app/api/**` altında `getServerSession` içe aktarılmıyor. Bunu `__tests__/security/dealer-staff-api-guard.test.ts` uygulama genelinde zorluyor. Rol listesiz `requireAuth()` derlenmiyor. |
+| D2 | **KAPANDI** | Eski benchmark emekliye ayrıldı. Yeni uçta k-anonimlik `K_ANON_MIN` katkıcı (veri sahibi) bayi sayısına göre uygulanıyor, tümleyen kontrolü de var (`lib/dealer-benchmark/core.ts`). |
+| D3 | **KAPANDI** | Kategori `_count` yalnızca bu bayinin ve sistemin aktif ürünlerini sayıyor (`app/api/dealer/categories/route.ts`). |
+| D4 | **KAPANDI** | Puantaj sunucuda durum makinesi, zaman penceresi ve koşullu yazımla yönetiliyor, denetim kaydı tutuluyor (`app/api/staff/shifts/route.ts`). PIN bcrypt ile saklanıyor, yanıtta `****`, denetimde yalnızca `pinChanged` görünüyor. |
+| D5 | **KAPANDI** | Gövdeler zod ile doğrulanıyor (`defineRoute` 1 MB/415). Eski uçlarda şema ve `.max` var. Bu turda `planId` sınırı eklendi. |
+| D6 | **KAPANDI** | Davet akışı (K1): bayi hesap açamıyor ve `emailVerified` dolduramıyor. |
+
+### Bu turda yapılanlar
+
+- Önceki oturumun yarım kalan işleri doğrulandı, tip denetiminden ve jest'ten geçirildi: O5 SSE politikası ve istemci geri çekilmesi, O6 yönetici erişim denetimi, gelen kutusu CSV'sinin personele kapatılması, mutlu saat ve QR yazma oran sınırları.
+- **Okuma dahil** handler başına oran sınırı eklendi. Kapsanan uçlar: aksiyon, olay (liste ve `[id]`), AI ayarları, inovasyon (prefs, segment önerileri, masa performansı, masa nabzı), personel/davet/vardiya/görev listeleri, offline-sync, QR liste ve `[id]`, mutlu saat (herkese açık okumada IP başına) ve mutlu saat denetimi. Yapı testi artık okuma uçlarını da kapsıyor.
+- Yöneticinin aksiyon ve olay `[id]` okuma/yazmaları, QR listesi ve mutlu saat listesi denetime yazılıyor.
+- Olay uçlarındaki karışık TR/EN hata metinleri ("Incident bulunamadı") Türkçeleştirildi.
+- Doğrulama: `tsc` 0 hata. `dealer-staff-api-guard`, `dealer-api-stream-admin-audit`, `dealer-consumption-gates`, `qr-*-quota`, `table-signal-route`, `marketing-pref-gate`, `settings-load-error-overwrite`, `staff-ops/*` ve `tenant/*` testleri geçti. `data-safety-archive` içindeki tek kırık test ("arşivlenmiş ödül alınamaz") gamification ödül ucuna ait; bu boyutun dosyası değil.
+
+### Kalan maddeler
+
+1. **Y4 personel izin matrisi:** şema gerekiyor (`DealerStaff.permissions`). Bugün aktif personel müşteri listesini (maskeli), gelen kutusunu ve AI önerisini okuyabiliyor, ama toplu dışa aktarım yapamıyor.
+2. **O7/Y5 plan bazlı kota:** şema gerekiyor (`PricingPlan.maxStaff`, `aiDailyTokens`). Bugün sabit tavanlar (ekip 50, ortam değişkeniyle AI bütçesi) uygulanıyor.
+3. **K2 fiziksel varlık kanıtı (tarama nonce'u):** ürün kararı. Puan tavanları ve `points_credited` görünürlüğü etkiyi sınırlıyor.
+4. **Kiracı katmanı (Faz 2/15):** Prisma `forTenant` uzantısı veya Postgres RLS uygulanmadı. Kapsam bugün `resolveDealerScope` ve `defineRoute({ tenant })` ile sağlanıyor, `__tests__/tenant/*` sözleşme testleri var.
+5. **Tüketicisi olmayan eski uçlar:** `/api/dealer/ai-settings` (yerine `settings/ai`), `/api/dealer/action-items`, `/api/dealer/incidents` (yerine `queues/*`), `/api/dealer/offline-sync` (kasa artık yerel kuyrukla canlı uca yazıyor) ve `/api/dealer/innovation/*` GET'leri. Bunlar sertleştirildi (rol, kapsam, oran sınırı, denetim), ama 410 ile emekliye ayırmak saldırı yüzeyini küçültür.
+
+### Yeni puan: **9 / 10**
+
+**Gerekçe:** İki kritik (K1, K2) ve yedi yüksek bulgunun altısı tamamen kapandı. Y4 yalnızca izin matrisi kısmında açık. Bütün orta ve düşük bulgular kapandı. Kalıcı güvence testleri var: `getServerSession` yasağı, zorunlu rol listesi, okuma dahil her uçta oran sınırı, CSV için personel kapısı, kiracı izolasyon matrisi. Tam puana kalan fark iki şema bağımlı yetkilendirme/kota maddesi (Y4 matrisi, plan bazlı kota) ile kiracı katmanının ORM/RLS düzeyinde zorunlu olmaması.
