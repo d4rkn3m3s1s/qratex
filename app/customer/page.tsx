@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import { headers } from 'next/headers';
+import { getToken } from 'next-auth/jwt';
 import { requireAuth } from '@/lib/api-auth';
 import { loadCustomerHome } from '@/lib/customer-home/load';
 import { CUSTOMER_HOME_QUERY_KEY } from '@/lib/customer-home/types';
@@ -22,13 +24,35 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function CustomerHomePage() {
   const queryClient = new QueryClient();
-  const auth = await requireAuth(['CUSTOMER']);
+  // Yetki kararı (DB) ile veri yüklemesi PARALEL başlar: imzalı JWT'deki kimlikle yükleme
+  // yetki gidiş-dönüşünü beklemez (LCP kartı = bakiye; mobil LCP sunucu beklemesine bağlıydı).
+  // Veri yalnız yetki onaylanır VE aynı kullanıcıya aitse önbelleğe girer; aksi halde atılır.
+  // getToken yalnız imzayı çözer (DB'ye gitmez); yetkili karar yine requireAuth'tadır.
+  const token = await getToken({
+    req: { headers: await headers() } as Parameters<typeof getToken>[0]['req'],
+    secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  }).catch(() => null);
+  const jwtUserId = typeof token?.id === 'string' && token.id ? token.id : typeof token?.sub === 'string' ? token.sub : undefined;
+  const [auth, home] = await Promise.all([
+    requireAuth(['CUSTOMER']),
+    jwtUserId
+      ? loadCustomerHome(jwtUserId).catch((error: unknown) => {
+          console.error('[customer-home] SSR yüklemesi başarısız; istemci yeniden deneyecek', error);
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
   if (!('error' in auth)) {
-    try {
-      queryClient.setQueryData(CUSTOMER_HOME_QUERY_KEY, await loadCustomerHome(auth.session.user.id));
-    } catch (error) {
-      console.error('[customer-home] SSR yüklemesi başarısız; istemci yeniden deneyecek', error);
-    }
+    const userId = auth.session.user.id;
+    // Çerez çözülemediyse / kimlik uyuşmadıysa: doğrulanmış kimlikle sıralı yükle (eski yol).
+    const data =
+      home && userId === jwtUserId
+        ? home
+        : await loadCustomerHome(userId).catch((error: unknown) => {
+            console.error('[customer-home] SSR yüklemesi başarısız; istemci yeniden deneyecek', error);
+            return null;
+          });
+    if (data) queryClient.setQueryData(CUSTOMER_HOME_QUERY_KEY, data);
   }
 
   return (

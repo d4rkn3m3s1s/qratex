@@ -8,6 +8,7 @@ import { moments } from '@/lib/moments/client';
 import { QueryState } from '@/components/states';
 import { formatInt } from '@/components/ds/play/shared';
 import { listContainer, listItem, useMotionPolicy } from '@/lib/motion';
+import { useIsHydrationRender } from '@/lib/motion/use-is-hydration-render';
 import type { CustomerHomeData, HomeStreak } from '@/lib/customer-home/types';
 import { useHomeCopy } from './copy';
 import { readEnvelope, useCustomerHome, useHomeCache } from './use-home';
@@ -56,6 +57,10 @@ type StreakTouch = HomeStreak & {
 function HomeContent({ data }: { data: CustomerHomeData }) {
   const { copy, locale } = useHomeCopy();
   const policy = useMotionPolicy();
+  // SSR verisiyle gelen ilk boyamada kartlar GÖRÜNÜR basılır (opacity:0 + giriş animasyonu
+  // LCP'yi JS indirme+hidrasyon+stagger sonrasına itiyordu: mobil LCP 3.8 sn). Giriş animasyonu
+  // yalnız veri istemcide yüklendiğinde (iskeletten sonra) oynar.
+  const animateEntrance = !useIsHydrationRender();
   const { patch, refresh } = useHomeCache();
   const [spinOpen, setSpinOpen] = useState(false);
   const [streakSaving, setStreakSaving] = useState(!data.streak.countedToday);
@@ -141,7 +146,7 @@ function HomeContent({ data }: { data: CustomerHomeData }) {
     <Motion.div
       className="flex min-w-0 flex-col gap-4 sm:gap-5"
       variants={policy.variants(listContainer)}
-      initial="hidden"
+      initial={animateEntrance ? 'hidden' : false}
       animate="visible"
     >
       <Motion.div variants={item}>

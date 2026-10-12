@@ -2,7 +2,7 @@
  * Müşteri Ana Sayfa verisi — TEK sunucu yükleyicisi.
  *
  * Hem `app/customer/page.tsx` (SSR ilk render) hem `GET /api/customer/home` (BFF) bunu
- * çağırır. Bütün sorgular tek `Promise.all` turunda, dar `select` ile; kullanıcıya özel,
+ * çağırır. Sorgular İKİ `Promise.all` turunda, dar `select` ile; kullanıcıya özel,
  * önbelleğe alınmaz. Hata FIRLATILIR (çağıran görünür hata gösterir — "200 + sıfırlar" yok).
  *
  * Kapsam: her sorgu `userId = oturum` ile sınırlıdır; sıra sayıları yalnız sayı döndürür
@@ -20,7 +20,6 @@ import {
   buildDailyGoals,
   buildPendingActions,
   dailyBoxDayKeys,
-  dayKeyToDbDate,
   greetingFor,
   istanbulTodayStart,
   istanbulWeekStart,
@@ -38,6 +37,47 @@ import type { CustomerHomeData, HomeSections } from './types';
 
 /** Sıralamaya giren müşteriler: demo/anonim hesaplar sayılmaz. */
 const RANKED = { role: 'CUSTOMER' as const, isDemo: false, anonymizedAt: null };
+
+type HomeUserFacts = {
+  pendingReviews: number;
+  unopenedBoxes: number;
+  readyRewards: number;
+  pendingRemedy: number;
+  feedbackToday: boolean;
+  reviewToday: boolean;
+  anyFeedback: boolean;
+  anyReview: boolean;
+  spinCount: number | null;
+  boxOpenedToday: boolean;
+  gameToday: boolean;
+};
+
+/**
+ * Kullanıcıya özel 11 sayaç/varlık kontrolü TEK gidiş-dönüşte (perf: lcp-mobile).
+ * Önceden 11 ayrı Prisma sorgusuydu; havuz 5 bağlantı olduğundan ~3 dalga × DB RTT ekliyordu
+ * (yerelde ölçülen RTT ≈ 290 ms → panonun LCP'si ~2,6 sn sunucu beklemesiydi). Koşullar
+ * Prisma sürümüyle birebir aynı; bölüm kapalıysa değer çağıranda sıfırlanır.
+ */
+async function loadUserFacts(userId: string, todayStart: Date, today: string, boxKeys: string[]): Promise<HomeUserFacts> {
+  const rows = await prisma.$queryRaw<HomeUserFacts[]>`
+    SELECT
+      (SELECT count(*)::int FROM "Consumption" c WHERE c."customerId" = ${userId}
+         AND NOT EXISTS (SELECT 1 FROM "ConsumptionReview" r WHERE r."consumptionId" = c."id")) AS "pendingReviews",
+      (SELECT count(*)::int FROM "UserSurpriseBox" WHERE "userId" = ${userId} AND "openedAt" IS NULL) AS "unopenedBoxes",
+      (SELECT count(*)::int FROM "UserReward" WHERE "userId" = ${userId} AND "claimedAt" IS NULL) AS "readyRewards",
+      (SELECT count(*)::int FROM "RemedyOffer" WHERE "userId" = ${userId} AND "status" = 'pending') AS "pendingRemedy",
+      EXISTS (SELECT 1 FROM "Feedback" WHERE "deletedAt" IS NULL AND "userId" = ${userId} AND "createdAt" >= ${todayStart}) AS "feedbackToday",
+      EXISTS (SELECT 1 FROM "ConsumptionReview" WHERE "deletedAt" IS NULL AND "customerId" = ${userId} AND "createdAt" >= ${todayStart}) AS "reviewToday",
+      EXISTS (SELECT 1 FROM "Feedback" WHERE "deletedAt" IS NULL AND "userId" = ${userId}) AS "anyFeedback",
+      EXISTS (SELECT 1 FROM "ConsumptionReview" WHERE "deletedAt" IS NULL AND "customerId" = ${userId}) AS "anyReview",
+      (SELECT "count" FROM "DailySpin" WHERE "userId" = ${userId} AND "day" = ${today}::date) AS "spinCount",
+      EXISTS (SELECT 1 FROM "UserSurpriseBox" WHERE "userId" = ${userId} AND "dayKey" = ANY(${boxKeys}) AND "openedAt" IS NOT NULL) AS "boxOpenedToday",
+      EXISTS (SELECT 1 FROM "MiniGameSession" WHERE "userId" = ${userId} AND "startedAt" >= ${todayStart}) AS "gameToday"
+  `;
+  const r = rows[0];
+  if (!r) throw new Error('Ana sayfa sayaçları okunamadı');
+  return r;
+}
 
 export class CustomerHomeNotFoundError extends Error {
   constructor() {
@@ -65,7 +105,9 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
   const todayStart = istanbulTodayStart(now);
   const weekStart = istanbulWeekStart(now);
 
-  const [user, sections, leagueRules, matrix] = await Promise.all([
+  const boxKeys = dailyBoxDayKeys(now);
+  // 1. tur: kullanıcı + kullanıcıya özel sayaçlar (puandan bağımsız olan her şey) birlikte.
+  const [user, sections, leagueRules, matrix, creditedThisWeek, facts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -87,6 +129,12 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
     resolveHomeSections(),
     getLeagueRules(),
     getPointsMatrix(),
+    prisma.analyticsEvent.findMany({
+      where: { userId, event: 'points_credited', createdAt: { gte: weekStart } },
+      select: { data: true },
+      take: 2000,
+    }),
+    loadUserFacts(userId, todayStart, today, boxKeys),
   ]);
   if (!user) throw new CustomerHomeNotFoundError();
 
@@ -99,35 +147,13 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
   const nextLeagueMin = sortedRules[leagueIndex + 1]?.minPoints ?? null;
   const leagueRange = nextLeagueMin === null ? { gte: league.minPoints } : { gte: league.minPoints, lt: nextLeagueMin };
   const aboveInLeague = nextLeagueMin === null ? { gt: points } : { gt: points, lt: nextLeagueMin };
-  const boxKeys = dailyBoxDayKeys(now);
   const spinRules = getSpinRules(matrix);
 
-  const [
-    aboveCount,
-    leagueSize,
-    nextAbove,
-    creditedThisWeek,
-    rewards,
-    pendingReviews,
-    unopenedBoxes,
-    readyRewards,
-    pendingRemedy,
-    feedbackToday,
-    reviewToday,
-    anyFeedback,
-    anyReview,
-    spinRow,
-    boxOpenedToday,
-    gameToday,
-  ] = await Promise.all([
+  // 2. tur: yalnız puana / bölüme bağlı olanlar.
+  const [aboveCount, leagueSize, nextAbove, rewards] = await Promise.all([
     prisma.user.count({ where: { ...RANKED, points: aboveInLeague } }),
     prisma.user.count({ where: { ...RANKED, points: leagueRange } }),
     prisma.user.findFirst({ where: { ...RANKED, points: aboveInLeague }, orderBy: { points: 'asc' }, select: { points: true } }),
-    prisma.analyticsEvent.findMany({
-      where: { userId, event: 'points_credited', createdAt: { gte: weekStart } },
-      select: { data: true },
-      take: 2000,
-    }),
     sections.rewards
       ? prisma.reward.findMany({
           where: { isActive: true, archivedAt: null },
@@ -136,22 +162,15 @@ export async function loadCustomerHome(userId: string, now: Date = new Date()): 
           select: { id: true, name: true, icon: true, cost: true, stock: true, metadata: true },
         })
       : Promise.resolve([]),
-    prisma.consumption.count({ where: { customerId: userId, review: null } }),
-    sections.surpriseBoxes ? prisma.userSurpriseBox.count({ where: { userId, openedAt: null } }) : Promise.resolve(0),
-    sections.rewards ? prisma.userReward.count({ where: { userId, claimedAt: null } }) : Promise.resolve(0),
-    sections.remedy ? prisma.remedyOffer.count({ where: { userId, status: 'pending' } }) : Promise.resolve(0),
-    prisma.feedback.findFirst({ where: { deletedAt: null, userId, createdAt: { gte: todayStart } }, select: { id: true } }),
-    prisma.consumptionReview.findFirst({ where: { deletedAt: null, customerId: userId, createdAt: { gte: todayStart } }, select: { id: true } }),
-    prisma.feedback.findFirst({ where: { deletedAt: null, userId }, select: { id: true } }),
-    prisma.consumptionReview.findFirst({ where: { deletedAt: null, customerId: userId }, select: { id: true } }),
-    sections.spin
-      ? prisma.dailySpin.findUnique({ where: { userId_day: { userId, day: dayKeyToDbDate(today) } }, select: { count: true } })
-      : Promise.resolve(null),
-    sections.surpriseBoxes
-      ? prisma.userSurpriseBox.findFirst({ where: { userId, dayKey: { in: boxKeys }, openedAt: { not: null } }, select: { id: true } })
-      : Promise.resolve(null),
-    sections.games ? prisma.miniGameSession.findFirst({ where: { userId, startedAt: { gte: todayStart } }, select: { id: true } }) : Promise.resolve(null),
   ]);
+  const pendingReviews = facts.pendingReviews;
+  const unopenedBoxes = sections.surpriseBoxes ? facts.unopenedBoxes : 0;
+  const readyRewards = sections.rewards ? facts.readyRewards : 0;
+  const pendingRemedy = sections.remedy ? facts.pendingRemedy : 0;
+  const { feedbackToday, reviewToday, anyFeedback, anyReview } = facts;
+  const spinRow = sections.spin && facts.spinCount !== null ? { count: facts.spinCount } : null;
+  const boxOpenedToday = sections.surpriseBoxes && facts.boxOpenedToday;
+  const gameToday = sections.games && facts.gameToday;
 
   const frame = user.equippedCosmetics.find((c) => c.cosmetic.type === 'avatar_frame')?.cosmetic.imageUrl ?? null;
   const background = user.equippedCosmetics.find((c) => c.cosmetic.type === 'profile_background')?.cosmetic.imageUrl ?? null;

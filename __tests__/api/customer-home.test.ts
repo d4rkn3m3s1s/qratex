@@ -16,6 +16,8 @@ jest.mock('@/lib/capture-api-error', () => ({ captureApiError: jest.fn() }));
 
 const mockConnectivity = jest.fn(() => false);
 const db = {
+  // Kullanıcıya özel sayaçlar tek ham sorguda (lib/customer-home/load.ts → loadUserFacts).
+  $queryRaw: jest.fn(),
   user: { findUnique: jest.fn(), count: jest.fn(), findFirst: jest.fn() },
   analyticsEvent: { findMany: jest.fn() },
   reward: { findMany: jest.fn() },
@@ -67,6 +69,29 @@ function get() {
   return GET(new NextRequest('http://localhost/api/customer/home'), {});
 }
 
+function facts(over: Record<string, unknown> = {}) {
+  return {
+    pendingReviews: 2,
+    unopenedBoxes: 1,
+    readyRewards: 0,
+    pendingRemedy: 1,
+    feedbackToday: false,
+    reviewToday: false,
+    anyFeedback: false,
+    anyReview: false,
+    spinCount: 1,
+    boxOpenedToday: false,
+    gameToday: false,
+    ...over,
+  };
+}
+
+/** `$queryRaw` etiketli şablon çağrısı → [SQL metni, parametreler]. */
+function rawCall(i = 0): [string, unknown[]] {
+  const [strings, ...values] = db.$queryRaw.mock.calls[i] as [TemplateStringsArray, ...unknown[]];
+  return [strings.join('?'), values];
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockRequireAuth.mockResolvedValue(customer);
@@ -105,15 +130,7 @@ beforeEach(() => {
     { id: 'r1', name: 'Kurabiye', icon: '🍪', cost: 1000, stock: -1, metadata: null },
     { id: 'r2', name: 'Kahve', icon: '/img/kahve.png', cost: 3500, stock: 5, metadata: null },
   ]);
-  db.consumption.count.mockResolvedValue(2);
-  db.userSurpriseBox.count.mockResolvedValue(1);
-  db.userSurpriseBox.findFirst.mockResolvedValue(null);
-  db.userReward.count.mockResolvedValue(0);
-  db.remedyOffer.count.mockResolvedValue(1);
-  db.feedback.findFirst.mockResolvedValue(null);
-  db.consumptionReview.findFirst.mockResolvedValue(null);
-  db.dailySpin.findUnique.mockResolvedValue({ count: 1 });
-  db.miniGameSession.findFirst.mockResolvedValue(null);
+  db.$queryRaw.mockResolvedValue([facts()]);
 });
 
 describe('GET /api/customer/home', () => {
@@ -160,8 +177,13 @@ describe('GET /api/customer/home', () => {
   it('her kullanıcı sorgusu oturumdaki kullanıcıyla sınırlı; sıralama demo/anonim hesapları saymaz', async () => {
     await get();
     expect(db.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'cust-1' } }));
-    expect(db.consumption.count).toHaveBeenCalledWith({ where: { customerId: 'cust-1', review: null } });
-    expect(db.remedyOffer.count).toHaveBeenCalledWith({ where: { userId: 'cust-1', status: 'pending' } });
+    // Ham sayaç sorgusu: her alt sorgu oturumdaki kullanıcıyla sınırlı (parametre, birleştirme değil).
+    const [sql, params] = rawCall();
+    const userFilters = sql.match(/"(userId|customerId)" = \?/g) ?? [];
+    expect(userFilters.length).toBe(11);
+    expect(params.filter((v) => v === 'cust-1').length).toBe(11);
+    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM "ConsumptionReview"/);
+    expect(sql).toMatch(/"RemedyOffer" WHERE "userId" = \? AND "status" = 'pending'/);
     expect(db.analyticsEvent.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ userId: 'cust-1', event: 'points_credited' }) })
     );
@@ -173,10 +195,9 @@ describe('GET /api/customer/home', () => {
 
   it('ödül modülü kapalıysa ödüller sorgulanmaz ve hiçbir yerde görünmez', async () => {
     mockModuleControls.mockResolvedValue({ rewards: false });
-    db.userReward.count.mockResolvedValue(3);
+    db.$queryRaw.mockResolvedValue([facts({ readyRewards: 3 })]);
     const { data } = await (await get()).json();
     expect(db.reward.findMany).not.toHaveBeenCalled();
-    expect(db.userReward.count).not.toHaveBeenCalled();
     expect(data.sections.rewards).toBe(false);
     expect(data.wallet.nextReward).toBeNull();
     expect(data.pending.find((p: { id: string }) => p.id === 'rewards')).toBeUndefined();
@@ -187,7 +208,8 @@ describe('GET /api/customer/home', () => {
     const { data } = await (await get()).json();
     expect(data.spin).toBeNull();
     expect(data.goals.map((g: { id: string }) => g.id)).toEqual(['streak', 'review', 'box']);
-    expect(db.dailySpin.findUnique).not.toHaveBeenCalled();
+    // Sayaç tek sorguda gelse de kapalı çarkın kullanımı yanıta sızmaz.
+    expect(data.goals.find((g: { id: string }) => g.id === 'spin')).toBeUndefined();
   });
 
   it('DB erişilemezse 503 + retryable (sıfırlarla 200 değil)', async () => {

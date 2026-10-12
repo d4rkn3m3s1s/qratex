@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react';
 import { m as Motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fadeUp } from '@/lib/motion/variants';
+import { useIsHydrationRender } from '@/lib/motion/use-is-hydration-render';
 import { TONE_CHIP, type Tone } from './tone';
 
 export type PageHeaderProps = {
@@ -50,11 +51,13 @@ export function PageHeader({
 }: PageHeaderProps) {
   const Heading = as;
   const hero = variant === 'hero';
+  const fromServer = useIsHydrationRender();
 
   return (
     <Motion.header
       variants={fadeUp}
-      initial="hidden"
+      // SSR ilk boyamada görünür (başlık çoğu panel sayfasının LCP öğesi); gezinmede animasyonlu.
+      initial={fromServer ? false : 'hidden'}
       animate="visible"
       className={cn(
         'relative min-w-0',

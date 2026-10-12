@@ -7,12 +7,7 @@ import { ShellTabBar } from '@/components/dashboard/shell-tab-bar';
 import { getShellConfig } from '@/lib/navigation/get-shell-config';
 import { NavClickTracker } from '@/components/dashboard/nav-click-tracker';
 import { RouteGate } from '@/components/dashboard/route-gate';
-import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
-import { CustomerBirthdayBonusHost } from '@/components/customer/customer-birthday-bonus-host';
-import { WelcomeVideoModal } from '@/components/customer/welcome-video-modal';
-import { MomentHost } from '@/components/moments/moment-host';
-import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
-import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
+import { DeferredCustomerShellHosts } from '@/components/customer/deferred-shell-hosts';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
@@ -60,15 +55,8 @@ export default async function CustomerLayout({
           <RouteGate>{children}</RouteGate>
         </main>
       </div>
-      <OnboardingSheet />
-      {/* Karşılama videosu: dosya (public/videos/welcome-customer.mp4) yoksa hiç açılmaz. */}
-      <WelcomeVideoModal />
-      <CustomerBirthdayBonusHost />
-      {/* An Motoru: puan kapsülü + seviye/lig/rozet anları (tam bir kez; açık dialog varken bekler). */}
-      <MomentHost />
-      <WebVitalsReporter />
-      {/* PWA: SW yalnız panelde kaydedilir; QR hunisinde hiç kurulmaz (P0-37). */}
-      <ServiceWorkerRegistrar />
+      {/* Onboarding, karşılama videosu, doğum günü, An Motoru, web-vitals, SW: hidrasyondan sonra yüklenir. */}
+      <DeferredCustomerShellHosts />
       {/* Mobil alt sekme: Ana Sayfa · Keşfet · TARA · Oyna · Cüzdan (lg altında). */}
       <NavClickTracker source="tabbar">
         <ShellTabBar />

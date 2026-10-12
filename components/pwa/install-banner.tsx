@@ -16,6 +16,17 @@ export function InstallBanner() {
   // Çevrimdışı yedek sayfasında ve masa sinyalinde (QR/kiosk) kurulum teşviki yersiz.
   const bare = useBareChrome();
   const [isDismissed, setIsDismissed] = useState(false);
+  // Kurulum teşviki kullanıcının sayfayla İLK etkileşiminden sonra gelir: açılışta kendiliğinden
+  // beliren alt bant panonun LCP öğesi oluyordu (mobil LCP ~8 sn) ve ilk bakışta içeriği örtüyordu.
+  const [engaged, setEngaged] = useState(false);
+  useEffect(() => {
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
+    const on = () => setEngaged(true);
+    for (const e of events) window.addEventListener(e, on, { once: true, passive: true });
+    return () => {
+      for (const e of events) window.removeEventListener(e, on);
+    };
+  }, []);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const iosGuideDialogRef = useRef<HTMLDivElement>(null);
   const prevIosFocusRef = useRef<HTMLElement | null>(null);
@@ -115,7 +126,7 @@ export function InstallBanner() {
   };
 
   // Don't show if already installed or dismissed
-  if (isInstalled || isStandalone || isDismissed || bare !== false) {
+  if (isInstalled || isStandalone || isDismissed || bare !== false || !engaged) {
     return null;
   }
 

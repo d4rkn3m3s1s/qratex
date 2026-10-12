@@ -49,7 +49,7 @@ import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { UserAvatarFrame } from '@/components/ui/avatar-frame';
-import { CommandPalette, type CommandPaletteItem } from '@/components/ds/command-palette';
+import type { CommandPaletteItem } from '@/components/ds/command-palette';
 import { navIcon } from '@/lib/navigation/icons';
 import { matchActiveHref } from '@/lib/navigation/registry';
 import { trackNav } from '@/lib/navigation/track';
@@ -78,6 +78,11 @@ const NotificationCenter = dynamic(
     ssr: false,
   },
 );
+
+// ⌘K komut paleti — ilk açılışta yüklenir (kabuğun ilk yük JS'inden çıkar; LCP/TBT).
+const CommandPalette = dynamic(() => import('@/components/ds/command-palette').then((m) => m.CommandPalette), {
+  ssr: false,
+});
 
 // ⌘J asistan çekmecesi — b-asistan yüzeyinin bileşeni; yalnız açılınca yüklenir.
 const AssistantDrawer = dynamic(() => import('@/components/dealer/assistant-drawer').then((m) => m.AssistantDrawer), {
@@ -189,6 +194,10 @@ export function DashboardHeader({ title, description, showSearch = true, actions
   useEffect(() => {
     if (ctx?.assistantOpen) setAssistantLoaded(true);
   }, [ctx?.assistantOpen]);
+  const [paletteLoaded, setPaletteLoaded] = useState(false);
+  useEffect(() => {
+    if (paletteOpen) setPaletteLoaded(true);
+  }, [paletteOpen]);
 
   // ⌘K / Ctrl+K: palet; ⌘J / Ctrl+J: bayi asistan çekmecesi.
   useEffect(() => {
@@ -523,7 +532,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
         </div>
       </div>
 
-      {showSearch && ctx && (
+      {showSearch && ctx && paletteLoaded && (
         <CommandPalette
           open={paletteOpen}
           onOpenChange={setPaletteOpen}
