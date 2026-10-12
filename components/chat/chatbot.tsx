@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
+import { DURATION, EASE } from '@/lib/motion/tokens';
 import { useLocaleSafe } from '@/lib/app-locale';
 import {
   X,
@@ -401,7 +402,7 @@ export function Chatbot() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: DURATION.base }}
                   >
                     {FAB_LIQUID_BUBBLES.map((b) => (
                       <Motion.span
@@ -426,12 +427,12 @@ export function Chatbot() {
                           x: [0, b.drift * 0.6, b.drift],
                           scale: [0.5, 1, 0.85, 0.45],
                         }}
-                        exit={{ opacity: 0, scale: 0.3, transition: { duration: 0.2 } }}
+                        exit={{ opacity: 0, scale: 0.3, transition: { duration: DURATION.base } }}
                         transition={{
                           duration: 2.35,
                           repeat: Infinity,
                           delay: b.delay,
-                          ease: [0.22, 1, 0.36, 1],
+                          ease: EASE.emphasized,
                           repeatDelay: 0.35,
                         }}
                         aria-hidden
@@ -454,18 +455,10 @@ export function Chatbot() {
                 whileHover={motionLite ? undefined : { scale: 1.04 }}
                 whileTap={{ scale: 0.92 }}
               >
-                {!motionLite && (
-                  <Motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/[0.08]"
-                    animate={{ x: ['-120%', '120%'] }}
-                    transition={{ duration: 3.6, repeat: Infinity, ease: 'linear' }}
-                    aria-hidden
-                  />
-                )}
                 <Motion.span
                   className="relative z-[1] flex items-center justify-center"
                   animate={isHovered && !motionLite ? { rotate: [0, -10, 10, 0] } : { rotate: 0 }}
-                  transition={{ duration: 0.55 }}
+                  transition={{ duration: DURATION.slow, ease: EASE.standard }}
                 >
                   {botImageOk ? (
                     <Image
@@ -497,7 +490,7 @@ export function Chatbot() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: DURATION.base }}
           >
             <Motion.button
               type="button"
@@ -617,11 +610,11 @@ export function Chatbot() {
                           key={isLoading ? typingMessage : 'idle'}
                           initial={{ opacity: 0, y: -4 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2 }}
+                          transition={{ duration: DURATION.base }}
                         >
                           {isLoading ? (
                             <>
-                              <Zap className="h-3.5 w-3.5 shrink-0 text-foreground/45 motion-reduce:animate-none animate-pulse sm:h-4 sm:w-4" />
+                              <Zap className="h-3.5 w-3.5 shrink-0 text-foreground/45 sm:h-4 sm:w-4" />
                               <span className="truncate text-foreground/90">{typingMessage}</span>
                             </>
                           ) : (

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { MapPin, MessageSquareReply, Pause, Pin, Play, Sparkles, Star } from 'lucide-react';
-import { Ambient, useMotionPolicy } from '@/lib/motion';
+import { Ambient, DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { WallFeedDto, WallItemDto } from '@/lib/dealer/voc-wall/config';
 import { useVocCopy, type VocCopy } from './copy';
@@ -119,7 +119,7 @@ export function WallDisplay({ feed, variant, status, controlsVisible = true, ext
   const current: WallItemDto | undefined = items[index];
   const tv = variant === 'tv';
   const Body = tv ? 'main' : 'div';
-  const transition = policy.transition({ duration: 0.4, ease: [0.22, 1, 0.36, 1] });
+  const transition = policy.transition({ duration: DURATION.slow, ease: EASE.emphasized });
   const updatedLabel = useMemo(() => {
     if (!status) return null;
     const sec = Math.max(0, Math.round((now - status.updatedAt) / 1000));

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { IconButton } from '@/components/ds/a11y';
 import { StatusBadge } from '@/components/ds/data';
 import { TONE_CHIP } from '@/components/states';
-import { useMotionPolicy } from '@/lib/motion';
+import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import type { OpenState } from '@/lib/places/business-hours';
 import { categoryLabel, type PlaceCategory } from '@/lib/places/categories';
 import { formatDistance, walkingMinutes } from '@/lib/places/geo';
@@ -125,7 +125,7 @@ export function SaveButton({ dealerId, name, saved, className }: { dealerId: str
           className="inline-flex"
           initial={pulse > 0 && !policy.reduce ? { scale: 1 } : false}
           animate={pulse > 0 && !policy.reduce ? { scale: [1, 1.25, 1] } : undefined}
-          transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }}
+          transition={{ duration: DURATION.base, ease: EASE.standard }}
         >
           <Heart className={cn('h-5 w-5', saved && 'fill-current')} />
         </Motion.span>

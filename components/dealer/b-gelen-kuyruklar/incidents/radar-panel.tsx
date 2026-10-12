@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ds/data';
 import { announce } from '@/components/ds/a11y';
 import { InlineError, SectionCard, SkeletonBlock, type Tone } from '@/components/states';
-import { useMotionPolicy } from '@/lib/motion';
+import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import type { RadarRuleStatus, RadarStatus } from '@/lib/dealer-queues/types';
 import { errorMessage, fetchJson, queueKeys, sendJson } from '../shared/api';
 import { useQueueLocale, useSharedCopy } from '../shared/copy';
@@ -118,7 +118,7 @@ export function RadarPanel({ initial, readOnly }: { initial: RadarStatus | null;
               className="absolute inset-[-6px] rounded-full ring-2 ring-danger"
               initial={{ opacity: 0.8, scale: 0.8 }}
               animate={{ opacity: 0, scale: 1.4 }}
-              transition={{ duration: 0.6, ease: [0.2, 0, 0, 1] }}
+              transition={{ duration: DURATION.slow, ease: EASE.standard }}
             />
           ) : null}
           <Radar aria-hidden className={cn('h-5 w-5', level === 'alert' ? 'text-danger' : level === 'watch' ? 'text-warning' : 'text-success')} />

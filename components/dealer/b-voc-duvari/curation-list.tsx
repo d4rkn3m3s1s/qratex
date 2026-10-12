@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ChoiceChips } from '@/components/ds/a11y';
 import { SectionCard } from '@/components/ds/page';
 import { QueryState, TONE_CHIP, type Tone } from '@/components/states';
-import { useMotionPolicy } from '@/lib/motion';
+import { DURATION, useMotionPolicy } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { BlockReason, CurationFilter, CurationItemDto, WallStatus, WallVerdict } from '@/lib/dealer/voc-wall/config';
 import { VOC_ROOT, curationKey, fetchCuration, setItemStatus, WallApiError } from './api';
@@ -95,7 +95,7 @@ export function CurationList({ qrCodeId, canModerate }: { qrCodeId: string | nul
                     layout={!policy.reduce}
                     initial={false}
                     exit={policy.reduce ? undefined : { opacity: 0, height: 0 }}
-                    transition={policy.transition({ duration: 0.2 })}
+                    transition={policy.transition({ duration: DURATION.base })}
                   >
                     <CurationRow
                       item={item}

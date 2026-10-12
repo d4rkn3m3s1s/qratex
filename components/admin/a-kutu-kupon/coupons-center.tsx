@@ -22,7 +22,7 @@ import {
 } from '@/components/ds/data';
 import { FilterBar, PageHeader, PanelPage, SectionTabs, useFilterState, useUrlState, type FilterField } from '@/components/ds/page';
 import { ErrorState } from '@/components/states';
-import { useMotionPolicy } from '@/lib/motion';
+import { DURATION, useMotionPolicy } from '@/lib/motion';
 import {
   COUPON_PAGE_SIZE,
   COUPON_STATUS_FILTERS,
@@ -94,7 +94,7 @@ function CopyCode({ code }: { code: string }) {
             initial={policy.reduce ? false : { scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={policy.reduce ? undefined : { scale: 0.6, opacity: 0 }}
-            transition={{ duration: 0.12 }}
+            transition={{ duration: DURATION.fast }}
             className="inline-flex"
           >
             {done ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}

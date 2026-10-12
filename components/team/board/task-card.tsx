@@ -1,4 +1,5 @@
 'use client';
+import { DURATION, EASE } from '@/lib/motion/tokens';
 
 import { memo, useState, type DragEvent } from 'react';
 import { m as Motion } from 'framer-motion';
@@ -92,7 +93,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
     <div draggable={draggable} onDragStart={draggable ? (e) => onDragStart?.(e, task) : undefined}>
     <Motion.article
       layout="position"
-      transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+      transition={{ duration: DURATION.base, ease: EASE.standard }}
       onClick={() => openTask(task.id)}
       aria-label={task.title}
       className={cn(
