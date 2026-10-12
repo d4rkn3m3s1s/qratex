@@ -120,7 +120,7 @@ function RiskView({ d }: { d: RiskOverview }) {
         icon={<Bot />}
         description={cfg.enabled ? copy.automationOn(cfg.thresholdPercent, cfg.inactiveDays) : copy.automationOff}
         actions={
-          <Button size="sm" variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setSheetOpen(true)}>
+          <Button size="sm" variant="outline" className="min-h-11" onClick={() => setSheetOpen(true)}>
             <Settings2 className="h-4 w-4" aria-hidden />
             {copy.automationOpen}
           </Button>

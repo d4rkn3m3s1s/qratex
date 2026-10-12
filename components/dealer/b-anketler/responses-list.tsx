@@ -33,10 +33,10 @@ export function ResponsesList({ surveyId, range }: { surveyId: string; range: Su
     >
       {(rows) => (
         <div className="space-y-3">
-          <ol className="space-y-3">
+          <ol className="divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
             {rows.map((r) => (
-              <li key={r.id} className="rounded-card border border-subtle bg-surface-1 p-4 qx-elevation-1">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-subtle pb-2">
+              <li key={r.id} className="p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
                   <p className="qx-small font-semibold text-fg">
                     <time dateTime={r.createdAt}>{formatDateTime(r.createdAt, tag)}</time>
                   </p>

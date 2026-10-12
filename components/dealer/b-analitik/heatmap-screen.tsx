@@ -203,7 +203,7 @@ function ViewToggle({ view, onChange }: { view: 'chart' | 'table'; onChange: (v:
             aria-pressed={view === v}
             onClick={() => onChange(v)}
             className={cn(
-              'qx-caption inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard sm:h-8',
+              'qx-caption inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               view === v ? 'bg-surface-1 text-fg qx-elevation-1' : 'text-fg-muted hover:text-fg',
             )}

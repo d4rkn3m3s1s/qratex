@@ -20,7 +20,7 @@ const SignatureGiftBox3D = dynamic(() => import('./signature-gift-box-3d'), {
       style={{ width: '100%', aspectRatio: '1 / 1' }}
     >
       <div
-        className="h-2/3 w-2/3 animate-pulse rounded-3xl"
+        className="h-2/3 w-2/3 rounded-3xl"
         style={{
           background:
             'radial-gradient(circle at 50% 40%, rgba(90,162,255,0.22), rgba(18,58,134,0.10) 55%, transparent 70%)',

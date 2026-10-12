@@ -39,9 +39,9 @@ export function Toaster() {
           info: '[&_[data-icon]]:text-info',
           description: 'group-[.toast]:text-muted-foreground',
           actionButton:
-            'group-[.toast]:min-h-9 group-[.toast]:cursor-pointer group-[.toast]:touch-manipulation group-[.toast]:rounded-md group-[.toast]:bg-primary group-[.toast]:px-3 group-[.toast]:py-2 group-[.toast]:text-sm group-[.toast]:font-medium group-[.toast]:text-primary-foreground group-[.toast]:transition-colors group-[.toast]:duration-200 group-[.toast]:focus-visible:outline-none group-[.toast]:focus-visible:ring-2 group-[.toast]:focus-visible:ring-ring',
+            'group-[.toast]:min-h-9 group-[.toast]:cursor-pointer group-[.toast]:touch-manipulation group-[.toast]:rounded-md group-[.toast]:bg-primary group-[.toast]:px-3 group-[.toast]:py-2 group-[.toast]:text-sm group-[.toast]:font-medium group-[.toast]:text-primary-foreground group-[.toast]:transition-colors group-[.toast]:duration-base group-[.toast]:focus-visible:outline-none group-[.toast]:focus-visible:ring-2 group-[.toast]:focus-visible:ring-ring',
           cancelButton:
-            'group-[.toast]:min-h-9 group-[.toast]:cursor-pointer group-[.toast]:touch-manipulation group-[.toast]:rounded-md group-[.toast]:bg-muted group-[.toast]:px-3 group-[.toast]:py-2 group-[.toast]:text-sm group-[.toast]:font-medium group-[.toast]:text-muted-foreground group-[.toast]:transition-colors group-[.toast]:duration-200 group-[.toast]:focus-visible:outline-none group-[.toast]:focus-visible:ring-2 group-[.toast]:focus-visible:ring-ring',
+            'group-[.toast]:min-h-9 group-[.toast]:cursor-pointer group-[.toast]:touch-manipulation group-[.toast]:rounded-md group-[.toast]:bg-muted group-[.toast]:px-3 group-[.toast]:py-2 group-[.toast]:text-sm group-[.toast]:font-medium group-[.toast]:text-muted-foreground group-[.toast]:transition-colors group-[.toast]:duration-base group-[.toast]:focus-visible:outline-none group-[.toast]:focus-visible:ring-2 group-[.toast]:focus-visible:ring-ring',
         },
       }}
     />

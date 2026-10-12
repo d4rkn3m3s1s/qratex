@@ -35,7 +35,7 @@ export function OverviewTab({ user: u, onGoTab }: { user: User360; onGoTab: (tab
           aria-valuemax={100}
           aria-valuenow={g.levelProgress}
         >
-          <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${g.levelProgress}%` }} />
+          <div className="h-full rounded-full bg-brand transition-[width] duration-base" style={{ width: `${g.levelProgress}%` }} />
         </div>
         <p className="mt-2 text-sm text-fg-muted">
           Seviye {fmtNumber(g.derivedLevel + 1)} için {fmtNumber(g.xpToNextLevel)} XP kaldı.

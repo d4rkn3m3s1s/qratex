@@ -26,8 +26,8 @@ export function NextActions({ actions }: { actions: NextAction[] }) {
         <div role="status" className="flex items-start gap-3 rounded-control bg-success-subtle/50 px-3 py-3">
           <CheckCircle2 aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-success" />
           <div>
-            <p className="text-sm font-medium text-fg">{copy.next.allClear}</p>
-            <p className="text-xs text-fg-muted">{copy.next.allClearDesc}</p>
+            <p className="qx-body font-medium text-fg">{copy.next.allClear}</p>
+            <p className="qx-caption text-fg-muted">{copy.next.allClearDesc}</p>
           </div>
         </div>
       ) : (
@@ -49,10 +49,10 @@ export function NextActions({ actions }: { actions: NextAction[] }) {
                 >
                   <SeverityBadge severity={a.severity} size="sm" className="mt-0.5 shrink-0" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-fg">{copy.next.title_[a.kind](a)}</span>
-                    <span className="mt-0.5 block text-xs text-fg-muted">{copy.next.detail[a.kind](a)}</span>
+                    <span className="block qx-body font-medium text-fg">{copy.next.title_[a.kind](a)}</span>
+                    <span className="mt-0.5 block qx-caption text-fg-muted">{copy.next.detail[a.kind](a)}</span>
                   </span>
-                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand">
+                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 qx-caption font-medium text-brand">
                     {copy.next.open}
                     <ArrowRight aria-hidden className="h-3.5 w-3.5 transition-transform duration-fast group-hover:translate-x-0.5" />
                   </span>
@@ -93,7 +93,7 @@ export function WaitingList({ waiting, now }: { waiting: WaitingSection; now: Da
       density="compact"
       actions={
         waiting.total > 0 ? (
-          <Link href={TODAY_LINKS.inboxWaiting} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+          <Link href={TODAY_LINKS.inboxWaiting} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 qx-body font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             {copy.waiting.seeAll}
             <ArrowRight aria-hidden className="h-4 w-4" />
           </Link>
@@ -104,8 +104,8 @@ export function WaitingList({ waiting, now }: { waiting: WaitingSection; now: Da
         <div role="status" className="flex items-start gap-3 py-2">
           <MessageSquare aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-fg-subtle" />
           <div>
-            <p className="text-sm font-medium text-fg">{copy.waiting.empty}</p>
-            <p className="text-xs text-fg-muted">{copy.waiting.emptyDesc}</p>
+            <p className="qx-body font-medium text-fg">{copy.waiting.empty}</p>
+            <p className="qx-caption text-fg-muted">{copy.waiting.emptyDesc}</p>
           </div>
         </div>
       ) : (
@@ -117,7 +117,7 @@ export function WaitingList({ waiting, now }: { waiting: WaitingSection; now: Da
             return (
               <li key={`${item.source}:${item.id}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 qx-caption text-fg-muted">
                     <Stars rating={item.rating} label={copy.waiting.stars(item.rating)} />
                     <span className="inline-flex items-center gap-1">
                       <SourceIcon aria-hidden className="h-3.5 w-3.5" />
@@ -127,12 +127,12 @@ export function WaitingList({ waiting, now }: { waiting: WaitingSection; now: Da
                     <time dateTime={item.createdAt}>{relative(item.createdAt)}</time>
                     {late && <span className="rounded-chip bg-danger-subtle px-1.5 py-0.5 font-medium text-danger">{copy.waiting.overdue}</span>}
                   </div>
-                  <p className={cn('mt-1 line-clamp-2 text-sm', item.excerpt ? 'text-fg' : 'italic text-fg-muted')}>{item.excerpt ?? copy.waiting.noText}</p>
+                  <p className={cn('mt-1 line-clamp-2 qx-body', item.excerpt ? 'text-fg' : 'italic text-fg-muted')}>{item.excerpt ?? copy.waiting.noText}</p>
                 </div>
                 <Link
                   href={item.href}
                   prefetch={false}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-control border border-strong px-3 text-sm font-medium text-fg hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-control border border-strong px-3 qx-body font-medium text-fg hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {copy.waiting.reply}
                   <span className="sr-only">: {item.excerpt ?? copy.waiting.noText}</span>

@@ -38,10 +38,10 @@ export function SetupCard({ setup }: { setup: SetupState }) {
     <section aria-labelledby={`${listId}-title`} className="min-w-0 rounded-card border border-subtle bg-surface-1">
       <div className="flex flex-wrap items-start gap-3 px-card py-4 sm:flex-nowrap">
         <div className="min-w-0 flex-1">
-          <h2 id={`${listId}-title`} className="text-base font-semibold text-fg">
+          <h2 id={`${listId}-title`} className="qx-h3 text-fg">
             {copy.setup.title}
           </h2>
-          <p className="mt-0.5 text-sm text-fg-muted">{copy.setup.desc}</p>
+          <p className="mt-0.5 qx-body text-fg-muted">{copy.setup.desc}</p>
           <div className="mt-3 flex items-center gap-3">
             <div
               role="progressbar"
@@ -54,7 +54,7 @@ export function SetupCard({ setup }: { setup: SetupState }) {
             >
               <div className="h-full rounded-full bg-brand transition-[width] duration-base" style={{ width: `${pct}%` }} />
             </div>
-            <span className="shrink-0 text-xs font-medium tabular-nums text-fg-muted">
+            <span className="shrink-0 qx-caption font-medium tabular-nums text-fg-muted">
               {copy.setup.progress(setup.required.done, setup.required.total)}
             </span>
           </div>
@@ -72,7 +72,7 @@ export function SetupCard({ setup }: { setup: SetupState }) {
             onClick={toggle}
             aria-expanded={!collapsed}
             aria-controls={listId}
-            className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 text-sm text-fg-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 qx-body text-fg-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             <span className="sr-only">{collapsed ? copy.setup.expand : copy.setup.collapse}</span>
             <ChevronDown aria-hidden className={cn('h-5 w-5 transition-transform duration-fast', collapsed ? '' : 'rotate-180')} />
@@ -95,23 +95,23 @@ export function SetupCard({ setup }: { setup: SetupState }) {
                 <span
                   aria-hidden
                   className={cn(
-                    'mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums',
+                    'mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full qx-caption font-semibold tabular-nums',
                     step.done ? 'bg-success text-success-fg' : 'bg-surface-3 text-fg-muted'
                   )}
                 >
                   {step.done ? <Check className="h-3.5 w-3.5" /> : i + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className={cn('text-sm font-medium', step.done ? 'text-fg-muted line-through decoration-fg-subtle' : 'text-fg')}>
+                  <p className={cn('qx-body font-medium', step.done ? 'text-fg-muted line-through decoration-fg-subtle' : 'text-fg')}>
                     {text.title}
-                    {!step.required && <span className="ml-2 rounded-chip bg-surface-3 px-1.5 py-0.5 text-xs font-normal text-fg-muted">{copy.setup.optional}</span>}
+                    {!step.required && <span className="ml-2 rounded-chip bg-surface-3 px-1.5 py-0.5 qx-caption font-normal text-fg-muted">{copy.setup.optional}</span>}
                     <span className="sr-only">{step.done ? ` — ${copy.setup.done}` : ''}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-fg-muted">{text.desc}</p>
+                  <p className="mt-0.5 qx-caption text-fg-muted">{text.desc}</p>
                 </div>
               </div>
               {!step.done && (
-                <Button asChild size="sm" variant={isNext ? 'default' : 'outline'} className="mt-auto min-h-11 w-full shadow-none sm:min-h-9">
+                <Button asChild size="sm" variant={isNext ? 'default' : 'outline'} className="mt-auto min-h-11 w-full shadow-none">
                   <Link href={step.href} prefetch={false}>
                     {text.cta}
                   </Link>

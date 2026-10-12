@@ -18,7 +18,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-11 min-h-11 w-full min-w-0 max-w-full cursor-pointer touch-manipulation items-center justify-between rounded-md border border-strong bg-background px-3 py-2 text-base sm:text-sm text-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      'flex h-11 min-h-11 w-full min-w-0 max-w-full cursor-pointer touch-manipulation items-center justify-between rounded-md border border-strong bg-background px-3 py-2 text-base sm:text-sm text-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       /* Koyu yüzeylerde / gradient hero üzerinde sınır-zemin ayrımı */
       'dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]',
       className
@@ -40,7 +40,7 @@ const SelectScrollUpButton = React.forwardRef<
   <SelectPrimitive.ScrollUpButton
     ref={ref}
     className={cn(
-      'flex min-h-8 cursor-pointer touch-manipulation items-center justify-center py-1 transition-colors duration-200 hover:bg-accent/50',
+      'flex min-h-8 cursor-pointer touch-manipulation items-center justify-center py-1 transition-colors duration-base hover:bg-accent/50',
       className
     )}
     {...props}
@@ -57,7 +57,7 @@ const SelectScrollDownButton = React.forwardRef<
   <SelectPrimitive.ScrollDownButton
     ref={ref}
     className={cn(
-      'flex min-h-8 cursor-pointer touch-manipulation items-center justify-center py-1 transition-colors duration-200 hover:bg-accent/50',
+      'flex min-h-8 cursor-pointer touch-manipulation items-center justify-center py-1 transition-colors duration-base hover:bg-accent/50',
       className
     )}
     {...props}
@@ -122,7 +122,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-pointer touch-manipulation select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors duration-200 focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'relative flex w-full cursor-pointer touch-manipulation select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors duration-base focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className
     )}
     {...props}

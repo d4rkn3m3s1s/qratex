@@ -97,7 +97,7 @@ function TrendSection({ data }: { data: AnalyticsOverview }) {
           aria-pressed={view === v}
           onClick={() => setView(v)}
           className={cn(
-            'qx-caption inline-flex h-11 items-center rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard sm:h-8',
+            'qx-caption inline-flex h-11 items-center rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             view === v ? 'bg-surface-1 text-fg qx-elevation-1' : 'text-fg-muted hover:text-fg',
           )}

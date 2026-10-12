@@ -530,7 +530,7 @@ function ListEmpty({
               <li key={s.key} className={cn('flex flex-col gap-2 rounded-card border border-subtle bg-surface-1 p-4')}>
                 <span className="qx-small font-semibold text-fg">{c.segments[s.key].label}</span>
                 <span className="qx-caption text-fg-muted">{c.segments[s.key].hint}</span>
-                <Button variant="outline" size="sm" className="mt-auto h-11 sm:h-9" onClick={() => onCreate(s.key)}>
+                <Button variant="outline" size="sm" className="mt-auto h-11" onClick={() => onCreate(s.key)}>
                   {c.empty.suggestionCta(fmtNumber(s.reachable, locale))}
                 </Button>
               </li>

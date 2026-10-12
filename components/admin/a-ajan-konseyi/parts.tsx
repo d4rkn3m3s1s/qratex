@@ -34,7 +34,7 @@ export function AgentAvatar({ agent, size = 'md', active = false }: { agent: str
     <span
       aria-hidden
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-semibold transition-shadow duration-200',
+        'inline-flex shrink-0 items-center justify-center rounded-full font-semibold transition-shadow duration-base',
         size === 'sm' ? 'h-7 w-7 text-xs' : 'h-9 w-9 text-sm',
         p ? TONE_CHIP[p.tone] : TONE_CHIP.neutral,
         active && 'ring-2 ring-focus ring-offset-2 ring-offset-surface-1'

@@ -33,7 +33,7 @@ const AvatarImage = React.forwardRef<
   return (
     <AvatarPrimitive.Image
       ref={ref}
-      className={cn('aspect-square h-full w-full object-cover transition-opacity duration-200', className)}
+      className={cn('aspect-square h-full w-full object-cover transition-opacity duration-base', className)}
       src={resolved}
       decoding="async"
       // Harici avatarlar (Google lh3 vb.) yabancı Referer ile 429 + HTML döndürüyor → tarayıcı

@@ -64,7 +64,7 @@ function NotificationCenterSkeleton() {
       variant="ghost"
       size="icon"
       type="button"
-      className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+      className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-base hover:bg-muted"
       disabled
       aria-label={t('notificationCenter.trigger')}
     >
@@ -456,7 +456,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
               <Button
                 variant="ghost"
                 size="icon"
-                className="hidden h-10 w-10 min-h-10 min-w-10 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted sm:inline-flex sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9"
+                className="hidden h-10 w-10 min-h-10 min-w-10 touch-manipulation rounded-full transition-colors duration-base hover:bg-muted sm:inline-flex sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9"
                 aria-label={t('appShell.themeSelect')}
               >
                 {!mounted || theme === 'system' || !theme ? (
@@ -491,7 +491,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-12 w-12 min-h-12 min-w-12 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20 sm:h-11 sm:min-h-11 sm:w-11 sm:min-w-11"
+                className="relative h-12 w-12 min-h-12 min-w-12 touch-manipulation rounded-full p-0 transition-shadow duration-base hover:ring-2 hover:ring-primary/20 sm:h-11 sm:min-h-11 sm:w-11 sm:min-w-11"
                 aria-label={t('appShell.accountMenu')}
               >
                 <div className="relative flex h-full w-full items-center justify-center">

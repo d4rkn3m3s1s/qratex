@@ -164,7 +164,7 @@ function ReadyView({
               aria-pressed={win === w}
               onClick={() => onWindow(w)}
               className={cn(
-                'min-h-[44px] rounded-[calc(var(--radius-md)-2px)] px-4 qx-small font-medium transition-colors duration-150 sm:min-h-9',
+                'min-h-[44px] rounded-[calc(var(--radius-md)-2px)] px-4 qx-small font-medium transition-colors duration-fast',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
                 win === w ? 'bg-surface-1 text-fg qx-elevation-1' : 'text-fg-muted hover:text-fg'
               )}

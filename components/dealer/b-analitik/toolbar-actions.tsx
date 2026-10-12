@@ -40,7 +40,7 @@ export function UpdatedAt({ iso, className }: { iso: string | null | undefined; 
 export function RefreshButton({ onRefresh, pending, disabled }: { onRefresh: () => void; pending: boolean; disabled?: boolean }) {
   const copy = useAnalyticsCopy();
   return (
-    <Button type="button" variant="outline" size="sm" className="h-11 min-h-11 gap-2 sm:h-9 sm:min-h-9" onClick={onRefresh} disabled={pending || disabled} aria-busy={pending || undefined}>
+    <Button type="button" variant="outline" size="sm" className="h-11 min-h-11 gap-2" onClick={onRefresh} disabled={pending || disabled} aria-busy={pending || undefined}>
       <RefreshCw className={cn('h-4 w-4', pending && 'motion-safe:animate-spin')} aria-hidden />
       <span>{pending ? copy.refreshing : copy.refresh}</span>
     </Button>
@@ -71,7 +71,7 @@ export function ExportMenu({ items, disabled }: { items: readonly ExportItem[]; 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="h-11 min-h-11 gap-2 sm:h-9 sm:min-h-9" disabled={disabled}>
+        <Button type="button" variant="outline" size="sm" className="h-11 min-h-11 gap-2" disabled={disabled}>
           <Download className="h-4 w-4" aria-hidden />
           <span>{copy.export}</span>
         </Button>
@@ -82,7 +82,7 @@ export function ExportMenu({ items, disabled }: { items: readonly ExportItem[]; 
           <DropdownMenuItem
             key={item.key}
             disabled={!item.csv}
-            className="min-h-11 sm:min-h-9"
+            className="min-h-11"
             onSelect={() => {
               if (!item.csv) return;
               const { content, fileName } = item.csv();
@@ -94,7 +94,7 @@ export function ExportMenu({ items, disabled }: { items: readonly ExportItem[]; 
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="min-h-11 sm:min-h-9" onSelect={() => window.print()}>
+        <DropdownMenuItem className="min-h-11" onSelect={() => window.print()}>
           {copy.exportPrint}
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -124,7 +124,7 @@ export function SendDialog({ campaign, initialMode = 'now', dealerId, onClose, o
                 <label
                   key={m}
                   className={cn(
-                    'flex min-h-[44px] cursor-pointer items-center gap-2 rounded-control border px-3 py-2 qx-small font-medium transition-colors duration-150',
+                    'flex min-h-[44px] cursor-pointer items-center gap-2 rounded-control border px-3 py-2 qx-small font-medium transition-colors duration-fast',
                     'focus-within:ring-2 focus-within:ring-focus focus-within:ring-offset-2 focus-within:ring-offset-background',
                     mode === m ? 'border-brand bg-brand-subtle text-brand' : 'border-subtle bg-surface-1 text-fg hover:bg-surface-3'
                   )}
@@ -169,7 +169,7 @@ export function SendDialog({ campaign, initialMode = 'now', dealerId, onClose, o
                 <label
                   key={h}
                   className={cn(
-                    'inline-flex min-h-[44px] min-w-[64px] cursor-pointer items-center justify-center rounded-chip border px-3 qx-small font-medium transition-colors duration-150',
+                    'inline-flex min-h-[44px] min-w-[64px] cursor-pointer items-center justify-center rounded-chip border px-3 qx-small font-medium transition-colors duration-fast',
                     'focus-within:ring-2 focus-within:ring-focus focus-within:ring-offset-2 focus-within:ring-offset-background',
                     holdout === h ? 'border-brand bg-brand-subtle text-brand' : 'border-subtle bg-surface-1 text-fg hover:bg-surface-3'
                   )}

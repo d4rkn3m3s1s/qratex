@@ -148,18 +148,18 @@ function CurationRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-0.5" role="img" aria-label={c.stars(item.rating)}>
             {[1, 2, 3, 4, 5].map((i) => (
-              <Star key={i} aria-hidden className={cn('h-3.5 w-3.5', i <= item.rating ? 'fill-amber-400 text-amber-400' : 'text-fg-subtle')} />
+              <Star key={i} aria-hidden className={cn('h-3.5 w-3.5', i <= item.rating ? 'fill-warning text-warning' : 'text-fg-subtle')} />
             ))}
           </span>
-          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', TONE_CHIP[chip.tone])}>
+          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 qx-caption font-medium', TONE_CHIP[chip.tone])}>
             {safety && <ShieldAlert aria-hidden className="h-3 w-3" />}
             {chip.label}
           </span>
           {item.intent && c.intent[item.intent] && (
-            <span className="rounded-full border border-subtle px-2 py-0.5 text-xs text-fg-muted">{c.intent[item.intent]}</span>
+            <span className="rounded-full border border-subtle px-2 py-0.5 qx-caption text-fg-muted">{c.intent[item.intent]}</span>
           )}
           {item.themes.map((t) => (
-            <span key={t} className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
+            <span key={t} className="rounded-full bg-surface-muted px-2 py-0.5 qx-caption text-fg-muted">
               {t}
             </span>
           ))}

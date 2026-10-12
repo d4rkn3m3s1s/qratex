@@ -59,7 +59,7 @@ export function DemoAccounts({
               aria-label={`${t('auth.demoLoginAriaPrefix')} ${label}`}
               className={cn(
                 'flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-control border border-border bg-surface-1 px-2 py-2',
-                'transition-colors duration-150 hover:border-brand-border hover:bg-brand-subtle',
+                'transition-colors duration-fast hover:border-brand-border hover:bg-brand-subtle',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
               )}
             >

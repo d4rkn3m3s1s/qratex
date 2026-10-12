@@ -150,7 +150,7 @@ export function CampaignEditor({ target, dealerId, onClose, onSaved }: CampaignE
                   <label
                     key={key}
                     className={cn(
-                      'relative flex min-h-[44px] cursor-pointer flex-col gap-0.5 rounded-control border px-3 py-2.5 transition-colors duration-150',
+                      'relative flex min-h-[44px] cursor-pointer flex-col gap-0.5 rounded-control border px-3 py-2.5 transition-colors duration-fast',
                       'focus-within:ring-2 focus-within:ring-focus focus-within:ring-offset-2 focus-within:ring-offset-background',
                       checked ? 'border-brand bg-brand-subtle' : 'border-subtle bg-surface-1 hover:bg-surface-3'
                     )}

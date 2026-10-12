@@ -71,7 +71,7 @@ export function CampaignRow({ item, readOnly, busy, performanceHref, onAction }:
     <article
       aria-busy={busy || undefined}
       className={cn(
-        'flex flex-col gap-3 rounded-card border border-subtle bg-surface-1 p-4 transition-opacity duration-150 sm:flex-row sm:items-start sm:gap-4',
+        'flex flex-col gap-3 rounded-card border border-subtle bg-surface-1 p-4 transition-opacity duration-fast sm:flex-row sm:items-start sm:gap-4',
         busy && 'opacity-70'
       )}
     >
@@ -120,7 +120,7 @@ export function CampaignRow({ item, readOnly, busy, performanceHref, onAction }:
 
       <div className="flex shrink-0 items-center gap-2 sm:justify-end">
         {sent ? (
-          <Button asChild variant="outline" size="sm" className="h-11 flex-1 gap-1.5 sm:h-9 sm:flex-none">
+          <Button asChild variant="outline" size="sm" className="h-11 flex-1 gap-1.5 sm:flex-none">
             <Link href={performanceHref}>
               <BarChart3 aria-hidden className="h-4 w-4" />
               {c.row.performance}
@@ -129,7 +129,7 @@ export function CampaignRow({ item, readOnly, busy, performanceHref, onAction }:
         ) : !readOnly && sendable && item.status !== 'scheduled' ? (
           <Button
             size="sm"
-            className="h-11 flex-1 gap-1.5 shadow-none sm:h-9 sm:flex-none"
+            className="h-11 flex-1 gap-1.5 shadow-none sm:flex-none"
             onClick={() => onAction('send', item)}
             disabled={busy}
           >
@@ -137,7 +137,7 @@ export function CampaignRow({ item, readOnly, busy, performanceHref, onAction }:
             {c.row.send}
           </Button>
         ) : !readOnly && editable ? (
-          <Button variant="outline" size="sm" className="h-11 flex-1 gap-1.5 sm:h-9 sm:flex-none" onClick={() => onAction('edit', item)} disabled={busy}>
+          <Button variant="outline" size="sm" className="h-11 flex-1 gap-1.5 sm:flex-none" onClick={() => onAction('edit', item)} disabled={busy}>
             <Pencil aria-hidden className="h-4 w-4" />
             {c.row.edit}
           </Button>

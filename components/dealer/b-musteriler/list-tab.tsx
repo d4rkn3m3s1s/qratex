@@ -140,7 +140,7 @@ export function ListTab({ initial }: { initial: { params: ListParams; page: Cust
     <div className="space-y-4">
       <FilterBar fields={fields}>
         {canSend && (
-          <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-10">
+          <Button asChild variant="outline" size="sm" className="min-h-11">
             <a href={exportHref} download>
               <Download className="h-4 w-4" aria-hidden />
               {copy.exportCsv}

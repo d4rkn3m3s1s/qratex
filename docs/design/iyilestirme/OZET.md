@@ -74,3 +74,20 @@ Bu turda yeni `sonra-*.png` alınmadı; mevcut görüntüler yukarıdaki listede
 - Animasyon: yalnız operasyon yüzeyleri ele alındı; kalan `animate-pulse` kullanımları değerlendirilmeli.
 - Müşteri: `home-screen.tsx` ve bakiye kartları çakışma nedeniyle bu turda düzenlenmedi.
 - axe/kontrast taraması ve prod build hâlâ yapılmadı.
+
+## Üçüncü tur
+
+Doğrulama: `tsc --noEmit` 0 hata; `npx jest` 356/359 suite yeşil. Kırmızı 3 suite (`remedy-offer-service`, `remedy-accept-abuse`, `customer-voices`) paralel çalışan telafi/bütçe işinin henüz commit edilmemiş `lib/remedy-budget.ts` değişikliğinden kaynaklanıyor, bu turun dosyalarıyla ilgisi yok.
+
+- **Bayi dokunma hedefi:** müşteriler, kampanyalar, kıyas/etki, içgörüler, analitik, bugün, radar ve otomasyon yanıt editöründe masaüstünde 36–40px'e küçülen `sm:h-9` / `sm:min-h-9|10` kaldırıldı. Butonlar her genişlikte en az 44px.
+- **Bayi yazı ölçeği:** bugün ekranı (dikkat, yapılacaklar, kurulum, haftalık rapor, operasyon özeti), otomasyon uyarı ve yanıt ekranları, VOC kürasyon çipleri, asistan baloncuğu ve markdown'daki ham `text-xs/sm/base` değerleri `qx-caption/qx-body/qx-h3` oldu. Form alanlarına dokunulmadı (iOS yakınlaştırma eşiği).
+- **Bayi yüzey:** anket yanıtları kart yığını yerine tek yüzeyde bölünmüş liste. Asistan çekmecesi başlığındaki süs ikon kutusu sade ikona indi. VOC yıldızları ham amber yerine `warning` tonunda.
+- **Hareket token'ları:** `components/ui/*` (button, input, select, dialog, sheet, tooltip, switch…), auth, dashboard başlık/bildirim, onboarding, PWA banner, admin parça ekranları ve bayi kampanya ekranlarındaki `duration-150/200/300/500` ve `ease-out/in-out` değerleri `duration-fast/base/slow` ve `ease-standard` oldu. Otomasyon uyarı çubuğu `DURATION.slow` + `EASE.standard` kullanıyor.
+- **Sonsuz süs hareketi:** sohbet FAB'ının sürekli zıplaması, panel başlığındaki sonsuz parlama ve avatar zıplaması kaldırıldı (hover baloncukları duruyor). "Yazıyor" noktaları token'a bağlandı. İmza hediye kutusu yükleyicisi statik. Avatar çerçevesi ve klan savaşı "canlı" noktası `motion-safe:` ile azaltılmış harekette duruyor.
+- **Bilerek dokunulmadı:** müşteri oyunları, karakter rozeti açılışı, gizemli bar, kutu açılışı, tarama vizörü, holo folyo, lab sayfaları, admin kapısı, landing arka planı ve public header (landing ajanının alanı), telafi/bütçe ekranları, gelen kutusu, ekip, ayarlar ve kasa/tüketim.
+
+### Kalanlar (üçüncü tur)
+
+- Değişiklikler tarayıcıda gözle doğrulanmadı. Bayi ekranlarında 44px butonların masaüstü yoğunluğu gözden geçirilmeli.
+- `components/layout/header.tsx` ve `components/landing/*` içinde hâlâ elle yazılmış süreler var; landing işi bitince ele alınmalı.
+- `remedy-screen.tsx` içindeki elle yazılmış süre (0.5) ve `animate-ping` telafi işinin dosyasında kaldı.

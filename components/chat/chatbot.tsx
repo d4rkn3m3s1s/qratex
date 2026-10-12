@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
-import { DURATION, EASE } from '@/lib/motion/tokens';
+import { DURATION, EASE, STAGGER } from '@/lib/motion/tokens';
 import { useLocaleSafe } from '@/lib/app-locale';
 import {
   X,
@@ -161,7 +161,7 @@ const qraMascotImgFilter = cn(
   'object-cover saturate-[1.22] contrast-[1.08] brightness-[1.05]',
   'drop-shadow-[0_2px_12px_hsl(var(--primary)/0.42)]',
   'dark:saturate-[1.34] dark:brightness-[1.1] dark:drop-shadow-[0_2px_16px_hsl(var(--primary)/0.48)]',
-  'transition-[filter,transform] duration-300 ease-out',
+  'transition-[filter,transform] duration-slow ease-standard motion-reduce:transition-none',
   'group-hover:saturate-[1.38] group-hover:brightness-[1.08] group-hover:drop-shadow-[0_3px_16px_hsl(var(--primary)/0.52)]'
 );
 
@@ -373,20 +373,6 @@ export function Chatbot() {
               onClick={() => setIsOpen(true)}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
-              animate={
-                motionLite
-                  ? undefined
-                  : {
-                      y: [0, -3, 0],
-                    }
-              }
-              transition={
-                motionLite
-                  ? undefined
-                  : {
-                      y: { duration: 2.8, repeat: Infinity, ease: 'easeInOut' },
-                    }
-              }
               className="group relative isolate flex h-[3.75rem] w-[3.75rem] shrink-0 touch-manipulation cursor-pointer items-center justify-center overflow-visible rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-16 sm:w-16"
             >
               <div
@@ -549,21 +535,9 @@ export function Chatbot() {
                   className="absolute inset-0 -z-0 bg-gradient-to-b from-white/40 to-transparent opacity-90 dark:from-white/[0.05] dark:to-transparent dark:opacity-100"
                   aria-hidden
                 />
-                {!motionLite && !isMinimized && (
-                  <Motion.div
-                    className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent dark:via-white/5"
-                    animate={{ x: ['-100%', '100%'] }}
-                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                    aria-hidden
-                  />
-                )}
 
                 <div className="relative z-[1] flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-                  <Motion.div
-                    className="relative shrink-0"
-                    animate={motionLite || isMinimized ? undefined : { y: [0, -2, 0] }}
-                    transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                  >
+                  <div className="relative shrink-0">
                     <div
                       className={cn(
                         glassAvatarFrame,
@@ -588,7 +562,7 @@ export function Chatbot() {
                         )}
                       </div>
                     </div>
-                  </Motion.div>
+                  </div>
 
                   <div className="min-w-0">
                     <h3 className="flex min-w-0 flex-wrap items-center gap-2 truncate text-sm font-semibold tracking-tight sm:text-base">
@@ -759,7 +733,7 @@ export function Chatbot() {
                                   transition={
                                     motionLite
                                       ? undefined
-                                      : { duration: 0.55, repeat: Infinity, delay: i * 0.12 }
+                                      : { duration: DURATION.slow * 2, repeat: Infinity, delay: i * STAGGER.step * 3, ease: EASE.standard }
                                   }
                                 />
                               ))}

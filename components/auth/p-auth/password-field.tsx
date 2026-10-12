@@ -90,7 +90,7 @@ export const PasswordField = forwardRef<HTMLInputElement, Props>(function Passwo
                 <span
                   key={step}
                   className={cn(
-                    'h-1.5 rounded-full transition-colors duration-200',
+                    'h-1.5 rounded-full transition-colors duration-base',
                     ev.strength >= step && ev.strength > 0 ? STRENGTH_BAR[ev.strength as 1 | 2 | 3 | 4] : 'bg-surface-3',
                   )}
                 />

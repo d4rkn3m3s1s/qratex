@@ -10,7 +10,7 @@ import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { useAuthCopy } from './p-auth/copy';
 
 const iconButton =
-  'inline-flex h-11 min-w-11 touch-manipulation items-center justify-center gap-1.5 rounded-full px-3 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex h-11 min-w-11 touch-manipulation items-center justify-center gap-1.5 rounded-full px-3 text-fg-muted transition-colors duration-fast hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * Kimlik ekranlarının TEK kabuğu (QDL v2 · ops kaydı): sakin düz zemin, üstte logo + dil +
@@ -59,7 +59,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           prefetch={false}
           href="/"
           aria-label={copy.shellHome}
-          className="flex w-fit items-center gap-2 rounded-lg outline-none transition-opacity duration-150 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-fit items-center gap-2 rounded-lg outline-none transition-opacity duration-fast hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Image src="/logo/logo.png" alt="" width={40} height={40} className="hidden h-9 w-9 object-contain dark:block" priority />
           <Image src="/logo/logo-light.png" alt="" width={40} height={40} className="block h-9 w-9 object-contain dark:hidden" priority />

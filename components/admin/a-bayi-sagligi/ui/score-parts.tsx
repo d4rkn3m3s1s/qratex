@@ -18,7 +18,7 @@ export function ScoreBadge({ score, band, c, size = 'md' }: { score: number; ban
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full font-medium tabular-nums transition-colors duration-200',
+        'inline-flex items-center gap-1.5 rounded-full font-medium tabular-nums transition-colors duration-base',
         TONE_CHIP[BAND_TONE[band]],
         size === 'sm' && 'px-2 py-0.5 text-xs',
         size === 'md' && 'px-2.5 py-1 text-sm',
@@ -94,7 +94,7 @@ export function ComponentBreakdown({
               >
                 <div
                   className={cn(
-                    'h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none',
+                    'h-full rounded-full transition-[width] duration-slow ease-standard motion-reduce:transition-none',
                     comp.points == null ? 'bg-transparent' : TONE_STRIPE[tone]
                   )}
                   style={{ width: `${pct}%` }}

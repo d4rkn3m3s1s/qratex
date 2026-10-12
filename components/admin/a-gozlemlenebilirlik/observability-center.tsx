@@ -233,7 +233,7 @@ function StatusBanner({ overall, issueCount }: { overall: HealthStatus; issueCou
         ? 'Bilinen bir sorun yok, ancak bazı bölümler okunamadı.'
         : `${issueCount} sorun var.`;
   return (
-    <div className={cn('flex items-center gap-3 rounded-xl border p-4 transition-colors duration-200', BANNER_CLASS[overall])}>
+    <div className={cn('flex items-center gap-3 rounded-xl border p-4 transition-colors duration-base', BANNER_CLASS[overall])}>
       <HealthBadge status={overall} size="md" label={HEALTH_LABEL[overall]} />
       <p className="text-base font-semibold">{sentence}</p>
     </div>

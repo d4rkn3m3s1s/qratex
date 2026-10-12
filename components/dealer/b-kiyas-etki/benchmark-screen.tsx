@@ -49,7 +49,7 @@ function Segmented<T extends string>({ label, value, options, onChange }: { labe
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            'qx-caption inline-flex min-h-11 shrink-0 flex-col items-center justify-center rounded-chip px-3 font-medium transition-colors duration-fast ease-standard sm:min-h-9',
+            'qx-caption inline-flex min-h-11 shrink-0 flex-col items-center justify-center rounded-chip px-3 font-medium transition-colors duration-fast ease-standard',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             value === o.value ? 'bg-surface-1 text-fg qx-elevation-1' : 'text-fg-muted hover:text-fg',
           )}
@@ -159,7 +159,7 @@ function Recommendations({ data }: { data: BenchmarkData }) {
                     <p className="qx-small font-medium text-fg">{t.title}</p>
                     <p className="qx-caption mt-0.5 text-fg-muted">{t.body}</p>
                   </div>
-                  <Button asChild variant="outline" size="sm" className="h-11 shrink-0 sm:h-9">
+                  <Button asChild variant="outline" size="sm" className="h-11 shrink-0">
                     <Link href={r.href}>
                       {t.cta}
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -383,7 +383,7 @@ export function BenchmarkScreen() {
           meta={data ? <span className="qx-caption tabular-nums text-fg-subtle">{copy.updatedAt(fmtDateTime(data.generatedAt, locale))}</span> : null}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" className="h-11 gap-2 sm:h-9" onClick={fresh.refresh} disabled={fresh.pending || !data} aria-busy={fresh.pending || undefined}>
+              <Button type="button" variant="outline" size="sm" className="h-11 gap-2" onClick={fresh.refresh} disabled={fresh.pending || !data} aria-busy={fresh.pending || undefined}>
                 <RefreshCw className={cn('h-4 w-4', fresh.pending && 'motion-safe:animate-spin')} aria-hidden />
                 {fresh.pending ? copy.refreshing : copy.refresh}
               </Button>
@@ -391,7 +391,7 @@ export function BenchmarkScreen() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-11 gap-2 sm:h-9"
+                className="h-11 gap-2"
                 disabled={!data}
                 onClick={() => data && downloadCsv(benchmarkCsv(data, copy), `kiyas_${data.group}_${data.period.range.from}_${data.period.range.to}.csv`)}
               >

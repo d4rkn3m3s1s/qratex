@@ -247,11 +247,11 @@ function NextSteps({ steps, onSetGoals }: { steps: readonly NextStep[]; onSetGoa
               <li key={s.kind} className="flex flex-col gap-2 rounded-control border border-subtle p-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="qx-small font-medium text-fg">{t.title}</span>
                 {s.kind === 'set_goals' ? (
-                  <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 sm:h-9" onClick={onSetGoals}>
+                  <Button type="button" variant="outline" size="sm" className="h-11 shrink-0" onClick={onSetGoals}>
                     {t.cta}
                   </Button>
                 ) : (
-                  <Button asChild variant="outline" size="sm" className="h-11 shrink-0 sm:h-9">
+                  <Button asChild variant="outline" size="sm" className="h-11 shrink-0">
                     <Link href={s.href}>
                       {t.cta}
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -305,7 +305,7 @@ function TrendSection({ data }: { data: ImpactData }) {
               aria-checked={view === v}
               onClick={() => setView(v)}
               className={cn(
-                'qx-caption inline-flex h-11 shrink-0 items-center rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard sm:h-8',
+                'qx-caption inline-flex h-11 shrink-0 items-center rounded-chip px-2.5 font-medium transition-colors duration-fast ease-standard',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 view === v ? 'bg-surface-1 text-fg qx-elevation-1' : 'text-fg-muted hover:text-fg',
               )}
@@ -376,7 +376,7 @@ function MethodCard({ data, onEdit }: { data: ImpactData; onEdit: () => void }) 
       className="scroll-mt-24"
       actions={
         !data.readOnly && (
-          <Button type="button" variant="outline" size="sm" className="h-11 gap-2 sm:h-9" onClick={onEdit}>
+          <Button type="button" variant="outline" size="sm" className="h-11 gap-2" onClick={onEdit}>
             <SlidersHorizontal className="h-4 w-4" aria-hidden />
             {copy.impact.assumptionsBtn}
           </Button>
@@ -494,12 +494,12 @@ export function ImpactScreen() {
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {data && !data.readOnly && (
-                <Button type="button" variant="outline" size="sm" className="h-11 gap-2 sm:h-9" onClick={openSheet}>
+                <Button type="button" variant="outline" size="sm" className="h-11 gap-2" onClick={openSheet}>
                   <SlidersHorizontal className="h-4 w-4" aria-hidden />
                   {copy.impact.assumptionsBtn}
                 </Button>
               )}
-              <Button type="button" variant="outline" size="sm" className="h-11 gap-2 sm:h-9" onClick={fresh.refresh} disabled={fresh.pending || !data} aria-busy={fresh.pending || undefined}>
+              <Button type="button" variant="outline" size="sm" className="h-11 gap-2" onClick={fresh.refresh} disabled={fresh.pending || !data} aria-busy={fresh.pending || undefined}>
                 <RefreshCw className={cn('h-4 w-4', fresh.pending && 'motion-safe:animate-spin')} aria-hidden />
                 {fresh.pending ? copy.refreshing : copy.refresh}
               </Button>
@@ -507,7 +507,7 @@ export function ImpactScreen() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-11 gap-2 sm:h-9"
+                className="h-11 gap-2"
                 disabled={!data}
                 onClick={() => data && downloadCsv(impactCsv(data, copy), `etki_${data.query.range.from}_${data.query.range.to}.csv`)}
               >

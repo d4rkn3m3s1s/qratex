@@ -27,7 +27,7 @@ export function AutomationNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'inline-flex min-h-11 items-center gap-2 rounded-control border px-3 text-sm font-medium transition-colors',
+                  'inline-flex min-h-11 items-center gap-2 rounded-control border px-3 qx-body font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
                   active
                     ? 'border-brand/40 bg-brand-subtle text-fg'

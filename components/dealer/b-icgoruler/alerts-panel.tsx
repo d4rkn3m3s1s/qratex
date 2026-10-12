@@ -9,7 +9,7 @@ import type { RefHandlers } from './refs';
 import { useInsightsCopy } from './copy';
 
 const linkClass =
-  'inline-flex min-h-11 items-center gap-1 qx-small font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-chip sm:min-h-8';
+  'inline-flex min-h-11 items-center gap-1 qx-small font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-chip';
 
 /**
  * Kural tabanlı uyarılar (eski sayfada LLM serbest metniydi, ilgili kayda bağlantı yoktu).

@@ -126,14 +126,14 @@ export function RadarPanel({ initial, readOnly }: { initial: RadarStatus | null;
       }
       actions={
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
+          <Button asChild variant="ghost" size="sm" className="min-h-11">
             <Link href="/dealer/automation/alerts">
               <SlidersHorizontal aria-hidden className="mr-1.5 h-4 w-4" />
               {copy.thresholdsLink}
             </Link>
           </Button>
           {!readOnly ? (
-            <Button variant="outline" size="sm" className="min-h-11 shadow-none sm:min-h-9" onClick={scan} loading={scanning} disabled={scanning}>
+            <Button variant="outline" size="sm" className="min-h-11 shadow-none" onClick={scan} loading={scanning} disabled={scanning}>
               <RefreshCw aria-hidden className="mr-1.5 h-4 w-4" />
               {scanning ? copy.radar.scanning : copy.radar.scan}
             </Button>

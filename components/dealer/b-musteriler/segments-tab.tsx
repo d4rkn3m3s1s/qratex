@@ -70,7 +70,7 @@ function SegmentCardView({ s, vipThreshold }: { s: SegmentCard; vipThreshold: st
           <Button
             size="sm"
             variant="outline"
-            className="min-h-11 sm:min-h-10"
+            className="min-h-11"
             disabled={s.count === 0}
             onClick={() => url.set({ tab: null, segment: s.tag, risk: null, band: null, q: null, page: null }, { history: 'push' })}
           >
@@ -80,7 +80,7 @@ function SegmentCardView({ s, vipThreshold }: { s: SegmentCard; vipThreshold: st
           {canSend && (
             <Button
               size="sm"
-              className="min-h-11 sm:min-h-10"
+              className="min-h-11"
               disabled={s.count === 0}
               onClick={() =>
                 compose({

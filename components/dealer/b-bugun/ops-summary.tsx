@@ -23,9 +23,9 @@ function Counter({ href, icon, label, value, sub, tone }: { href: string; icon: 
           {icon}
         </span>
         <span className="min-w-0">
-          <span className="block text-xs text-fg-muted">{label}</span>
+          <span className="block qx-caption text-fg-muted">{label}</span>
           <span className="block text-xl font-semibold tabular-nums text-fg">{value.toLocaleString(tag)}</span>
-          {sub && <span className="block text-xs text-fg-muted">{sub}</span>}
+          {sub && <span className="block qx-caption text-fg-muted">{sub}</span>}
         </span>
       </Link>
     </li>
@@ -45,8 +45,8 @@ function DailyFlow({ daily }: { daily: OpsData['daily'] }) {
   const max = Math.max(1, ...daily.map((d) => Math.max(d.feedback, d.consumptions)));
   return (
     <div className="min-w-0">
-      <h3 className="text-sm font-semibold text-fg">{copy.ops.dailyTitle}</h3>
-      <div className="mt-1 flex flex-wrap gap-3 text-xs text-fg-muted" aria-hidden>
+      <h3 className="qx-body font-semibold text-fg">{copy.ops.dailyTitle}</h3>
+      <div className="mt-1 flex flex-wrap gap-3 qx-caption text-fg-muted" aria-hidden>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-brand" />
           {copy.ops.dailyFeedback}
@@ -106,15 +106,15 @@ function Distribution({ dist, sources }: { dist: OpsData['distribution']; source
   const pctOf = (n: number) => (dist.n > 0 ? Math.round((n / dist.n) * 100) : 0);
   return (
     <div className="min-w-0">
-      <h3 className="text-sm font-semibold text-fg">{copy.ops.distributionTitle}</h3>
+      <h3 className="qx-body font-semibold text-fg">{copy.ops.distributionTitle}</h3>
       {dist.n === 0 ? (
-        <p className="mt-2 text-sm text-fg-muted">{copy.ops.noRatings}</p>
+        <p className="mt-2 qx-body text-fg-muted">{copy.ops.noRatings}</p>
       ) : (
         <>
           <div aria-hidden className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-surface-3">
             {parts.map((p) => (p.n > 0 ? <span key={p.key} className={p.cls} style={{ width: `${(p.n / dist.n) * 100}%` }} /> : null))}
           </div>
-          <ul className="mt-3 space-y-1.5 text-sm">
+          <ul className="mt-3 space-y-1.5 qx-body">
             {parts.map((p) => (
               <li key={p.key} className="flex items-center gap-2">
                 <span aria-hidden className={cn('h-2.5 w-2.5 shrink-0 rounded-sm', p.cls)} />
@@ -125,7 +125,7 @@ function Distribution({ dist, sources }: { dist: OpsData['distribution']; source
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-fg-muted">{copy.ops.sources(sources.qr, sources.consumption)}</p>
+          <p className="mt-2 qx-caption text-fg-muted">{copy.ops.sources(sources.qr, sources.consumption)}</p>
         </>
       )}
     </div>

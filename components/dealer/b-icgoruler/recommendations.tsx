@@ -35,7 +35,7 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
       description={copy.recs.desc}
       icon={<ListTodo className="h-4 w-4" aria-hidden />}
       actions={
-        <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
+        <Button asChild variant="ghost" size="sm" className="min-h-11">
           <Link href="/dealer/inbox/assigned">
             {copy.recs.goToList}
             <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
@@ -76,7 +76,7 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="min-h-11 sm:min-h-9"
+                  className="min-h-11"
                   onClick={() => handlers.openRec(r.id, r.text)}
                 >
                   <Quote className="mr-1.5 h-4 w-4" aria-hidden />
@@ -85,14 +85,14 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
                 {r.actionItemId ? (
                   <Link
                     href={`/dealer/inbox/assigned?q=${encodeURIComponent(r.text.slice(0, 60))}`}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-chip px-2 qx-small font-medium text-success underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-chip px-2 qx-small font-medium text-success underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden />
                     {copy.recs.inList}
                   </Link>
                 ) : (
                   data.canWrite && (
-                    <Button type="button" size="sm" className="min-h-11 sm:min-h-9" onClick={() => setTarget(r)}>
+                    <Button type="button" size="sm" className="min-h-11" onClick={() => setTarget(r)}>
                       <ListPlus className="mr-1.5 h-4 w-4" aria-hidden />
                       {copy.recs.add}
                     </Button>

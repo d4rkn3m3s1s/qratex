@@ -108,7 +108,7 @@ export function Markdown({
   const map = new Map(sources.map((s) => [s.ref, s]));
   const blocks = parseBlocks(content);
   return (
-    <div className={cn('space-y-2 text-sm leading-relaxed text-fg', className)}>
+    <div className={cn('space-y-2 qx-body leading-relaxed text-fg', className)}>
       {blocks.map((b, i) => {
         if (b.kind === 'h') return <p key={i} className="pt-1 font-semibold text-fg"><Inline text={b.text} sources={map} onCite={onCite} /></p>;
         if (b.kind === 'p') return <p key={i}><Inline text={b.text} sources={map} onCite={onCite} /></p>;

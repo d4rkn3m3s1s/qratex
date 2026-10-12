@@ -27,7 +27,7 @@ export function RolePicker({ value, onChange, disabled }: { value: SignupRole; o
             <label
               key={v}
               className={cn(
-                'relative flex min-h-[6.5rem] cursor-pointer flex-col gap-1.5 rounded-control border p-3 transition-colors duration-150',
+                'relative flex min-h-[6.5rem] cursor-pointer flex-col gap-1.5 rounded-control border p-3 transition-colors duration-fast',
                 'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
                 selected ? 'border-brand bg-brand-subtle' : 'border-border bg-surface-1 hover:border-brand-border',
               )}

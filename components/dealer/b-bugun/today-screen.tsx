@@ -155,7 +155,7 @@ function TodayHeader({ heading, refreshing = false, onRefresh }: { heading: Toda
       title={`${copy.greeting[heading.greeting]}, ${heading.name ?? copy.fallbackName}`}
       description={dateLabel}
       meta={
-        <span className="inline-flex items-center gap-1 text-xs text-fg-muted" aria-live="polite">
+        <span className="inline-flex items-center gap-1 qx-caption text-fg-muted" aria-live="polite">
           {pending || refreshing ? copy.refreshing : copy.updatedAt(timeLabel)}
         </span>
       }

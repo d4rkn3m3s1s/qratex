@@ -15,7 +15,7 @@ import { ChoiceChips } from '@/components/ds/a11y';
 import { DirtyBar, Field } from '@/components/ds/form';
 import { QueryState } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { useMotionPolicy } from '@/lib/motion';
+import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { alertRulesSchema } from '@/lib/dealer-automation/alert-rules';
 import type { RadarLevel, RadarRuleEval, RadarRuleKey, RadarRules } from '@/lib/dealer-queues/radar-rules';
 import { AUTOMATION_KEYS, type AlertsOverviewDto, type AlertsStatusDto } from '@/lib/dealer-automation/types';
@@ -104,7 +104,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
     <>
       <div className="flex flex-wrap items-center gap-3 rounded-card border border-subtle bg-surface-1 p-4" aria-live="polite">
         {status ? (
-          <span className={cn('rounded-chip px-3 py-1 text-sm font-semibold', LEVEL_CLS[status.level])}>
+          <span className={cn('rounded-chip px-3 py-1 qx-body font-semibold', LEVEL_CLS[status.level])}>
             {dirty ? c.withThese : c.now}
             {c.level[status.level]}
           </span>
@@ -231,7 +231,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
                   className="flex min-h-11 flex-wrap items-center gap-2 py-2 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   <SeverityBadge severity={toSeverity(r.severity)} size="sm" />
-                  <span className="min-w-0 flex-1 text-sm text-fg">{r.title}</span>
+                  <span className="min-w-0 flex-1 qx-body text-fg">{r.title}</span>
                   <span className="qx-caption text-fg-muted">
                     {c.status[r.status] ?? r.status} · {fmtRelative(r.createdAt)}
                   </span>
@@ -293,7 +293,7 @@ function RuleCard({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 id={id} className="text-sm font-semibold text-fg">
+          <h3 id={id} className="qx-body font-semibold text-fg">
             {title}
           </h3>
           <p className="qx-small text-fg-muted">{sentence}</p>
@@ -312,7 +312,7 @@ function RuleCard({
               className={cn('h-full rounded-full', evaluation.level === 'alert' ? 'bg-danger' : evaluation.level === 'watch' ? 'bg-warning' : 'bg-success')}
               initial={false}
               animate={{ width: `${Math.round(ratio * 100)}%` }}
-              transition={{ duration: policy.reduce ? 0 : 0.35, ease: 'easeOut' }}
+              transition={{ duration: policy.reduce ? 0 : DURATION.slow, ease: EASE.standard }}
             />
           </div>
         </div>

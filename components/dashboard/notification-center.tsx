@@ -322,7 +322,7 @@ export function NotificationCenter() {
                 variant="ghost"
                 size="icon"
                 type="button"
-                className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-base hover:bg-muted"
                 disabled
                 aria-label={t('notificationCenter.trigger')}
             >
@@ -340,7 +340,7 @@ export function NotificationCenter() {
                         variant="ghost"
                         size="icon"
                         type="button"
-                        className="relative h-11 min-h-11 min-w-11 w-11 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                        className="relative h-11 min-h-11 min-w-11 w-11 touch-manipulation rounded-full transition-colors duration-base hover:bg-muted"
                         aria-label={
                             unreadCount > 99
                                 ? t('notificationCenter.triggerOverflow')
@@ -390,7 +390,7 @@ export function NotificationCenter() {
                                 <button
                                     key={tab}
                                     onClick={() => setFilter(tab)}
-                                    className={`cursor-pointer px-3 py-1.5 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-200 ${filter === tab
+                                    className={`cursor-pointer px-3 py-1.5 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-base ${filter === tab
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground'
                                         }`}
@@ -437,7 +437,7 @@ export function NotificationCenter() {
                                     return (
                                         <CollapseItem key={n.id}>
                                             <div
-                                                className={`group flex w-full items-stretch border-b border-border/50 transition-colors duration-200 hover:bg-muted/50 ${!n.isRead ? 'bg-primary/[0.03]' : ''
+                                                className={`group flex w-full items-stretch border-b border-border/50 transition-colors duration-base hover:bg-muted/50 ${!n.isRead ? 'bg-primary/[0.03]' : ''
                                                     }`}
                                             >
                                                 <button

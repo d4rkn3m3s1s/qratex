@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
 
 const buttonVariants = cva(
-  'inline-flex min-w-0 max-w-full touch-manipulation items-center justify-center gap-2 whitespace-normal text-center break-words sm:whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  'inline-flex min-w-0 max-w-full touch-manipulation items-center justify-center gap-2 whitespace-normal text-center break-words sm:whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-base ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
   {
     variants: {
       variant: {

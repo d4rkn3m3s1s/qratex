@@ -198,7 +198,7 @@ export function InstallBanner() {
                   data-pwa-dismiss
                   aria-label={t('pwaInstall.closeAria')}
                   onClick={handleDismiss}
-                  className="-m-2 flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="-m-2 flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-base hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <X className="h-5 w-5 shrink-0" aria-hidden />
                 </button>
@@ -239,7 +239,7 @@ export function InstallBanner() {
                   data-pwa-dismiss
                   aria-label={t('pwaInstall.closeAria')}
                   onClick={closeIosGuide}
-                  className="-m-2 flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="-m-2 flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-base hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <X className="h-6 w-6 shrink-0" aria-hidden />
                 </button>

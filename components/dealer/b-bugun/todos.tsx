@@ -29,7 +29,7 @@ export function Todos({ todos }: { todos: TodosSection }) {
       description={copy.todos.desc(todos.openTotal)}
       density="compact"
       actions={
-        <Link href={TODAY_LINKS.todos} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+        <Link href={TODAY_LINKS.todos} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 qx-body font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
           {copy.todos.seeAll}
           <ArrowRight aria-hidden className="h-4 w-4" />
         </Link>
@@ -66,8 +66,8 @@ function OpenTodos({ items }: { items: TodoItem[] }) {
       <div role="status" className="flex items-start gap-3 py-2">
         <ListTodo aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-fg-subtle" />
         <div>
-          <p className="text-sm font-medium text-fg">{copy.todos.empty}</p>
-          <p className="text-xs text-fg-muted">{copy.todos.emptyDesc}</p>
+          <p className="qx-body font-medium text-fg">{copy.todos.empty}</p>
+          <p className="qx-caption text-fg-muted">{copy.todos.emptyDesc}</p>
         </div>
       </div>
     );
@@ -90,7 +90,7 @@ function OpenTodos({ items }: { items: TodoItem[] }) {
               type="button"
               onClick={() => complete(item)}
               disabled={setStatus.isPending && setStatus.variables?.id === item.id}
-              className="group relative mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:h-9 sm:w-9"
+              className="group relative mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:w-9"
             >
               <span className="grid h-5 w-5 place-items-center rounded-full border-2 border-strong text-transparent transition-colors duration-fast group-hover:border-success group-hover:text-success">
                 <Check aria-hidden className="h-3 w-3" />
@@ -100,8 +100,8 @@ function OpenTodos({ items }: { items: TodoItem[] }) {
               </span>
             </button>
             <div className="min-w-0 flex-1 pt-1">
-              <p className="line-clamp-2 text-sm text-fg">{item.text}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+              <p className="line-clamp-2 qx-body text-fg">{item.text}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 qx-caption text-fg-muted">
                 <StatusBadge label={copy.todos.priority[item.priority]} tone={PRIORITY_TONE[item.priority]} size="sm" icon={null} />
                 {item.dueAt && (
                   <span className={cn(item.overdue && 'font-medium text-danger')}>
@@ -141,26 +141,26 @@ function Suggestions({ items }: { items: SuggestionItem[] }) {
 
   return (
     <div className="mt-3 border-t border-subtle pt-3">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+      <h3 className="flex items-center gap-1.5 qx-body font-semibold text-fg">
         <Sparkles aria-hidden className="h-4 w-4 text-brand" />
         {copy.todos.suggestionsTitle}
       </h3>
-      <p className="mt-0.5 text-xs text-fg-muted">{copy.todos.suggestionsDesc}</p>
+      <p className="mt-0.5 qx-caption text-fg-muted">{copy.todos.suggestionsDesc}</p>
       <ul className="mt-2 space-y-2">
         {items.map((s) => {
           const busy = busyKey === s.key;
           return (
             <li key={s.key} className="rounded-control border border-subtle bg-surface-2 p-2.5">
-              <p className="text-sm text-fg">{s.text}</p>
+              <p className="qx-body text-fg">{s.text}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge label={copy.todos.priority[s.priority]} tone={PRIORITY_TONE[s.priority]} size="sm" icon={null} />
-                <span className="text-xs text-fg-muted">{copy.todos.fromRating(s.rating)}</span>
+                <span className="qx-caption text-fg-muted">{copy.todos.fromRating(s.rating)}</span>
                 <span className="ml-auto flex gap-1.5">
                   <button
                     type="button"
                     onClick={() => act(s, true)}
                     disabled={busy}
-                    className="inline-flex min-h-11 items-center gap-1 rounded-control px-2.5 text-xs font-medium text-fg-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 sm:min-h-9"
+                    className="inline-flex min-h-11 items-center gap-1 rounded-control px-2.5 qx-caption font-medium text-fg-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
                   >
                     <X aria-hidden className="h-3.5 w-3.5" />
                     {copy.todos.dismiss}
@@ -171,7 +171,7 @@ function Suggestions({ items }: { items: SuggestionItem[] }) {
                     onClick={() => act(s, false)}
                     disabled={busy}
                     aria-busy={busy}
-                    className="inline-flex min-h-11 items-center gap-1 rounded-control bg-brand px-2.5 text-xs font-medium text-brand-fg hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50 sm:min-h-9"
+                    className="inline-flex min-h-11 items-center gap-1 rounded-control bg-brand px-2.5 qx-caption font-medium text-brand-fg hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                   >
                     <Plus aria-hidden className="h-3.5 w-3.5" />
                     {copy.todos.add}

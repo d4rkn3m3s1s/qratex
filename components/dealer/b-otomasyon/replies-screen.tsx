@@ -248,7 +248,7 @@ function Presets({ onPick, compact }: { onPick: (b: ReplyRuleBody) => void; comp
                 {p.body.action === 'incident' ? <Siren className="h-4 w-4" /> : <MessageSquareText className="h-4 w-4" />}
               </span>
               <span>
-                <span className="block text-sm font-medium text-fg">{p.title}</span>
+                <span className="block qx-body font-medium text-fg">{p.title}</span>
                 <span className="qx-small text-fg-muted">{p.hint}</span>
               </span>
             </button>
@@ -411,14 +411,14 @@ function RuleCard({
     >
       <div className="flex flex-wrap items-start gap-3">
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-surface-2 text-sm font-semibold tabular-nums text-fg"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-surface-2 qx-body font-semibold tabular-nums text-fg"
           aria-hidden
         >
           {index + 1}
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-fg">{rule.name}</h3>
+            <h3 className="qx-body font-semibold text-fg">{rule.name}</h3>
             {!rule.isActive && <span className="rounded-chip bg-surface-2 px-2 py-0.5 qx-caption text-fg-muted">{c.paused}</span>}
             {broken && (
               <span className="inline-flex items-center gap-1 rounded-chip bg-warning-subtle px-2 py-0.5 qx-caption text-fg">
@@ -426,7 +426,7 @@ function RuleCard({
               </span>
             )}
           </div>
-          <p className="text-sm text-fg">
+          <p className="qx-body text-fg">
             <span className="font-medium">{rule.sentence}</span>
             <span className="text-fg-muted"> → </span>
             {rule.action === 'incident' ? (
@@ -506,7 +506,7 @@ function RunsPanel({ id, ruleId }: { id: string; ruleId: string }) {
         {(d) => (
           <ul className="space-y-2">
             {d.runs.map((r, i) => (
-              <li key={`${r.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+              <li key={`${r.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 qx-body">
                 <time dateTime={r.at} className="qx-caption tabular-nums text-fg-muted">
                   {fmtDateTime(r.at)}
                 </time>

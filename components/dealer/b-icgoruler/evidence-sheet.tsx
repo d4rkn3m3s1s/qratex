@@ -39,7 +39,7 @@ function CorrectPopover({ item, onChanged }: { item: EvidenceItem; onChanged: ()
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
+        <Button type="button" variant="ghost" size="sm" className="min-h-11">
           <PencilLine className="mr-1.5 h-4 w-4" aria-hidden />
           {copy.evidence.correct}
         </Button>
@@ -123,7 +123,7 @@ function EvidenceList({ data, target, onChanged }: { data: InsightsData; target:
                   {it.qrName ? ` · ${it.qrName}` : ''} · {it.replied ? copy.evidence.replied : copy.evidence.notReplied}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
-                  <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11">
                     <Link href={`/dealer/inbox?id=${encodeURIComponent(it.key)}`}>
                       <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden />
                       {copy.evidence.openInInbox}

@@ -141,7 +141,7 @@ export function ReplyEditor({
       <TextField control={form.control} name="name" label={c.name} required maxLength={80} placeholder={c.namePlaceholder} />
 
       <fieldset className="space-y-3 rounded-card border border-subtle p-3 sm:p-4">
-        <legend className="px-1 text-sm font-semibold text-fg">{c.when}</legend>
+        <legend className="px-1 qx-body font-semibold text-fg">{c.when}</legend>
         <Controller
           control={form.control}
           name="condition"
@@ -236,7 +236,7 @@ export function ReplyEditor({
       </fieldset>
 
       <fieldset className="space-y-3 rounded-card border border-subtle p-3 sm:p-4">
-        <legend className="px-1 text-sm font-semibold text-fg">{c.what}</legend>
+        <legend className="px-1 qx-body font-semibold text-fg">{c.what}</legend>
         <Controller
           control={form.control}
           name="action"
@@ -310,7 +310,7 @@ export function ReplyEditor({
             <div className="flex flex-wrap items-center gap-2">
               <span className="qx-caption text-fg-muted">{c.addVariable}</span>
               {TEMPLATE_VARIABLES.map((tv) => (
-                <Button key={tv.key} type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => insertVariable(tv.key)}>
+                <Button key={tv.key} type="button" variant="outline" size="sm" className="min-h-11" onClick={() => insertVariable(tv.key)}>
                   {`{{${tv.key}}}`} <span className="sr-only">({c.variables[tv.key] ?? tv.label})</span>
                   <span aria-hidden className="text-fg-muted">· {c.variables[tv.key] ?? tv.label}</span>
                 </Button>
@@ -324,7 +324,7 @@ export function ReplyEditor({
             {(v.template ?? '').trim().length >= 5 && (
               <div className="rounded-card border border-subtle bg-surface-2 p-3">
                 <p className="qx-caption text-fg-muted">{c.customerSees(copy.remedy.sampleCustomer)}</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-fg">{samplePreview}</p>
+                <p className="mt-1 whitespace-pre-wrap qx-body text-fg">{samplePreview}</p>
               </div>
             )}
           </>
@@ -344,7 +344,7 @@ export function ReplyEditor({
       <SwitchField control={form.control} name="isActive" label={c.active} description={c.activeHint} variant="card" />
 
       <section aria-labelledby="reply-preview-title" className="space-y-2 rounded-card border border-subtle p-3 sm:p-4">
-        <h3 id="reply-preview-title" className="text-sm font-semibold text-fg">
+        <h3 id="reply-preview-title" className="qx-body font-semibold text-fg">
           {c.previewTitle}
         </h3>
         {!debouncedCond ? (
@@ -355,7 +355,7 @@ export function ReplyEditor({
           <p className="qx-small text-fg-muted" role="status">{c.previewLoading}</p>
         ) : (
           <div className="space-y-2" aria-live="polite">
-            <p className="text-sm text-fg">
+            <p className="qx-body text-fg">
               <strong className="tabular-nums">{fmtInt(preview.data.matched)}</strong>
               {c.matched}
               {preview.data.matched > 0 && isReply && (
@@ -377,7 +377,7 @@ export function ReplyEditor({
                       {s.replied && <span>{c.replied}</span>}
                       {s.keywordHits.length > 0 && <span>· {s.keywordHits.join(', ')}</span>}
                     </div>
-                    <p className="mt-1 text-sm text-fg">{s.textPreview ?? <span className="text-fg-muted">{c.ratingOnly}</span>}</p>
+                    <p className="mt-1 qx-body text-fg">{s.textPreview ?? <span className="text-fg-muted">{c.ratingOnly}</span>}</p>
                   </li>
                 ))}
               </ul>
@@ -447,7 +447,7 @@ function KeywordInput({
       {keywords.length > 0 && (
         <ul className="flex flex-wrap gap-2" aria-label={c.keywordsAdded}>
           {keywords.map((k) => (
-            <li key={k} className="inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-1 pl-3 pr-1 text-sm text-fg">
+            <li key={k} className="inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-1 pl-3 pr-1 qx-body text-fg">
               {k}
               <button
                 type="button"
@@ -463,7 +463,7 @@ function KeywordInput({
       )}
       <div className="flex min-h-11 items-center gap-2">
         <Checkbox id={wholeId} checked={wholeWord} onCheckedChange={(v) => onChange(keywords, v === true)} />
-        <label htmlFor={wholeId} className="cursor-pointer text-sm text-fg">
+        <label htmlFor={wholeId} className="cursor-pointer qx-body text-fg">
           {c.wholeWord}
         </label>
       </div>

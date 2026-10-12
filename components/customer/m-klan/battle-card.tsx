@@ -59,7 +59,7 @@ function ActiveBattle({ battle, onExpire }: { battle: CurrentBattleDto; onExpire
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-danger-subtle px-2.5 py-1 text-xs font-semibold text-danger">
           <Ambient as="span" className="inline-flex" fallback={<span aria-hidden className="h-2 w-2 rounded-full bg-danger" />}>
-            {(running) => <span aria-hidden className={cn('h-2 w-2 rounded-full bg-danger', running && 'animate-pulse')} />}
+            {(running) => <span aria-hidden className={cn('h-2 w-2 rounded-full bg-danger', running && 'motion-safe:animate-pulse')} />}
           </Ambient>
           {copy.live}
         </span>

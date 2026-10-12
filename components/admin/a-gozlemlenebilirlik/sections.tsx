@@ -32,7 +32,7 @@ export function HealthSection({ section, jobs, onRetry }: { section: Section<Hea
         <div className="space-y-4">
           <ul className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {section.data.checks.map((c) => (
-              <li key={c.id} className="min-w-0 rounded-lg border border-border p-3 transition-colors duration-200">
+              <li key={c.id} className="min-w-0 rounded-lg border border-border p-3 transition-colors duration-base">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium">{c.label}</p>
                   <HealthBadge status={c.status} />

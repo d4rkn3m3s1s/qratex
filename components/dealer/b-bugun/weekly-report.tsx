@@ -46,15 +46,15 @@ function WeeklyBody({ data, onWeekChange }: { data: WeeklyData; onWeekChange: (w
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" className="min-h-11 shadow-none sm:min-h-9" disabled={!data.prevWeek} onClick={() => data.prevWeek && onWeekChange(data.prevWeek)}>
+        <Button variant="outline" size="sm" className="min-h-11 shadow-none" disabled={!data.prevWeek} onClick={() => data.prevWeek && onWeekChange(data.prevWeek)}>
           <ChevronLeft aria-hidden className="h-4 w-4" />
           <span className="sr-only sm:not-sr-only">{copy.weekly.prev}</span>
         </Button>
-        <h2 className="min-w-0 flex-1 text-center text-base font-semibold text-fg sm:flex-none sm:text-left" aria-live="polite">
+        <h2 className="min-w-0 flex-1 text-center qx-h3 text-fg sm:flex-none sm:text-left" aria-live="polite">
           {copy.weekly.range(fmt.short(data.week), fmt.long(data.weekEnd))}
           {!data.isComplete && <span className="ml-2 align-middle"><StatusBadge label={copy.weekly.inProgress} tone="info" size="sm" /></span>}
         </h2>
-        <Button variant="outline" size="sm" className="min-h-11 shadow-none sm:min-h-9" disabled={!data.nextWeek} onClick={() => data.nextWeek && onWeekChange(data.nextWeek)}>
+        <Button variant="outline" size="sm" className="min-h-11 shadow-none" disabled={!data.nextWeek} onClick={() => data.nextWeek && onWeekChange(data.nextWeek)}>
           <span className="sr-only sm:not-sr-only">{copy.weekly.next}</span>
           <ChevronRight aria-hidden className="h-4 w-4" />
         </Button>
@@ -72,7 +72,7 @@ function WeeklyBody({ data, onWeekChange }: { data: WeeklyData; onWeekChange: (w
         <Themes themes={data.themes} />
         <div className="space-y-4">
           <SectionCard title={copy.weekly.autoTitle} icon={<ListChecks />} density="compact" actions={<StatusBadge label={copy.weekly.autoBadge} tone="neutral" size="sm" icon={null} />}>
-            <p className={cn('text-sm', data.autoRecommendation ? 'text-fg' : 'text-fg-muted')}>{data.autoRecommendation?.text ?? copy.weekly.autoEmpty}</p>
+            <p className={cn('qx-body', data.autoRecommendation ? 'text-fg' : 'text-fg-muted')}>{data.autoRecommendation?.text ?? copy.weekly.autoEmpty}</p>
             {data.autoRecommendation && <AddRecommendation key={data.week} text={data.autoRecommendation.text} />}
           </SectionCard>
           <Narrative data={data} />
@@ -89,7 +89,7 @@ function AddRecommendation({ text }: { text: string }) {
   const [done, setDone] = useState(false);
   if (done) {
     return (
-      <p role="status" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-success">
+      <p role="status" className="mt-2 inline-flex items-center gap-1 qx-caption font-medium text-success">
         <Check aria-hidden className="h-3.5 w-3.5" />
         {copy.todos.added}
       </p>
@@ -99,7 +99,7 @@ function AddRecommendation({ text }: { text: string }) {
     <Button
       variant="outline"
       size="sm"
-      className="mt-3 min-h-11 shadow-none sm:min-h-9"
+      className="mt-3 min-h-11 shadow-none"
       disabled={add.isPending}
       aria-busy={add.isPending}
       onClick={() =>
@@ -131,7 +131,7 @@ function Trend({ t }: { t: WeeklyTheme }) {
   const d = t.count - t.prevCount;
   const Icon = d > 0 ? TrendingUp : d < 0 ? TrendingDown : Minus;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
+    <span className="inline-flex items-center gap-1 qx-caption text-fg-muted">
       <Icon aria-hidden className="h-3.5 w-3.5" />
       {copy.weekly.themePrev(t.prevCount)}
     </span>
@@ -144,7 +144,7 @@ function Themes({ themes }: { themes: WeeklyTheme[] }) {
   return (
     <SectionCard title={copy.weekly.themesTitle} description={copy.weekly.themesDesc} density="compact">
       {themes.length === 0 ? (
-        <p role="status" className="text-sm text-fg-muted">
+        <p role="status" className="qx-body text-fg-muted">
           {copy.weekly.themesEmpty}
         </p>
       ) : (
@@ -154,7 +154,7 @@ function Themes({ themes }: { themes: WeeklyTheme[] }) {
             return (
               <li key={t.label} className="min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-fg">{t.label}</span>
+                  <span className="truncate qx-body font-medium text-fg">{t.label}</span>
                   <Trend t={t} />
                 </div>
                 <div aria-hidden className="mt-1 flex h-2 overflow-hidden rounded-full bg-surface-3" style={{ width: `${Math.max(12, (t.count / max) * 100)}%` }}>
@@ -162,7 +162,7 @@ function Themes({ themes }: { themes: WeeklyTheme[] }) {
                   {neutral > 0 && <span className="bg-fg-subtle/40" style={{ width: `${(neutral / t.count) * 100}%` }} />}
                   {t.negative > 0 && <span className="bg-danger" style={{ width: `${(t.negative / t.count) * 100}%` }} />}
                 </div>
-                <p className="mt-0.5 text-xs text-fg-muted">{copy.weekly.themeRow(t.count, t.positive, t.negative)}</p>
+                <p className="mt-0.5 qx-caption text-fg-muted">{copy.weekly.themeRow(t.count, t.positive, t.negative)}</p>
               </li>
             );
           })}
@@ -190,11 +190,11 @@ function Narrative({ data }: { data: WeeklyData }) {
     >
       {data.narrative ? (
         <div className="space-y-2">
-          <p className="whitespace-pre-line text-sm leading-relaxed text-fg">{data.narrative.text}</p>
+          <p className="whitespace-pre-line qx-body leading-relaxed text-fg">{data.narrative.text}</p>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-fg-muted">{copy.weekly.aiGeneratedAt(timeFmt.format(new Date(data.narrative.generatedAt)))}</span>
+            <span className="qx-caption text-fg-muted">{copy.weekly.aiGeneratedAt(timeFmt.format(new Date(data.narrative.generatedAt)))}</span>
             {data.aiAvailable && (
-              <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={() => run(true)} disabled={gen.isPending} aria-busy={gen.isPending}>
+              <Button variant="ghost" size="sm" className="min-h-11" onClick={() => run(true)} disabled={gen.isPending} aria-busy={gen.isPending}>
                 {gen.isPending ? copy.weekly.aiGenerating : copy.weekly.aiRegenerate}
               </Button>
             )}
@@ -202,14 +202,14 @@ function Narrative({ data }: { data: WeeklyData }) {
         </div>
       ) : data.aiAvailable ? (
         <div className="space-y-3">
-          <p className="text-sm text-fg-muted">{copy.weekly.aiDesc}</p>
-          <Button size="sm" className="min-h-11 shadow-none sm:min-h-9" onClick={() => run(false)} disabled={gen.isPending} aria-busy={gen.isPending}>
+          <p className="qx-body text-fg-muted">{copy.weekly.aiDesc}</p>
+          <Button size="sm" className="min-h-11 shadow-none" onClick={() => run(false)} disabled={gen.isPending} aria-busy={gen.isPending}>
             <Sparkles aria-hidden className="h-4 w-4" />
             {gen.isPending ? copy.weekly.aiGenerating : copy.weekly.aiGenerate}
           </Button>
         </div>
       ) : (
-        <p className="text-sm text-fg-muted">{copy.weekly.aiUnavailable}</p>
+        <p className="qx-body text-fg-muted">{copy.weekly.aiUnavailable}</p>
       )}
     </SectionCard>
   );
@@ -228,7 +228,7 @@ function WeeklyArchive({ current, onOpen }: { current: string | null; onOpen: (w
       density="flush"
       actions={
         rows.length > 0 ? (
-          <Button variant="outline" size="sm" className="min-h-11 shadow-none sm:min-h-9" onClick={() => downloadArchiveCsv(rows, copy, tag, fmt.long)}>
+          <Button variant="outline" size="sm" className="min-h-11 shadow-none" onClick={() => downloadArchiveCsv(rows, copy, tag, fmt.long)}>
             <Download aria-hidden className="h-4 w-4" />
             {copy.weekly.csv}
           </Button>
@@ -239,10 +239,10 @@ function WeeklyArchive({ current, onOpen }: { current: string | null; onOpen: (w
         {() => (
           <div className="min-w-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[36rem] text-sm">
+              <table className="w-full min-w-[36rem] qx-body">
                 <caption className="sr-only">{copy.weekly.archiveTitle}</caption>
                 <thead>
-                  <tr className="border-b border-subtle text-left text-xs text-fg-muted">
+                  <tr className="border-b border-subtle text-left qx-caption text-fg-muted">
                     <th scope="col" className="px-4 py-2 font-medium">{copy.weekly.archiveCols.week}</th>
                     <th scope="col" className="px-2 py-2 text-right font-medium">{copy.weekly.archiveCols.feedback}</th>
                     <th scope="col" className="px-2 py-2 text-right font-medium">{copy.weekly.archiveCols.avg}</th>
@@ -262,7 +262,7 @@ function WeeklyArchive({ current, onOpen }: { current: string | null; onOpen: (w
                             type="button"
                             onClick={() => onOpen(r.week)}
                             aria-current={active ? 'true' : undefined}
-                            className="inline-flex min-h-11 items-center rounded-control font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9"
+                            className="inline-flex min-h-11 items-center rounded-control font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                           >
                             {copy.weekly.range(fmt.short(r.week), fmt.short(addDaysLocal(r.week, 6)))}
                             <span className="sr-only"> — {copy.weekly.archiveOpen}</span>
@@ -282,7 +282,7 @@ function WeeklyArchive({ current, onOpen }: { current: string | null; onOpen: (w
             </div>
             {q.hasNextPage && (
               <div className="border-t border-subtle px-4 py-3">
-                <Button variant="outline" size="sm" className="min-h-11 shadow-none sm:min-h-9" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} aria-busy={q.isFetchingNextPage}>
+                <Button variant="outline" size="sm" className="min-h-11 shadow-none" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} aria-busy={q.isFetchingNextPage}>
                   {copy.weekly.archiveMore}
                 </Button>
               </div>

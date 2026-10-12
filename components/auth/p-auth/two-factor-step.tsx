@@ -61,7 +61,7 @@ export function OtpField({
               <div
                 key={i}
                 className={cn(
-                  'flex h-14 items-center justify-center rounded-control border bg-surface-0 text-2xl font-semibold tabular-nums text-fg transition-colors duration-150',
+                  'flex h-14 items-center justify-center rounded-control border bg-surface-0 text-2xl font-semibold tabular-nums text-fg transition-colors duration-fast',
                   error ? 'border-danger' : active ? 'border-brand ring-2 ring-ring' : 'border-border',
                   disabled && 'opacity-60',
                 )}

@@ -34,7 +34,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-modal gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
+  'fixed z-modal gap-4 bg-background p-6 shadow-lg transition ease-standard data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-slow data-[state=open]:duration-slow',
   {
     variants: {
       side: {
@@ -70,7 +70,7 @@ const SheetContent = React.forwardRef<
       {children}
       <SheetPrimitive.Close
         className={cn(
-          'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-200 hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary',
+          'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-base hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary',
           'right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))]'
         )}
       >

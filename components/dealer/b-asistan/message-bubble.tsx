@@ -23,7 +23,7 @@ export function UserBubble({ content, createdAt, copy, failed }: { content: stri
     <li className="flex justify-end">
       <div className="max-w-[88%] sm:max-w-[75%]">
         <p className="sr-only">{copy.you}:</p>
-        <div className={cn('whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand px-3.5 py-2.5 text-sm text-brand-fg', failed && 'opacity-80')}>
+        <div className={cn('whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand px-3.5 py-2.5 qx-body text-brand-fg', failed && 'opacity-80')}>
           {content}
         </div>
         <p className="mt-1 text-end qx-caption text-fg-muted">

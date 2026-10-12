@@ -1,5 +1,6 @@
 'use client';
 
+import { RemedyBudgetCard } from '@/components/remedy/remedy-budget-card';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -72,7 +73,12 @@ export function SettingsScreen() {
 function TabBody({ tab, data }: { tab: DealerSettingsTab; data: DealerSettingsSnapshot }) {
   switch (tab) {
     case 'business':
-      return <BusinessTab data={data.business} />;
+      return (
+        <div className="space-y-6">
+          <BusinessTab data={data.business} />
+          <RemedyBudgetCard mode="dealer" />
+        </div>
+      );
     case 'account':
       return <AccountTab data={data.account} />;
     case 'notifications':

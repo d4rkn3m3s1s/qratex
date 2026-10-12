@@ -35,12 +35,10 @@ export function AssistantDrawer({ open, onOpenChange, assistantHref = '/dealer/a
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-[min(30rem,100vw)] flex-col gap-0 p-0 sm:max-w-none">
         <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b border-border px-3 py-2 pe-12 text-start">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand" aria-hidden>
-            <Bot className="h-4 w-4" />
-          </span>
+          <Bot className="h-5 w-5 shrink-0 text-brand" aria-hidden />
           <div className="min-w-0 flex-1">
-            <SheetTitle className="text-base">{copy.drawerTitle}</SheetTitle>
-            <SheetDescription className="truncate text-xs">{copy.drawerDesc}</SheetDescription>
+            <SheetTitle className="qx-h3">{copy.drawerTitle}</SheetTitle>
+            <SheetDescription className="truncate qx-caption">{copy.drawerDesc}</SheetDescription>
           </div>
           <IconButton
             aria-label={copy.newChat}

@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'relative w-full max-w-lg gap-4 border bg-background p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-xl',
+          'relative w-full max-w-lg gap-4 border bg-background p-6 shadow-2xl duration-base data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-xl',
           'max-h-[90vh] overflow-y-auto',
           className
         )}
@@ -51,7 +51,7 @@ const DialogContent = React.forwardRef<
         {children}
         <DialogPrimitive.Close
           className={cn(
-            'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-200 hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground',
+            'absolute flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-md opacity-80 ring-offset-background transition-[opacity,background-color] duration-base hover:bg-accent/90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground',
             'right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))]'
           )}
         >

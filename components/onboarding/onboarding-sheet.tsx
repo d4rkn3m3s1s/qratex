@@ -171,14 +171,14 @@ export function OnboardingSheet() {
               type="button"
               variant="ghost"
               onClick={handleSkip}
-              className="touch-manipulation transition-colors duration-200 min-h-11"
+              className="touch-manipulation transition-colors duration-base min-h-11"
             >
               {t('onboarding.skip')}
             </Button>
             <Button
               type="button"
               onClick={handleNext}
-              className="touch-manipulation gap-2 transition-colors duration-200 min-h-11 min-w-[6.5rem]"
+              className="touch-manipulation gap-2 transition-colors duration-base min-h-11 min-w-[6.5rem]"
             >
               {isLast ? t('onboarding.finish') : t('onboarding.next')}
               <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />

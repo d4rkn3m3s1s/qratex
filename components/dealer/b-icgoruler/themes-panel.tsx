@@ -117,7 +117,7 @@ export function ThemesPanel({ data, handlers }: { data: InsightsData; handlers: 
         density="flush"
         actions={
           data.themes.length > 0 ? (
-            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={exportCsv}>
+            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={exportCsv}>
               <Download className="mr-1.5 h-4 w-4" aria-hidden />
               {copy.page.exportCsv}
             </Button>

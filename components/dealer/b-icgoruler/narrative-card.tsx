@@ -126,7 +126,7 @@ export function NarrativeCard({ data, handlers, lang }: { data: InsightsData; ha
       type="button"
       size="sm"
       variant={n ? 'outline' : 'default'}
-      className="min-h-11 sm:min-h-9"
+      className="min-h-11"
       disabled={gen.isPending || (cooling && !n?.stale)}
       onClick={() => run(!!n)}
       aria-describedby={cooling ? 'insights-narrative-cooldown' : undefined}

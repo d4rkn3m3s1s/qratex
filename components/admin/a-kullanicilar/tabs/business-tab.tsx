@@ -16,6 +16,7 @@ import { assignPlan, errorText, fetchPlans, patchProfile } from '../api';
 import { fmtDate, fmtNumber } from '../format';
 import { FormField, fieldError } from '../parts';
 import { AdminKullanicilarText } from '../copy';
+import { RemedyBudgetCard } from '@/components/remedy/remedy-budget-card';
 
 const SUB_LABELS: Record<string, string> = {
   active: 'Etkin',
@@ -50,6 +51,7 @@ export function BusinessTab({ user: u, onChanged }: { user: User360; onChanged: 
         />
         {!locked ? <PlanPicker userId={u.identity.id} currentPlanId={d.plan?.id ?? null} onChanged={onChanged} /> : null}
       </SectionCard>
+      {!locked ? <RemedyBudgetCard mode="admin" dealerId={u.identity.id} /> : null}
     </div>
   );
 }
