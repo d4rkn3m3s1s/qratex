@@ -137,7 +137,7 @@ function UsageRow({ label, used, max }: { label: string; used: number; max: numb
         aria-valuenow={Math.min(used, max)}
         className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3"
       >
-        <div className={cn('h-full rounded-full', high ? 'bg-warning' : 'bg-brand')} style={{ width: `${pct}%` }} />
+        <div className={cn('qx-fx-fill h-full rounded-full transition-[width] duration-slow ease-standard', high ? 'bg-warning' : 'bg-brand')} style={{ width: `${pct}%` }} />
       </div>
     </li>
   );

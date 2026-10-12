@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { AlertCircle, Check, Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { playSound } from '@/lib/sound';
 import { useSettingsCopy } from './copy';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -112,7 +113,10 @@ export function SettingSwitchRow({
         <Switch
           id={id}
           checked={checked}
-          onCheckedChange={onCheckedChange}
+          onCheckedChange={(next) => {
+            playSound('toggle');
+            onCheckedChange(next);
+          }}
           disabled={disabled || state === 'saving'}
           aria-label={ariaLabel}
           aria-describedby={description ? descId : undefined}

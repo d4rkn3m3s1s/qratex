@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, Copy, Link2, MessageCircle, QrCode, Share2, Gift, Sparkles } from 'lucide-react';
+import { Copy, Link2, MessageCircle, QrCode, Share2, Gift, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlowCard } from '@/components/ds/play';
 import { announce } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { formatPoints, useInviteCopy } from './copy';
+import { DrawCheck } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { buildInviteUrl, buildWhatsAppUrl, copyText, shareInvite, spellCode } from './share';
 import { InviteQr } from './invite-qr';
 
@@ -67,6 +69,7 @@ export function InviteHero({
   const flash = (key: Exclude<CopiedKey, null>, message: string) => {
     setCopied(key);
     setManual(false);
+    playSound('success');
     announce(message);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(null), 1500);
@@ -163,11 +166,11 @@ export function InviteHero({
           </Button>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" onClick={() => void onCopy('link')} disabled={!canShare} className="min-h-11">
-              {copied === 'link' ? <Check aria-hidden className="mr-2 size-4 text-success" /> : <Link2 aria-hidden className="mr-2 size-4" />}
+              {copied === 'link' ? <DrawCheck circle={false} className="mr-2 size-4 text-success" /> : <Link2 aria-hidden className="mr-2 size-4" />}
               {copied === 'link' ? copy.copied : copy.copyLink}
             </Button>
             <Button type="button" variant="outline" onClick={() => void onCopy('code')} disabled={!code || !codeActive} className="min-h-11">
-              {copied === 'code' ? <Check aria-hidden className="mr-2 size-4 text-success" /> : <Copy aria-hidden className="mr-2 size-4" />}
+              {copied === 'code' ? <DrawCheck circle={false} className="mr-2 size-4 text-success" /> : <Copy aria-hidden className="mr-2 size-4" />}
               {copied === 'code' ? copy.copied : copy.copyCode}
             </Button>
             {canShare ? (

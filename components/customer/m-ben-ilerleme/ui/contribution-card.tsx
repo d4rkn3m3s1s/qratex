@@ -202,7 +202,7 @@ export function ContributionCard({
                   aria-valuetext={c.componentValue(n(comp.count), n(comp.points, 1), n(comp.max))}
                   className="h-2 w-full overflow-hidden rounded-full bg-surface-3"
                 >
-                  <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                  <div className="qx-fx-fill h-full rounded-full bg-brand transition-[width] duration-slow ease-standard" style={{ width: `${pct}%` }} />
                 </div>
                 <p className="qx-caption text-fg-muted">{meta.help(n(comp.cap))}</p>
               </div>

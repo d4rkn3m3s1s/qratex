@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Burst, DrawCheck } from '@/components/fx/event-fx';
 import { CheckCircle2, ChevronRight, Clock, Gift, Ticket } from 'lucide-react';
 import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
@@ -69,6 +70,14 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
     },
   });
 
+  // Kabul anı: bu oturumda bekleyen → kabul geçişi görülünce bir kez ışık + tik (ses toast köprüsünde).
+  const prevStatus = useRef(remedy.status);
+  const [justAccepted, setJustAccepted] = useState(0);
+  useEffect(() => {
+    if (prevStatus.current !== 'accepted' && remedy.status === 'accepted') setJustAccepted((n) => n + 1);
+    prevStatus.current = remedy.status;
+  }, [remedy.status]);
+
   if (remedy.status === 'accepted') {
     const isPoints = remedy.selectionType === 'points';
     // Kupon türü (indirim / ücretsiz ürün) Cüzdan → Kodlarım'da kasada gösterilir (m-cuzdan-oduller).
@@ -79,7 +88,10 @@ export function RemedyPanel({ remedy, business, onDone }: { remedy: RemedyPanelD
         <span aria-hidden className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-surface-1" />
         <span aria-hidden className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-surface-1" />
         <p className="qx-caption flex items-center gap-1.5 font-medium text-brand">
-          <CheckCircle2 aria-hidden className="h-4 w-4" />
+          <span className="relative inline-flex">
+            {justAccepted ? <DrawCheck className="h-4 w-4" /> : <CheckCircle2 aria-hidden className="h-4 w-4" />}
+            <Burst trigger={justAccepted} kind="light" count={8} radius={40} />
+          </span>
           {copy.remedyAcceptedTitle}
         </p>
         <p className="qx-h2 mt-1 text-fg">{remedy.selectionLabel ?? copy.remedyAccepted}</p>

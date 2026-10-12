@@ -143,7 +143,7 @@ export function LeagueHero({
             className="h-2.5 w-full overflow-hidden rounded-full bg-surface-3"
           >
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] transition-[width] duration-slow ease-standard"
+              className="qx-fx-fill h-full rounded-full bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] transition-[width] duration-slow ease-standard"
               style={{ width: `${me.leagueProgress}%` }}
             />
           </div>

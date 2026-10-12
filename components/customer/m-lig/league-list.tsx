@@ -10,6 +10,7 @@ import type { LeagueRowDTO } from '@/lib/league-board/types';
 import { cn } from '@/lib/utils';
 import { LigAvatar } from './lig-avatar';
 import { useLigCopy } from './use-lig-copy';
+import { useFlipRows } from './use-flip-rows';
 
 /**
  * Sıralama satırları (sade: sıra · avatar · maskeli ad · lig · skor). Satırlar tıklanabilir
@@ -29,6 +30,7 @@ export const LeagueList = forwardRef<HTMLLIElement, {
   animateEntry: boolean;
 }>(function LeagueList({ rows, unit, page, pageCount, onPage, listKey, busy, animateEntry }, meRef) {
   const { copy, fmt } = useLigCopy();
+  const flipRef = useFlipRows(rows.map((r) => r.key), listKey);
 
   return (
     <section aria-labelledby="lig-ranking-title" className="space-y-3" aria-busy={busy || undefined}>
@@ -40,7 +42,12 @@ export const LeagueList = forwardRef<HTMLLIElement, {
           {rows.map((row, i) => (
             <Motion.li
               key={row.key}
-              ref={row.isMe ? meRef : undefined}
+              ref={(el: HTMLLIElement | null) => {
+                flipRef(row.key)(el);
+                if (!row.isMe || !meRef) return;
+                if (typeof meRef === 'function') meRef(el);
+                else meRef.current = el;
+              }}
               id={row.isMe ? 'lig-me' : undefined}
               tabIndex={row.isMe ? -1 : undefined}
               variants={listItem}

@@ -57,7 +57,7 @@ export function Meter({
     >
       <div
         className={cn(
-          'h-full rounded-full transition-[width] duration-slow ease-standard',
+          'qx-fx-fill h-full rounded-full transition-[width] duration-slow ease-standard',
           tone === 'success' ? 'bg-success' : tone === 'warning' ? 'bg-warning' : 'bg-brand'
         )}
         style={{ width: `${pct}%` }}
@@ -100,7 +100,7 @@ export function StatusStrip({
   return (
     <div className="rounded-card border border-border bg-surface-1 px-4 py-2 qx-elevation-1 sm:py-4">
       <div className="grid grid-cols-3 divide-x divide-border">
-        <Cell title={c.streakTitle} short={c.streakShort} icon={<Flame className="size-3.5 shrink-0 text-warning" aria-hidden />}>
+        <Cell title={c.streakTitle} short={c.streakShort} icon={<Flame className="qx-fx-flame size-3.5 shrink-0 text-warning" aria-hidden />}>
           {streak.ok ? (
             <>
               <Figure value={streak.data.current} rest={c.streakUnit} />
