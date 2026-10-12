@@ -312,6 +312,7 @@ export function Header() {
             </SheetTrigger>
             <SheetContent
               id="site-mobile-nav-sheet"
+              aria-describedby={undefined}
               side="right"
               className="w-full pb-[max(1rem,env(safe-area-inset-bottom))] sm:w-80"
             >

@@ -91,7 +91,7 @@ function ModulesSection({ hub }: { hub: TeamHub }) {
         </div>
       )}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl" aria-describedby={undefined}>
           {editing ? <ModuleForm key={editing === 'new' ? 'new' : editing.id} mod={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
         </DialogContent>
       </Dialog>
@@ -319,7 +319,7 @@ function ChecklistsSection({ hub }: { hub: TeamHub }) {
         </ul>
       )}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl" aria-describedby={undefined}>
           {editing ? (
             <ChecklistForm key={editing === 'new' ? 'new' : editing.id} tpl={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
           ) : null}

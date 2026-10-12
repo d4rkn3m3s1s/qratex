@@ -447,6 +447,7 @@
         "nativeExitHint": "Uygulamadan çıkmak için geri tuşuna tekrar basın"
     },
     "notificationCenter": {
+        "sheetDescription": "Son bildirimlerin; tümünü ya da yalnızca okunmamışları görüntüleyebilirsin.",
         "title": "Bildirimler",
         "trigger": "Bildirimler",
         "triggerUnread": "Bildirimler, {count} okunmamış",

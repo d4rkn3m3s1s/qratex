@@ -64,7 +64,7 @@ export function TasksPanel({ hub, focusUserId }: { hub: TeamHub; focusUserId?: s
         )}
       </div>
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" aria-describedby={undefined}>
           {editing ? <EditTask key={editing.id} task={editing} hub={hub} onClose={() => setEditing(null)} /> : null}
         </DialogContent>
       </Dialog>

@@ -447,6 +447,7 @@
         "nativeExitHint": "Press back again to exit the app"
     },
     "notificationCenter": {
+        "sheetDescription": "Your recent notifications; view all or only the unread ones.",
         "title": "Notifications",
         "trigger": "Notifications",
         "triggerUnread": "Notifications, {count} unread",

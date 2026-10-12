@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
-    Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+    Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -366,6 +366,7 @@ export function NotificationCenter() {
                 <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
                     {/* Header */}
                     <SheetHeader className="px-5 pt-5 pb-3 border-b space-y-3">
+                        <SheetDescription className="sr-only">{t('notificationCenter.sheetDescription')}</SheetDescription>
                         <div className="flex items-center justify-between gap-2 pr-10">
                             <SheetTitle className="flex items-center gap-2 text-lg">
                                 <Bell className="h-5 w-5 shrink-0" aria-hidden />

@@ -505,7 +505,7 @@ function Center({ data, initialSelected, refetch }: { data: TemplatesView; initi
 
       {selected && (
         <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
-          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl" aria-describedby={undefined}>
             <SheetHeader>
               <SheetTitle><AdminIletisimText k="preview" /></SheetTitle>
             </SheetHeader>
