@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { m as Motion, AnimatePresence } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
+import { CollapseItem, CollapseList } from '@/lib/motion';
 import {
     Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle,
     XCircle, ExternalLink, Filter, BellOff, Gift, Loader2,
@@ -430,18 +431,11 @@ export function NotificationCenter() {
                                 )}
                             </div>
                         ) : (
-                            <AnimatePresence mode="popLayout">
-                                {filteredNotifications.map((n, i) => {
+                            <CollapseList>
+                                {filteredNotifications.map((n) => {
                                     const Icon = getIcon(n.type);
                                     return (
-                                        <Motion.div
-                                            key={n.id}
-                                            initial={{ opacity: 0, x: 16 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: -16, height: 0 }}
-                                            transition={{ delay: Math.min(i, 10) * 0.02, type: 'spring', stiffness: 300, damping: 30 }}
-                                            layout
-                                        >
+                                        <CollapseItem key={n.id}>
                                             <div
                                                 className={`group flex w-full items-stretch border-b border-border/50 transition-colors duration-200 hover:bg-muted/50 ${!n.isRead ? 'bg-primary/[0.03]' : ''
                                                     }`}
@@ -497,10 +491,10 @@ export function NotificationCenter() {
                                                     </Button>
                                                 </div>
                                             </div>
-                                        </Motion.div>
+                                        </CollapseItem>
                                     );
                                 })}
-                            </AnimatePresence>
+                            </CollapseList>
                         )}
                     </div>
                 </SheetContent>

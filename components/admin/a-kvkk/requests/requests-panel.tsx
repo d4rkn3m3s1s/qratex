@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -50,7 +49,7 @@ import {
 } from '@/components/states';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { fadeUp } from '@/lib/motion/variants';
+import { CollapseItem, CollapseList } from '@/lib/motion';
 import {
   DSR_EVENT_LABELS,
   DSR_STATUS_LABELS,
@@ -601,7 +600,7 @@ function DetailPanel({ id, onClose }: { id: string | null; onClose: () => void }
 function RequestRow({ row, onOpen }: { row: DsrListRow; onOpen: (id: string) => void }) {
   const Icon = (TYPE_ICON as Record<string, typeof FileText>)[row.type] ?? FileText;
   return (
-    <Motion.li variants={fadeUp} initial="hidden" animate="visible" exit="exit" layout="position">
+    <CollapseItem as="li">
       <button
         type="button"
         onClick={() => onOpen(row.id)}
@@ -628,7 +627,7 @@ function RequestRow({ row, onOpen }: { row: DsrListRow; onOpen: (id: string) => 
           </span>
         </span>
       </button>
-    </Motion.li>
+    </CollapseItem>
   );
 }
 
@@ -810,11 +809,11 @@ export function RequestsPanel() {
           {() => (
             <>
               <ul className="divide-y divide-border" aria-busy={list.isFetching}>
-                <AnimatePresence initial={false}>
+                <CollapseList>
                   {rows.map((row) => (
                     <RequestRow key={row.id} row={row} onOpen={(id) => set({ id })} />
                   ))}
-                </AnimatePresence>
+                </CollapseList>
               </ul>
               {list.hasNextPage ? (
                 <div className="flex justify-center border-t border-border p-3">

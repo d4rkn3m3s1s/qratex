@@ -37,6 +37,10 @@ const COPY = {
     dropHint: 'ya da fotoğrafı buraya bırakın',
     photoCount: (n: number, max: number) => `${n} / ${max} fotoğraf`,
     sizeHint: (max: string) => `Fotoğraflar otomatik küçültülür (en fazla ${max}), konum bilgisi silinir`,
+    confirmPrompt: 'Emin misin?',
+    confirmYes: 'Evet',
+    confirmNo: 'Vazgeç',
+    confirmOpened: 'Onay bekleniyor. Evet ile onaylayın, Vazgeç veya Esc ile geri dönün.',
   },
   en: {
     close: 'Close',
@@ -65,6 +69,10 @@ const COPY = {
     dropHint: 'or drop a photo here',
     photoCount: (n: number, max: number) => `${n} / ${max} photos`,
     sizeHint: (max: string) => `Photos are resized automatically (max ${max}); location data is removed`,
+    confirmPrompt: 'Are you sure?',
+    confirmYes: 'Yes',
+    confirmNo: 'Cancel',
+    confirmOpened: 'Confirmation pending. Press Yes to confirm, Cancel or Esc to go back.',
   },
 } as const;
 

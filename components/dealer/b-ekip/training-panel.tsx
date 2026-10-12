@@ -5,11 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Archive, BookOpen, Check, ListChecks, Loader2, Minus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { SectionCard, StatusBadge } from '@/components/ds';
-import { ConfirmAction, EmptyState, ErrorState } from '@/components/states';
+import { InlineConfirm, SectionCard, StatusBadge } from '@/components/ds';
+import { EmptyState, ErrorState } from '@/components/states';
 import type { ChecklistTemplateDto, TeamHub, TrainingModuleDto } from '@/lib/staff-ops/types';
 import type { ChecklistItemDef, ChecklistType } from '@/lib/staff-ops/core';
 import { cn } from '@/lib/utils';
+import { CollapseItem, CollapseList } from '@/lib/motion';
 import { addDays, fmtDateTime, fmtDay, newClientId, sendJson, teamFetch } from './shared';
 import { useTeamCopy } from './copy';
 import { FormRow, INPUT_CLS, useHubMutation } from './parts';
@@ -48,10 +49,12 @@ function ModulesSection({ hub }: { hub: TeamHub }) {
       ) : (
         <div className="space-y-4">
           <ul className="divide-y divide-border">
+            <CollapseList>
             {hub.training.map((mod) => {
               const done = mod.completedBy.filter((u) => members.some((x) => x.userId === u)).length;
               return (
-                <li key={mod.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center">
+                <CollapseItem as="li" key={mod.id}>
+                <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-fg">{mod.title}</p>
                     <p className="qx-caption text-fg-muted">
@@ -67,24 +70,22 @@ function ModulesSection({ hub }: { hub: TeamHub }) {
                       <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`${copy.common.edit}: ${mod.title}`} onClick={() => setEditing(mod)}>
                         <Pencil className="h-4 w-4" aria-hidden />
                       </Button>
-                      <ConfirmAction
-                        tone="warning"
-                        title={c.archiveTitle}
-                        description={c.archiveDesc}
+                      <InlineConfirm
+                        size="icon"
+                        tone="neutral"
                         confirmLabel={copy.common.archive}
-                        irreversibleNote={false}
+                        aria-label={`${copy.common.archive}: ${mod.title}`}
                         onConfirm={() => archive.mutateAsync(mod.id)}
-                        trigger={
-                          <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`${copy.common.archive}: ${mod.title}`}>
-                            <Archive className="h-4 w-4" aria-hidden />
-                          </Button>
-                        }
-                      />
+                      >
+                        <Archive className="h-4 w-4" aria-hidden />
+                      </InlineConfirm>
                     </div>
                   )}
-                </li>
+                </div>
+                </CollapseItem>
               );
             })}
+            </CollapseList>
           </ul>
           {members.length > 0 && <CompletionMatrix hub={hub} />}
         </div>
@@ -260,10 +261,12 @@ function ChecklistsSection({ hub }: { hub: TeamHub }) {
         <EmptyState compact icon={ListChecks} title={c.checklistEmptyTitle} description={c.checklistEmptyDesc} />
       ) : (
         <ul className="divide-y divide-border">
+          <CollapseList>
           {hub.checklists.map((t) => {
             const last = t.completions[0];
             return (
-              <li key={t.id} className="flex flex-col gap-3 py-3 lg:flex-row lg:items-center">
+              <CollapseItem as="li" key={t.id}>
+              <div className="flex flex-col gap-3 py-3 lg:flex-row lg:items-center">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-fg">{t.title}</span>
@@ -297,24 +300,22 @@ function ChecklistsSection({ hub }: { hub: TeamHub }) {
                     <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`${copy.common.edit}: ${t.title}`} onClick={() => setEditing(t)}>
                       <Pencil className="h-4 w-4" aria-hidden />
                     </Button>
-                    <ConfirmAction
-                      tone="warning"
-                      title={c.checklistArchiveTitle}
-                      description={c.checklistArchiveDesc}
+                    <InlineConfirm
+                      size="icon"
+                      tone="neutral"
                       confirmLabel={copy.common.archive}
-                      irreversibleNote={false}
+                      aria-label={`${copy.common.archive}: ${t.title}`}
                       onConfirm={() => archive.mutateAsync(t.id)}
-                      trigger={
-                        <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`${copy.common.archive}: ${t.title}`}>
-                          <Archive className="h-4 w-4" aria-hidden />
-                        </Button>
-                      }
-                    />
+                    >
+                      <Archive className="h-4 w-4" aria-hidden />
+                    </InlineConfirm>
                   </div>
                 </div>
-              </li>
+              </div>
+              </CollapseItem>
             );
           })}
+          </CollapseList>
         </ul>
       )}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>

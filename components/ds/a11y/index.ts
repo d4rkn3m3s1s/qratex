@@ -27,3 +27,4 @@ export {
   type Politeness,
 } from './live-region';
 export { useA11yCopy, getA11yCopy, useDsLocale, formatBytes, type A11yCopy, type DsLocale } from './copy';
+export { InlineConfirm, type InlineConfirmProps } from './inline-confirm';

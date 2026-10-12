@@ -1,15 +1,16 @@
-'use client';
+"use client";
 
-import { useMemo, useState, type DragEvent } from 'react';
-import { TASK_STATUSES, type TaskStatus } from '@/lib/team/constants';
-import { checkTransition, canMoveTask } from '@/lib/team/permissions';
-import { cn } from '@/lib/utils';
-import { useWorkspace } from '../workspace-context';
-import { useTaskActions } from '../lib/use-task-actions';
-import { STATUS_ICON } from '../shared';
-import { TaskCard } from './task-card';
-import type { TaskDto } from '../lib/types';
-import { useTeamCopy, useTeamLabels } from '../copy';
+import { CollapseItem, CollapseList } from "@/lib/motion";
+import { useMemo, useState, type DragEvent } from "react";
+import { TASK_STATUSES, type TaskStatus } from "@/lib/team/constants";
+import { checkTransition, canMoveTask } from "@/lib/team/permissions";
+import { cn } from "@/lib/utils";
+import { useWorkspace } from "../workspace-context";
+import { useTaskActions } from "../lib/use-task-actions";
+import { STATUS_ICON } from "../shared";
+import { TaskCard } from "./task-card";
+import type { TaskDto } from "../lib/types";
+import { useTeamCopy, useTeamLabels } from "../copy";
 
 /**
  * Kanban — 4 kolon (Yapılacak · Devam · Onayda · Bitti). Masaüstünde sürükle-bırak; aynı geçiş
@@ -38,20 +39,29 @@ export function KanbanView({
   const [over, setOver] = useState<TaskStatus | null>(null);
 
   const byCol = useMemo(() => {
-    const map: Record<TaskStatus, TaskDto[]> = { todo: [], in_progress: [], review: [], done: [] };
+    const map: Record<TaskStatus, TaskDto[]> = {
+      todo: [],
+      in_progress: [],
+      review: [],
+      done: [],
+    };
     for (const t of tasks) (map[t.status as TaskStatus] ?? map.todo).push(t);
     return map;
   }, [tasks]);
 
   const canDrop = (to: TaskStatus) => {
     if (!dragTask) return false;
-    if (dragTask.status === to || dragTask.status === 'done') return false;
-    return checkTransition(dragTask.status as TaskStatus, to, teamViewer.isManager ? 'manager' : 'member').ok;
+    if (dragTask.status === to || dragTask.status === "done") return false;
+    return checkTransition(
+      dragTask.status as TaskStatus,
+      to,
+      teamViewer.isManager ? "manager" : "member",
+    ).ok;
   };
 
   const onDragStart = (e: DragEvent, task: TaskDto) => {
-    e.dataTransfer.setData('text/plain', task.id);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData("text/plain", task.id);
+    e.dataTransfer.effectAllowed = "move";
     setDragTask(task);
   };
 
@@ -72,13 +82,15 @@ export function KanbanView({
             key={col}
             aria-labelledby={`col-${col}`}
             className={cn(
-              'flex w-[85vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-card border bg-surface-2/60 p-2 sm:w-[20rem] lg:w-auto lg:max-w-none',
-              over === col && droppable ? 'border-brand bg-brand-subtle/40' : 'border-subtle'
+              "flex w-[85vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-card border bg-surface-2/60 p-2 sm:w-[20rem] lg:w-auto lg:max-w-none",
+              over === col && droppable
+                ? "border-brand bg-brand-subtle/40"
+                : "border-subtle",
             )}
             onDragOver={(e) => {
               if (!droppable) return;
               e.preventDefault();
-              e.dataTransfer.dropEffect = 'move';
+              e.dataTransfer.dropEffect = "move";
               if (over !== col) setOver(col);
             }}
             onDragLeave={() => setOver((cur) => (cur === col ? null : cur))}
@@ -91,30 +103,49 @@ export function KanbanView({
             }}
           >
             <header className="flex items-center justify-between gap-2 px-1.5 pb-2 pt-1">
-              <h3 id={`col-${col}`} className="qx-small flex items-center gap-1.5 font-semibold text-fg">
+              <h3
+                id={`col-${col}`}
+                className="qx-small flex items-center gap-1.5 font-semibold text-fg"
+              >
                 <Icon className="h-4 w-4 text-fg-muted" aria-hidden />
                 {tm.STATUS_META[col].label}
               </h3>
-              <span className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted" aria-label={tf.taskCount(items.length)}>
+              <span
+                className="qx-caption qx-num rounded-chip bg-surface-1 px-1.5 py-0.5 text-fg-muted"
+                aria-label={tf.taskCount(items.length)}
+              >
                 {items.length}
               </span>
             </header>
-            <div className="flex min-h-[6rem] flex-col gap-2">
-              {items.map((t) => (
-                <TaskCard
-                  key={t.id}
-                  task={t}
-                  selectable={selectMode}
-                  selected={selected.has(t.id)}
-                  onToggleSelect={onToggleSelect}
-                  draggable={!selectMode && canMoveTask(teamViewer, t) && t.status !== 'done'}
-                  onDragStart={onDragStart}
-                  onPickTag={onPickTag}
-                />
-              ))}
+            <div className="flex min-h-[6rem] flex-col [&>*>*]:mb-2">
+              <CollapseList>
+                {items.map((t) => (
+                  <CollapseItem key={t.id}>
+                    <TaskCard
+                      task={t}
+                      selectable={selectMode}
+                      selected={selected.has(t.id)}
+                      onToggleSelect={onToggleSelect}
+                      draggable={
+                        !selectMode &&
+                        canMoveTask(teamViewer, t) &&
+                        t.status !== "done"
+                      }
+                      onDragStart={onDragStart}
+                      onPickTag={onPickTag}
+                    />
+                  </CollapseItem>
+                ))}
+              </CollapseList>
               {items.length === 0 && (
                 <p className="qx-small rounded-control border border-dashed border-subtle px-3 py-6 text-center text-fg-subtle">
-                  {droppable ? tu.burayaBirak : col === 'review' ? tu.onayBekleyenGorevYok : col === 'done' ? tu.henuzBitenGorevYok : tu.gorevYok}
+                  {droppable
+                    ? tu.burayaBirak
+                    : col === "review"
+                      ? tu.onayBekleyenGorevYok
+                      : col === "done"
+                        ? tu.henuzBitenGorevYok
+                        : tu.gorevYok}
                 </p>
               )}
             </div>

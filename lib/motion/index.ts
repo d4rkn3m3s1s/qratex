@@ -9,3 +9,4 @@ export { useNumberTicker, cubicBezier } from './use-number-ticker';
 export { MotionPolicyConfig } from './motion-policy-config';
 export { Ambient } from './ambient';
 export { Reveal } from './reveal';
+export { CollapseList, CollapseItem } from './collapse-list';

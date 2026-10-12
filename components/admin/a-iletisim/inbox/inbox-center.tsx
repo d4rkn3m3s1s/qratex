@@ -27,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import { PageHeader, PanelPage } from '@/components/ds/page';
 import { EmptyState, InlineError, QueryState } from '@/components/states';
 import { cn } from '@/lib/utils';
-import { DURATION, useMotionPolicy } from '@/lib/motion';
+import { CollapseItem, CollapseList, DURATION, useMotionPolicy } from '@/lib/motion';
 import {
   INBOX_VIEWS,
   INBOX_VIEW_META,
@@ -419,20 +419,13 @@ export function InboxCenter({ initial }: { initial: Initial }) {
             >
               {() => (
                 <ul role="list" className="divide-y divide-border">
-                  <AnimatePresence initial={false}>
+                  <CollapseList>
                     {items.map((it) => (
-                      <Motion.li
-                        key={it.id}
-                        layout={policy.reduce ? false : 'position'}
-                        initial={policy.reduce ? false : { opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={policy.reduce ? { opacity: 0 } : { opacity: 0, x: 24, height: 0 }}
-                        transition={policy.transition({ duration: DURATION.base })}
-                      >
+                      <CollapseItem as="li" key={it.id}>
                         <MailRow item={it} active={it.id === selectedId} onOpen={() => open(it)} />
-                      </Motion.li>
+                      </CollapseItem>
                     ))}
-                  </AnimatePresence>
+                  </CollapseList>
                 </ul>
               )}
             </QueryState>

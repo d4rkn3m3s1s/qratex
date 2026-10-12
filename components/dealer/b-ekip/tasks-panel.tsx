@@ -1,12 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AnimatePresence, m } from 'framer-motion';
 import { AlertTriangle, Ban, ClipboardList, Pencil, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ConfirmAction, EmptyState } from '@/components/states';
-import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
+import { EmptyState } from '@/components/states';
+import { InlineConfirm } from '@/components/ds';
+import { CollapseItem, CollapseList } from '@/lib/motion';
 import type { TaskDto, TeamHub } from '@/lib/staff-ops/types';
 import { cn } from '@/lib/utils';
 import { fmtDateTime, istanbulLocalToIso, isoToIstanbulLocal, sendJson } from './shared';
@@ -18,7 +18,6 @@ type Filter = 'open' | 'overdue' | 'done';
 export function TasksPanel({ hub, focusUserId }: { hub: TeamHub; focusUserId?: string | null }) {
   const { copy } = useTeamCopy();
   const c = copy.tasks;
-  const motion = useMotionPolicy();
   const members = useMemo(() => hub.members.filter((x) => x.isActive), [hub.members]);
   const [filter, setFilter] = useState<Filter>('open');
   const [editing, setEditing] = useState<TaskDto | null>(null);
@@ -52,21 +51,14 @@ export function TasksPanel({ hub, focusUserId }: { hub: TeamHub; focusUserId?: s
             description={filter === 'done' ? undefined : c.emptyOpenDesc}
           />
         ) : (
-          <ul className="space-y-2" aria-label={copy.hub.tabs.tasks}>
-            <AnimatePresence initial={false}>
+          <ul className="flex flex-col [&>li>*]:mb-2" aria-label={copy.hub.tabs.tasks}>
+            <CollapseList>
               {list.map((t) => (
-                <m.li
-                  key={t.id}
-                  layout={!motion.reduce}
-                  initial={motion.reduce ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={motion.transition({ duration: DURATION.base, ease: EASE.standard })}
-                >
+                <CollapseItem as="li" key={t.id}>
                   <TaskRow task={t} onEdit={() => setEditing(t)} />
-                </m.li>
+                </CollapseItem>
               ))}
-            </AnimatePresence>
+            </CollapseList>
           </ul>
         )}
       </div>
@@ -110,18 +102,15 @@ function TaskRow({ task, onEdit }: { task: TaskDto; onEdit: () => void }) {
             <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`${c.editTitle}: ${task.title}`} onClick={onEdit}>
               <Pencil className="h-4 w-4" aria-hidden />
             </Button>
-            <ConfirmAction
-              tone="danger"
-              title={`${c.cancel}: ${task.title}`}
+            <InlineConfirm
+              size="icon"
+              className="text-danger"
               confirmLabel={c.cancel}
-              irreversibleNote={false}
+              aria-label={`${c.cancel}: ${task.title}`}
               onConfirm={() => cancel.mutateAsync(undefined)}
-              trigger={
-                <Button variant="ghost" size="icon" className="h-11 w-11 text-danger" aria-label={`${c.cancel}: ${task.title}`}>
-                  <Ban className="h-4 w-4" aria-hidden />
-                </Button>
-              }
-            />
+            >
+              <Ban className="h-4 w-4" aria-hidden />
+            </InlineConfirm>
           </>
         ) : (
           <Button variant="outline" size="sm" className="min-h-11" disabled={reopen.isPending} onClick={() => reopen.mutate(undefined)}>
