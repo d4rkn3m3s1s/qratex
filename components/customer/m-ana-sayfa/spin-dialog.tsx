@@ -6,6 +6,7 @@ import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatInt } from '@/components/ds/play/shared';
+import { AnimatedNumber } from '@/components/ds/data/animated-number';
 import { EASE, useReducedMotionPref } from '@/lib/motion';
 import { BUZZ, buzz, confetti, sound } from '@/lib/moments/effects';
 import type { HomeSpin } from '@/lib/customer-home/types';
@@ -163,9 +164,9 @@ export default function SpinDialog({
   const resultText = result ? prizeText({ ...result.prize, label: result.prize.label }, units) : null;
   const shownValue = result
     ? result.prize.type === 'points'
-      ? formatInt(result.credited.points || result.prize.value, locale)
+      ? result.credited.points || result.prize.value
       : result.prize.type === 'xp'
-        ? formatInt(result.credited.xp || result.prize.value, locale)
+        ? result.credited.xp || result.prize.value
         : null
     : null;
 
@@ -241,7 +242,14 @@ export default function SpinDialog({
                         <>
                           <p className="qx-overline text-fg-muted">{won ? copy.wonTitle : resultText.unit}</p>
                           <p className="qx-num mt-1 text-5xl font-bold leading-none tracking-tight text-fg tabular-nums">
-                            +{shownValue}
+                            {shownValue != null && (
+                              <AnimatedNumber
+                                value={shownValue}
+                                format={(n) => `+${formatInt(n, locale)}`}
+                                animateOnMount
+                                durationMs={700}
+                              />
+                            )}
                             <span className="ml-1.5 text-xl font-semibold text-fg-muted">{resultText.unit}</span>
                           </p>
                           <p className="qx-small mt-2 text-fg-muted">{capped ? copy.capped : copy.wonBody}</p>

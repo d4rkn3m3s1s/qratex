@@ -6,6 +6,7 @@
  * Not: recharts bu barrel'dan YÜKLENMEZ — grafikler `lazyChart(() => import(…))` ile.
  */
 export { MetricTile, MetricGrid, type MetricTileProps, type MetricGridProps } from './metric-tile';
+export { AnimatedNumber, type AnimatedNumberProps } from './animated-number';
 export { DeltaBadge, type DeltaBadgeProps } from './delta-badge';
 export { Sparkline, type SparklineProps } from './sparkline';
 export { sparklineGeometry, type SparklineGeometry, type SparklineOptions } from './sparkline-geometry';

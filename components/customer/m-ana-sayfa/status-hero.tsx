@@ -10,7 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UserAvatarFrame } from '@/components/ui/avatar-frame';
 import { LeagueEmblem, MOMENT_PULSE_EVENT, RewardProgress, XpRing } from '@/components/ds/play';
 import { FOCUS_RING, formatInt } from '@/components/ds/play/shared';
-import { SPRING, useNumberTicker, useReducedMotionPref } from '@/lib/motion';
+import { SPRING, useReducedMotionPref } from '@/lib/motion';
+import { AnimatedNumber } from '@/components/ds/data/animated-number';
 import { HOME_LINKS } from '@/lib/customer-home/core';
 import type { CustomerHomeData } from '@/lib/customer-home/types';
 import { useHomeCopy } from './copy';
@@ -151,7 +152,6 @@ function BalanceNumber({ value, unit, locale }: { value: number; unit: string; l
   const ref = useRef<HTMLSpanElement | null>(null);
   const reduce = useReducedMotionPref();
   const controls = useAnimationControls();
-  const shown = useNumberTicker(value);
 
   useEffect(() => {
     const el = ref.current;
@@ -167,8 +167,8 @@ function BalanceNumber({ value, unit, locale }: { value: number; unit: string; l
   return (
     <p className="flex items-baseline gap-2">
       <span ref={ref} data-moment-anchor="points" className="inline-block">
-        <Motion.span animate={controls} className="inline-block qx-display font-display tabular-nums text-fg" aria-hidden>
-          {formatInt(shown, locale)}
+        <Motion.span animate={controls} className="inline-block qx-display font-display text-fg" aria-hidden>
+          <AnimatedNumber value={value} format={(n) => formatInt(n, locale)} srLabel={null} />
         </Motion.span>
       </span>
       <span className="qx-body font-medium text-fg-muted" aria-hidden>

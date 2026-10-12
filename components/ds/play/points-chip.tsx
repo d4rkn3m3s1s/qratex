@@ -4,7 +4,8 @@ import { forwardRef, useCallback, useEffect, useRef, useState, type ButtonHTMLAt
 import { m as Motion } from 'framer-motion';
 import { Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SPRING, useNumberTicker, useReducedMotionPref } from '@/lib/motion';
+import { SPRING, useReducedMotionPref } from '@/lib/motion';
+import { AnimatedNumber } from '../data/animated-number';
 import { useRegister, type Register } from './register';
 import { usePlayLocale } from './locale';
 import { FOCUS_RING, TOUCH_TARGET, formatInt, type PlayLocale, type PlaySize } from './shared';
@@ -84,7 +85,6 @@ export const PointsChip = forwardRef<HTMLElement, PointsChipProps>(function Poin
   const innerRef = useRef<HTMLElement | null>(null);
   const reg = useRegister(register, innerRef);
   const reduce = useReducedMotionPref();
-  const display = useNumberTicker(value);
   const prev = useRef(value);
   const [bump, setBump] = useState(0);
   const expressive = reg === 'play' && !reduce;
@@ -133,8 +133,8 @@ export const PointsChip = forwardRef<HTMLElement, PointsChipProps>(function Poin
   const body = (
     <>
       {iconNode}
-      <span aria-hidden className="qx-num font-semibold tabular-nums">
-        {formatInt(display, locale)}
+      <span aria-hidden className="qx-num font-semibold">
+        <AnimatedNumber value={value} format={(n) => formatInt(n, locale)} srLabel={null} />
       </span>
       {unitNode !== null && (
         <span aria-hidden className="font-medium">

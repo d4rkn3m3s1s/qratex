@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Gamepad2, History, ListChecks, QrCode, Target } from 'lucide-react';
 import { RewardProgress } from '@/components/ds/play';
-import { useNumberTicker } from '@/lib/motion';
+import { AnimatedNumber } from '@/components/ds/data/animated-number';
 import { cn } from '@/lib/utils';
 import { useWalletCopy } from './copy';
 import { formatPoints } from './format';
@@ -29,7 +29,6 @@ export function BalanceHero({
   onOpenGoal?: (id: string) => void;
 }) {
   const copy = useWalletCopy();
-  const shown = useNumberTicker(balance);
   return (
     <section
       aria-labelledby="wallet-balance-heading"
@@ -41,9 +40,12 @@ export function BalanceHero({
             {copy.balance}
           </h2>
           <p className="mt-1 flex items-baseline gap-2">
-            <span className="qx-display qx-num text-fg" aria-hidden>
-              {formatPoints(shown, copy.locale)}
-            </span>
+            <AnimatedNumber
+              value={balance}
+              format={(n) => formatPoints(n, copy.locale)}
+              srLabel={null}
+              className="qx-display qx-num text-fg"
+            />
             <span className="qx-small text-fg-muted" aria-hidden>
               {copy.pointsShort}
             </span>
