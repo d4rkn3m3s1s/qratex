@@ -251,7 +251,7 @@ function DayCell({
         type="button"
         onClick={onAdd}
         aria-label={c.addFor(member.name ?? member.email, fmtDay(day, locale))}
-        className="grid min-h-9 w-full place-items-center rounded-control border border-dashed border-subtle text-fg-muted opacity-60 transition-opacity duration-fast hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid min-h-11 w-full place-items-center rounded-control border border-dashed border-subtle text-fg-muted opacity-60 transition-opacity duration-fast hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Plus className="h-4 w-4" aria-hidden />
       </button>

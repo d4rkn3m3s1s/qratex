@@ -52,7 +52,7 @@ export function InstantSwitchRow({
   return (
     <div className={cn('flex min-h-11 items-start gap-3 py-3', muted && 'opacity-60')}>
       {icon && (
-        <span aria-hidden className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-fg-muted [&_svg]:h-4 [&_svg]:w-4">
+        <span aria-hidden className="mt-1 inline-flex shrink-0 text-fg-subtle [&_svg]:h-4 [&_svg]:w-4">
           {icon}
         </span>
       )}

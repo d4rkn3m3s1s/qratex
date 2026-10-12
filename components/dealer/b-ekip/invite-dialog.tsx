@@ -92,7 +92,7 @@ export function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       aria-pressed={jobTitle === p}
                       onClick={() => setJobTitle(p)}
                       className={cn(
-                        'qx-caption min-h-9 rounded-chip border px-2.5 font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        'qx-caption min-h-11 rounded-chip border px-2.5 font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         jobTitle === p ? 'border-brand bg-brand-subtle text-brand' : 'border-subtle text-fg-muted hover:text-fg'
                       )}
                     >

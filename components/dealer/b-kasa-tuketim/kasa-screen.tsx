@@ -379,7 +379,6 @@ function CustomerCard({ card }: { card: CardLookupDto }) {
           </p>
           <p className="mt-1 text-sm font-medium text-success">{v.countHere === 0 ? c.firstVisit : c.visitNo(v.countHere + 1)}</p>
         </div>
-        <CheckCircle2 className="h-7 w-7 shrink-0 text-success" aria-hidden />
       </div>
       {v.countHere > 0 && (
         <>
@@ -457,7 +456,7 @@ function SuccessPanel({ success, onNext, onUndo }: { success: Success; onNext: (
         </>
       )}
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-        <Button ref={nextRef} onClick={onNext} className="min-h-12 flex-1 text-base sm:flex-none sm:px-8">
+        <Button ref={nextRef} onClick={onNext} className="min-h-14 flex-1 text-base sm:flex-none sm:px-8">
           {c.next}
         </Button>
         {!success.duplicate && <VoidButton createdAt={success.createdAt} voidable onClick={onUndo} size="default" />}

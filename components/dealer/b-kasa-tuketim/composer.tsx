@@ -287,7 +287,7 @@ export function Composer({
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button type="button" onClick={submit} disabled={submitting || amountInvalid} className="min-h-12 flex-1 gap-2 text-base">
+        <Button type="button" onClick={submit} disabled={submitting || amountInvalid} className="min-h-14 flex-1 gap-2 text-base font-semibold">
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
           {submitting ? c.submitting : c.submit}
         </Button>

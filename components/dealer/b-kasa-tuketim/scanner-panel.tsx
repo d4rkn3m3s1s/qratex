@@ -160,12 +160,10 @@ export function ScannerPanel({
         <div id={READER_ID} className={cn('h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover', !active && 'hidden')} />
         {!active && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-subtle text-brand ring-1 ring-inset ring-brand-border">
-              <ScanLine className="h-7 w-7" aria-hidden />
-            </span>
+            <ScanLine className="h-10 w-10 text-fg-subtle" aria-hidden />
             <p className="font-medium">{c.camera.idleTitle}</p>
             <p className="max-w-xs text-sm text-fg-muted">{c.camera.idleHint}</p>
-            <Button onClick={() => void scanner.start()} disabled={scanner.status === 'stopping'} className="mt-1 min-h-11 gap-2 px-5">
+            <Button onClick={() => void scanner.start()} disabled={scanner.status === 'stopping'} className="mt-1 min-h-14 gap-2 px-6 text-base">
               <Camera className="h-4 w-4" aria-hidden />
               {c.camera.open}
             </Button>

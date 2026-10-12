@@ -143,7 +143,7 @@ function PushCard({ devices }: { devices: PushDevice[] }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span aria-hidden className="inline-flex h-8 w-8 items-center justify-center rounded-control bg-surface-muted text-fg-muted">
+          <span aria-hidden className="inline-flex shrink-0 text-fg-subtle">
             <BellRing className="h-4 w-4" />
           </span>
           <div className="min-w-0">
