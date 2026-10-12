@@ -11,6 +11,7 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkTokenReplay, type TokenReplayResult } from '@/lib/token-replay';
 import { loadSessionState, evaluateSessionState, type SessionState } from '@/lib/auth/session-state';
 import { checkAdminElevation } from '@/lib/admin-gate';
+import { adminNeeds2faSetup } from '@/lib/auth/admin-2fa';
 import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import type { Session } from 'next-auth';
 
@@ -67,6 +68,7 @@ export interface RequireAuthOptions {
 }
 
 export const ADMIN_GATE_REQUIRED_CODE = 'ADMIN_GATE_REQUIRED';
+export const ADMIN_2FA_REQUIRED_CODE = 'ADMIN_2FA_REQUIRED';
 export const STAFF_INACTIVE_CODE = 'STAFF_INACTIVE';
 
 function authError(status: number, error: string, code: string): NextResponse {
@@ -93,6 +95,14 @@ function authError(status: number, error: string, code: string): NextResponse {
  * `requireAuth()` rol kontrolünü atlıyordu; STAFF gibi "ne bayi ne müşteri" rolü kapsam
  * filtresine düşmeyip kiracılar arası veri görebiliyordu (`/api/search`).
  */
+async function readForwardedPath(): Promise<string | null> {
+  try {
+    return (await headers()).get('x-qx-pathname');
+  } catch {
+    return null; // istek bağlamı dışı (betik/test)
+  }
+}
+
 export async function requireAuth(
   allowedRoles: ReadonlyArray<AllowedRole>,
   options: RequireAuthOptions = {}
@@ -183,6 +193,15 @@ export async function requireAuth(
       }
       return {
         error: authError(403, 'Bu işlem için önce yönetici kapısından geçmelisiniz.', ADMIN_GATE_REQUIRED_CODE),
+      };
+    }
+    // Zorunlu admin 2FA (lib/auth/admin-2fa; panel sayfalarıyla aynı karar): yalnız /api/admin/*
+    // (yol proxy'nin ezerek yazdığı `x-qx-pathname`). Kapı-muaf uçlar (gate, ekip) adminGate:false
+    // ile buraya hiç girmez; 2FA kurulum ucu /api/auth/2fa admin önekinde değil. DB hatası → fail-open.
+    const apiPath = await readForwardedPath();
+    if (apiPath && apiPath.startsWith('/api/admin/') && (await adminNeeds2faSetup(userId, { sid: jti ?? null, pathname: apiPath }))) {
+      return {
+        error: authError(403, 'Yönetici hesabında iki adımlı doğrulama zorunlu. Önce Hesap güvenliği sayfasından kurun.', ADMIN_2FA_REQUIRED_CODE),
       };
     }
   }

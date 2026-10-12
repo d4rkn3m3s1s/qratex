@@ -183,7 +183,14 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
     }
     // Sıra: CSRF köken denetimi (B5) → bakım modu (panel API'leri 503, yöneticiler muaf) → admin kapısı.
     const blocked = csrfOriginBlock(req) ?? (await maintenanceBlock(req)) ?? (await adminApiGateBlock(req));
-    const res = blocked ?? NextResponse.next();
+    let res: NextResponse;
+    if (blocked) res = blocked;
+    else if (pathname.startsWith('/api/admin/')) {
+      // requireAuth'taki zorunlu admin 2FA denetimi yolu buradan okur; istemci değeri EZİLİR.
+      const fwd = new Headers(req.headers);
+      fwd.set('x-qx-pathname', pathname);
+      res = NextResponse.next({ request: { headers: fwd } });
+    } else res = NextResponse.next();
     addSecurityHeaders(res, pathname);
     addCorsHeaders(res, req);
     return res;
