@@ -108,8 +108,8 @@ export function MobileTabBar({ items, activeId, ariaLabel, className }: MobileTa
                 >
                   <span
                     className={cn(
-                      'flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30',
-                      'ring-4 ring-background transition-transform duration-fast ease-standard motion-safe:group-active:scale-95'
+                      'flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary text-primary-foreground shadow-md shadow-primary/20',
+                      'ring-4 ring-background transition-transform duration-fast ease-standard motion-safe:group-active:scale-[0.92]'
                     )}
                   >
                     <Icon className="h-6 w-6" aria-hidden />
@@ -129,16 +129,21 @@ export function MobileTabBar({ items, activeId, ariaLabel, className }: MobileTa
                 aria-current={active ? 'page' : undefined}
                 aria-label={badge ? `${item.label} (${badge})` : undefined}
                 className={cn(
-                  'group relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 outline-none',
+                  'group relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 outline-none',
                   'transition-colors duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-ring',
                   active ? 'text-brand' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {active && <span className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-primary" aria-hidden />}
-                <span className="relative transition-transform duration-fast motion-safe:group-active:scale-90">
-                  <Icon className="h-6 w-6" aria-hidden />
+                {/* Aktif gösterge: ikonun arkasında yumuşak hap (çizgiden daha net; etiket de kalınlaşır). */}
+                <span
+                  className={cn(
+                    'relative flex h-8 w-14 items-center justify-center rounded-full transition-[background-color,transform] duration-fast ease-standard motion-safe:group-active:scale-90',
+                    active ? 'bg-brand/10' : 'group-hover:bg-surface-2'
+                  )}
+                >
+                  <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.25 : 2} aria-hidden />
                   {badge && (
-                    <span className="absolute -right-2 -top-1.5 min-w-[1.125rem] rounded-full bg-primary px-1 text-center text-[11px] font-semibold leading-4 text-primary-foreground tabular-nums">
+                    <span className="absolute right-1.5 -top-1 min-w-[1.125rem] rounded-full bg-primary px-1 text-center text-[11px] font-semibold leading-4 text-primary-foreground tabular-nums">
                       {badge}
                     </span>
                   )}

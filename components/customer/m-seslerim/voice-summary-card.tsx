@@ -11,9 +11,9 @@ import { formatNumber } from './lib';
 
 function Stat({ label, value, sub, icon }: { label: string; value: string; sub?: string | null; icon: React.ReactNode }) {
   return (
-    <div className="min-w-[8.5rem] flex-1 snap-start rounded-control border border-subtle bg-surface-1/70 px-3 py-2.5">
+    <div className="min-w-0 rounded-control border border-subtle bg-surface-1/70 px-3 py-2.5">
       <div className="flex items-center gap-1.5 text-fg-muted">
-        <span aria-hidden className="[&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+        <span aria-hidden className="shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         <span className="qx-caption">{label}</span>
       </div>
       <p className="qx-h2 qx-num mt-1 text-fg">{value}</p>
@@ -48,7 +48,7 @@ export function VoiceSummaryCard({ summary }: { summary: VoiceSummary }) {
       </header>
 
       {/* Mobilde yatay kayan stat şeridi (sıkışık 3 sütun yerine), geniş ekranda ızgara. */}
-      <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label={copy.voices} value={formatNumber(totals.voices, locale)} icon={<MessageSquare />} />
         <Stat
           label={copy.avgRating}

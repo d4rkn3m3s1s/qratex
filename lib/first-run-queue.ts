@@ -81,3 +81,19 @@ export function useFirstRunTurn(id: FirstRunId, wants: boolean | null): { grante
   };
   return { granted, finish };
 }
+
+/**
+ * Bir ilk-açılış katmanı şu an açık mı ya da açılmak üzere mi? Kayıtsız katmanlar (çerez bandı
+ * gibi kalıcı-ama-modal-olmayan bildirimler) bununla sıraya girer: video/tanıtım/doğum günü
+ * akışı bitene kadar geri çekilir, sonra kendi sırası gelir — ilk girişte üç katman üst üste
+ * açılmaz. Yalnız 'want' sayılır: henüz karar vermemiş (yoklayan) katman bandı gizlemez.
+ */
+export function isFirstRunBusy(state: ReadonlyMap<FirstRunId, SlotState>): boolean {
+  for (const s of state.values()) if (s === 'want') return true;
+  return false;
+}
+
+export function useFirstRunBusy(): boolean {
+  useSyncExternalStore(subscribe, () => version, () => 0);
+  return isFirstRunBusy(slots);
+}

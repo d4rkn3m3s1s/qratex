@@ -1,24 +1,33 @@
 import type { ReactNode } from 'react';
 import { CalendarClock, Coins, Flame } from 'lucide-react';
-import { CountdownChip, StreakFlame } from '@/components/ds/play';
+import { CountdownChip } from '@/components/ds/play';
 import { cn } from '@/lib/utils';
 import type { EarningsData, Settled, TodayData } from '@/lib/play-hub/server';
 import { streakBonusXp, type StreakSummary } from '@/lib/play-hub/catalog';
 import { playHubCopy, type PlayLocale } from './copy';
 import { SectionError } from './section-error';
 
-function Tile({ title, icon, children, className }: { title: string; icon: ReactNode; children: ReactNode; className?: string }) {
+/** Şeridin tek hücresi: küçük etiket → büyük sayı → ölçer. Kart değil; ortak panelin bölmesi. */
+function Cell({ title, short, icon, children }: { title: string; short: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <section
-      aria-label={title}
-      className={cn('flex min-w-0 flex-col gap-2 rounded-card border border-border bg-surface-1 p-4 qx-elevation-1', className)}
-    >
-      <h2 className="flex items-center gap-2 qx-small font-semibold text-fg-muted">
+    <section aria-label={title} className="flex min-w-0 flex-col gap-1.5 px-3 py-3 first:pl-0 last:pr-0 sm:px-5 sm:py-1">
+      <h2 className="flex min-w-0 items-center gap-1.5 qx-caption font-medium text-fg-muted">
         {icon}
-        {title}
+        <span className="truncate sm:hidden" aria-hidden>{short}</span>
+        <span className="sr-only sm:not-sr-only sm:truncate">{title}</span>
       </h2>
       {children}
     </section>
+  );
+}
+
+/** Büyük sayı + sönük payda ("0 / 600 puan" tek satırda sıkışmasın). */
+function Figure({ value, rest }: { value: number | string; rest?: string }) {
+  return (
+    <p className="flex min-w-0 items-baseline gap-1 font-display qx-num leading-none text-fg">
+      <span className="text-2xl font-semibold tracking-tight sm:text-3xl">{value}</span>
+      {rest ? <span className="truncate qx-caption text-fg-muted">{rest}</span> : null}
+    </p>
   );
 }
 
@@ -77,67 +86,77 @@ export function StatusStrip({
   const c = playHubCopy(locale);
   const used = today.ok ? [...today.data.entries.keys()].length : 0;
 
+  const capped = earnings.ok && earnings.data.today >= earnings.data.dailyCap;
+  const streakLine = streak.ok
+    ? streak.data.wonToday
+      ? c.streakSafe(streak.data.current)
+      : streak.data.atRisk
+        ? c.streakAtRisk(streak.data.current)
+        : c.streakNone
+    : null;
+
+  // Tek panel, üç bölme: eskiden üç eşit ağırlıkta kart mobilde oyunları ekranın altına itiyordu.
+  // Sayılar öne, açıklamalar tek bir alt satıra (yalnız durum değişince önemli olan seri mesajı).
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <Tile title={c.streakTitle} icon={<Flame className="size-4 text-warning" aria-hidden />}>
-        {streak.ok ? (
-          <>
-            <StreakFlame days={streak.data.current} size="lg" locale={locale} className="text-fg" />
-            <p className={cn('qx-small', streak.data.atRisk ? 'text-warning' : 'text-fg-muted')}>
-              {streak.data.wonToday
-                ? c.streakSafe(streak.data.current)
-                : streak.data.atRisk
-                  ? c.streakAtRisk(streak.data.current)
-                  : c.streakNone}
-            </p>
-            {!streak.data.wonToday && (
-              <p className="qx-caption text-fg-muted">
-                {c.streakNext(streak.data.nextLength, streakBonusXp(streak.data.nextLength))}
-              </p>
-            )}
-            <p className="qx-caption text-fg-muted">
-              {c.streakMilestone(streak.data.nextMilestone)} · {c.streakLongest(streak.data.longest)}
-            </p>
-          </>
-        ) : (
-          <SectionError locale={locale} kind={streak.error} className="p-0" />
-        )}
-      </Tile>
+    <div className="rounded-card border border-border bg-surface-1 px-4 py-2 qx-elevation-1 sm:py-4">
+      <div className="grid grid-cols-3 divide-x divide-border">
+        <Cell title={c.streakTitle} short={c.streakShort} icon={<Flame className="size-3.5 shrink-0 text-warning" aria-hidden />}>
+          {streak.ok ? (
+            <>
+              <Figure value={streak.data.current} rest={c.streakUnit} />
+              <p className="truncate qx-caption text-fg-muted">{c.streakLongest(streak.data.longest)}</p>
+            </>
+          ) : (
+            <SectionError locale={locale} kind={streak.error} className="p-0" />
+          )}
+        </Cell>
 
-      <Tile title={c.attemptsTitle} icon={<CalendarClock className="size-4 text-brand" aria-hidden />}>
-        {today.ok ? (
-          <>
-            <p className="qx-h3 font-display qx-num text-fg">{c.attemptsValue(Math.min(used, totalGames), totalGames)}</p>
-            <Meter value={Math.min(used, totalGames)} max={Math.max(totalGames, 1)} label={c.attemptsTitle} />
-            <div className="flex flex-wrap items-center gap-2">
-              <CountdownChip target={today.data.resetAt} label={c.resetIn} size="sm" locale={locale} />
-            </div>
-            <p className="qx-caption text-fg-muted">{c.attemptsHint}</p>
-          </>
-        ) : (
-          <SectionError locale={locale} kind={today.error} className="p-0" />
-        )}
-      </Tile>
+        <Cell title={c.attemptsTitle} short={c.attemptsShort} icon={<CalendarClock className="size-3.5 shrink-0 text-brand" aria-hidden />}>
+          {today.ok ? (
+            <>
+              <Figure value={Math.min(used, totalGames)} rest={`/ ${totalGames}`} />
+              <Meter value={Math.min(used, totalGames)} max={Math.max(totalGames, 1)} label={c.attemptsTitle} className="h-1.5" />
+            </>
+          ) : (
+            <SectionError locale={locale} kind={today.error} className="p-0" />
+          )}
+        </Cell>
 
-      <Tile title={c.earningsTitle} icon={<Coins className="size-4 text-warning" aria-hidden />}>
-        {earnings.ok ? (
-          <>
-            <p className="qx-h3 font-display qx-num text-fg">{c.earningsValue(earnings.data.today, earnings.data.dailyCap)}</p>
-            <Meter
-              value={earnings.data.today}
-              max={earnings.data.dailyCap}
-              label={c.earningsTitle}
-              tone={earnings.data.today >= earnings.data.dailyCap ? 'warning' : 'success'}
-            />
-            {earnings.data.today >= earnings.data.dailyCap ? (
-              <p className="qx-small text-warning">{c.earningsCapped}</p>
+        <Cell title={c.earningsTitle} short={c.earningsShort} icon={<Coins className="size-3.5 shrink-0 text-warning" aria-hidden />}>
+          {earnings.ok ? (
+            <>
+              <Figure value={earnings.data.today} rest={`/ ${earnings.data.dailyCap}`} />
+              <Meter
+                value={earnings.data.today}
+                max={earnings.data.dailyCap}
+                label={c.earningsTitle}
+                tone={capped ? 'warning' : 'success'}
+                className="h-1.5"
+              />
+            </>
+          ) : (
+            <SectionError locale={locale} kind={earnings.error} className="p-0" />
+          )}
+        </Cell>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border py-2.5 sm:mt-3 sm:pb-0 sm:pt-3">
+        {today.ok ? <CountdownChip target={today.data.resetAt} label={c.resetIn} size="sm" locale={locale} /> : null}
+        {streakLine ? (
+          <p className={cn('min-w-0 flex-1 qx-caption', streak.ok && streak.data.atRisk ? 'font-medium text-warning' : 'text-fg-muted')}>
+            {streakLine}
+            {streak.ok && !streak.data.wonToday ? (
+              <span className="hidden sm:inline"> {c.streakNext(streak.data.nextLength, streakBonusXp(streak.data.nextLength))}</span>
             ) : null}
-            <p className="qx-caption text-fg-muted">{c.earningsHint(earnings.data.week, earnings.data.weeklyCap)}</p>
-          </>
-        ) : (
-          <SectionError locale={locale} kind={earnings.error} className="p-0" />
-        )}
-      </Tile>
+          </p>
+        ) : null}
+        {capped ? <p className="w-full qx-caption font-medium text-warning">{c.earningsCapped}</p> : null}
+        {earnings.ok ? (
+          <p className="hidden w-full qx-caption text-fg-muted sm:block">
+            {c.earningsHint(earnings.data.week, earnings.data.weeklyCap)} · {c.attemptsHint}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
