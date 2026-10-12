@@ -126,7 +126,7 @@ export const GlowCard = forwardRef<HTMLDivElement, GlowCardProps>(function GlowC
       <Slottable>{children}</Slottable>
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] opacity-70"
+        className="pointer-events-none absolute inset-0 -z-10 !m-0 rounded-[inherit] opacity-70"
         style={{ ...BORDER_MASK, background: 'linear-gradient(135deg, var(--qx-glow-from), var(--qx-glow-to))' }}
       />
     </Comp>
