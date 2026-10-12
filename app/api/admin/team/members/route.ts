@@ -7,6 +7,9 @@ import { checkRateLimitDb } from '@/lib/rate-limit';
 import { emailLookupFilter, normalizeEmail } from '@/lib/auth/normalize-email';
 import { publicDisplayName } from '@/lib/http/dto';
 import { TEAM_ROUTE_ROLES, requireTeamViewer } from '@/lib/team/access';
+import { TEAM_INVITE_TTL_HOURS, TEAM_ROLE_LABEL, createTeamInvitation } from '@/lib/team/invitations';
+import { sendTeamInvitationEmail } from '@/lib/email';
+import { getPublicAppOrigin } from '@/lib/public-app-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,8 +107,9 @@ const addBody = z
   .refine((b) => !!b.userId || !!b.email, { message: 'Kişi seçin' });
 
 /**
- * POST — mevcut kullanıcıyı ekibe ekler (kimlik ya da e-posta; büyük/küçük harf duyarsız —
- * denetim Bulgu 5/6). Platform rolü DEĞİŞMEZ. Yönetici rolünü yalnız ADMIN verebilir
+ * POST — mevcut kullanıcıyı ekibe DAVET eder (kimlik ya da e-posta; büyük/küçük harf duyarsız —
+ * denetim Bulgu 5/6). Üyelik ancak kişi davet bağlantısını kabul edince oluşur (TeamInvitation).
+ * Platform rolü DEĞİŞMEZ. Yönetici rolünü yalnız ADMIN verebilir
  * (yetki zincirinin kendini genişletmesi engellenir).
  */
 export const POST = defineRoute(
@@ -128,26 +132,31 @@ export const POST = defineRoute(
     if (target.adminTeamRole) throw new ApiError('CONFLICT', 'Bu kişi zaten ekipte.');
     const slugs = await validateSlugs(body.departments ?? (body.department ? [body.department] : []));
 
-    const member = await prisma.$transaction(async (tx) => {
-      const updated = await tx.user.update({
-        where: { id: target.id },
-        data: { adminTeamRole: body.teamRole, adminDepartment: slugs[0] ?? null },
-        select: { id: true, name: true, image: true, adminDepartment: true, adminTeamRole: true },
-      });
-      await writeDepartments(tx, target.id, slugs);
-      await tx.auditLog.create({
-        data: {
-          userId: viewer.userId,
-          action: 'add_team_member',
-          entity: 'admin_team_member',
-          entityId: target.id,
-          newData: { teamRole: body.teamRole, departments: slugs } as Prisma.InputJsonValue,
-          ...getAuditRequestMeta(request),
-        },
-      });
-      return updated;
+    if (!target.email) throw new ApiError('VALIDATION', 'Bu hesabın e-posta adresi yok; davet gönderilemez.');
+
+    // Doğrudan rol yazma YOK: davet oluşur, kişi mailindeki tek kullanımlık bağlantıyla kabul
+    // eder (oturum e-postası = davet e-postası). Bkz. lib/team/invitations.ts.
+    const { invitation, token } = await createTeamInvitation({
+      email: target.email,
+      role: body.teamRole,
+      department: slugs[0] ?? null,
+      invitedById: viewer.userId,
+      audit: getAuditRequestMeta(request),
     });
-    return ok({ member: { ...member, departmentSlugs: slugs } }, { legacySpread: true });
+    const base = target.role === 'ADMIN' ? '/admin/ekip/davet' : '/customer/ekip-davet';
+    const acceptUrl = `${getPublicAppOrigin().replace(/\/$/, '')}${base}?token=${encodeURIComponent(token)}`;
+    const inviter = await prisma.user.findUnique({ where: { id: viewer.userId }, select: { name: true } });
+    const mail = await sendTeamInvitationEmail(target.email, {
+      acceptUrl,
+      inviterName: inviter?.name ?? null,
+      roleLabel: TEAM_ROLE_LABEL[body.teamRole],
+      expiresHours: TEAM_INVITE_TTL_HOURS,
+      userName: target.name ?? undefined,
+    }).catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : 'mail hatası' }));
+    return ok(
+      { invited: true, invitation: { ...invitation, email: target.email }, mailSent: mail.ok },
+      { status: 201, legacySpread: true }
+    );
   }
 );
 

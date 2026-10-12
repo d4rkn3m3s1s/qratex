@@ -262,3 +262,40 @@ export function buildAdminComposeEmail(input: {
   });
   return { html, text };
 }
+
+/**
+ * İç ekip daveti (TeamInvitation). Ham token yalnız bu mailde bulunur (DB'de sha256).
+ * Kabul, bağlantıyı açan oturumdaki e-posta = davet e-postası ise geçerlidir.
+ */
+export async function sendTeamInvitationEmail(
+  to: string,
+  opts: { acceptUrl: string; inviterName?: string | null; roleLabel: string; expiresHours: number; userName?: string }
+): Promise<{ ok: boolean; error?: string }> {
+  const subject = 'QRATEX — Ekip daveti';
+  const { logoUrl, brandLinkHref } = transactionalBranding();
+  const inviter = opts.inviterName?.trim() ? escapeEmailText(opts.inviterName.trim().slice(0, 60)) : 'Bir ekip yöneticisi';
+  const inviterText = opts.inviterName?.trim() ? opts.inviterName.trim().slice(0, 60) : 'Bir ekip yöneticisi';
+  const html = buildTransactionalEmailHtml({
+    heading: 'QRATEX',
+    bodyHtml: `${greetingHtml(opts.userName)}
+  <p>${inviter} sizi QRATEX iç ekibine <strong>${escapeEmailText(opts.roleLabel)}</strong> olarak davet etti.</p>
+  <p>Daveti kabul etmek için aşağıdaki bağlantıyı bu e-posta adresiyle giriş yapmış olarak açın.</p>`,
+    cta: { href: opts.acceptUrl, label: 'Daveti kabul et' },
+    footnoteHtml: `<p class="tx-email-muted" style="font-size: 14px; color: #666;">Bağlantı ${opts.expiresHours} saat geçerlidir ve yalnız bir kez kullanılabilir. Bu daveti beklemiyorsanız e-postayı yok sayabilirsiniz.</p>`,
+    logoUrl,
+    brandLinkHref,
+  });
+  const text = buildTransactionalPlainText({
+    heading: 'QRATEX',
+    bodyLines: [
+      greetingText(opts.userName),
+      `${inviterText} sizi QRATEX iç ekibine ${opts.roleLabel} olarak davet etti.`,
+      'Daveti kabul etmek için aşağıdaki bağlantıyı bu e-posta adresiyle giriş yapmış olarak açın.',
+    ],
+    cta: { href: opts.acceptUrl, label: 'Daveti kabul et' },
+    footnoteLines: [`Bağlantı ${opts.expiresHours} saat geçerlidir ve yalnız bir kez kullanılabilir.`],
+  });
+  const result = await sendTransactionalEmail({ to, subject, html, text, from: fromEmail });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}

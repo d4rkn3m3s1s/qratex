@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Star, UserMinus, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -100,8 +100,19 @@ export function MembersPanel({
             <SelectItem value="uye">{tx.roleMember}</SelectItem>
           </SelectContent>
         </Select>
-        {manage && <AddMember viewer={viewer} meta={meta} onAdded={() => void refresh()} />}
+        {manage && (
+          <AddMember
+            viewer={viewer}
+            meta={meta}
+            onAdded={() => {
+              void refresh();
+              void qc.invalidateQueries({ queryKey: INVITES_KEY });
+            }}
+          />
+        )}
       </div>
+
+      {manage && <PendingInvitations viewer={viewer} />}
 
       {rows.length === 0 ? (
         <EmptyState variant={q || role !== 'all' || deptFilter !== 'all' ? 'filtered' : 'default'} title={tu.uyeBulunamadi} compact />
@@ -209,6 +220,54 @@ export function MembersPanel({
   );
 }
 
+type PendingInvite = { id: string; email: string; role: string; expiresAt: string; invitedBy: { name: string | null } | null };
+const INVITES_KEY = ['team', 'invitations'] as const;
+
+/** Bekleyen ekip davetleri (kabul edilmemiş, süresi dolmamış, iptal edilmemiş) + iptal. */
+function PendingInvitations({ viewer }: { viewer: ClientViewer }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: INVITES_KEY,
+    queryFn: () => teamFetch<{ invitations: PendingInvite[] }>(`${API}/invitations`),
+  });
+  const list = q.data?.invitations ?? [];
+  if (list.length === 0) return null;
+  return (
+    <section aria-label="Bekleyen davetler" className="rounded-card border border-subtle bg-surface-1 p-3">
+      <h3 className="qx-small mb-2 font-semibold text-fg">Bekleyen davetler ({list.length})</h3>
+      <ul className="space-y-1.5">
+        {list.map((inv) => (
+          <li key={inv.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="min-w-0 flex-1 truncate">{inv.email}</span>
+            <StatusBadge label={inv.role === 'yonetici' ? 'Yönetici' : 'Üye'} tone="neutral" icon={null} size="sm" />
+            <span className="qx-caption text-fg-muted">
+              son: {new Date(inv.expiresAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+            </span>
+            {(viewer.isAdmin || inv.role !== 'yonetici') && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await teamFetch(`${API}/invitations?id=${encodeURIComponent(inv.id)}`, { method: 'DELETE' });
+                    toast.success('Davet iptal edildi');
+                    void qc.invalidateQueries({ queryKey: INVITES_KEY });
+                  } catch (err) {
+                    toast.error(errorMessage(err));
+                  }
+                }}
+              >
+                İptal et
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /**
  * Üye ekleme. Platform yöneticisi ad/e-posta parçasıyla (≥3 karakter) arar; ekip yöneticisi
  * kişiyi TAM e-postasıyla ekler (kullanıcı tabanı listelenemez; P0-10). Rol ve departmanlar
@@ -272,8 +331,10 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
     setBusy(true);
     setError(null);
     try {
-      await teamFetch(`${API}/members`, { method: 'POST', json: { userId: pick.id, teamRole, departments: depts } });
-      toast.success(`${dn(pick)} ekibe eklendi`);
+      const r = await teamFetch<{ mailSent?: boolean }>(`${API}/members`, { method: 'POST', json: { userId: pick.id, teamRole, departments: depts } });
+      // Üyelik davet kabul edilince oluşur (tek kullanımlık, süreli bağlantı).
+      if (r?.mailSent === false) toast.warning(`${dn(pick)} için davet oluşturuldu ama e-posta gönderilemedi. Daveti iptal edip tekrar deneyin.`);
+      else toast.success(`${dn(pick)} kişisine ekip daveti gönderildi`);
       setOpen(false);
       onAdded();
     } catch (err) {
