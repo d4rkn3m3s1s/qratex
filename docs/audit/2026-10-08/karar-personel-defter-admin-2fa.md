@@ -26,5 +26,4 @@
 - DB okunamazsa fail-open (rol + kapı zaten geçti; panel düşmez), hata loglanır.
 
 ## Kalanlar
-- Zorunluluk yalnız panel SAYFALARINDA; `/api/admin/*` uçları 2FA'sız admin için ayrıca
-  kesilmiyor (kapı çerezi şart olmaya devam ediyor). İstenirse `requireAuth` ADMIN dalına eklenir.
+- KAPANDI (9698dafc): `/api/admin/*` uçları da `requireAuth` ADMIN dalında aynı kararla kesiliyor (403 `ADMIN_2FA_REQUIRED`); `/api/auth/2fa` ve `adminGate:false` uçlar muaf.
