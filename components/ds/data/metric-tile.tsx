@@ -157,7 +157,9 @@ export const MetricTile = forwardRef<HTMLDivElement, MetricTileProps>(function M
                   title={copy.lowSampleHint(nFmt(metric.minN!))}
                 >
                   <AlertTriangle className="h-3 w-3" aria-hidden />
-                  {copy.lowSample} · <span className="qx-num">{copy.sample(nFmt(metric.n!))}</span>
+                  {copy.lowSample}{' '}
+                  {/* "· n = 11" tek parça kalsın: dar kutuda nokta/eşittir satır sonunda yetim kalıyordu. */}
+                  <span className="qx-num whitespace-nowrap">· {copy.sample(nFmt(metric.n!))}</span>
                   <span className="sr-only">. {copy.lowSampleHint(nFmt(metric.minN!))}</span>
                 </span>
               ) : typeof metric.n === 'number' ? (
