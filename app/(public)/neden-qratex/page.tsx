@@ -8,7 +8,6 @@ import { getModuleControls } from '@/lib/module-gate';
 import { getPublicStats } from '@/lib/landing/public-stats';
 import { getPublicPricingPlans } from '@/lib/landing/public-pricing';
 import { buildPricingJsonLd } from '@/lib/landing/public-pricing-core';
-import { Reveal } from '@/lib/motion/reveal';
 import {
   breadcrumbJsonLd,
   buildPublicMetadata,
@@ -140,39 +139,33 @@ export default async function WhyQratexPage() {
 
       <PublicSection id="nasil-baslanir" labelledBy="how-title" className="pt-0 sm:pt-0">
         <SectionHeading id="how-title" eyebrow={copy.how.eyebrow} title={copy.how.title} />
-        <ol className="grid gap-4 md:grid-cols-3">
+        <ol className="grid gap-x-8 gap-y-8 md:grid-cols-3">
           {copy.how.steps.map((step, i) => (
-            <Reveal as="li" index={i} key={step.title} className="list-none">
-              <div className="h-full rounded-card border border-subtle bg-surface-1/85 p-6 backdrop-blur-md">
-                <span
-                  className="grid h-10 w-10 place-items-center rounded-full bg-brand text-sm font-bold text-brand-fg qx-num"
-                  aria-hidden
-                >
-                  {i + 1}
-                </span>
-                <h3 className="mt-4 text-lg font-semibold text-fg">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-fg-muted">{step.body}</p>
-              </div>
-            </Reveal>
+            <li key={step.title} className="list-none border-t-2 border-fg pt-4">
+              <span className="qx-num font-mono text-sm font-semibold text-fg-muted" aria-hidden>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <h3 className="mt-2 text-lg font-semibold text-fg">{step.title}</h3>
+              <p className="mt-2 text-pretty text-sm leading-relaxed text-fg-muted">{step.body}</p>
+            </li>
           ))}
         </ol>
       </PublicSection>
 
       <PublicSection id="ozellikler" labelledBy="features-title" className="pt-0 sm:pt-0">
         <SectionHeading id="features-title" eyebrow={copy.features.eyebrow} title={copy.features.title} sub={copy.features.sub} />
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Eşit ağırlıklı ikon-kart ızgarası yerine bölünmüş liste: başlık solda, açıklama sağda okunur. */}
+        <ul className="divide-y divide-border border-y border-border">
           {copy.features.items.map((item, i) => {
             const Icon = FEATURE_ICONS[i] ?? Inbox;
             return (
-              <Reveal as="li" index={i} key={item.title} className="list-none">
-                <div className="h-full rounded-card border border-subtle bg-surface-1/85 p-6 backdrop-blur-md">
-                  <span className="grid h-11 w-11 place-items-center rounded-control bg-brand-subtle text-brand" aria-hidden>
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <h3 className="mt-4 text-lg font-semibold text-fg">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-fg-muted">{item.body}</p>
-                </div>
-              </Reveal>
+              <li key={item.title} className="grid gap-2 py-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:gap-8">
+                <h3 className="flex items-center gap-2.5 text-base font-semibold text-fg">
+                  <Icon className="h-4 w-4 shrink-0 text-brand" aria-hidden />
+                  {item.title}
+                </h3>
+                <p className="text-pretty text-sm leading-relaxed text-fg-muted">{item.body}</p>
+              </li>
             );
           })}
         </ul>

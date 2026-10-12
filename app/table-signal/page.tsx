@@ -129,7 +129,7 @@ function StateScreen({
         <h1 id="ts-state-title" className="qx-h2 mt-4 text-fg">
           {title}
         </h1>
-        <p className="mt-2 text-sm text-fg-muted">{body}</p>
+        <p className="mt-2 text-pretty text-sm text-fg-muted">{body}</p>
         <div className="mt-6 flex flex-col gap-2">
           {retry && (
             <Button asChild className="min-h-11">

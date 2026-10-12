@@ -18,7 +18,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
 import { signOut } from '@/lib/native/sign-out';
-import { Building2, CheckCircle2, LogIn, UserPlus } from 'lucide-react';
+import { CheckCircle2, LogIn, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -264,7 +264,6 @@ function StaffInviteInner() {
 
   return (
     <AuthCard
-      icon={<Building2 className="h-6 w-6" aria-hidden />}
       title={copy.inviteTitle(preview.businessName)}
       description={
         <>

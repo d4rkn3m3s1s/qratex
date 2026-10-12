@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { PostCard } from '@/components/public/p-blog-yasal/post-card';
 import { getAllPosts } from '@/lib/blog-posts';
 import { TurkishOnlyNotice } from '@/components/public/p-blog-yasal/turkish-only-notice';
@@ -10,17 +11,14 @@ export default function BlogPostNotFound() {
     <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-10 sm:px-6">
       <div className="max-w-2xl space-y-3">
         <p className="qx-overline text-brand">404</p>
-        <h1 className="qx-h1 text-3xl text-fg">Bu yazıyı bulamadık</h1>
+        <h1 className="qx-h1 text-balance text-3xl text-fg">Bu yazıyı bulamadık</h1>
         <p className="text-base leading-7 text-fg-muted">
           Yazı kaldırılmış ya da adresi değişmiş olabilir. Son yazılarımıza göz atabilir ya da tüm yazılara dönebilirsiniz.
         </p>
         <TurkishOnlyNotice kind="blog" />
-        <Link
-          href="/blog"
-          className="inline-flex min-h-11 items-center rounded-control bg-brand px-5 text-sm font-semibold text-brand-fg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-        >
-          Tüm yazılar
-        </Link>
+        <Button asChild className="mt-2">
+          <Link href="/blog">Tüm yazılar</Link>
+        </Button>
       </div>
       {latest.length ? (
         <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

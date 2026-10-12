@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, KeyRound, Link2Off } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Link2Off } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { track } from '@/lib/analytics';
 import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
@@ -139,7 +139,6 @@ export function ResetPasswordView({
 
   return (
     <AuthCard
-      icon={<KeyRound className="h-6 w-6" aria-hidden />}
       title={copy.resetTitle}
       description={copy.resetBody}
       footer={

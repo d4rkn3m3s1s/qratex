@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { Gift, Mail, User, UserPlus, UserX } from 'lucide-react';
+import { Gift, Mail, User, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -287,7 +287,6 @@ export function RegisterView({
 
   return (
     <AuthCard
-      icon={<UserPlus className="h-6 w-6" aria-hidden />}
       title={copy.registerTitle}
       description={copy.registerSubtitle}
       footer={

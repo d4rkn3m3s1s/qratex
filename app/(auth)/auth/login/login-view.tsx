@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { signIn, getSession } from 'next-auth/react';
-import { LogIn, Mail, MapPin, Sparkles } from 'lucide-react';
+import { Mail, MapPin, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -294,7 +294,7 @@ export function LoginView({
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
       <AuthCard
-        icon={qrPlace ? <MapPin className="h-6 w-6" aria-hidden /> : <LogIn className="h-6 w-6" aria-hidden />}
+        icon={qrPlace ? <MapPin className="h-6 w-6" aria-hidden /> : undefined}
         title={qrPlace ? copy.loginQrTitle(qrPlace) : copy.loginTitle}
         description={qrPlace ? copy.loginQrBody : copy.loginSubtitle}
         footer={

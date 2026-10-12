@@ -119,11 +119,11 @@ export default async function BlogPostPage({ params }: { params: Params }) {
             <div className="flex flex-wrap items-center gap-2">
               <CategoryChip category={post.category} href={`/blog?kategori=${post.category}`} />
             </div>
-            <h1 id="post-title" className="qx-h1 text-3xl text-fg md:text-5xl md:leading-[1.1]">
+            <h1 id="post-title" className="qx-h1 text-balance text-3xl text-fg md:text-5xl md:leading-[1.1]">
               {post.title}
             </h1>
-            <p className="text-lg leading-8 text-fg-muted">{post.description}</p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-muted">
+            <p className="text-pretty text-lg leading-8 text-fg-muted">{post.description}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-fg-muted [&>span+span]:before:mr-3 [&>span+span]:before:text-border [&>span+span]:before:content-['·']">
               <span className="inline-flex items-center gap-2 font-medium text-fg">
                 <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-subtle text-brand" aria-hidden>
                   <Building2 className="h-4 w-4" />

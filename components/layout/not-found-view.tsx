@@ -14,19 +14,19 @@ import { uiCopy } from '@/lib/i18n/ui-copy';
 export function NotFoundView() {
   const copy = uiCopy(useLocaleSafe());
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-background to-muted/20 px-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-surface-0 px-4 text-fg">
       <SkipToMainContent targetId="not-found-main" variant="content" />
       <main
         id="not-found-main"
         tabIndex={-1}
-        className="max-w-md space-y-6 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="w-full max-w-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <p className="text-8xl font-bold text-primary/20" aria-hidden>
+        <p className="qx-caption font-mono tabular-nums tracking-wide text-fg-muted" aria-hidden>
           404
         </p>
-        <h1 className="text-2xl font-semibold">{copy.notFoundTitle}</h1>
-        <p className="text-muted-foreground">{copy.notFoundBody}</p>
-        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+        <h1 className="qx-h1 mt-2 text-balance">{copy.notFoundTitle}</h1>
+        <p className="qx-body mt-3 text-fg-muted text-pretty">{copy.notFoundBody}</p>
+        <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row">
           <Button asChild>
             <Link href="/" className="gap-2">
               <Home className="h-4 w-4 shrink-0" aria-hidden />

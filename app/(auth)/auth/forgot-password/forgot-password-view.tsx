@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, KeyRound, MailCheck, MailX, RotateCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, MailCheck, MailX, RotateCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -196,7 +196,6 @@ export function ForgotPasswordView({
 
   return (
     <AuthCard
-      icon={<KeyRound className="h-6 w-6" aria-hidden />}
       title={copy.forgotTitle}
       description={copy.forgotBody}
       footer={backLink}

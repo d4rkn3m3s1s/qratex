@@ -158,7 +158,7 @@ export function LegalDocument({
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
                 Yasal belge
               </p>
-              <h1 id="legal-title" className="qx-h1 text-3xl text-fg sm:text-4xl">
+              <h1 id="legal-title" className="qx-h1 text-balance text-3xl text-fg sm:text-4xl">
                 {title}
               </h1>
               <p className="max-w-prose text-base leading-7 text-fg-muted">{description}</p>
@@ -182,7 +182,7 @@ export function LegalDocument({
             {summary.length ? (
               <section
                 aria-labelledby="kisaca-title"
-                className="mt-8 rounded-card border border-border border-l-4 border-l-brand bg-surface-1 p-5 qx-elevation-1 sm:p-6"
+                className="mt-8 rounded-card border border-border border-l-4 border-l-brand bg-surface-1 p-5 sm:p-6"
               >
                 <h2 id="kisaca-title" className="qx-h3 text-fg">
                   Kısaca

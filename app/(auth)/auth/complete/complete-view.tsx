@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Gift, Loader2, ShieldCheck, Store } from 'lucide-react';
+import { CheckCircle2, Gift, Loader2, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { track } from '@/lib/analytics';
 import { resolvePostLoginTarget, roleHome } from '@/lib/auth/post-login-target';
@@ -154,7 +154,6 @@ export function CompleteView({
   if (phase === 'password') {
     return (
       <AuthCard
-        icon={<ShieldCheck className="h-6 w-6" aria-hidden />}
         title={copy.completeAccountTitle}
         description={copy.completeAccountBody(provider)}
       >

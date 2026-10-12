@@ -192,10 +192,10 @@ export default async function TrustPage() {
             const Icon = CONTROL_ICONS[i] ?? Download;
             return (
               <li key={action.title} className="flex flex-col rounded-card border border-subtle bg-surface-1/90 p-5 sm:p-6">
-                <span className="grid h-11 w-11 place-items-center rounded-control bg-brand-subtle text-brand" aria-hidden>
-                  <Icon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-4 font-semibold text-fg">{action.title}</h3>
+                <h3 className="flex items-center gap-2.5 font-semibold text-fg">
+                  <Icon className="h-4 w-4 shrink-0 text-brand" aria-hidden />
+                  {action.title}
+                </h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-fg-muted">{action.body}</p>
                 <Button asChild variant="outline" className="mt-5 self-start">
                   <Link href={PRIVACY_SETTINGS_HREF}>
@@ -219,11 +219,11 @@ export default async function TrustPage() {
       {/* İşletmeler için */}
       <PublicSection id="isletmeler" labelledBy="biz-title" className="pt-0 sm:pt-0">
         <SectionHeading id="biz-title" eyebrow={copy.business.eyebrow} title={copy.business.title} align="start" />
-        <ul className="grid gap-4 sm:grid-cols-2">
+        <ul className="divide-y divide-border border-y border-border">
           {copy.business.items.map((item) => (
-            <li key={item.title} className="rounded-card border border-subtle bg-surface-1/90 p-5 sm:p-6">
+            <li key={item.title} className="grid gap-1.5 py-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:gap-8">
               <p className="font-semibold text-fg">{item.title}</p>
-              <p className="mt-2 text-sm leading-relaxed text-fg-muted">{item.body}</p>
+              <p className="text-pretty text-sm leading-relaxed text-fg-muted">{item.body}</p>
             </li>
           ))}
         </ul>
@@ -232,11 +232,11 @@ export default async function TrustPage() {
       {/* Güvenlik uygulamaları */}
       <PublicSection id="guvenlik" labelledBy="security-title" className="pt-0 sm:pt-0">
         <SectionHeading id="security-title" eyebrow={copy.security.eyebrow} title={copy.security.title} sub={copy.security.sub} align="start" />
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
           {copy.security.items.map((item, i) => {
             const Icon = SECURITY_ICONS[i] ?? ShieldCheck;
             return (
-              <li key={item.title} className="flex gap-4 rounded-card border border-subtle bg-surface-1/90 p-5">
+              <li key={item.title} className="flex gap-3 border-t border-border py-5">
                 <Icon className="mt-0.5 h-5 w-5 shrink-0 text-brand" aria-hidden />
                 <div>
                   <p className="font-semibold text-fg">{item.title}</p>
