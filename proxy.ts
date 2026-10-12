@@ -119,7 +119,16 @@ const authMiddleware = withAuth(
       }
     }
 
-    const res = NextResponse.next();
+    // Admin sayfa koruması (lib/auth/admin-page-guard → zorunlu 2FA) yolu bu başlıktan okur;
+    // istemcinin gönderdiği değer her zaman EZİLİR.
+    let res: NextResponse;
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+      const fwd = new Headers(req.headers);
+      fwd.set('x-qx-pathname', pathname);
+      res = NextResponse.next({ request: { headers: fwd } });
+    } else {
+      res = NextResponse.next();
+    }
     // Belge politikası (P0-36): tarama sayfaları DAHİL bütün panel sayfalarında camera=(self) —
     // next.config başlığıyla aynı değer; panelden taramaya yumuşak geçişte belge değişmez.
     res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));

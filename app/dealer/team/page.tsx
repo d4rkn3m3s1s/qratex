@@ -6,6 +6,8 @@ import { isYmd } from '@/lib/staff-ops/core';
 import type { TeamHub } from '@/lib/staff-ops/types';
 import { ErrorState } from '@/components/states';
 import { TeamHubScreen } from '@/components/dealer/b-ekip/team-hub';
+import { StaffLedgerScopeCard } from '@/components/dealer/b-ekip/staff-ledger-scope-card';
+import { getStaffLedgerScope } from '@/lib/dealer/kasa/staff-scope.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,10 +52,18 @@ export default async function DealerTeamPage({ searchParams }: PageProps) {
 
   const rawWeek = Array.isArray(sp.week) ? sp.week[0] : sp.week;
   const week = rawWeek && isYmd(rawWeek) ? rawWeek : null;
-  const initial = await getTeamHub(scope.dealerId, { week }).catch((err): TeamHub | null => {
-    console.error('[dealer/team] sunucu ön yüklemesi başarısız:', err);
-    return null;
-  });
+  const [initial, ledgerScope] = await Promise.all([
+    getTeamHub(scope.dealerId, { week }).catch((err): TeamHub | null => {
+      console.error('[dealer/team] sunucu ön yüklemesi başarısız:', err);
+      return null;
+    }),
+    getStaffLedgerScope(scope.dealerId),
+  ]);
 
-  return <TeamHubScreen initial={initial} />;
+  return (
+    <>
+      <StaffLedgerScopeCard initial={ledgerScope} />
+      <TeamHubScreen initial={initial} />
+    </>
+  );
 }

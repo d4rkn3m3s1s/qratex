@@ -151,11 +151,18 @@ export async function lookupCard(params: {
 
 // ───────────────────────────── Defter ─────────────────────────────
 
-export function ledgerWhere(dealerId: string, f: LedgerFilters, w: DateWindow): Prisma.ConsumptionWhereInput {
+export function ledgerWhere(
+  dealerId: string,
+  f: LedgerFilters,
+  w: DateWindow,
+  scopeWhere?: Prisma.ConsumptionWhereInput | null
+): Prisma.ConsumptionWhereInput {
   const and: Prisma.ConsumptionWhereInput[] = [
     { dealerId },
     { createdAt: { ...(w.from ? { gte: w.from } : {}), lt: w.to } },
   ];
+  // Personel kapsamı (StaffLedgerScope) — sayım, satırlar ve özet aynı filtreyi paylaşır.
+  if (scopeWhere) and.push(scopeWhere);
   if (f.productId) and.push({ productId: f.productId });
   const rb = ratingBounds(f.rating);
   if (rb === 'none') {
@@ -286,8 +293,13 @@ async function ownRecentEntries(actorId: string, now: Date): Promise<Set<string>
   return ids;
 }
 
-async function summarize(dealerId: string, f: LedgerFilters, w: DateWindow): Promise<LedgerSummaryNumbers> {
-  const where = ledgerWhere(dealerId, f, w);
+async function summarize(
+  dealerId: string,
+  f: LedgerFilters,
+  w: DateWindow,
+  scopeWhere?: Prisma.ConsumptionWhereInput | null
+): Promise<LedgerSummaryNumbers> {
+  const where = ledgerWhere(dealerId, f, w, scopeWhere);
   const [agg, amountCount, reviewed, perCustomer] = await Promise.all([
     prisma.consumption.aggregate({ where, _count: { _all: true }, _sum: { amount: true } }),
     prisma.consumption.count({ where: { AND: [where, { amount: { not: null } }] } }),
@@ -312,12 +324,14 @@ export async function listLedger(
     withPrevious?: boolean;
     /** Personel görünümü: ad maskeli, geri alma yalnız kendi girdiği kayıtlarda. */
     staffActorId?: string | null;
+    /** Ek kapsam filtresi (personel defter politikası; bkz. staff-scope.server.ts). */
+    scopeWhere?: Prisma.ConsumptionWhereInput | null;
   } = {}
 ): Promise<LedgerPage> {
   const now = opts.now ?? new Date();
   const pageSize = opts.pageSize ?? LEDGER_PAGE_SIZE;
   const w = resolveLedgerWindow(filters, now);
-  const where = ledgerWhere(dealerId, filters, w);
+  const where = ledgerWhere(dealerId, filters, w, opts.scopeWhere);
   const prevW = opts.withPrevious === false ? null : previousWindow(w);
 
   const [total, rows, current, previous] = await Promise.all([
@@ -329,8 +343,8 @@ export async function listLedger(
       take: pageSize,
       select: ROW_SELECT,
     }),
-    summarize(dealerId, filters, w),
-    prevW ? summarize(dealerId, filters, prevW) : Promise.resolve(null),
+    summarize(dealerId, filters, w, opts.scopeWhere),
+    prevW ? summarize(dealerId, filters, prevW, opts.scopeWhere) : Promise.resolve(null),
   ]);
   const [points, ownEntriesOf] = await Promise.all([
     passivePointsFor(rows.map((r) => r.id)),

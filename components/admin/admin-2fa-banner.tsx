@@ -6,8 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { AdminText } from './copy';
 
 /**
- * Yönetici 2FA uyarısı — 2FA ZORUNLU değildir (sahip hesabı kilitlenmesin), ama kurulmamışsa
- * yönetici panelinin her sayfasında kalıcı, kapatılamaz uyarı + tek tık kurulum bağlantısı.
+ * Yönetici 2FA uyarısı — 2FA artık ZORUNLU (lib/auth/admin-2fa: kurulmamış admin kurulum
+ * sayfasına yönlendirilir); bu uyarı muaf (demo / break-glass) hesaplarda ve kurulum sayfasında görünür.
  * Okuma hatasında sessizce gizlenir (paneli düşürmez).
  */
 export async function Admin2faBanner() {

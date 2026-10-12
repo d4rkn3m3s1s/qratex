@@ -105,12 +105,28 @@ export function parseLedgerFilters(src: ParamSource): LedgerFilters {
 }
 
 /**
- * En az yetki: personel (STAFF) defterde yalnız BUGÜNÜ görür. Dışa aktarma (CSV) personele kapalı;
+ * En az yetki: personel (STAFF) `today` politikasında yalnız BUGÜNÜ görür (bkz. StaffLedgerScope). Dışa aktarma (CSV) personele kapalı;
  * listeyi `range=all` + sayfalama ile gezmek aynı tam müşteri/ciro/yorum dökümünü verirdi.
  */
-export function scopeLedgerFilters(f: LedgerFilters, via: string): LedgerFilters {
-  if (via === 'staff') return { ...f, range: 'today', from: null, to: null };
+export function scopeLedgerFilters(f: LedgerFilters, via: string, staffScope?: StaffLedgerScope): LedgerFilters {
+  // Politika verilmezse en dar kapsam ('today') — eski çağıranlar güvenli kalır.
+  if (via === 'staff' && (staffScope ?? 'today') === 'today') return { ...f, range: 'today', from: null, to: null };
   return f;
+}
+
+/**
+ * Personelin işlem defteri kapsamı (bayi ayarı, `Settings` anahtar/değer tablosunda):
+ *  - `today`     → yalnız bugünün tüm tüketimleri
+ *  - `today_own` → bugünün tümü + personelin KENDİ girdiği geçmiş kayıtlar (VARSAYILAN)
+ *  - `all`       → bayinin tüm defteri
+ * API düzeyinde zorlanır (listLedger `scopeWhere`); UI yalnız yansıtır.
+ */
+export const STAFF_LEDGER_SCOPES = ['today', 'today_own', 'all'] as const;
+export type StaffLedgerScope = (typeof STAFF_LEDGER_SCOPES)[number];
+export const DEFAULT_STAFF_LEDGER_SCOPE: StaffLedgerScope = 'today_own';
+
+export function parseStaffLedgerScope(v: unknown): StaffLedgerScope | null {
+  return typeof v === 'string' && (STAFF_LEDGER_SCOPES as readonly string[]).includes(v) ? (v as StaffLedgerScope) : null;
 }
 
 /** Filtreyi URL parametrelerine yazar (varsayılanlar yazılmaz → kısa, paylaşılabilir URL). */

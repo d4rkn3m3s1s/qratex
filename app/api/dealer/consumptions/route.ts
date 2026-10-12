@@ -6,6 +6,7 @@ import { createConsumption, runConsumptionSideEffects } from '@/lib/consumption/
 import { parseLedgerFilters, scopeLedgerFilters } from '@/lib/dealer/kasa/core';
 import { listLedger } from '@/lib/dealer/kasa/server';
 import { mapKasaErrors } from '@/lib/dealer/kasa/http';
+import { resolveStaffLedgerAccess } from '@/lib/dealer/kasa/staff-scope.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,9 +30,12 @@ export const GET = defineRoute(
     const sp = request.nextUrl.searchParams;
     const size = Number.parseInt(sp.get('pageSize') ?? '', 10);
     const pageSize = Number.isInteger(size) && size >= 5 && size <= 50 ? size : undefined;
+    // Personel kapsamı bayi ayarından (today | today_own | all) — API'de zorlanır.
+    const staff = await resolveStaffLedgerAccess(tenant);
     return ok(
-      await listLedger(tenant.dealerId, scopeLedgerFilters(parseLedgerFilters(sp), tenant.via), {
+      await listLedger(tenant.dealerId, scopeLedgerFilters(parseLedgerFilters(sp), tenant.via, staff.policy ?? undefined), {
         pageSize,
+        scopeWhere: staff.scopeWhere,
         // Personel: ad maskeli (kasa kartıyla aynı), geri alma düğmesi yalnız kendi kaydında.
         staffActorId: tenant.via === 'staff' ? tenant.actorId : null,
       })

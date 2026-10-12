@@ -10,11 +10,14 @@
  *  - Gizli kapı çerezi geçersizse → `/admin-gate` (imza + süre + oturum + güncel sürüm; API ile
  *    AYNI doğrulama: `checkAdminElevation`). Kapı yapılandırması okunamazsa da kapıya gider
  *    (fail-closed; kapı ekranı kendi hatasını gösterir).
+ *  - 2FA kurulmamışsa → `/admin/account-security?zorunlu=1` (lib/auth/admin-2fa; demo/break-glass muaf).
  */
 import { getServerSession } from 'next-auth';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { checkAdminElevation } from '@/lib/admin-gate';
+import { ADMIN_2FA_SETUP_PATH, adminNeeds2faSetup } from '@/lib/auth/admin-2fa';
 
 const ROLE_HOME: Record<string, string> = {
   DEALER: '/dealer',
@@ -31,5 +34,9 @@ export async function requireAdminPage(): Promise<{ userId: string }> {
   const jti = (session as { jti?: string }).jti ?? null;
   const elevation = await checkAdminElevation(userId, jti);
   if (!elevation.ok) redirect('/admin-gate');
+  // Zorunlu 2FA (kapıdan SONRA): kurulmamışsa kurulum sayfasına. Yol, proxy'nin her /admin
+  // isteğinde ezerek yazdığı `x-qx-pathname` başlığından okunur (istemci sahtesi geçmez).
+  const pathname = (await headers()).get('x-qx-pathname');
+  if (await adminNeeds2faSetup(userId, { sid: jti, pathname })) redirect(`${ADMIN_2FA_SETUP_PATH}?zorunlu=1`);
   return { userId };
 }
