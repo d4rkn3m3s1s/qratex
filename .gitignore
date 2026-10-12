@@ -60,3 +60,7 @@ nul
 
 # PWA (next-pwa) her build'de yeniden üretir — commit edilmemeli
 public/fallback-*.js
+
+# Ajan/kapı ölçümleri için ayrı derleme klasörleri
+.next-*/
+.playwright-mcp/
