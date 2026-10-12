@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { announce } from '@/components/ds/a11y';
 import { useReducedMotionPref, SPRING } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { Burst } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { getVenueCopy, type VenueLocale } from './copy';
 
 /**
@@ -29,10 +31,16 @@ export function FavoriteButton({
   const [saved, setSaved] = useState(initial);
   const [pending, startTransition] = useTransition();
   const reduce = useReducedMotionPref();
+  const [pop, setPop] = useState(0);
 
   const toggle = () => {
     const next = !saved;
     setSaved(next);
+    // SES + kalp patlaması yalnız kaydetmede (çıkarma sessiz).
+    if (next) {
+      setPop((n) => n + 1);
+      playSound('success');
+    }
     startTransition(async () => {
       try {
         const res = next
@@ -64,13 +72,14 @@ export function FavoriteButton({
     >
       <Motion.span
         aria-hidden
-        className="inline-flex"
+        className="relative inline-flex"
         key={saved ? 'on' : 'off'}
         initial={reduce ? false : { scale: 0.6 }}
         animate={{ scale: 1 }}
         transition={SPRING.snappy}
       >
         <Heart className={cn('h-4 w-4', saved && 'fill-current')} />
+        {saved && <Burst trigger={pop} kind="hearts" count={8} radius={30} />}
       </Motion.span>
       <span>{saved ? copy.saved : copy.save}</span>
     </Button>

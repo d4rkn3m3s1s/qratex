@@ -81,7 +81,7 @@ export function BoxesSection({
         {unopened.length === 0 ? (
           <p className="qx-small text-fg-muted">{copy.boxes.waitingEmpty}</p>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ul className="qx-fx-stagger grid grid-cols-1 gap-3 sm:grid-cols-2">
             {unopened.map((b) => (
               <li key={b.id} className="flex min-h-[4.5rem] items-center gap-3 rounded-card border border-subtle bg-surface-1 p-3">
                 <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted">

@@ -196,7 +196,7 @@ function EntryList({ items, fmt, onOpen }: { items: PointsEntry[]; fmt: Formatte
         return (
           <Fragment key={g.day}>
             <GroupHeading id={headingId}>{fmt.dayHeading(g.day, { today: copy.today, yesterday: copy.yesterday }, today)}</GroupHeading>
-            <ul aria-labelledby={headingId} className="divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
+            <ul aria-labelledby={headingId} className="qx-fx-stagger divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
               {g.rows.map((e) => {
                 const label = sourceLabel(e.source, locale);
                 const earn = e.delta > 0;

@@ -47,7 +47,7 @@ export function PassesSection({
             }
           />
         ) : (
-          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <ul className="qx-fx-stagger grid grid-cols-1 gap-2 md:grid-cols-2">
             {passes.map((p) => (
               <li key={p.id} className="min-w-0">
                 <RewardPassRow pass={p} onOpen={() => onOpen(`reward:${p.id}`)} />
@@ -59,7 +59,7 @@ export function PassesSection({
 
       {remedy.length > 0 && (
         <SectionCard title={copy.passes.remedyTitle} description={copy.passes.remedyHint} headingLevel="h2">
-          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <ul className="qx-fx-stagger grid grid-cols-1 gap-2 md:grid-cols-2">
             {remedy.map((p) => (
               <li key={p.id} className="min-w-0">
                 <RemedyPassRow pass={p} onOpen={() => onOpen(`remedy:${p.id}`)} />
@@ -74,7 +74,7 @@ export function PassesSection({
           <p className="qx-small text-fg-muted">{copy.passes.usedEmpty}</p>
         ) : (
           <div className="flex flex-col gap-2">
-            <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <ul className="qx-fx-stagger grid grid-cols-1 gap-2 md:grid-cols-2">
               {used.map((p) => (
                 <li key={p.id} className="min-w-0">
                   <RewardPassRow pass={p} onOpen={() => onOpen(`reward:${p.id}`)} />

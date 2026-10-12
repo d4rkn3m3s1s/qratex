@@ -1,9 +1,11 @@
 'use client';
 
+import { DrawCheck } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { m as Motion } from 'framer-motion';
-import { CheckCircle2, Gift, Pin, PinOff, Shirt } from 'lucide-react';
+import { Gift, Pin, PinOff, Shirt } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DetailSheet } from '@/components/ds/data';
@@ -64,6 +66,7 @@ export function CosmeticSheet({
       keyRef.current = null;
       onBalance(r.newBalance);
       setFlow({ id: item.id, stage: 'bought' });
+      playSound('coin'); // SES: satın alma tamamlandı
       announce(copy.cosmetics.bought);
       onRefresh();
     } catch (err) {
@@ -207,7 +210,7 @@ export function CosmeticSheet({
                   transition={policy.transition(SPRING.bouncy)}
                   className="qx-small flex items-center gap-2 rounded-card border border-success-border bg-success-subtle p-3 font-medium text-success"
                 >
-                  <CheckCircle2 aria-hidden className="size-5 shrink-0" />
+                  <DrawCheck className="size-5 shrink-0" circle={false} />
                   {copy.cosmetics.bought}
                 </Motion.div>
               )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
 import { useId, useRef, useState } from 'react';
 import { Search, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
@@ -81,6 +82,7 @@ export function GiftDialog({
       const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null;
       if (!res.ok || !json?.success) throw new Error(json?.error || copy.errors.generic);
       toast.success(copy.cosmetics.giftSent(recipient.displayName));
+      playSound('reward'); // SES: hediye gönderildi
       onSent();
       reset();
       onOpenChange(false);

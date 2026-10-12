@@ -13,6 +13,7 @@
  *    bu yüzeyde lazy). Konum dış sarmalayıcıda, dönüş içteki elemanda (kural §4.2-2).
  *  - Azaltılmış harekette (`useReducedMotionPref`) tilt, glare ve parıltı hiç çizilmez.
  */
+import { playSound } from '@/lib/sound';
 import { useRef } from 'react';
 import { m as Motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Snowflake } from 'lucide-react';
@@ -179,6 +180,7 @@ export function CardFace({
                 type="button"
                 onClick={() => {
                   resetTilt();
+                  playSound('flip'); // SES: kart kasada göster
                   onPresent();
                 }}
                 onPointerMove={onPointerMove}

@@ -100,7 +100,7 @@ export function TopTab({ initial }: { initial: TopResponse | null }) {
             {savedInList > 0 && <p className="qx-caption text-fg-muted">{copy.topSavedInList(savedInList)}</p>}
             <Podium entries={d.entries.slice(0, 3)} />
             {d.entries.length > 3 && (
-              <ol className="flex flex-col gap-2" aria-label={copy.topTitle} start={4}>
+              <ol className="qx-fx-stagger flex flex-col gap-2" aria-label={copy.topTitle} start={4}>
                 {d.entries.slice(3).map((e) => (
                   <TopRow key={e.dealerId} entry={e} />
                 ))}

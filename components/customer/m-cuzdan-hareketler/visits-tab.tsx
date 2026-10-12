@@ -351,7 +351,7 @@ function VisitList({ items, fmt, reward }: { items: VisitItem[]; fmt: Formatters
         return (
           <Fragment key={g.month}>
             <GroupHeading id={headingId}>{fmt.monthHeading(g.month, currentYear)}</GroupHeading>
-            <ul aria-labelledby={headingId} className="divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
+            <ul aria-labelledby={headingId} className="qx-fx-stagger divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
               {g.rows.map((v) => {
                 const place = v.dealer.name ?? copy.unnamedPlace;
                 const when = fmt.relative(v.at);

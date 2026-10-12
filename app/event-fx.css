@@ -187,3 +187,20 @@
   100% { transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .qx-fx-settle > * { animation: none; } }
+
+/* ── Liste kademeli giriş (müşteri listeleri): ilk 8 çocuk 40ms arayla, sonrası gecikmesiz ── */
+.qx-fx-stagger > * { animation: qx-fx-stagger-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.qx-fx-stagger > :nth-child(2) { animation-delay: 40ms; }
+.qx-fx-stagger > :nth-child(3) { animation-delay: 80ms; }
+.qx-fx-stagger > :nth-child(4) { animation-delay: 120ms; }
+.qx-fx-stagger > :nth-child(5) { animation-delay: 160ms; }
+.qx-fx-stagger > :nth-child(6) { animation-delay: 200ms; }
+.qx-fx-stagger > :nth-child(7) { animation-delay: 240ms; }
+.qx-fx-stagger > :nth-child(8) { animation-delay: 280ms; }
+@keyframes qx-fx-stagger-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-fx-stagger > * { animation: none !important; }
+}

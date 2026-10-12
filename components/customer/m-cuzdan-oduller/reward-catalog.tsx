@@ -136,7 +136,7 @@ export function RewardCatalog({
         />
       ) : (
         <>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={copy.rewardsTitle}>
+          <ul className="qx-fx-stagger grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={copy.rewardsTitle}>
             {visible.slice(0, limit).map((r) => (
               <li key={r.id} className="min-w-0">
                 <RewardCard reward={r} balance={balance} onOpen={open} />

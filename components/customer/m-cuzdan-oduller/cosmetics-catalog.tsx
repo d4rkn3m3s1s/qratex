@@ -114,7 +114,7 @@ export function CosmeticsCatalog({
         />
       ) : (
         <>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={copy.tabs.cosmetics}>
+          <ul className="qx-fx-stagger grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={copy.tabs.cosmetics}>
             {visible.slice(0, limit).map((item) => (
               <li key={item.id} className="min-w-0">
                 <CosmeticCard item={item} balance={balance} preview={catalog.preview} onOpen={open} />

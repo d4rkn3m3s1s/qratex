@@ -58,7 +58,7 @@ export function HistoryTab({ onBrowse, receiptId, onOpenReceipt, onCloseReceipt 
           />
         }
       >
-        <ul className="divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
+        <ul className="qx-fx-stagger divide-y divide-subtle overflow-hidden rounded-card border border-subtle bg-surface-1">
           {items.map((d) => (
             <li key={d.id}>
               <button

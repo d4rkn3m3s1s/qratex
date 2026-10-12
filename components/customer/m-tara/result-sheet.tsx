@@ -6,11 +6,13 @@
  *  - Kart: bağla (POST /api/cards/[token]/activate) / zaten senin / bağlandı
  *  - Mesaj: galeriden/derin linkten gelen hata (eyleme dönük metin)
  */
+import { DrawCheck } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { m } from 'framer-motion';
-import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Loader2, MapPin, ScanLine, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CreditCard, Loader2, MapPin, ScanLine, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DURATION, EASE, SPRING, useMotionPolicy } from '@/lib/motion';
@@ -98,6 +100,21 @@ export function ResultSheet({
     if (stateKey) primaryRef.current?.focus();
   }, [stateKey]);
 
+  // SES: tarama sonucu anı — işletme bulundu / kart bağlandı = onay, uyarı = hata.
+  const soundKey = state
+    ? state.type === 'venue'
+      ? 'ok'
+      : state.type === 'card'
+        ? state.activation === 'done'
+          ? 'ok'
+          : ''
+        : 'err'
+    : '';
+  useEffect(() => {
+    if (soundKey === 'ok') playSound('success');
+    else if (soundKey === 'err') playSound('error');
+  }, [soundKey, stateKey]);
+
   return (
     <DialogPrimitive.Root
       open={open}
@@ -136,7 +153,11 @@ export function ResultSheet({
               <div className="space-y-4">
                 <DialogPrimitive.Description className="sr-only">{copy.venueEyebrow}</DialogPrimitive.Description>
                 <div className="flex items-start gap-3 pr-10">
-                  <VenueLogo name={state.venue.name} logoUrl={state.venue.logoUrl} />
+                  <span className="relative shrink-0">
+                    <VenueLogo name={state.venue.name} logoUrl={state.venue.logoUrl} />
+                    <span aria-hidden className="qx-fx-wave" />
+                    <span aria-hidden className="qx-fx-wave" />
+                  </span>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand">{copy.venueEyebrow}</p>
                     <DialogPrimitive.Title className="text-xl font-bold leading-tight text-balance break-words">
@@ -199,7 +220,7 @@ export function ResultSheet({
                   <span
                     aria-hidden
                     className={cn(
-                      'inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-control',
+                      'relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-control',
                       state.activation === 'done' || state.state === 'mine'
                         ? 'bg-success-subtle text-success'
                         : 'bg-brand-subtle text-brand'
@@ -211,10 +232,16 @@ export function ResultSheet({
                         animate={{ scale: 1, opacity: 1 }}
                         transition={policy.transition(SPRING.bouncy)}
                       >
-                        <CheckCircle2 className="h-7 w-7" />
+                        <DrawCheck className="h-7 w-7" />
                       </m.span>
                     ) : (
                       <CreditCard className="h-7 w-7" />
+                    )}
+                    {state.activation === 'done' && (
+                      <>
+                        <span aria-hidden className="qx-fx-wave" />
+                        <span aria-hidden className="qx-fx-wave" />
+                      </>
                     )}
                   </span>
                   <div className="min-w-0">

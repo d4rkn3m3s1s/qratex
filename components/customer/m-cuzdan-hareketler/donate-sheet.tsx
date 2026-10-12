@@ -10,10 +10,12 @@
  * Başarı anı: ilerleme çubuğu eski değerden yeni değere akar, onay ikonu belirir (`celebrate`
  * bütçesi içinde); azaltılmış harekette yalnız son durum.
  */
+import { Burst, DrawCheck } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { m as Motion } from 'framer-motion';
-import { CheckCircle2, Heart, Loader2, Receipt } from 'lucide-react';
+import { Heart, Loader2, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -108,6 +110,7 @@ function DonateSheetInner({ project, balance, defaultPublic, fmt, onClose, onDon
         requestKey,
       });
       setResult(res);
+      playSound('thanks'); // SES: bağış tamamlandı — kalp anı
       onDonated(res, project);
       announce(copy.successBody(fmt.int(res.receipt.points), project.name), { politeness: 'assertive' });
     } catch (e) {
@@ -167,9 +170,10 @@ function DonateSheetInner({ project, balance, defaultPublic, fmt, onClose, onDon
             initial={reduce ? false : { opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: DURATION.base, ease: EASE.emphasized }}
-            className="grid h-16 w-16 place-items-center rounded-full bg-success-subtle text-success"
+            className="relative grid h-16 w-16 place-items-center rounded-full bg-success-subtle text-success"
           >
-            <CheckCircle2 className="h-9 w-9" aria-hidden />
+            <DrawCheck className="h-9 w-9" />
+            <Burst trigger={1} kind="hearts" count={10} radius={60} />
           </Motion.span>
           <p className="qx-body text-fg">{copy.successBody(fmt.int(result.receipt.points), project.name)}</p>
           {impact ? (

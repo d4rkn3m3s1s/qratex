@@ -194,7 +194,7 @@ export function DealsTab({
                 </h2>
                 <p className="qx-caption text-fg-muted">{copy.flashHint}</p>
               </div>
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <ul className="qx-fx-stagger grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {view.flash.map((f) => (
                   <FlashCard key={f.id} offer={f} />
                 ))}

@@ -342,7 +342,7 @@ function ProjectsTab({
       {list.length === 0 ? (
         <EmptyState compact title={copy.categoryEmpty} />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="qx-fx-stagger grid gap-3 sm:grid-cols-2">
           {list.map((p) => (
             <li key={p.id}>
               <ProjectCard

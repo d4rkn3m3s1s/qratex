@@ -1,5 +1,7 @@
 'use client';
 
+import { Burst } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { useState } from 'react';
 import Image from 'next/image';
 import { m as Motion } from 'framer-motion';
@@ -116,18 +118,22 @@ export function SaveButton({ dealerId, name, saved, className }: { dealerId: str
       disabled={pendingId === dealerId}
       onClick={(e) => {
         e.stopPropagation();
-        if (!saved) setPulse((n) => n + 1);
+        if (!saved) {
+          setPulse((n) => n + 1);
+          playSound('success'); // SES: kaydetme anı (çıkarma sessiz)
+        }
         toggle(dealerId, name, !saved);
       }}
       icon={
         <Motion.span
           key={pulse}
-          className="inline-flex"
+          className="relative inline-flex"
           initial={pulse > 0 && !policy.reduce ? { scale: 1 } : false}
           animate={pulse > 0 && !policy.reduce ? { scale: [1, 1.25, 1] } : undefined}
           transition={{ duration: DURATION.base, ease: EASE.standard }}
         >
           <Heart className={cn('h-5 w-5', saved && 'fill-current')} />
+          {saved && <Burst trigger={pulse} kind="hearts" count={8} radius={28} />}
         </Motion.span>
       }
     />
