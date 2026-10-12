@@ -153,7 +153,7 @@ export function ObservabilityCenter({ initial }: { initial: ObservabilitySnapsho
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="inline-flex items-center gap-1.5">
                 <span className="relative inline-flex h-2.5 w-2.5" aria-hidden>
-                  {conn === 'live' && <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />}
+                  {conn === 'live' && <span className="absolute inline-flex h-full w-full rounded-full bg-success qx-fx-pulse-calm" />}
                   <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', conn === 'live' ? 'bg-success' : conn === 'stale' ? 'bg-warning' : conn === 'offline' ? 'bg-danger' : 'bg-fg-subtle')} />
                 </span>
                 <StatusBadge size="sm" tone={CONN_META[conn].tone} label={CONN_META[conn].label} icon={null} srPrefix="Bağlantı:" />

@@ -137,3 +137,11 @@
   .qx-fx-medal::after { opacity: 0; }
   .qx-fx-status { transition: none; }
 }
+
+/* Admin: sakin sağlık nabzı (canlı bağlantı noktası) — ping yerine yavaş halka */
+.qx-fx-pulse-calm { animation: qx-fx-pulse-calm 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+@keyframes qx-fx-pulse-calm {
+  0% { transform: scale(1); opacity: 0.45; }
+  70%, 100% { transform: scale(2.2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .qx-fx-pulse-calm { animation: none; opacity: 0; } }

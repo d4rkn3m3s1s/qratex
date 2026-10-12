@@ -2,13 +2,14 @@
 
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { m as Motion } from 'framer-motion';
-import { Check, Copy, Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { Copy, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { TONE_CALLOUT } from '@/components/states';
 import { DURATION, EASE, useReducedMotionPref } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { DrawCheck } from '@/components/fx/event-fx';
 import { copyText } from './api';
 
 /**
@@ -84,7 +85,7 @@ export function SecretReveal({
             {shown ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
           </Button>
           <Button type="button" className="min-h-11" onClick={copy}>
-            {copied === 'ok' ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            {copied === 'ok' ? <DrawCheck circle={false} className="h-4 w-4" /> : <Copy className="h-4 w-4" aria-hidden />}
             {copied === 'ok' ? 'Kopyalandı' : 'Kopyala'}
           </Button>
         </div>
@@ -132,7 +133,7 @@ export function CodeBlock({ title, code }: { title: string; code: string }) {
           }}
           aria-label={`${title} örneğini kopyala`}
         >
-          {state === 'ok' ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+          {state === 'ok' ? <DrawCheck circle={false} className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
           <span aria-live="polite">{state === 'ok' ? 'Kopyalandı' : state === 'failed' ? 'Kopyalanamadı' : 'Kopyala'}</span>
         </button>
       </figcaption>
