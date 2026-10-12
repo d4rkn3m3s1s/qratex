@@ -9,13 +9,14 @@
  */
 import Link from 'next/link';
 import { m as Motion } from 'framer-motion';
-import { CheckCircle2, CloudOff, Gift, Info, Sparkles, Users } from 'lucide-react';
+import { CloudOff, Gift, Info, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DURATION, EASE, SPRING } from '@/lib/motion/tokens';
 import type { FeedbackRewardResult } from '@/lib/feedback-funnel/schema';
 import type { FunnelCopy } from './copy';
 import type { FunnelViewerInfo } from './types';
 import { btnPrimary, btnSecondary } from './button-styles';
+import { Burst, DrawCheck } from '@/components/fx/event-fx';
 
 /** `offline`: cihaz çevrimdışıydı; değilse sunucu/ağ hatası sonrası kuyruğa alındı (metin farklı — sahte "çevrimdışısın" yok). */
 export type FunnelOutcome = { kind: 'sent'; reward: FeedbackRewardResult } | { kind: 'queued'; offline: boolean };
@@ -52,11 +53,19 @@ export function SuccessPanel({
         animate={{ scale: 1, opacity: 1 }}
         transition={reduce ? { duration: 0 } : SPRING.bouncy}
         className={cn(
-          'flex h-20 w-20 items-center justify-center rounded-full',
+          'relative flex h-20 w-20 items-center justify-center rounded-full',
           queued ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'
         )}
       >
-        {queued ? <CloudOff aria-hidden className="h-10 w-10" /> : <CheckCircle2 aria-hidden className="h-10 w-10" />}
+        {queued ? (
+          <CloudOff aria-hidden className="h-10 w-10" />
+        ) : (
+          <>
+            {/* Teşekkür anı: çizilen tik + kalp/yıldız parçacıkları (CSS, <900ms; azaltılmışta yok). */}
+            <DrawCheck className="h-10 w-10" />
+            {!reduce && <Burst trigger={1} kind="hearts" count={12} radius={64} />}
+          </>
+        )}
       </Motion.div>
 
       <div className="space-y-2">

@@ -256,7 +256,10 @@ function BadgeTile({
           <Pin aria-hidden className="size-3.5" />
         </span>
       )}
-      <BadgeGlyph label={item.name} imageSrc={item.thumb} rarity={item.rarity} color={item.color ?? undefined} size="lg" aria-hidden />
+      {/* Yeni kazanılan rozet: madalyonda tek seferlik parlama süpürmesi (CSS; azaltılmışta yok). */}
+      <span className={cn('rounded-full', item.isNew && 'qx-fx-medal')}>
+        <BadgeGlyph label={item.name} imageSrc={item.thumb} rarity={item.rarity} color={item.color ?? undefined} size="lg" aria-hidden />
+      </span>
       <span className="qx-small line-clamp-2 min-h-[2.5em] font-semibold leading-tight text-fg">{item.name}</span>
       {item.rarity !== 'common' && <RarityBadge rarity={item.rarity} locale={copy.locale} />}
     </button>

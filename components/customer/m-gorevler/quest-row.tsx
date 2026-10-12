@@ -1,5 +1,8 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
+
+import { useEffect, useRef, useState } from 'react';
 import { m as Motion } from 'framer-motion';
 import { CheckCircle2, ChevronRight, Gift, Loader2, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +10,7 @@ import { CountdownChip } from '@/components/ds/play';
 import { DURATION, EASE, listItem, useReducedMotionPref } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { QuestGlyph } from './quest-glyph';
+import { DrawCheck } from '@/components/fx/event-fx';
 import { formatCount, type QuestCopy } from './copy';
 import type { QuestDTO } from './types';
 
@@ -95,6 +99,16 @@ export function QuestRow({ quest, index, copy, locale, claiming, claimDisabled, 
         : claimable
           ? copy.completed
           : copy.inProgress;
+  // Bu oturumda talep edilip "tamamlandı"ya geçtiyse: tik çizilir + kart hafifçe zıplar (yalnız geçişte).
+  const prevState = useRef(quest.state);
+  const [justDone, setJustDone] = useState(false);
+  useEffect(() => {
+    if (prevState.current !== quest.state && done && prevState.current !== 'claimed' && prevState.current !== 'auto_rewarded') {
+      setJustDone(true);
+      playSound('task-complete');
+    }
+    prevState.current = quest.state;
+  }, [quest.state, done]);
 
   return (
     <Motion.li
@@ -107,6 +121,7 @@ export function QuestRow({ quest, index, copy, locale, claiming, claimDisabled, 
         'rounded-card border bg-surface-1 qx-elevation-1',
         claimable ? 'border-success-border' : 'border-subtle',
         done && 'bg-surface-0',
+        justDone && 'qx-fx-bump',
       )}
     >
       <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-4">
@@ -141,7 +156,7 @@ export function QuestRow({ quest, index, copy, locale, claiming, claimDisabled, 
                   claimable ? 'text-success' : done ? 'text-fg-muted' : 'text-fg-muted',
                 )}
               >
-                {done ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
+                {done ? justDone ? <DrawCheck className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
                 {statusText}
               </span>
               <RewardChips reward={quest.reward} copy={copy} locale={locale} muted={done} />

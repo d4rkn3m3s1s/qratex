@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Gamepad2, History, ListChecks, QrCode, Target } from 'lucide-react';
 import { RewardProgress } from '@/components/ds/play';
 import { AnimatedNumber } from '@/components/ds/data/animated-number';
+import { PointsGain } from '@/components/fx/event-fx';
 import { cn } from '@/lib/utils';
 import { useWalletCopy } from './copy';
 import { formatPoints } from './format';
@@ -40,12 +41,14 @@ export function BalanceHero({
             {copy.balance}
           </h2>
           <p className="mt-1 flex items-baseline gap-2">
-            <AnimatedNumber
-              value={balance}
-              format={(n) => formatPoints(n, copy.locale)}
-              srLabel={null}
-              className="qx-display qx-num text-fg"
-            />
+            <PointsGain value={balance}>
+              <AnimatedNumber
+                value={balance}
+                format={(n) => formatPoints(n, copy.locale)}
+                srLabel={null}
+                className="qx-display qx-num text-fg"
+              />
+            </PointsGain>
             <span className="qx-small text-fg-muted" aria-hidden>
               {copy.pointsShort}
             </span>

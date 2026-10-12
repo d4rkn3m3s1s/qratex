@@ -271,7 +271,7 @@ function buildColumns(c: SegmentsCopy, locale: 'tr' | 'en', onOpen: (id: string)
       meta: meta({ mobile: 'field', label: c.p.table.status }),
       cell: ({ row }) => (
         <div className="space-y-0.5">
-          <StatusBadge size="sm" tone={isProposalStatus(row.original.status) ? STATUS_TONE[row.original.status] : 'neutral'} label={statusLabel(row.original.status, c)} />
+          <StatusBadge size="sm" className="qx-fx-status" tone={isProposalStatus(row.original.status) ? STATUS_TONE[row.original.status] : 'neutral'} label={statusLabel(row.original.status, c)} />
           {row.original.decidedBy && <p className="qx-caption truncate text-fg-muted">{row.original.decidedBy.label}</p>}
         </div>
       ),
@@ -380,7 +380,7 @@ function ProposalReview({
           return (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge tone={isProposalStatus(d.status) ? STATUS_TONE[d.status] : 'neutral'} label={statusLabel(d.status, c)} />
+                <StatusBadge className="qx-fx-status" tone={isProposalStatus(d.status) ? STATUS_TONE[d.status] : 'neutral'} label={statusLabel(d.status, c)} />
                 <StatusBadge tone="neutral" icon={null} label={c.p.segments[d.segmentKey] ?? d.segmentKey} />
                 {d.dealer.isDemo && <StatusBadge tone="info" label={c.p.table.demo} />}
                 {pending && <span className={d.ageHours > PENDING_SLA_HOURS ? 'qx-caption font-semibold text-warning' : 'qx-caption text-fg-muted'}>{c.p.table.ageValue(d.ageHours)}</span>}

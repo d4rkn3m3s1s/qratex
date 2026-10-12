@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
 import { CookieConsentBanner } from '@/components/layout/cookie-consent-banner';
 import './globals.css';
+import './event-fx.css';
 import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
 import { DeferredRootIslands } from '@/components/deferred-root-islands';

@@ -1,0 +1,139 @@
+/*
+ * Olay animasyonları (docs/design/iyilestirme/OLAY-ANIMASYONLARI.md).
+ * Kural: yalnız transform/opacity/stroke-dashoffset (kompozitör, 60fps), yerleşimi
+ * değiştirmez (CLS yok), her biri < 900ms. prefers-reduced-motion'da hepsi kapalı →
+ * öğe doğrudan son durumda görünür.
+ */
+
+/* ── "+N" yüzen etiket + parıltı (puan kazanımı) ─────────────────────────── */
+.qx-fx-anchor { position: relative; display: inline-block; }
+.qx-fx-float {
+  position: absolute; left: 100%; top: -0.25em; margin-left: 0.35em;
+  pointer-events: none; white-space: nowrap;
+  font-size: 0.42em; font-weight: 700; line-height: 1;
+  color: var(--color-success, oklch(0.62 0.17 150));
+  animation: qx-fx-float 820ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes qx-fx-float {
+  0% { opacity: 0; transform: translateY(0.4em) scale(0.85); }
+  20% { opacity: 1; transform: translateY(0) scale(1.05); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-1.1em) scale(1); }
+}
+.qx-fx-glint {
+  position: absolute; inset: -0.2em -0.4em; pointer-events: none; border-radius: 999px;
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--color-warning, gold) 45%, transparent), transparent);
+  animation: qx-fx-glint 640ms ease-out both;
+}
+@keyframes qx-fx-glint {
+  0% { opacity: 0; transform: scale(0.6); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+/* ── Onay işareti çizimi ─────────────────────────────────────────────────── */
+.qx-fx-check path {
+  stroke-dasharray: 24; stroke-dashoffset: 24;
+  animation: qx-fx-draw 420ms 80ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.qx-fx-check circle { transform-origin: center; animation: qx-fx-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes qx-fx-draw { to { stroke-dashoffset: 0; } }
+@keyframes qx-fx-pop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* ── Kart zıplaması (görev tamamlandı, yeni değer) ──────────────────────── */
+.qx-fx-bump { animation: qx-fx-bump 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes qx-fx-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.025) translateY(-2px); }
+  100% { transform: scale(1); }
+}
+
+/* ── Parçacık patlaması (kalp/yıldız/ışık) ──────────────────────────────── */
+.qx-fx-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.qx-fx-burst > span {
+  position: absolute; left: 0; top: 0; line-height: 1;
+  transform: translate(-50%, -50%);
+  animation: qx-fx-particle var(--d, 760ms) cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms) both;
+}
+@keyframes qx-fx-particle {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
+  20% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(var(--s, 1)) rotate(var(--r, 0deg));
+  }
+}
+/* Işık patlaması halkası (ödül/kutu açılışı) */
+.qx-fx-flash {
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(circle, color-mix(in oklch, var(--color-warning, gold) 55%, transparent) 0%, transparent 65%);
+  animation: qx-fx-glint 700ms ease-out both;
+}
+.qx-fx-spin-in { animation: qx-fx-spin-in 640ms cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+@keyframes qx-fx-spin-in {
+  0% { transform: rotate(-200deg) scale(0.5); opacity: 0; }
+  100% { transform: rotate(0) scale(1); opacity: 1; }
+}
+
+/* ── Rozet madalyon parlaması ───────────────────────────────────────────── */
+.qx-fx-medal { position: relative; isolation: isolate; }
+.qx-fx-medal::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.65) 48%, transparent 66%);
+  background-size: 250% 100%; background-position: 120% 0;
+  animation: qx-fx-sheen 850ms 120ms ease-out both;
+  mix-blend-mode: soft-light;
+}
+@keyframes qx-fx-sheen { to { background-position: -40% 0; } }
+
+/* ── Onay dalgası (bayi kasa: kart okundu) ──────────────────────────────── */
+.qx-fx-wave {
+  position: absolute; left: 50%; top: 50%; width: 40%; aspect-ratio: 1; pointer-events: none;
+  border-radius: 999px; border: 3px solid var(--color-success, oklch(0.62 0.17 150));
+  transform: translate(-50%, -50%) scale(0.2);
+  animation: qx-fx-wave 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.qx-fx-wave + .qx-fx-wave { animation-delay: 140ms; }
+@keyframes qx-fx-wave {
+  0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.2); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
+}
+
+/* ── Listeye kayarak giren satır ────────────────────────────────────────── */
+.qx-fx-row-in { animation: qx-fx-row-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes qx-fx-row-in {
+  0% { opacity: 0; transform: translateX(-12px); background-color: color-mix(in oklch, var(--color-success, green) 18%, transparent); }
+  60% { opacity: 1; transform: none; }
+  100% { background-color: transparent; }
+}
+
+/* ── Durum rozeti renk geçişi (admin onay) ─────────────────────────────── */
+.qx-fx-status { transition: background-color 420ms ease, color 420ms ease, border-color 420ms ease; }
+
+/* ── Boş durum: sakin nefes alan illüstrasyon ──────────────────────────── */
+.qx-fx-breathe { animation: qx-fx-breathe 4.8s ease-in-out infinite; }
+@keyframes qx-fx-breathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.04) translateY(-2px); }
+}
+
+/* ── Toast ikonları (sonner): onay çizimi, hata hafif sarsıntı ─────────── */
+[data-sonner-toast][data-type='success'] [data-icon] svg { animation: qx-fx-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+[data-sonner-toast][data-type='success'] [data-icon] svg path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: qx-fx-draw 380ms 120ms ease-out forwards; }
+[data-sonner-toast][data-type='error'] [data-icon] { animation: qx-fx-shake 380ms 80ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+@keyframes qx-fx-shake {
+  15%, 85% { transform: translateX(-1px); }
+  30%, 70% { transform: translateX(2px); }
+  45%, 55% { transform: translateX(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qx-fx-float, .qx-fx-glint, .qx-fx-burst, .qx-fx-flash, .qx-fx-wave { display: none; }
+  .qx-fx-check path, .qx-fx-check circle, .qx-fx-bump, .qx-fx-spin-in, .qx-fx-row-in, .qx-fx-breathe,
+  .qx-fx-medal::after,
+  [data-sonner-toast] [data-icon], [data-sonner-toast] [data-icon] svg, [data-sonner-toast] [data-icon] svg path {
+    animation: none !important; stroke-dashoffset: 0 !important;
+  }
+  .qx-fx-medal::after { opacity: 0; }
+  .qx-fx-status { transition: none; }
+}

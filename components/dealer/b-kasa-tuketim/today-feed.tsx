@@ -9,6 +9,8 @@ import type { LedgerPage, LedgerRow } from '@/lib/dealer/kasa/types';
 import { formatMoney, formatTime } from './api';
 import { RatingBadge, VoidButton, VoidDialog } from './parts';
 import { useKasaCopy } from './copy';
+import { useNewIds } from '@/components/fx/event-fx';
+import { cn } from '@/lib/utils';
 
 type QueryLike = {
   data: LedgerPage | undefined;
@@ -22,6 +24,7 @@ type QueryLike = {
 export function TodayFeed({ query, onVoided }: { query: QueryLike; onVoided: () => void }) {
   const { copy } = useKasaCopy();
   const c = copy.kasa.today;
+  const isNewRow = useNewIds(query.data?.rows.map((r) => r.id) ?? [], !!query.data);
   const [voidRow, setVoidRow] = useState<LedgerRow | null>(null);
 
   return (
@@ -59,7 +62,7 @@ export function TodayFeed({ query, onVoided }: { query: QueryLike; onVoided: () 
               ) : (
                 <ul className="divide-y divide-border rounded-xl border border-border">
                   {data.rows.map((r) => (
-                    <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                    <li key={r.id} className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2', isNewRow(r.id) && 'qx-fx-row-in')}>
                       <span className="qx-num w-11 text-xs text-fg-muted">{formatTime(r.createdAt, copy.locale)}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{r.customer.displayName ?? copy.kasa.customer.unnamed}</span>

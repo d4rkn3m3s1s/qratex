@@ -89,7 +89,8 @@ export function EmptyState({
         )}
         aria-hidden
       >
-        <Icon className={compact ? 'h-5 w-5' : 'h-7 w-7'} strokeWidth={1.75} />
+        {/* Sakin "nefes": yalnız ikon, 4.8 sn döngü, ±%4 (azaltılmış harekette durur). */}
+        <Icon className={cn(compact ? 'h-5 w-5' : 'h-7 w-7', 'qx-fx-breathe')} strokeWidth={1.75} />
       </div>
       <div className="space-y-1">
         <Heading className={cn('font-semibold text-fg', compact ? 'qx-body' : 'qx-h3')}>{title ?? defaultTitle}</Heading>

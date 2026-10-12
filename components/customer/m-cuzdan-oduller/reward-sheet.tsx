@@ -1,9 +1,12 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
+
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { m as Motion } from 'framer-motion';
-import { ArrowRight, CheckCircle2, Info, QrCode } from 'lucide-react';
+import { ArrowRight, Info, QrCode } from 'lucide-react';
+import { Burst, DrawCheck } from '@/components/fx/event-fx';
 import { Button } from '@/components/ui/button';
 import { DetailSheet, KeyValueList, type KeyValueItem } from '@/components/ds/data';
 import { RewardProgress } from '@/components/ds/play';
@@ -62,6 +65,7 @@ export function RewardSheet({
       );
       keyRef.current = null;
       setFlow({ id: reward.id, stage: 'success', result });
+      playSound('reward');
       announce(copy.detail.successTitle);
       onClaimed(result);
     } catch (err) {
@@ -178,9 +182,14 @@ export function RewardSheet({
                 initial={policy.reduce ? false : { scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={policy.transition(SPRING.bouncy)}
-                className="grid size-16 place-items-center rounded-full bg-success-subtle text-success ring-1 ring-inset ring-success-border"
+                className="relative grid size-16 place-items-center rounded-full bg-success-subtle text-success ring-1 ring-inset ring-success-border"
               >
-                <CheckCircle2 aria-hidden className="size-8" />
+                {/* Ödül alındı: ışık patlaması + dönerek gelen tik (CSS, azaltılmışta sade). */}
+                <span aria-hidden className="qx-fx-flash" style={{ inset: -24, borderRadius: 999 }} />
+                <span className="qx-fx-spin-in grid place-items-center">
+                  <DrawCheck className="size-8" />
+                </span>
+                {!policy.reduce && <Burst trigger={1} kind="light" count={10} radius={52} />}
               </Motion.div>
               <div>
                 <p className="qx-h3 text-fg">{copy.detail.successTitle}</p>

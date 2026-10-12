@@ -18,6 +18,7 @@ import { useQrScanner, QR_SCANNER_ERROR_KEYS } from '@/lib/hooks/use-qr-scanner'
 import { useAppT } from '@/lib/app-locale';
 import { extractCardToken } from '@/lib/qr-scan-targets';
 import { useKasaCopy } from './copy';
+import { DrawCheck } from '@/components/fx/event-fx';
 
 export interface ScannerPanelHandle {
   start: () => Promise<void>;
@@ -188,6 +189,18 @@ export function ScannerPanel({
             />
           )}
         </AnimatePresence>
+        {/* Kart okundu: yeşil onay dalgası + çizilen tik (CSS; azaltılmış harekette gizli). */}
+        {lockPulse > 0 && (
+          <div key={`wave-${lockPulse}`} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+            <span className="qx-fx-wave" />
+            <span className="qx-fx-wave" />
+            <span className="absolute inset-0 grid place-items-center motion-reduce:hidden">
+              <span className="grid h-16 w-16 place-items-center rounded-full bg-success text-success-fg opacity-0 [animation:qx-fx-glint_880ms_ease-out_both]">
+                <DrawCheck className="h-9 w-9" circle={false} />
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
       <p role="status" aria-live="polite" className="min-h-5 text-center text-sm text-fg-muted">
