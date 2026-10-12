@@ -1,78 +1,773 @@
 {
-  "generatedAt": "2026-08-25T15:04:52.400Z",
+  "generatedAt": "2026-10-12T12:17:27.997Z",
   "routes": [
     {
-      "path": "/api/admin/ab-testing/overview",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/ab-testing/overview/route.ts"
-    },
-    {
-      "path": "/api/admin/agents/conversation",
+      "path": "/api/admin/ai-ops/assistant",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/agents/conversation/route.ts"
+      "file": "app/api/admin/ai-ops/assistant/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/agents/conversation/stream",
+      "path": "/api/admin/ai-ops/backlog/pending",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/agents/conversation/stream/route.ts"
+      "file": "app/api/admin/ai-ops/backlog/pending/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/agents/council-to-actions",
-      "methods": [
-        "POST"
-      ],
-      "file": "app/api/admin/agents/council-to-actions/route.ts"
-    },
-    {
-      "path": "/api/admin/agents/outcomes",
-      "methods": [
-        "POST"
-      ],
-      "file": "app/api/admin/agents/outcomes/route.ts"
-    },
-    {
-      "path": "/api/admin/agents/run/[id]",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/agents/run/[id]/route.ts"
-    },
-    {
-      "path": "/api/admin/agents/run",
-      "methods": [
-        "POST"
-      ],
-      "file": "app/api/admin/agents/run/route.ts"
-    },
-    {
-      "path": "/api/admin/agents/runs",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/agents/runs/route.ts"
-    },
-    {
-      "path": "/api/admin/ai-learning/system",
+      "path": "/api/admin/ai-ops/backlog",
       "methods": [
         "GET",
-        "POST",
-        "PATCH"
+        "POST"
       ],
-      "file": "app/api/admin/ai-learning/system/route.ts"
+      "file": "app/api/admin/ai-ops/backlog/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/ai-quality",
+      "path": "/api/admin/ai-ops/budget",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai-ops/budget/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai-ops/dealers",
       "methods": [
         "GET",
         "PATCH"
       ],
-      "file": "app/api/admin/ai-quality/route.ts"
+      "file": "app/api/admin/ai-ops/dealers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai-ops/errors",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai-ops/errors/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai-ops/signals/feedbacks",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai-ops/signals/feedbacks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai-ops/signals",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai-ops/signals/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai-ops/usage",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai-ops/usage/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/chats/[id]/reveal",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/quality/chats/[id]/reveal/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/chats/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/chats/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/chats/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/chats/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/chats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/chats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/chats/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/chats/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/metrics",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/metrics/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/run",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/quality/run/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/samples/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/ai/quality/samples/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/quality/samples",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/quality/samples/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/dealers/[id]/profile",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/dealers/[id]/profile/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/dealers/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/ai/studio/dealers/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/dealers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/dealers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/learning/proposal",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/learning/proposal/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/learning/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/learning/restore/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/learning",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/learning/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/learning/train",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/learning/train/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/models",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/ai/studio/models/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/prompts/drafts",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/prompts/drafts/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/prompts/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/prompts/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/prompts",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/prompts/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/prompts/versions/[id]",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/prompts/versions/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/tones/[id]/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ai/studio/tones/[id]/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/tones/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/ai/studio/tones/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/tones/[id]/status",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/tones/[id]/status/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/tones/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/tones/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/ai/studio/tones",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/ai/studio/tones/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/analytics/[section]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/analytics/[section]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-analitik/use-admin-analytics.ts"
+      ]
     },
     {
       "path": "/api/admin/analytics/cleanup-events",
@@ -80,87 +775,779 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/analytics/cleanup-events/route.ts"
-    },
-    {
-      "path": "/api/admin/api-catalog",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/api-catalog/route.ts"
-    },
-    {
-      "path": "/api/admin/api-keys",
-      "methods": [
-        "GET",
-        "POST",
-        "DELETE"
-      ],
-      "file": "app/api/admin/api-keys/route.ts"
+      "file": "app/api/admin/analytics/cleanup-events/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/assets/upload",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/assets/upload/route.ts"
+      "file": "app/api/admin/assets/upload/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kesif-bagis/api.ts",
+        "components/admin/a-magaza-oduller/api.ts",
+        "components/admin/a-rozetler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/audit/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/audit/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/audit/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/audit/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/audit/facets",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/audit/facets/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/audit",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/audit/route.ts"
+      "file": "app/api/admin/audit/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-denetim/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/badges/algorithm/history",
+      "path": "/api/admin/audit/summary",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/badges/algorithm/history/route.ts"
+      "file": "app/api/admin/audit/summary/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/badges/algorithm/impact",
+      "path": "/api/admin/badges/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/badges/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/lab/catalog",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/badges/algorithm/impact/route.ts"
+      "file": "app/api/admin/badges/lab/catalog/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/badges/algorithm",
+      "path": "/api/admin/badges/lab/classify",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/lab/classify/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/lab/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/lab/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/lab",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/lab/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/lab/sandbox",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/lab/sandbox/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/lab/targets",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/lab/targets/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/badges/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-rozetler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/badges/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/thresholds/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/thresholds/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/thresholds/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/thresholds/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/badges/thresholds",
       "methods": [
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/badges/algorithm/route.ts"
-    },
-    {
-      "path": "/api/admin/badges/algorithm/simulate",
-      "methods": [
-        "POST"
-      ],
-      "file": "app/api/admin/badges/algorithm/simulate/route.ts"
+      "file": "app/api/admin/badges/thresholds/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/bootstrap",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/bootstrap/route.ts"
+      "file": "app/api/admin/bootstrap/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/bootstrap-action-button.tsx"
+      ]
     },
     {
       "path": "/api/admin/bootstrap/summary",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/bootstrap/summary/route.ts"
+      "file": "app/api/admin/bootstrap/summary/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/badges",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/campaigns-calendar/badges/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/campaigns/[id]/active",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/campaigns/[id]/active/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/campaigns/[id]/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/campaigns/[id]/archive/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/campaigns/[id]/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/campaigns/[id]/restore/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/campaigns/[id]",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/campaigns-calendar/campaigns/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/campaigns",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/campaigns/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/concepts/[id]/active",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/concepts/[id]/active/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/concepts/[id]/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/concepts/[id]/archive/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/concepts/[id]/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/concepts/[id]/restore/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/concepts/[id]",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/campaigns-calendar/concepts/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/concepts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/concepts/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/campaigns-calendar/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/campaigns-calendar",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/campaigns-calendar/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kampanya-takvimi/api.ts"
+      ]
     },
     {
       "path": "/api/admin/cards/[id]/assign",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/cards/[id]/assign/route.ts"
+      "file": "app/api/admin/cards/[id]/assign/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/[id]/detail",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/[id]/detail/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/cards/[id]",
@@ -169,86 +1556,470 @@
         "PATCH",
         "DELETE"
       ],
-      "file": "app/api/admin/cards/[id]/route.ts"
+      "file": "app/api/admin/cards/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/cards/[id]/unassign",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/cards/[id]/unassign/route.ts"
+      "file": "app/api/admin/cards/[id]/unassign/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/cards/batches",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/cards/batches/route.ts"
+      "file": "app/api/admin/cards/batches/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/cards/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/customers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/customers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/cards/generate",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/cards/generate/route.ts"
+      "file": "app/api/admin/cards/generate/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/list",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/list/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/cards/print",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/print/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/cards",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/cards/route.ts"
+      "file": "app/api/admin/cards/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kartlar/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/character-test",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "file": "app/api/admin/character-test/route.ts"
-    },
-    {
-      "path": "/api/admin/compliance/logs",
+      "path": "/api/admin/cards/stats",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/compliance/logs/route.ts"
+      "file": "app/api/admin/cards/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/compliance/overview",
+      "path": "/api/admin/command-center/events",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/compliance/overview/route.ts"
+      "file": "app/api/admin/command-center/events/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-komuta/use-command.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/command-center",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/command-center/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-komuta/use-command.ts"
+      ]
     },
     {
       "path": "/api/admin/compose-mail",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/compose-mail/route.ts"
+      "file": "app/api/admin/compose-mail/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/cosmetics/[id]",
+      "path": "/api/admin/council/config",
       "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/council/config/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/council/dealers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/council/dealers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/council/sessions/[id]/publish",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/council/sessions/[id]/publish/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/council/sessions/[id]",
+      "methods": [
+        "GET",
         "PATCH"
       ],
-      "file": "app/api/admin/cosmetics/[id]/route.ts"
+      "file": "app/api/admin/council/sessions/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/cosmetics",
+      "path": "/api/admin/council/sessions/[id]/step",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/council/sessions/[id]/step/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/council/sessions",
       "methods": [
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/cosmetics/route.ts"
+      "file": "app/api/admin/council/sessions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/cosmetics/seed-demos",
+      "path": "/api/admin/coupons/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/coupons/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/coupons/batch",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/cosmetics/seed-demos/route.ts"
+      "file": "app/api/admin/coupons/batch/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/coupons/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/coupons/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/coupons",
@@ -257,28 +2028,351 @@
         "POST",
         "DELETE"
       ],
-      "file": "app/api/admin/coupons/route.ts"
+      "file": "app/api/admin/coupons/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kutu-kupon/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/dashboard",
+      "path": "/api/admin/coupons/stats",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/dashboard/route.ts"
+      "file": "app/api/admin/coupons/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/dealers-ai-stats",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/dealers-ai-stats/route.ts"
+      "file": "app/api/admin/dealers-ai-stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/dealers-health/[dealerId]/csm-tasks",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/dealers-health/[dealerId]/csm-tasks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/dealers-health/[dealerId]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/dealers-health/[dealerId]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/dealers-health/csm-tasks/[taskId]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/dealers-health/csm-tasks/[taskId]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/dealers-health/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/dealers-health/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
     },
     {
       "path": "/api/admin/dealers-health",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/dealers-health/route.ts"
+      "file": "app/api/admin/dealers-health/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/design-system/a11y/checklist",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/design-system/a11y/checklist/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/design-system/a11y",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/design-system/a11y/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/design-system/theme/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/design-system/theme/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/design-system/theme/rollback",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/design-system/theme/rollback/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/design-system/theme",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/design-system/theme/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/discovery/coverage",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/discovery/coverage/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/discovery/dealers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/discovery/dealers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/discovery/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/discovery/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/discovery/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/discovery/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/discovery",
@@ -286,37 +2380,497 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/discovery/route.ts"
+      "file": "app/api/admin/discovery/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kesif-bagis/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/donations/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/donations/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/donations/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/donations/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/donations/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/donations/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/donations",
       "methods": [
         "GET",
-        "PUT",
-        "PATCH"
+        "POST"
       ],
-      "file": "app/api/admin/donations/route.ts"
+      "file": "app/api/admin/donations/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kesif-bagis/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/economy-sim",
+      "path": "/api/admin/donations/stats",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/economy-sim/route.ts"
+      "file": "app/api/admin/donations/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/ecosystem-summary",
+      "path": "/api/admin/donations/transactions/[id]",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/ecosystem-summary/route.ts"
+      "file": "app/api/admin/donations/transactions/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/donations/transactions",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/donations/transactions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/economy/adjust-approvals",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/economy/adjust-approvals/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/economy/flow",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/economy/flow/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/economy/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/economy/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/economy/leagues/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/economy/leagues/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/economy/simulate",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/economy/simulate/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
     },
     {
       "path": "/api/admin/email-test",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/email-test/route.ts"
+      "file": "app/api/admin/email-test/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/feature-control/experiments/[id]/assignment",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feature-control/experiments/[id]/assignment/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/experiments/[id]/results",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feature-control/experiments/[id]/results/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/experiments/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/feature-control/experiments/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/experiments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/feature-control/experiments/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/flags/[id]/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/feature-control/flags/[id]/archive/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feature-control/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/modules/[key]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/feature-control/modules/[key]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feature-control/overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/rollouts/[key]",
+      "methods": [
+        "PUT"
+      ],
+      "file": "app/api/admin/feature-control/rollouts/[key]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feature-control/rollouts",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feature-control/rollouts/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/features",
@@ -327,14 +2881,150 @@
         "PATCH",
         "DELETE"
       ],
-      "file": "app/api/admin/features/route.ts"
+      "file": "app/api/admin/features/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feedbacks/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/feedbacks/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/feedbacks/dealer-options",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feedbacks/dealer-options/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/feedbacks/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feedbacks/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/feedbacks-screen.tsx"
+      ]
+    },
+    {
+      "path": "/api/admin/feedbacks/feed",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feedbacks/feed/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/feedbacks/item",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feedbacks/item/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/api.ts"
+      ]
     },
     {
       "path": "/api/admin/feedbacks/restore",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/feedbacks/restore/route.ts"
+      "file": "app/api/admin/feedbacks/restore/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/feedbacks",
@@ -342,61 +3032,342 @@
         "GET",
         "DELETE"
       ],
-      "file": "app/api/admin/feedbacks/route.ts"
+      "file": "app/api/admin/feedbacks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/feedbacks/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/feedbacks/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-geri-bildirimler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/games/[gameType]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/games/[gameType]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-oyunlar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/games/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/games/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-oyunlar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/games",
       "methods": [
         "GET",
-        "PATCH"
+        "PATCH",
+        "DELETE"
       ],
-      "file": "app/api/admin/games/route.ts"
+      "file": "app/api/admin/games/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-oyunlar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/games/tournament",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/games/tournament/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-oyunlar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/gamification/settings",
       "methods": [
         "GET",
+        "PUT",
         "PATCH"
       ],
-      "file": "app/api/admin/gamification/settings/route.ts"
+      "file": "app/api/admin/gamification/settings/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
     },
     {
       "path": "/api/admin/gate",
       "methods": [
         "GET",
-        "POST"
+        "POST",
+        "DELETE"
       ],
-      "file": "app/api/admin/gate/route.ts"
+      "file": "app/api/admin/gate/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/health",
+      "path": "/api/admin/inbox/[id]/attachments/[n]",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/health/route.ts"
+      "file": "app/api/admin/inbox/[id]/attachments/[n]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/inbox/[id]/body",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/inbox/[id]/body/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/inbox/[id]/reply",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/inbox/[id]/reply/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/inbox/[id]",
       "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/inbox/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/inbox/overview",
+      "methods": [
         "GET"
       ],
-      "file": "app/api/admin/inbox/[id]/route.ts"
+      "file": "app/api/admin/inbox/overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/inbox",
       "methods": [
-        "GET",
-        "POST",
-        "PATCH"
-      ],
-      "file": "app/api/admin/inbox/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/ab-report",
-      "methods": [
         "GET"
       ],
-      "file": "app/api/admin/innovation/ab-report/route.ts"
+      "file": "app/api/admin/inbox/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-iletisim/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/inbox/settings",
+      "methods": [
+        "PUT"
+      ],
+      "file": "app/api/admin/inbox/settings/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/inbox/sync",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/inbox/sync/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/innovation/config",
@@ -404,71 +3375,410 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/innovation/config/route.ts"
+      "file": "app/api/admin/innovation/config/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/server/modules.ts"
+      ]
     },
     {
       "path": "/api/admin/innovation/demo-package",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/innovation/demo-package/route.ts"
+      "file": "app/api/admin/innovation/demo-package/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/innovation/demo-scenario",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/innovation/demo-scenario/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/flash-offers",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/innovation/flash-offers/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/health-score-v2",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/innovation/health-score-v2/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/risk-dashboard",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/innovation/risk-dashboard/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/segment-proposals/[id]",
-      "methods": [
-        "PATCH"
-      ],
-      "file": "app/api/admin/innovation/segment-proposals/[id]/route.ts"
-    },
-    {
-      "path": "/api/admin/innovation/segment-proposals",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/innovation/segment-proposals/route.ts"
+      "file": "app/api/admin/innovation/demo-scenario/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/insights",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/insights/route.ts"
+      "file": "app/api/admin/insights/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [
+          "insights_global"
+        ],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/intern-emails/preview",
+      "path": "/api/admin/integrations/catalog",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/integrations/catalog/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/dealers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/integrations/dealers/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/deliveries/[id]/resend",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/deliveries/[id]/resend/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/deliveries",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/integrations/deliveries/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/keys/[id]/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/keys/[id]/revoke/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/keys/[id]/roll",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/keys/[id]/roll/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/keys/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/integrations/keys/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/keys",
       "methods": [
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/intern-emails/preview/route.ts"
+      "file": "app/api/admin/integrations/keys/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/integrations/overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/partners/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/integrations/partners/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/partners",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/partners/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/webhooks/[id]/rotate-secret",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/webhooks/[id]/rotate-secret/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/webhooks/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/integrations/webhooks/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/webhooks/[id]/test",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/webhooks/[id]/test/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/integrations/webhooks",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/integrations/webhooks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/intern-emails/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/intern-emails/preview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/intern-emails",
@@ -477,67 +3787,415 @@
         "POST",
         "PUT"
       ],
-      "file": "app/api/admin/intern-emails/route.ts"
+      "file": "app/api/admin/intern-emails/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-iletisim/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/intern-emails/sends",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/intern-emails/sends/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/jobs",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/jobs/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-gozlemlenebilirlik/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/jobs/run",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/jobs/run/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-gozlemlenebilirlik/api.ts"
+      ]
     },
     {
       "path": "/api/admin/kpis/action-completion",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/kpis/action-completion/route.ts"
+      "file": "app/api/admin/kpis/action-completion/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/modules/overview",
+      "path": "/api/admin/navigation/history",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/modules/overview/route.ts"
+      "file": "app/api/admin/navigation/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-navigasyon-studyosu/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/navigation",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/navigation/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-navigasyon-studyosu/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/observability",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/observability/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-gozlemlenebilirlik/api.ts"
+      ]
     },
     {
       "path": "/api/admin/onboarding/install-to-value",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/onboarding/install-to-value/route.ts"
+      "file": "app/api/admin/onboarding/install-to-value/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pages/[id]/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/pages/[id]/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pages/[id]/publish",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pages/[id]/publish/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pages/[id]",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/pages/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/pages",
       "methods": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE"
-      ],
-      "file": "app/api/admin/pages/route.ts"
-    },
-    {
-      "path": "/api/admin/partners",
-      "methods": [
-        "GET",
         "POST"
       ],
-      "file": "app/api/admin/partners/route.ts"
+      "file": "app/api/admin/pages/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/platform-pulse",
+      "path": "/api/admin/platform-settings/access",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/platform-settings/access/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/platform-settings/history",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/platform-pulse/route.ts"
+      "file": "app/api/admin/platform-settings/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/platform-settings/revert",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/platform-settings/revert/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/platform-settings",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/platform-settings/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/api.ts"
+      ]
     },
     {
       "path": "/api/admin/playbooks/apply",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/playbooks/apply/route.ts"
+      "file": "app/api/admin/playbooks/apply/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
     },
     {
       "path": "/api/admin/playbooks",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/playbooks/route.ts"
+      "file": "app/api/admin/playbooks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-bayi-sagligi/client/api.ts"
+      ]
     },
     {
       "path": "/api/admin/preagg",
@@ -545,7 +4203,160 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/preagg/route.ts"
+      "file": "app/api/admin/preagg/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/console",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/pricing/console/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/plans/[id]/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pricing/plans/[id]/archive/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/plans/[id]/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/pricing/plans/[id]/history/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/plans/[id]/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pricing/plans/[id]/restore/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/plans/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/pricing/plans/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/plans",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pricing/plans/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/reorder",
+      "methods": [
+        "PUT"
+      ],
+      "file": "app/api/admin/pricing/reorder/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/pricing",
@@ -555,36 +4366,300 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/pricing/route.ts"
+      "file": "app/api/admin/pricing/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": [
+        "components/admin/a-fiyatlandirma/api.ts",
+        "components/admin/a-kullanicilar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/pricing/stripe/create-price",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pricing/stripe/create-price/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/pricing/stripe",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/pricing/stripe/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/privacy-requests/[id]",
       "methods": [
+        "GET",
         "POST",
         "PATCH"
       ],
-      "file": "app/api/admin/privacy-requests/[id]/route.ts"
+      "file": "app/api/admin/privacy-requests/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kvkk/requests/api.ts"
+      ]
     },
     {
       "path": "/api/admin/privacy-requests",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
       ],
-      "file": "app/api/admin/privacy-requests/route.ts"
+      "file": "app/api/admin/privacy-requests/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kvkk/requests/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/product-roadmap",
+      "path": "/api/admin/privacy/logs/export",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/product-roadmap/route.ts"
+      "file": "app/api/admin/privacy/logs/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kvkk/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/qra-chat-logs",
+      "path": "/api/admin/privacy/logs",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/qra-chat-logs/route.ts"
+      "file": "app/api/admin/privacy/logs/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kvkk/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/privacy",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/privacy/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kvkk/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/quests/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/quests/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/quests/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/quests/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/quests/achievements",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/quests/achievements/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/quests/options",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/quests/options/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/quests",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/quests/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-gorevler/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/quests/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/quests/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/referrals",
@@ -592,54 +4667,263 @@
         "GET",
         "PATCH"
       ],
-      "file": "app/api/admin/referrals/route.ts"
+      "file": "app/api/admin/referrals/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "app/admin/referrals/page.tsx"
+      ]
     },
     {
-      "path": "/api/admin/seasonal-campaigns",
+      "path": "/api/admin/segments/[segmentId]/members",
       "methods": [
-        "GET",
-        "POST",
-        "PUT"
+        "GET"
       ],
-      "file": "app/api/admin/seasonal-campaigns/route.ts"
+      "file": "app/api/admin/segments/[segmentId]/members/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
-      "path": "/api/admin/seasonal-concepts",
+      "path": "/api/admin/segments/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/segments/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/segments/modules/rotate-secret",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/segments/modules/rotate-secret/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/segments/modules",
       "methods": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE"
+        "PATCH"
       ],
-      "file": "app/api/admin/seasonal-concepts/route.ts"
+      "file": "app/api/admin/segments/modules/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/segments/proposals/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/segments/proposals/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/segments/proposals/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/segments/proposals/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/segments/proposals",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/segments/proposals/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-segmentler/client/api.ts"
+      ]
     },
     {
       "path": "/api/admin/segments",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/segments/route.ts"
+      "file": "app/api/admin/segments/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/seo/audit",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/seo/audit/route.ts"
+      "file": "app/api/admin/seo/audit/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/seo/health",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
       ],
-      "file": "app/api/admin/seo/health/route.ts"
+      "file": "app/api/admin/seo/health/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/seo/rollback",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/seo/rollback/route.ts"
+      "file": "app/api/admin/seo/rollback/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
     },
     {
       "path": "/api/admin/seo",
@@ -647,7 +4931,44 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/seo/route.ts"
+      "file": "app/api/admin/seo/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-seo-sayfalar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/settings/admin-gate/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/settings/admin-gate/revoke/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/gate-settings.tsx"
+      ]
     },
     {
       "path": "/api/admin/settings/admin-gate",
@@ -655,39 +4976,63 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/settings/admin-gate/route.ts"
+      "file": "app/api/admin/settings/admin-gate/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/gate-settings.tsx"
+      ]
     },
     {
-      "path": "/api/admin/settings/ai-tones",
+      "path": "/api/admin/settings/admin-gate/unlock",
       "methods": [
-        "GET",
-        "POST",
-        "PATCH"
+        "POST"
       ],
-      "file": "app/api/admin/settings/ai-tones/route.ts"
+      "file": "app/api/admin/settings/admin-gate/unlock/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ayarlar-kapi/gate-settings.tsx"
+      ]
     },
     {
       "path": "/api/admin/settings/audit",
       "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/settings/audit/route.ts"
-    },
-    {
-      "path": "/api/admin/settings/character-thresholds",
-      "methods": [
         "GET",
+        "POST",
         "PUT"
       ],
-      "file": "app/api/admin/settings/character-thresholds/route.ts"
-    },
-    {
-      "path": "/api/admin/settings/experience-pulse",
-      "methods": [
-        "GET",
-        "PUT"
-      ],
-      "file": "app/api/admin/settings/experience-pulse/route.ts"
+      "file": "app/api/admin/settings/audit/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/settings/leagues",
@@ -695,15 +5040,41 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/settings/leagues/route.ts"
+      "file": "app/api/admin/settings/leagues/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
     },
     {
       "path": "/api/admin/settings/modules",
       "methods": [
         "GET",
+        "POST",
         "PUT"
       ],
-      "file": "app/api/admin/settings/modules/route.ts"
+      "file": "app/api/admin/settings/modules/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/settings/points-matrix",
@@ -711,14 +5082,42 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/settings/points-matrix/route.ts"
+      "file": "app/api/admin/settings/points-matrix/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-ekonomi-studyosu/api.ts"
+      ]
     },
     {
       "path": "/api/admin/settings/rollback",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/settings/rollback/route.ts"
+      "file": "app/api/admin/settings/rollback/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/settings",
@@ -727,7 +5126,20 @@
         "POST",
         "PUT"
       ],
-      "file": "app/api/admin/settings/route.ts"
+      "file": "app/api/admin/settings/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/settings/sidebar-groups",
@@ -735,32 +5147,122 @@
         "GET",
         "PUT"
       ],
-      "file": "app/api/admin/settings/sidebar-groups/route.ts"
-    },
-    {
-      "path": "/api/admin/settings/sidebar-order",
-      "methods": [
-        "GET",
-        "PUT"
-      ],
-      "file": "app/api/admin/settings/sidebar-order/route.ts"
+      "file": "app/api/admin/settings/sidebar-groups/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/settings/visibility",
       "methods": [
         "GET",
+        "POST",
         "PUT"
       ],
-      "file": "app/api/admin/settings/visibility/route.ts"
+      "file": "app/api/admin/settings/visibility/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/squads/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/squads/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/squads/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-klanlar/squads-center.tsx"
+      ]
+    },
+    {
+      "path": "/api/admin/squads/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/audit/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/squads/battles/[id]",
       "methods": [
         "GET",
-        "PATCH",
-        "DELETE"
+        "PATCH"
       ],
-      "file": "app/api/admin/squads/battles/[id]/route.ts"
+      "file": "app/api/admin/squads/battles/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/squads/battles",
@@ -768,57 +5270,600 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/squads/battles/route.ts"
+      "file": "app/api/admin/squads/battles/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/squads/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-klanlar/squads-center.tsx"
+      ]
+    },
+    {
+      "path": "/api/admin/squads/options",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/options/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/squads",
       "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-klanlar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/squads/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/squads/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/cosmetics/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/store/cosmetics/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/cosmetics/[id]",
+      "methods": [
         "GET",
         "PATCH"
       ],
-      "file": "app/api/admin/squads/route.ts"
+      "file": "app/api/admin/store/cosmetics/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/cosmetics",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/store/cosmetics/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/cosmetics/seed",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/store/cosmetics/seed/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/cosmetics/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/store/cosmetics/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/redemptions/[id]",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/store/redemptions/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/redemptions",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/store/redemptions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/redemptions/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/store/redemptions/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/rewards/[id]/actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/store/rewards/[id]/actions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/rewards/[id]/pool",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/store/rewards/[id]/pool/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/rewards/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/store/rewards/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/rewards",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/store/rewards/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/store/rewards/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/store/rewards/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/surprise-box/campaigns/[id]/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/surprise-box/campaigns/[id]/revoke/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/surprise-box/campaigns/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/surprise-box/campaigns/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/surprise-box/coupons",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/surprise-box/coupons/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/surprise-box/recipients",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/surprise-box/recipients/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/surprise-box",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/surprise-box/route.ts"
+      "file": "app/api/admin/surprise-box/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kutu-kupon/api.ts"
+      ]
     },
     {
       "path": "/api/admin/surprise-box/send",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/surprise-box/send/route.ts"
+      "file": "app/api/admin/surprise-box/send/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [
+          "surprise_boxes"
+        ],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/surprise-box/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/surprise-box/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/system-status",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/system-status/route.ts"
+      "file": "app/api/admin/system-status/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/activity",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/team/activity/route.ts"
+      "file": "app/api/admin/team/activity/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/ai-qa",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/team/ai-qa/route.ts"
+      "file": "app/api/admin/team/ai-qa/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/ai",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/team/ai/route.ts"
+      "file": "app/api/admin/team/ai/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/audit/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/automations",
@@ -828,7 +5873,17 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/team/automations/route.ts"
+      "file": "app/api/admin/team/automations/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/autotask",
@@ -836,23 +5891,126 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/team/autotask/route.ts"
+      "file": "app/api/admin/team/autotask/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/departments",
       "methods": [
         "GET",
         "POST",
+        "PATCH",
         "DELETE"
       ],
-      "file": "app/api/admin/team/departments/route.ts"
+      "file": "app/api/admin/team/departments/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/files",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/team/files/route.ts"
+      "file": "app/api/admin/team/files/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/initiatives/[id]",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/team/initiatives/[id]/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/initiatives",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "app/api/admin/team/initiatives/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/invitations/accept",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/team/invitations/accept/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/invitations",
+      "methods": [
+        "GET",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/invitations/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/members",
@@ -862,14 +6020,51 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/team/members/route.ts"
+      "file": "app/api/admin/team/members/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/performance",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/team/performance/route.ts"
+      "file": "app/api/admin/team/performance/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/team/summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/summary/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tags",
@@ -878,7 +6073,17 @@
         "POST",
         "DELETE"
       ],
-      "file": "app/api/admin/team/tags/route.ts"
+      "file": "app/api/admin/team/tags/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tasks/[id]/attachments",
@@ -886,14 +6091,34 @@
         "POST",
         "DELETE"
       ],
-      "file": "app/api/admin/team/tasks/[id]/attachments/route.ts"
+      "file": "app/api/admin/team/tasks/[id]/attachments/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tasks/[id]/duplicate",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/team/tasks/[id]/duplicate/route.ts"
+      "file": "app/api/admin/team/tasks/[id]/duplicate/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tasks/[id]",
@@ -901,14 +6126,34 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/team/tasks/[id]/route.ts"
+      "file": "app/api/admin/team/tasks/[id]/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tasks/bulk",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/team/tasks/bulk/route.ts"
+      "file": "app/api/admin/team/tasks/bulk/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/tasks",
@@ -918,7 +6163,17 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/team/tasks/route.ts"
+      "file": "app/api/admin/team/tasks/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/templates",
@@ -928,14 +6183,17 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/team/templates/route.ts"
-    },
-    {
-      "path": "/api/admin/team/trend",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/team/trend/route.ts"
+      "file": "app/api/admin/team/templates/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/team/views",
@@ -944,63 +6202,752 @@
         "POST",
         "DELETE"
       ],
-      "file": "app/api/admin/team/views/route.ts"
-    },
-    {
-      "path": "/api/admin/tech-summary",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/tech-summary/route.ts"
+      "file": "app/api/admin/team/views/route.ts",
+      "auth": {
+        "kind": "none"
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/tenant-health",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/tenant-health/route.ts"
+      "file": "app/api/admin/tenant-health/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/trust-overview",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/trust-overview/route.ts"
+      "file": "app/api/admin/trust-overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/trust-timeline",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/trust-timeline/route.ts"
+      "file": "app/api/admin/trust-timeline/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": true
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/alerts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/trust/alerts/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust/audit/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/cases/[id]",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/trust/cases/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/cases/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/trust/cases/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/cases/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust/cases/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/cases",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust/cases/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/ledger/[ledgerId]/reverse",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/trust/ledger/[ledgerId]/reverse/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust/overview/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/rules",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/trust/rules/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/scan",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/trust/scan/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/trust/subjects/[userId]",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/trust/subjects/[userId]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/access-link",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/access-link/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/activity",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/[id]/activity/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/anonymize",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/anonymize/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/approval",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/approval/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/[id]/audit/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/badges",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/users/[id]/badges/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/elevation",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/elevation/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/feedbacks",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/[id]/feedbacks/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/ledger",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/[id]/ledger/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/notify",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/notify/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/users/[id]/plan",
       "methods": [
         "PATCH"
       ],
-      "file": "app/api/admin/users/[id]/plan/route.ts"
+      "file": "app/api/admin/users/[id]/plan/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/points",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/points/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/profile",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/users/[id]/profile/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/remedy-budget",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/users/[id]/remedy-budget/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/rewards",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/rewards/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/role",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/role/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kullanicilar/api.ts",
+        "components/admin/a-kullanicilar/users-screen.tsx"
+      ]
+    },
+    {
+      "path": "/api/admin/users/[id]/sessions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/sessions/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/[id]/suspension",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/[id]/suspension/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/users/automation/dry-run",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/users/automation/dry-run/route.ts"
+      "file": "app/api/admin/users/automation/dry-run/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/users-automation-panel.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/automation/execute",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/users/automation/execute/route.ts"
+      "file": "app/api/admin/users/automation/execute/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/users-automation-panel.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/automation/jobs/process",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/users/automation/jobs/process/route.ts"
+      "file": "app/api/admin/users/automation/jobs/process/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/users/automation/rules/[id]",
@@ -1009,7 +6956,22 @@
         "PUT",
         "DELETE"
       ],
-      "file": "app/api/admin/users/automation/rules/[id]/route.ts"
+      "file": "app/api/admin/users/automation/rules/[id]/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/users-automation-panel.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/automation/rules",
@@ -1017,26 +6979,169 @@
         "GET",
         "POST"
       ],
-      "file": "app/api/admin/users/automation/rules/route.ts"
+      "file": "app/api/admin/users/automation/rules/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/users-automation-panel.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/automation/runs",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/users/automation/runs/route.ts"
+      "file": "app/api/admin/users/automation/runs/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": false,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/users-automation-panel.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/bulk",
       "methods": [
         "POST"
       ],
-      "file": "app/api/admin/users/bulk/route.ts"
+      "file": "app/api/admin/users/bulk/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kullanicilar/api.ts"
+      ]
+    },
+    {
+      "path": "/api/admin/users/catalog",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/catalog/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/create/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/export/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": [
+        "components/admin/a-kullanicilar/users-screen.tsx"
+      ]
     },
     {
       "path": "/api/admin/users/hall-of-fame",
-      "methods": [],
-      "file": "app/api/admin/users/hall-of-fame/route.ts"
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/users/hall-of-fame/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": false
+      },
+      "usedBy": []
+    },
+    {
+      "path": "/api/admin/users/list",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/list/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     },
     {
       "path": "/api/admin/users",
@@ -1047,37 +7152,42 @@
         "PATCH",
         "DELETE"
       ],
-      "file": "app/api/admin/users/route.ts"
+      "file": "app/api/admin/users/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": true,
+        "retired": true
+      },
+      "usedBy": [
+        "components/admin/a-kullanicilar/api.ts"
+      ]
     },
     {
-      "path": "/api/admin/vercel-status",
+      "path": "/api/admin/users/stats",
       "methods": [
         "GET"
       ],
-      "file": "app/api/admin/vercel-status/route.ts"
-    },
-    {
-      "path": "/api/admin/web-vitals-summary",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/web-vitals-summary/route.ts"
-    },
-    {
-      "path": "/api/admin/webhooks/deliveries",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/webhooks/deliveries/route.ts"
-    },
-    {
-      "path": "/api/admin/webhooks",
-      "methods": [
-        "GET",
-        "POST",
-        "DELETE"
-      ],
-      "file": "app/api/admin/webhooks/route.ts"
+      "file": "app/api/admin/users/stats/route.ts",
+      "auth": {
+        "kind": "role",
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "policy": {
+        "rateLimited": true,
+        "modules": [],
+        "bodySchema": false,
+        "retired": false
+      },
+      "usedBy": []
     }
   ]
 }
