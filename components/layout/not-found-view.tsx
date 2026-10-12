@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { useLocaleSafe } from '@/lib/app-locale';
 import { uiCopy } from '@/lib/i18n/ui-copy';
+import { CalmIllustration } from '@/components/public/calm-illustration';
 
 /**
  * 404 gövdesi. Kök 404 statik üretilir (eşleşmeyen her URL'de aynı HTML), bu yüzden dil sunucuda
@@ -21,6 +22,7 @@ export function NotFoundView() {
         tabIndex={-1}
         className="w-full max-w-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
+        <CalmIllustration kind="lost" className="mb-4 -ml-2" />
         <p className="qx-caption font-mono tabular-nums tracking-wide text-fg-muted" aria-hidden>
           404
         </p>

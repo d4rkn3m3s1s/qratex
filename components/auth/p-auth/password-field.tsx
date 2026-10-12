@@ -89,8 +89,9 @@ export const PasswordField = forwardRef<HTMLInputElement, Props>(function Passwo
               {[1, 2, 3, 4].map((step) => (
                 <span
                   key={step}
+                  data-on={ev.strength >= step && ev.strength > 0}
                   className={cn(
-                    'h-1.5 rounded-full transition-colors duration-base',
+                    'qx-strength-seg h-1.5 rounded-full transition-colors duration-base',
                     ev.strength >= step && ev.strength > 0 ? STRENGTH_BAR[ev.strength as 1 | 2 | 3 | 4] : 'bg-surface-3',
                   )}
                 />

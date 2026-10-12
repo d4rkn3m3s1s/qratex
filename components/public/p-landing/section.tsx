@@ -24,7 +24,8 @@ export function PublicSection({
       aria-labelledby={labelledBy}
       className={cn('relative scroll-mt-24 px-4 py-14 sm:px-6 sm:py-20', className)}
     >
-      <div className={cn('mx-auto w-full max-w-6xl', innerClassName)}>{children}</div>
+      {/* qx-reveal: CSS scroll-driven giriş (JS yok; desteklemeyen tarayıcıda düz görünür). */}
+      <div className={cn('qx-reveal mx-auto w-full max-w-6xl', innerClassName)}>{children}</div>
     </section>
   );
 }

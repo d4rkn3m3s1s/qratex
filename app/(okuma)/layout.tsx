@@ -43,6 +43,7 @@ export default function ReadingLayout({ children }: { children: React.ReactNode 
   return (
     <div data-register="ops" className="qx-reading relative flex min-h-dvh flex-col bg-background">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
+      <div className="qx-read-progress" aria-hidden />
       <SkipToMainContent targetId="main-content" variant="content" />
       <div className="relative z-[1] flex min-h-dvh flex-col">
         <div className="print:hidden">

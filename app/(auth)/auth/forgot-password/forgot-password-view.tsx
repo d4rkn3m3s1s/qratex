@@ -1,5 +1,7 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, MailCheck, MailX, RotateCw, Sparkles } from 'lucide-react';
@@ -73,6 +75,7 @@ export function ForgotPasswordView({
       });
       if (res.ok) {
         setSentTo(target);
+        playSound('send');
         rememberAuthEmail(target);
         cooldown.start(Number(res.headers.get('Retry-After')) || RESEND_COOLDOWN_SEC);
         track('password_reset_requested');
@@ -111,6 +114,7 @@ export function ForgotPasswordView({
         body: JSON.stringify(payload),
       });
       setMagicState(res.ok ? 'sent' : 'failed');
+      if (res.ok) playSound('send');
       if (res.ok) track('magic_link_requested', { from: 'forgot_password' });
     } catch {
       setMagicState('failed');
@@ -141,6 +145,7 @@ export function ForgotPasswordView({
       <AuthCard
         tone="success"
         icon={<MailCheck className="h-6 w-6" aria-hidden />}
+        moment="envelope"
         title={copy.forgotSentTitle}
         description={copy.forgotSentBody(sentTo)}
         headingRef={headingRef}

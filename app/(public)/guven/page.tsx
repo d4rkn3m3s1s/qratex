@@ -87,6 +87,7 @@ export default async function TrustPage() {
 
   return (
     <div className="relative">
+      <div className="qx-read-progress" aria-hidden />
       <LocaleSync serverLocale={locale} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(aboutLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(breadcrumbJsonLd(resolved.base, crumbs)) }} />
@@ -102,7 +103,7 @@ export default async function TrustPage() {
                 <ShieldCheck className="h-4 w-4" aria-hidden />
                 {copy.hero.eyebrow}
               </p>
-              <h1 id="trust-title" className="mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
+              <h1 id="trust-title" className="qx-title-in mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
                 {copy.hero.title}
               </h1>
               <p className="mt-5 max-w-2xl text-pretty text-base leading-relaxed text-fg-muted sm:text-lg">{copy.hero.sub}</p>

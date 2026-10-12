@@ -82,6 +82,7 @@ export function VerifyPending({
   return (
     <AuthCard
       icon={<MailCheck className="h-6 w-6" aria-hidden />}
+      moment="envelope"
       title={copy.verifyPendingTitle}
       description={knownEmail ? copy.verifyPendingBody(knownEmail) : copy.verifyPendingGeneric}
       footer={

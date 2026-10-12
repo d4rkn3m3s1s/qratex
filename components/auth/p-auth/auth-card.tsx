@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import { Fragment, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/utils';
 import { TONE_CHIP, type Tone } from '@/components/states/tone';
 
@@ -24,6 +24,8 @@ export function AuthCard({
   headingId,
   className,
   live,
+  moment,
+  stepKey,
 }: {
   icon?: ReactNode;
   tone?: Tone;
@@ -37,8 +39,13 @@ export function AuthCard({
   className?: string;
   /** Başlık + açıklama bir durum bildirimi ise ekran okuyucuya duyurulur. */
   live?: 'polite' | 'assertive';
+  /** Başarı anı: 'envelope' → ikon zarf gibi uçar + kıvılcım (mail gönderildi ekranları). */
+  moment?: 'envelope';
+  /** Adım anahtarı; değişince içerik yeniden girer (form → gönderildi geçişi). Varsayılan: başlık metni. */
+  stepKey?: string;
 }) {
   const centered = align === 'center';
+  const step = stepKey ?? (typeof title === 'string' ? title : undefined);
   return (
     <section
       aria-labelledby={headingId}
@@ -47,14 +54,25 @@ export function AuthCard({
         className,
       )}
     >
+      <Fragment key={step}>
       <header
-        className={cn('flex flex-col gap-2 px-5 pt-6 sm:px-7 sm:pt-7', centered ? 'items-center text-center' : 'items-start')}
+        className={cn('qx-auth-step flex flex-col gap-2 px-5 pt-6 sm:px-7 sm:pt-7', centered ? 'items-center text-center' : 'items-start')}
         role={live ? (live === 'assertive' ? 'alert' : 'status') : undefined}
         aria-live={live}
       >
         {icon ? (
-          <div className={cn('mb-1 grid h-12 w-12 place-items-center rounded-full', TONE_CHIP[tone])} aria-hidden>
+          <div
+            className={cn('qx-auth-icon mb-1 grid h-12 w-12 place-items-center rounded-full', TONE_CHIP[tone])}
+            data-tone={tone}
+            data-moment={moment}
+            aria-hidden
+          >
             {icon}
+            {moment === 'envelope'
+              ? SPARKS.map((s, i) => (
+                  <span key={i} className="qx-spark" style={{ ['--dx' as string]: s[0], ['--dy' as string]: s[1], animationDelay: s[2] }} />
+                ))
+              : null}
           </div>
         ) : null}
         <h1 ref={headingRef} id={headingId} tabIndex={headingRef ? -1 : undefined} className="qx-h1 text-fg outline-none">
@@ -62,13 +80,21 @@ export function AuthCard({
         </h1>
         {description ? <div className="qx-body text-fg-muted text-pretty">{description}</div> : null}
       </header>
-      {children ? <div className="space-y-5 px-5 pb-6 pt-5 sm:px-7 sm:pb-7">{children}</div> : <div className="pb-6 sm:pb-7" />}
+      {children ? <div className="qx-auth-step space-y-5 px-5 pb-6 pt-5 sm:px-7 sm:pb-7">{children}</div> : <div className="pb-6 sm:pb-7" />}
+      </Fragment>
       {footer ? (
         <footer className="flex flex-col items-center gap-2 border-t border-border px-5 py-4 text-center sm:px-7">{footer}</footer>
       ) : null}
     </section>
   );
 }
+
+/** Zarf anı kıvılcımları: [dx, dy, gecikme] — CSS `qx-pa-spark` (app/public-anim.css). */
+const SPARKS: ReadonlyArray<readonly [string, string, string]> = [
+  ['-26px', '-22px', '520ms'],
+  ['28px', '-18px', '600ms'],
+  ['4px', '-32px', '680ms'],
+];
 
 /** "veya" ayırıcısı — tek biçim. */
 export function AuthDivider({ label }: { label: string }) {

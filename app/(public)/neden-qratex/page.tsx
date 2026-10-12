@@ -82,6 +82,7 @@ export default async function WhyQratexPage() {
 
   return (
     <div className="relative">
+      <div className="qx-read-progress" aria-hidden />
       <LocaleSync serverLocale={locale} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(webPageLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(breadcrumbJsonLd(resolved.base, crumbs)) }} />
@@ -94,7 +95,7 @@ export default async function WhyQratexPage() {
           <BreadcrumbNav items={crumbs} />
           <div className="max-w-3xl">
             <p className="qx-overline text-brand">{copy.hero.eyebrow}</p>
-            <h1 id="why-title" className="mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
+            <h1 id="why-title" className="qx-title-in mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
               {fmt(copy.hero.title, { brand })}
             </h1>
             <p className="mt-5 text-pretty text-base leading-relaxed text-fg-muted sm:text-lg">{fmt(copy.hero.sub, { brand })}</p>

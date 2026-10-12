@@ -4,6 +4,7 @@ import { Construction } from 'lucide-react';
 import { getMaintenanceState } from '@/lib/platform-settings/flags';
 import type { MaintenanceState } from '@/lib/platform-settings/registry';
 import { getServerLocale } from '@/lib/server-locale';
+import { CalmIllustration } from '@/components/public/calm-illustration';
 
 /**
  * Bakım ekranı. Bakım modu açıkken müşteri/bayi panelleri proxy tarafından buraya yönlenir
@@ -37,9 +38,13 @@ export default async function MaintenancePage() {
   return (
     <main className="grid min-h-[100dvh] place-items-center bg-surface-0 px-4 py-12 text-fg">
       <div className="w-full max-w-md rounded-card border border-border bg-surface-1 p-8 text-center shadow-sm">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-warning-subtle text-warning" aria-hidden>
-          <Construction className="h-7 w-7" />
-        </span>
+        {state.enabled ? (
+          <CalmIllustration kind="fix" className="mx-auto" />
+        ) : (
+          <span className="qx-calm-breathe mx-auto grid h-14 w-14 place-items-center rounded-full bg-warning-subtle text-warning" aria-hidden>
+            <Construction className="h-7 w-7" />
+          </span>
+        )}
         {state.enabled ? (
           <>
             <h1 className="qx-h2 mt-5">{en ? 'Down for a quick update' : 'Kısa bir bakımdayız'}</h1>

@@ -1,5 +1,7 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { getSession, signIn } from 'next-auth/react';
@@ -150,6 +152,7 @@ export function MagicView({
         body: JSON.stringify(payload),
       });
       setRequestState(res.ok ? 'sent' : 'failed');
+      if (res.ok) playSound('send');
       if (res.ok) track('magic_link_requested', { from: 'magic_error' });
     } catch {
       setRequestState('failed');

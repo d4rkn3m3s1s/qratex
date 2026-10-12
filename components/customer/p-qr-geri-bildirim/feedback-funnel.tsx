@@ -181,9 +181,13 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
   React.useEffect(() => () => {
     if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
   }, []);
+  // Yıldız kaskad pop'u: her seçimde a/b arasında geçiş → CSS animasyonu yeniden başlar (app/public-anim.css).
+  const [starPop, setStarPop] = React.useState<'a' | 'b' | undefined>(undefined);
   const onRate = (v: number) => {
     warmLaterSteps();
     setRating(v);
+    setStarPop((p) => (p === 'a' ? 'b' : 'a'));
+    playSound('tick');
     setTags((prev) => {
       const allowed = new Set(tagsForRating(v).map((t) => t.id));
       return prev.filter((id) => allowed.has(id));
@@ -229,7 +233,9 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
     setOutcome({ kind: 'sent', reward: r });
     setStep('done');
     announce(copy.successTitle);
-    playSound('success');
+    // Teşekkür anı: seviye atlandıysa büyük an sesi, değilse sakin başarı (puan kapsülü zaten coin çalar;
+    // success-panel'e dokunulmaz).
+    playSound((r.status === 'credited' || r.status === 'capped') && r.leveledUp ? 'celebration' : 'success');
     if (r.status === 'credited' || r.status === 'capped') {
       // An Motoru: puan kapsülü + bekleyen büyük anlar (seviye/lig/rozet sunucuda kayıtlı, tam bir kez).
       const shown = r.points > 0 || r.xp > 0 ? moments.points({ points: r.points, xp: r.xp }) : true;
@@ -351,7 +357,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
                 )}
               </div>
 
-              <div onPointerUp={() => (lastPointer.current = Date.now())}>
+              <div className="qx-star-cascade" data-pop={starPop} onPointerUp={() => (lastPointer.current = Date.now())}>
                 <RatingInput
                   aria-label={copy.ratingAria}
                   value={rating}

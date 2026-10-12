@@ -31,7 +31,13 @@ export function AuthNotice({
       id={id}
       role={tone === 'danger' ? 'alert' : 'status'}
       aria-live={tone === 'danger' ? 'assertive' : 'polite'}
-      className={cn('flex items-start gap-3 rounded-control border px-4 py-3 text-left', TONE_CALLOUT[tone], className)}
+      className={cn(
+        'flex items-start gap-3 rounded-control border px-4 py-3 text-left',
+        // Hata bandı belirince tek seferlik nazik titreşim (app/public-anim.css; azaltılmış harekette kapalı).
+        tone === 'danger' && 'qx-notice-shake',
+        TONE_CALLOUT[tone],
+        className,
+      )}
     >
       <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', TONE_TEXT[tone])} aria-hidden />
       <div className="qx-small min-w-0 flex-1 space-y-1">

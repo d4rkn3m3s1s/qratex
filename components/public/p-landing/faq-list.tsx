@@ -38,7 +38,7 @@ export function FaqList({
         </div>
         <div className="divide-y divide-[hsl(var(--border-subtle))] border-y border-subtle">
           {items.map((item) => (
-            <details key={item.q} className="group">
+            <details key={item.q} className="qx-faq group">
               <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 text-left font-medium text-fg transition-colors duration-fast hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <span>{item.q}</span>
                 <ChevronDown
