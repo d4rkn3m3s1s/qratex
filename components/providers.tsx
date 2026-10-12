@@ -6,9 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LazyMotion } from 'framer-motion';
 import { MotionPolicyConfig } from '@/lib/motion/motion-policy-config';
 import { useState, useEffect, useLayoutEffect, type ReactNode } from 'react';
-import { InstallBanner } from '@/components/pwa/install-banner';
-import { OfflineBanner } from '@/components/layout/offline-banner';
-import { SessionDeviceGuard } from '@/components/customer/p-kart-masa-offline/offline/session-device-guard';
+import dynamic from 'next/dynamic';
 import { applyRuntimeThemeCss } from '@/lib/apply-runtime-theme';
 // Palet kataloğu (theme-runtime → theme-model) ilk yük JS'inde değil: SSR aynı CSS'i zaten
 // basıyor; istemci yalnız değişiklikte (yayın, dönemsel konsept) tembel modülle yeniden yazar.
@@ -23,6 +21,14 @@ import { ConfettiProvider } from '@/components/providers/confetti-provider';
 import { AccessibilityClassSync } from '@/components/accessibility-class-sync';
 import { SeasonalConceptApplier } from '@/components/seasonal/seasonal-concept-applier';
 import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
+
+// PWA/çevrimdışı adaları ilk boyamaya katkı vermez → ayrı parça, hidrasyondan sonra (perf: / LCP).
+const InstallBanner = dynamic(() => import('@/components/pwa/install-banner').then((m) => m.InstallBanner), { ssr: false });
+const OfflineBanner = dynamic(() => import('@/components/layout/offline-banner').then((m) => m.OfflineBanner), { ssr: false });
+const SessionDeviceGuard = dynamic(
+  () => import('@/components/customer/p-kart-masa-offline/offline/session-device-guard').then((m) => m.SessionDeviceGuard),
+  { ssr: false }
+);
 
 const loadDomAnimation = () => import('@/lib/motion/dom-animation').then((mod) => mod.default);
 

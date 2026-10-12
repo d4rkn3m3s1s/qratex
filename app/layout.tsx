@@ -1,13 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
-import { VercelAnalytics } from '@/components/analytics/vercel-analytics';
-import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { CookieConsentBanner } from '@/components/layout/cookie-consent-banner';
 import './globals.css';
 import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
-import { Toaster } from '@/components/ui/toaster';
+import { DeferredRootIslands } from '@/components/deferred-root-islands';
 import { ChatbotLazy } from '@/components/chat/chatbot-lazy';
 import { siteUrl } from '@/lib/site-config';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -66,10 +64,13 @@ const inter = Inter({
   display: 'swap',
 });
 
+// Görüntü yazısı (skor/sayaç) hiçbir rotada ilk boyamanın metni değil; ön yükleme kritik yolda
+// Inter ile bant genişliği yarıştırıyordu (/ LCP). swap: önce yedek yazı, sonra değişim.
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin', 'latin-ext'],
   variable: '--font-display',
   display: 'swap',
+  preload: false,
 });
 
 // Yalnız kod/kimlik alanlarında kullanılır → ön yükleme yok (her sayfanın kritik yolunda değil).
@@ -206,13 +207,12 @@ export default async function RootLayout({
           <PageTransition>
             {children}
           </PageTransition>
-          <Toaster />
           {/* Capacitor native kabuk köprüsü (web'de etkisiz). */}
           <NativeBridge />
           <ChatbotLazy />
-          {/* Ölçüm: Vercel çerezsiz + URL redaksiyonlu; PostHog yalnız rızayla (P0-31). */}
-          <VercelAnalytics />
-          <PostHogProvider />
+          {/* Toaster + ölçüm (Vercel çerezsiz/URL redaksiyonlu; PostHog yalnız rızayla, P0-31)
+              ilk JS'te değil: hidrasyondan sonra ayrı parça olarak yüklenir (perf: / LCP). */}
+          <DeferredRootIslands />
           {/* Rıza bildirimi + tercih merkezi tüm yüzeylerde (panele doğrudan girişte de). */}
           <CookieConsentBanner />
         </Providers>

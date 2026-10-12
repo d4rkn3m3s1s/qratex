@@ -72,7 +72,8 @@ export function LandingHero({
                 alt={copy.shotCustomerAlt}
                 width={390}
                 height={640}
-                priority
+                preload
+                fetchPriority="high"
                 sizes="290px"
                 className="h-auto w-full"
               />
