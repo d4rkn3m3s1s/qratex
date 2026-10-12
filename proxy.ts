@@ -185,7 +185,7 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
     const blocked = csrfOriginBlock(req) ?? (await maintenanceBlock(req)) ?? (await adminApiGateBlock(req));
     let res: NextResponse;
     if (blocked) res = blocked;
-    else if (pathname.startsWith('/api/admin/')) {
+    else if (pathname.startsWith('/api/')) {
       // requireAuth'taki zorunlu admin 2FA denetimi yolu buradan okur; istemci değeri EZİLİR.
       const fwd = new Headers(req.headers);
       fwd.set('x-qx-pathname', pathname);

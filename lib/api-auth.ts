@@ -199,7 +199,9 @@ export async function requireAuth(
     // (yol proxy'nin ezerek yazdığı `x-qx-pathname`). Kapı-muaf uçlar (gate, ekip) adminGate:false
     // ile buraya hiç girmez; 2FA kurulum ucu /api/auth/2fa admin önekinde değil. DB hatası → fail-open.
     const apiPath = await readForwardedPath();
-    if (apiPath && apiPath.startsWith('/api/admin/') && (await adminNeeds2faSetup(userId, { sid: jti ?? null, pathname: apiPath }))) {
+    // Fail-closed: ADMIN rolüyle gelen HER API isteği (yol başlığı eksik ya da /api/admin dışı olsa da);
+    // yalnız 2FA kurulum/kimlik uçları (/api/auth/*) muaf.
+    if (!(apiPath ?? '').startsWith('/api/auth/') && (await adminNeeds2faSetup(userId, { sid: jti ?? null, pathname: apiPath ?? '' }))) {
       return {
         error: authError(403, 'Yönetici hesabında iki adımlı doğrulama zorunlu. Önce Hesap güvenliği sayfasından kurun.', ADMIN_2FA_REQUIRED_CODE),
       };

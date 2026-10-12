@@ -51,6 +51,7 @@ jest.mock('@/lib/redis', () => ({
   }),
 }));
 
+jest.mock('@/lib/auth/admin-2fa', () => ({ adminNeeds2faSetup: jest.fn(async () => false) }));
 jest.mock('@/lib/token-replay', () => ({ checkTokenReplay: jest.fn(async () => ({ ok: true })) }));
 
 import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';

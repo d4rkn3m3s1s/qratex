@@ -62,8 +62,8 @@ describe('requireAuth — zorunlu admin 2FA (/api/admin/*)', () => {
     expect((await result(await requireAuth(['ADMIN'], { adminGate: false }))).status).toBe(200);
     expect(mockNeeds).not.toHaveBeenCalled();
   });
-  it('yol başlığı yoksa (proxy dışı bağlam) denetlenmez', async () => {
+  it('yol başlığı yoksa da denetlenir (fail-closed)', async () => {
     mockNeeds.mockResolvedValue(true);
-    expect((await result(await requireAuth(['ADMIN']))).status).toBe(200);
+    expect((await result(await requireAuth(['ADMIN']))).status).toBe(403);
   });
 });
