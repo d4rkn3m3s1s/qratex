@@ -440,16 +440,23 @@ export async function openBox(
   db: Db = prisma
 ): Promise<RevealPayload> {
   const now = input.now ?? new Date();
-  const select = { id: true, title: true, message: true, points: true, couponCode: true, dayKey: true, openedAt: true } as const;
+  const select = { id: true, title: true, message: true, points: true, couponCode: true, dayKey: true, openedAt: true, withdrawnAt: true } as const;
   const box = await db.userSurpriseBox.findFirst({ where: { id: input.boxId, userId: input.userId }, select });
+  // Geri çekilmiş (withdrawn) ve açılmamış kutu müşteri için yok hükmündedir — puan basılmaz.
+  if (box && !box.openedAt && box.withdrawnAt) throw new WalletError('BOX_NOT_FOUND', 'Kutu bulunamadı.');
   if (!box) throw new WalletError('BOX_NOT_FOUND', 'Kutu bulunamadı.');
   if (box.openedAt) return revealOf(box, { newBalance: null, alreadyOpened: true });
 
   return db.$transaction(async (tx) => {
     const claimed = await tx.userSurpriseBox.updateMany({
-      where: { id: box.id, userId: input.userId, openedAt: null },
+      where: { id: box.id, userId: input.userId, openedAt: null, withdrawnAt: null },
       data: { openedAt: now },
     });
+    if (claimed.count === 0) {
+      // Yarış: arada geri çekildiyse "zaten açıldı" değil, "yok" de.
+      const cur = await tx.userSurpriseBox.findUnique({ where: { id: box.id }, select: { openedAt: true, withdrawnAt: true } });
+      if (cur && !cur.openedAt && cur.withdrawnAt) throw new WalletError('BOX_NOT_FOUND', 'Kutu bulunamadı.');
+    }
     if (claimed.count === 0) return revealOf(box, { newBalance: null, alreadyOpened: true });
 
     let newBalance: number | null = null;

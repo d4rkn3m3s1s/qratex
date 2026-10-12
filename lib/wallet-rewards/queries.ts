@@ -351,7 +351,7 @@ export async function loadOwnedWallet(
     listRemedyPasses(userId, { db }),
     boxesEnabled
       ? db.userSurpriseBox.findMany({
-          where: { userId, openedAt: null },
+          where: { userId, openedAt: null, withdrawnAt: null },
           select: BOX_SELECT,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: UNOPENED_BOX_LIMIT,

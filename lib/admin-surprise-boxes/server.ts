@@ -61,7 +61,8 @@ const num = (v: unknown): number => {
 /** Gönderenin bugün (İstanbul günü) dağıttığı hediye puanı. */
 export async function sentTodayBySender(db: Prisma.TransactionClient | Db, senderId: string, now: Date): Promise<number> {
   const agg = await db.userSurpriseBox.aggregate({
-    where: { sentByUserId: senderId, dayKey: null, createdAt: { gte: istanbulDayStart(now) } },
+    // Geri çekilen kutunun puanı serbest kalır (eskiden satır silinirdi).
+    where: { sentByUserId: senderId, dayKey: null, withdrawnAt: null, createdAt: { gte: istanbulDayStart(now) } },
     _sum: { points: true },
   });
   return agg._sum.points ?? 0;
@@ -114,7 +115,7 @@ async function senderNames(db: Db, ids: Array<string | null>): Promise<Map<strin
 const keySql = () => Prisma.sql`COALESCE(b."metadata"->>'campaignId', b."id")`;
 
 export async function listCampaigns(q: CampaignListQuery, db: Db = prisma): Promise<CampaignListPage> {
-  const where: Prisma.Sql[] = [Prisma.sql`b."dayKey" IS NULL`];
+  const where: Prisma.Sql[] = [Prisma.sql`b."dayKey" IS NULL`, Prisma.sql`b."withdrawnAt" IS NULL`];
   if (q.q) where.push(Prisma.sql`(b."title" ILIKE ${'%' + q.q + '%'} OR b."couponCode" ILIKE ${'%' + q.q + '%'})`);
   const having =
     q.status === 'pending'
@@ -175,7 +176,7 @@ export async function getStats(adminId: string, now: Date = new Date(), db: Db =
         COALESCE(SUM(b."points") FILTER (WHERE b."openedAt" IS NULL), 0) AS "pendingPoints",
         COUNT(*) FILTER (WHERE b."openedAt" IS NULL) AS "pendingBoxes"
       FROM "UserSurpriseBox" b
-      WHERE b."dayKey" IS NULL`,
+      WHERE b."dayKey" IS NULL AND b."withdrawnAt" IS NULL`,
     db.$queryRaw<Array<Record<string, unknown>>>`
       SELECT COUNT(*) AS "generated",
              COUNT(b."openedAt") AS "opened",
@@ -267,6 +268,7 @@ async function campaignBoxes(db: Db | Prisma.TransactionClient, key: string) {
   const rows = await db.userSurpriseBox.findMany({
     where: {
       dayKey: null,
+      withdrawnAt: null,
       OR: [{ metadata: { path: ['campaignId'], equals: key } }, { id: key }],
     },
     select: BOX_SELECT,
@@ -374,9 +376,17 @@ export async function revokeCampaign(
     if (pending.length === 0) throw new ApiError('CONFLICT', 'Geri çekilecek açılmamış kutu yok; hepsi açılmış.');
 
     const ids = pending.map((b) => b.id);
-    // Koşullu: arada açılan kutu silinmez (açılış kazanır, puan zaten basılmıştır).
-    const del = await tx.userSurpriseBox.deleteMany({ where: { id: { in: ids }, openedAt: null } });
-    const stillPending = await tx.userSurpriseBox.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    // SİLME YOK — geri çekme (withdraw): satır denetim için kalır, listelerden ve müşteriden
+    // gizlenir, açılamaz. Koşullu: arada açılan kutu geri çekilmez (açılış kazanır).
+    const withdrawnAt = new Date();
+    const del = await tx.userSurpriseBox.updateMany({
+      where: { id: { in: ids }, openedAt: null, withdrawnAt: null },
+      data: { withdrawnAt, withdrawnById: actor.id ?? null, withdrawReason: reason.slice(0, 500) },
+    });
+    const stillPending = await tx.userSurpriseBox.findMany({
+      where: { id: { in: ids }, withdrawnAt: null },
+      select: { id: true },
+    });
     const goneIds = new Set(ids.filter((id) => !stillPending.some((s) => s.id === id)));
     const revokedBoxes = pending.filter((b) => goneIds.has(b.id));
     const pointsReleased = revokedBoxes.reduce((a, b) => a + b.points, 0);
@@ -400,7 +410,7 @@ export async function revokeCampaign(
           oldData: {
             boxes: revokedBoxes.map((b) => ({ id: b.id, userId: b.userId, points: b.points, couponCode: b.couponCode, title: b.title, createdAt: b.createdAt })),
           },
-          newData: { revoked: del.count, pointsReleased, reason },
+          newData: { revoked: del.count, pointsReleased, reason, withdrawnAt: withdrawnAt.toISOString(), mode: 'withdraw' },
         },
         request
       ),

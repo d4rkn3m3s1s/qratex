@@ -51,16 +51,21 @@ const db = {
     findMany: jest.fn(async ({ where }: { where: Row }) => {
       if (where.id && typeof where.id === 'object') {
         const ids = (where.id as { in: string[] }).in;
-        return boxes.filter((b) => ids.includes(b.id as string)).map((b) => ({ id: b.id }));
+        return boxes
+          .filter((b) => ids.includes(b.id as string) && (!('withdrawnAt' in where) || b.withdrawnAt == null))
+          .map((b) => ({ id: b.id }));
       }
       const key = ((where.OR as Row[])[0].metadata as { equals: string }).equals;
-      return boxes.filter((b) => (b.metadata as Row | null)?.campaignId === key || b.id === key).map((b) => ({ ...b, user: { name: 'Ali', email: 'a@x.com' } }));
+      return boxes
+        .filter((b) => !('withdrawnAt' in where) || b.withdrawnAt == null)
+        .filter((b) => (b.metadata as Row | null)?.campaignId === key || b.id === key).map((b) => ({ ...b, user: { name: 'Ali', email: 'a@x.com' } }));
     }),
-    deleteMany: jest.fn(async ({ where }: { where: { id: { in: string[] }; openedAt: null } }) => {
+    // Geri çekme artık SİLMEZ: withdrawnAt/By/Reason yazar (denetim için satır kalır).
+    updateMany: jest.fn(async ({ where, data }: { where: { id: { in: string[] } }; data: Row }) => {
       let n = 0;
-      for (let i = boxes.length - 1; i >= 0; i--) {
-        if (where.id.in.includes(boxes[i].id as string) && boxes[i].openedAt == null) {
-          boxes.splice(i, 1);
+      for (const b of boxes) {
+        if (where.id.in.includes(b.id as string) && b.openedAt == null && b.withdrawnAt == null) {
+          Object.assign(b, data);
           n++;
         }
       }
@@ -160,7 +165,7 @@ describe('kutu kuponu doğrulaması', () => {
 });
 
 describe('kampanya geri çekme', () => {
-  it('yalnız açılmamış kutuları siler, bildirimleri temizler ve denetim yazar', async () => {
+  it('yalnız açılmamış kutuları geri çeker (silmez), bildirimleri temizler ve denetim yazar', async () => {
     const meta = { campaignId: 'sb_abc123' };
     boxes.push(
       { id: 'b1', userId: 'u1', points: 100, couponCode: null, title: 'T', metadata: meta, openedAt: null, createdAt: NOW },
@@ -169,10 +174,17 @@ describe('kampanya geri çekme', () => {
     );
     const r = await revokeCampaign('sb_abc123', 'yanlış puan', actor, null, db as never);
     expect(r).toEqual({ revoked: 2, pointsReleased: 200 });
-    expect(boxes.map((b) => b.id)).toEqual(['b2']);
+    // Satırlar KALIR; açılmamış olanlar withdrawn işaretlenir, açılmış olan dokunulmaz.
+    expect(boxes.map((b) => b.id)).toEqual(['b1', 'b2', 'b3']);
+    expect(boxes.filter((b) => b.withdrawnAt).map((b) => b.id)).toEqual(['b1', 'b3']);
+    expect(boxes.find((b) => b.id === 'b1')).toMatchObject({ withdrawnById: actor.id, withdrawReason: 'yanlış puan' });
+    expect(boxes.find((b) => b.id === 'b2')!.withdrawnAt).toBeUndefined();
+    // Tekrar geri çekme: kalan açılmamış kutu yok (geri çekilenler listeden gizli) → 409.
+    await expect(revokeCampaign('sb_abc123', 'tekrar', actor, null, db as never)).rejects.toMatchObject({ status: 409 });
     expect(db.notification.deleteMany).toHaveBeenCalledTimes(1);
     expect(audits).toHaveLength(1);
     expect(audits[0].action).toBe('SURPRISE_BOX_REVOKE');
+    expect((audits[0].newData as Row).mode).toBe('withdraw');
     expect((audits[0].newData as Row).reason).toBe('yanlış puan');
   });
   it('hepsi açılmışsa 409, kampanya yoksa 404', async () => {

@@ -322,6 +322,20 @@ describe('sürpriz kutu', () => {
     await expectWalletError(openBox({ userId: 'u1', boxId: 'x' }), 'BOX_NOT_FOUND');
   });
 
+  it('geri çekilmiş (withdrawn) açılmamış kutu → BOX_NOT_FOUND, puan basılmaz', async () => {
+    db.userSurpriseBox.findFirst.mockResolvedValue({ id: 'b1', title: 'T', message: null, points: 100, couponCode: null, dayKey: null, openedAt: null, withdrawnAt: NOW });
+    await expectWalletError(openBox({ userId: 'u1', boxId: 'b1' }), 'BOX_NOT_FOUND');
+    expect(db.userSurpriseBox.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('yarış: açılış anında geri çekildiyse → BOX_NOT_FOUND (claim withdrawnAt:null koşullu)', async () => {
+    db.userSurpriseBox.findFirst.mockResolvedValue({ id: 'b1', title: 'T', message: null, points: 100, couponCode: null, dayKey: null, openedAt: null, withdrawnAt: null });
+    db.userSurpriseBox.updateMany.mockResolvedValue({ count: 0 });
+    db.userSurpriseBox.findUnique.mockResolvedValue({ openedAt: null, withdrawnAt: NOW });
+    await expectWalletError(openBox({ userId: 'u1', boxId: 'b1' }), 'BOX_NOT_FOUND');
+    expect(db.userSurpriseBox.updateMany.mock.calls[0][0].where).toMatchObject({ withdrawnAt: null, openedAt: null });
+  });
+
   it('günlük kutu anahtarı İstanbul günü (UTC 21:30 → ertesi gün)', async () => {
     db.userSurpriseBox.upsert.mockResolvedValue({ id: 'b2', openedAt: null });
     const r = await ensureDailyBox({ userId: 'u1', now: NOW, points: 99 });

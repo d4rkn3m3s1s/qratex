@@ -151,7 +151,7 @@ export async function getCouponStats(now: Date = new Date(), db: Db = prisma): P
     db.$queryRaw<Array<{ pending: unknown; opened: unknown }>>`
       SELECT COUNT(*) FILTER (WHERE b."openedAt" IS NULL) AS "pending", COUNT(b."openedAt") AS "opened"
       FROM "UserSurpriseBox" b
-      WHERE b."dayKey" IS NULL AND b."couponCode" IS NOT NULL`,
+      WHERE b."dayKey" IS NULL AND b."withdrawnAt" IS NULL AND b."couponCode" IS NOT NULL`,
   ]);
   return {
     counts,
@@ -184,7 +184,7 @@ export async function getCoupon(id: string, now: Date = new Date(), db: Db = pri
   const [reds, series, boxes, audits] = await Promise.all([
     db.couponRedemption.findMany({ where: { couponId: id }, orderBy: { createdAt: 'desc' }, take: 50, select: { userId: true, createdAt: true } }),
     redemptionSeries(db, now, id),
-    db.userSurpriseBox.groupBy({ by: ['dayKey'], where: { couponCode: c.code, dayKey: null }, _count: { _all: true, openedAt: true } }),
+    db.userSurpriseBox.groupBy({ by: ['dayKey'], where: { couponCode: c.code, dayKey: null, withdrawnAt: null }, _count: { _all: true, openedAt: true } }),
     db.auditLog.findMany({
       where: { entity: 'Coupon', entityId: id },
       orderBy: { createdAt: 'desc' },

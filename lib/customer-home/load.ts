@@ -63,7 +63,7 @@ async function loadUserFacts(userId: string, todayStart: Date, today: string, bo
     SELECT
       (SELECT count(*)::int FROM "Consumption" c WHERE c."customerId" = ${userId}
          AND NOT EXISTS (SELECT 1 FROM "ConsumptionReview" r WHERE r."consumptionId" = c."id")) AS "pendingReviews",
-      (SELECT count(*)::int FROM "UserSurpriseBox" WHERE "userId" = ${userId} AND "openedAt" IS NULL) AS "unopenedBoxes",
+      (SELECT count(*)::int FROM "UserSurpriseBox" WHERE "userId" = ${userId} AND "openedAt" IS NULL AND "withdrawnAt" IS NULL) AS "unopenedBoxes",
       (SELECT count(*)::int FROM "UserReward" WHERE "userId" = ${userId} AND "claimedAt" IS NULL) AS "readyRewards",
       (SELECT count(*)::int FROM "RemedyOffer" WHERE "userId" = ${userId} AND "status" = 'pending') AS "pendingRemedy",
       EXISTS (SELECT 1 FROM "Feedback" WHERE "deletedAt" IS NULL AND "userId" = ${userId} AND "createdAt" >= ${todayStart}) AS "feedbackToday",

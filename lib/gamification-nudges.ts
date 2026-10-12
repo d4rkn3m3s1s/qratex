@@ -148,6 +148,7 @@ export async function runSurpriseBoxNudges(db: Db = prisma, now: Date = new Date
     const boxes = await db.userSurpriseBox.findMany({
       where: {
         openedAt: null,
+        withdrawnAt: null,
         dayKey: null, // yalnız yöneticinin gönderdiği kutular (günlük otomatik kutu değil)
         createdAt: { lt: openBefore, gte: notOlderThan },
         user: ELIGIBLE_CUSTOMER,
