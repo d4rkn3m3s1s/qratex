@@ -96,6 +96,8 @@ interface DashboardHeaderProps {
   description?: string;
   /** Komut paletini (⌘K) göster. */
   showSearch?: boolean;
+  /** Bildirim merkezi (zorunlu 2FA kurulumunda kapalı: uç 403 döner). */
+  showNotifications?: boolean;
   actions?: React.ReactNode;
 }
 
@@ -131,7 +133,7 @@ function writeRecent(role: string, ids: string[]): void {
 
 const isMacLike = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
-export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
+export function DashboardHeader({ title, description, showSearch = true, showNotifications = true, actions }: DashboardHeaderProps) {
   const t = useAppT();
   const bl = useBilingual();
   const router = useRouter();
@@ -484,7 +486,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <NotificationCenter />
+          {showNotifications && <NotificationCenter />}
 
           {/* Hesap menüsü — müşteride avatar → Ben */}
           <DropdownMenu>

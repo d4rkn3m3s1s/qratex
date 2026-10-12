@@ -104,7 +104,7 @@ function Inner({ basePath, viewer, initialMeta }: { basePath: string; viewer: Cl
               <MetricTile label={tu.yonetici} metric={{ value: managers.length }} icon={<Crown />} size="compact" hint={tu.platformYoneticileriHerZaman} />
               <button
                 type="button"
-                className="rounded-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex rounded-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*]:flex-1"
                 onClick={() => {
                   setDeptFilter('none');
                   setTab('members');

@@ -17,7 +17,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { checkAdminElevation } from '@/lib/admin-gate';
-import { ADMIN_2FA_SETUP_PATH, adminNeeds2faSetup } from '@/lib/auth/admin-2fa';
+import { ADMIN_2FA_SETUP_PATH, adminNeeds2faSetup, isSetupPath } from '@/lib/auth/admin-2fa';
 
 const ROLE_HOME: Record<string, string> = {
   DEALER: '/dealer',
@@ -25,7 +25,12 @@ const ROLE_HOME: Record<string, string> = {
   STAFF: '/staff',
 };
 
-export async function requireAdminPage(): Promise<{ userId: string }> {
+/**
+ * `setupRequired`: 2FA kurulumu bekleniyor (yalnız kurulum sayfasında `true` dönebilir — diğer
+ * yollar zaten yönlendirilir). Layout bu durumda 2FA'sız 403 alacak kabuk uçlarını (bildirim,
+ * ui-seen, ⌘K araması) hiç çağırmayan sade kabuk çizer.
+ */
+export async function requireAdminPage(): Promise<{ userId: string; setupRequired: boolean }> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/auth/login');
   const userId = session.user.id;
@@ -37,6 +42,8 @@ export async function requireAdminPage(): Promise<{ userId: string }> {
   // Zorunlu 2FA (kapıdan SONRA): kurulmamışsa kurulum sayfasına. Yol, proxy'nin her /admin
   // isteğinde ezerek yazdığı `x-qx-pathname` başlığından okunur (istemci sahtesi geçmez).
   const pathname = (await headers()).get('x-qx-pathname');
-  if (await adminNeeds2faSetup(userId, { sid: jti, pathname })) redirect(`${ADMIN_2FA_SETUP_PATH}?zorunlu=1`);
-  return { userId };
+  // Karar yoldan bağımsız hesaplanır (pathname=null); döngüyü kurulum yolu muafiyeti önler.
+  const setupRequired = await adminNeeds2faSetup(userId, { sid: jti, pathname: null });
+  if (setupRequired && !isSetupPath(pathname)) redirect(`${ADMIN_2FA_SETUP_PATH}?zorunlu=1`);
+  return { userId, setupRequired };
 }
