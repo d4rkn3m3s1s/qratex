@@ -35,8 +35,36 @@ import { PendingReviews, RecentActivity } from './card-activity';
 import { CardManage } from './card-manage';
 import { CARD_COPY, type CardCopy, type CardLocale } from './copy';
 import { loadDomMax } from './dom-max';
-import { PresentSheet } from './present-sheet';
+import dynamic from 'next/dynamic';
 import { StatusPanel } from './status-panel';
+
+// Tam ekran panel (Radix Dialog + QR) ilk boyamada gerekmez → ayrı parça, istemcide yüklenir.
+const PresentSheet = dynamic(() => import('./present-sheet').then((m) => m.PresentSheet), { ssr: false });
+
+/** Tarayıcı boşa düşünce (ya da en geç `timeout` ms sonra) true olur; `force` hemen true yapar. */
+function useIdleReady(force: boolean, timeout = 2500): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    if (force) {
+      setReady(true);
+      return;
+    }
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => setReady(true), { timeout });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => setReady(true), 1200);
+    return () => window.clearTimeout(id);
+  }, [force, ready, timeout]);
+  return ready;
+}
+
+const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 export const WALLET_CARD_QUERY_KEY = ['customer', 'wallet-card'] as const;
 
@@ -57,29 +85,31 @@ function isClientError(error: unknown): boolean {
 }
 
 /** QR görselleri — `qrcode` yalnız gerektiğinde yüklenir (ilk paket dışı). */
-function useCardQrCodes(cards: readonly WalletCard[], fallback: Record<string, string>) {
+function useCardQrCodes(cards: readonly WalletCard[], fallback: Record<string, string>, enabled: boolean) {
   const [codes, setCodes] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState(false);
   const tokens = useMemo(() => cards.filter((c) => c.status === 'ACTIVATED').map((c) => c.token), [cards]);
   const key = tokens.join('|');
   useEffect(() => {
-    if (tokens.length === 0) return;
+    if (!enabled || tokens.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
         const QRCode = (await import('qrcode')).default;
         const origin = resolveCardOrigin(process.env.NEXT_PUBLIC_APP_URL, window.location.origin);
-        const entries = await Promise.all(
-          tokens.map(async (token) => {
-            const url = await QRCode.toDataURL(buildCardUrl(token, origin), {
-              width: 480,
-              margin: 2,
-              color: { dark: BRAND_CARD_QR_DARK_HEX, light: HEX_WHITE },
-              errorCorrectionLevel: 'M',
-            });
-            return [token, url] as const;
-          })
-        );
+        // Kart başına ayrı görev: tek uzun görev ana iş parçacığını kilitlemesin.
+        const entries: (readonly [string, string])[] = [];
+        for (const token of tokens) {
+          if (cancelled) return;
+          const url = await QRCode.toDataURL(buildCardUrl(token, origin), {
+            width: 480,
+            margin: 2,
+            color: { dark: BRAND_CARD_QR_DARK_HEX, light: HEX_WHITE },
+            errorCorrectionLevel: 'M',
+          });
+          entries.push([token, url] as const);
+          await yieldToMain();
+        }
         if (!cancelled) {
           setCodes(Object.fromEntries(entries));
           setFailed(false);
@@ -94,7 +124,7 @@ function useCardQrCodes(cards: readonly WalletCard[], fallback: Record<string, s
     };
     // `key`, token listesinin kararlı özeti.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, enabled]);
   return { codes: { ...fallback, ...codes }, failed };
 }
 
@@ -211,7 +241,10 @@ export function WalletCardView({
   const usingSnapshot = !data && query.isError && !isClientError(query.error) && !!snapshot;
   const cards = data?.cards ?? (usingSnapshot ? snapshot!.cards : []);
   const holderName = (data ? data.holderName : snapshot?.holderName) || copy.holderFallback;
-  const { codes, failed } = useCardQrCodes(cards, usingSnapshot ? snapshot!.qr : {});
+  const [presentId, setPresentId] = useState<string | null>(null);
+  // QR üretimi ilk boyamadan sonraya; kullanıcı panel açarsa hemen başlar.
+  const qrReady = useIdleReady(presentId !== null);
+  const { codes, failed } = useCardQrCodes(cards, usingSnapshot ? snapshot!.qr : {}, qrReady);
 
   // Başarılı yanıtı (ve üretilen QR'ı) çevrimdışı için sakla.
   const codesKey = Object.keys(codes).sort().join('|');
@@ -221,7 +254,6 @@ export function WalletCardView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, data, codesKey]);
 
-  const [presentId, setPresentId] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const presentButtons = useRef(new Map<string, HTMLButtonElement>());
   const lastPresentedId = useRef<string | null>(null);
