@@ -15,7 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { getModuleControls } from '@/lib/module-gate';
 import { getPointsMatrix } from '@/lib/points-rules';
 import { getCapRule, sumEarnedInWindow } from '@/lib/economy';
-import { describeRemedyOffer } from '@/lib/remedy-offer-service';
+import { describeRemedyOffer, isRemedyExpired } from '@/lib/remedy-offer-service';
 import { CUSTOMER_HIDDEN_TIMELINE_KINDS } from '@/lib/remedy-timeline';
 import {
   buildVoiceJourney,
@@ -79,20 +79,31 @@ const remedyBriefSelect = {
   where: { status: { in: VISIBLE } },
   orderBy: { createdAt: 'desc' as const },
   take: 5,
-  select: { id: true, status: true, createdAt: true, selectedType: true, selectedValue: true, options: true },
+  select: { id: true, status: true, expiresAt: true, createdAt: true, selectedType: true, selectedValue: true, options: true },
 };
 
 type RemedyBriefRow = {
   id: string;
   status: string;
+  expiresAt: Date | null;
   createdAt: Date;
   selectedType: string | null;
   selectedValue: string | null;
   options: Prisma.JsonValue;
 };
 
+/**
+ * Süresi geçmiş ama bakım işi (dealer-queues/maintenance) henüz kapatmamış bekleyen teklif
+ * müşteriye "süresi doldu" görünür — detay ucuyla (`/api/customer/remedy/[offerId]`) aynı kural.
+ * Aksi halde liste/rozet/sayaç seçilemeyen bir teklifi "seçimini bekliyor" diye gösterir.
+ */
+function withEffectiveStatus<T extends { status: string; expiresAt: Date | null }>(o: T, now: Date = new Date()): T {
+  return o.status === 'pending' && isRemedyExpired(o.expiresAt, now) ? { ...o, status: 'expired' } : o;
+}
+
 function remedyBrief(rows: RemedyBriefRow[]): VoiceListItem['remedy'] {
-  const r = pickActiveRemedy(rows);
+  const now = new Date();
+  const r = pickActiveRemedy(rows.map((x) => withEffectiveStatus(x, now)));
   if (!r) return null;
   return { id: r.id, status: r.status as CustomerRemedyStatus, selectionLabel: describeRemedyOffer(r).selectionLabel };
 }
@@ -341,7 +352,9 @@ export async function getVoiceSummary(userId: string, now: Date = new Date()): P
       take: PENDING_PREVIEW,
       select: { id: true, createdAt: true, dealer: { select: dealerSelect }, product: { select: { name: true } } },
     }),
-    prisma.remedyOffer.count({ where: { ...customerRemedyWhere(userId), status: 'pending' } }),
+    prisma.remedyOffer.count({
+      where: { ...customerRemedyWhere(userId), status: 'pending', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+    }),
     prisma.$queryRaw<Array<{ dealerId: string; n: number; avg: number }>>`
       SELECT t."dealerId", COUNT(*)::int AS "n", AVG(t."rating")::float8 AS "avg"
       FROM (
@@ -428,6 +441,7 @@ export async function getVoiceSummary(userId: string, now: Date = new Date()): P
 type OfferWithEvents = {
   id: string;
   status: string;
+  expiresAt: Date | null;
   message: string;
   createdAt: Date;
   acceptedAt: Date | null;
@@ -440,6 +454,7 @@ type OfferWithEvents = {
 const offerDetailSelect = {
   id: true,
   status: true,
+  expiresAt: true,
   message: true,
   createdAt: true,
   acceptedAt: true,
@@ -454,7 +469,8 @@ const offerDetailSelect = {
   },
 } satisfies Prisma.RemedyOfferSelect;
 
-function toRemedyDetail(o: OfferWithEvents): VoiceRemedyDetail {
+function toRemedyDetail(raw: OfferWithEvents): VoiceRemedyDetail {
+  const o = withEffectiveStatus(raw);
   const { options, selection, selectionLabel } = describeRemedyOffer(o);
   const notified = o.timelineEvents.find((e) => e.kind === 'notified');
   return {
@@ -471,7 +487,7 @@ function toRemedyDetail(o: OfferWithEvents): VoiceRemedyDetail {
 }
 
 function journeyRemedies(offers: OfferWithEvents[]) {
-  return offers.map((o) => ({
+  return offers.map((x) => withEffectiveStatus(x)).map((o) => ({
     id: o.id,
     status: o.status,
     createdAt: o.createdAt,

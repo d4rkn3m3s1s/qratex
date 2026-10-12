@@ -266,6 +266,20 @@ describe('listVoices', () => {
     expect(page.nextCursor).toBeNull();
   });
 
+  it('süresi geçmiş ama bakım işinin henüz kapatmadığı bekleyen teklif "süresi doldu" görünür', async () => {
+    mockFeedbackFindMany.mockResolvedValue([]);
+    mockReviewFindMany.mockResolvedValue([
+      {
+        id: 'r2', consumptionId: 'c2', rating: 1, text: 'Kötü', createdAt: new Date('2026-10-06'),
+        dealerRepliedAt: null, consumption: { dealer, product: null },
+        remedyOffers: [{ id: 'o2', status: 'pending', expiresAt: new Date(Date.now() - 1000), createdAt: new Date(), selectedType: null, selectedValue: null, options: [] }],
+      },
+    ]);
+    mockLedgerFindMany.mockResolvedValue([]);
+    const page = await listVoices('u1', params);
+    expect(page.items[0].remedy).toMatchObject({ id: 'o2', status: 'expired' });
+  });
+
   it('tür filtresi diğer tabloyu hiç sorgulamaz; arama ve durum filtresi sunucuda', async () => {
     mockFeedbackFindMany.mockResolvedValue([]);
     await listVoices('u1', { ...params, type: 'qr', status: 'remedy', q: 'kahve' });
