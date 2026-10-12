@@ -64,7 +64,12 @@ export function SoundToggle({ compact = false }: { compact?: boolean }) {
             onChange={(e) => setPrefs({ ...prefs, volume: Number(e.target.value) / 100 })}
             onPointerUp={() => update(prefs)}
             onKeyUp={() => update(prefs)}
-            className="w-40 accent-[hsl(var(--primary))]"
+            // Yerel iz Chrome'da accent-color'a göre açık griye düşüyor (koyu temada parlak beyaz şerit) →
+            // iz ve topuz tema token'larından çizilir; dolu kısım hacmi gösterir.
+            style={{
+              background: `linear-gradient(to right, hsl(var(--primary)) ${Math.round(prefs.volume * 100)}%, hsl(var(--border-strong)) ${Math.round(prefs.volume * 100)}%)`,
+            }}
+            className="h-1.5 w-40 cursor-pointer appearance-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[hsl(var(--primary))] [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[hsl(var(--primary))] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow"
             aria-label={en ? 'Interface sound volume' : 'Arayüz sesi seviyesi'}
           />
         </label>
