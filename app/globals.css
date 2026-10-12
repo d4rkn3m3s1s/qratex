@@ -183,67 +183,68 @@
      erişilebilirlik modlarını (renk körü + koyu, yüksek kontrast + koyu) ve tema paletini
      tüm sayfa için geçersiz kılıyordu. Body değerleri artık html'den miras alır. */
   .dark:not(body) {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 98%;
-    /* Yükselti tonları: zemin 5% → kart 9% → yüzey-2 12.5% → muted 15%; sınır 20%.
-       Eski 8/11/14/16 dizisinde kart zemine, sınır muted'a karışıyordu (çamur). */
-    --card: 222 38% 9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 32% 12.5%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 262 83% 58%;
+    --background: 228 18% 7%;
+    --foreground: 220 20% 96%;
+    /* Yükselti merdiveni (2026-10 koyu cila): tonlu zemin 7% → kart 10.5% → yüzey-2 13.5%
+       → popover 16%; her basamak ≈1.08:1. Saf siyah yerine 228° hafif mavi-gri ton;
+       vurgu/durum renklerinin doygunluğu düşürüldü. Ölçümler: docs/design/iyilestirme/KOYU-TEMA.md */
+    --card: 228 15% 10.5%;
+    --card-foreground: 220 20% 96%;
+    --popover: 228 13% 16%;
+    --popover-foreground: 220 20% 96%;
+    --primary: 262 68% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 19% 14%;
+    --secondary: 228 12% 15%;
     --secondary-foreground: 210 40% 96%;
-    --muted: 217 22% 15%;
-    --muted-foreground: 215 16% 68%;
-    --accent: 262 45% 18%;
-    --accent-foreground: 262 83% 82%;
-    --border: 217 19% 20%;
-    --input: 217 17% 24%;
-    --ring: 262 83% 58%;
+    --muted: 228 11% 16%;
+    --muted-foreground: 222 12% 70%;
+    --accent: 262 30% 19%;
+    --accent-foreground: 262 75% 84%;
+    --border: 228 11% 22%;
+    --input: 228 11% 27%;
+    --ring: 262 70% 66%;
 
-    --surface-2: 222 32% 12.5%;
-    --text-3: 215 12% 57%;
-    --border-strong: 217 13% 44%;
+    --surface-2: 228 13% 13.5%;
+    --text-3: 222 9% 58%;
+    --border-strong: 225 9% 42%;
 
-    --brand-text: 262 90% 78%;
-    --brand-subtle: 262 45% 18%;
-    --brand-border: 262 45% 36%;
+    --brand-text: 260 80% 80%;
+    --brand-subtle: 262 30% 18%;
+    --brand-border: 262 35% 38%;
 
-    --success: 142 71% 45%;
+    --success: 148 58% 42%;
     --success-fg: 142 80% 8%;
-    --success-text: 142 69% 58%;
-    --success-subtle: 142 50% 12%;
-    --success-border: 142 45% 30%;
+    --success-text: 146 52% 60%;
+    --success-subtle: 148 30% 13%;
+    --success-border: 148 32% 30%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 85% 52%;
     --warning-fg: 26 83% 14%;
-    --warning-text: 43 96% 58%;
-    --warning-subtle: 38 60% 12%;
-    --warning-border: 38 60% 32%;
+    --warning-text: 40 82% 62%;
+    --warning-subtle: 36 35% 13%;
+    --warning-border: 36 40% 32%;
 
     /* P0-38: eski koyu --destructive (0 62% 30%) metin olarak 1,93:1 idi.
        Dolgu artık beyaz metinle 4,8:1; metin rolü --danger-text 7,2:1. */
     --danger: 0 72% 51%;
     --danger-fg: 0 0% 100%;
-    --danger-text: 0 91% 71%;
-    --danger-subtle: 0 55% 15%;
-    --danger-border: 0 55% 38%;
+    --danger-text: 0 78% 73%;
+    --danger-subtle: 0 35% 15%;
+    --danger-border: 0 40% 38%;
 
     --info: 199 89% 48%;
     --info-fg: 204 80% 10%;
-    --info-text: 199 92% 66%;
-    --info-subtle: 201 60% 13%;
-    --info-border: 201 50% 34%;
+    --info-text: 200 75% 68%;
+    --info-subtle: 205 35% 14%;
+    --info-border: 205 35% 34%;
 
-    --overlay: 222 60% 2%;
+    --overlay: 228 30% 3%;
 
     --gradient-from: 262 83% 58%;
     --gradient-to: 292 84% 61%;
-    --glass-bg: 222 35% 10%;
-    --glass-border: 217 19% 22%;
-    --shadow-color: 222 47% 2%;
+    --glass-bg: 228 15% 11%;
+    --glass-border: 228 11% 24%;
+    --shadow-color: 228 30% 2%;
 
     /* Grafik/kimlik renkleri koyu zeminde bir kademe aydınlatılır (çok koyu zeminde sönükleşmesin). */
     --category-1: 262 83% 66%;
@@ -255,8 +256,8 @@
     --category-7: 25 95% 60%;
     --category-8: 292 80% 68%;
 
-    --elevation-1: 0 1px 2px 0 hsl(var(--shadow-color) / 0.5), inset 0 1px 0 0 hsl(0 0% 100% / 0.03);
-    --elevation-2: 0 6px 16px -4px hsl(var(--shadow-color) / 0.7), inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
+    --elevation-1: 0 1px 2px 0 hsl(var(--shadow-color) / 0.5), inset 0 1px 0 0 hsl(0 0% 100% / 0.07);
+    --elevation-2: 0 6px 16px -4px hsl(var(--shadow-color) / 0.7), inset 0 1px 0 0 hsl(0 0% 100% / 0.06);
     --elevation-3: 0 20px 48px -12px hsl(var(--shadow-color) / 0.85), inset 0 1px 0 0 hsl(0 0% 100% / 0.05);
   }
 
