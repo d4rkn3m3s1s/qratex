@@ -109,7 +109,7 @@ export function CustomerBirthdayBonusHost() {
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-          <Sparkles className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+          <Sparkles className="h-4 w-4 shrink-0 text-warning" aria-hidden />
           <span className="text-pretty text-center">{t('customerBirthdayPopup.hint')}</span>
         </div>
         <DialogFooter className="flex-col gap-2 sm:flex-col">

@@ -129,7 +129,7 @@ function LiquidGlassWash({ enabled }: { enabled: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.55] dark:opacity-40" aria-hidden>
       <div className="absolute -left-[20%] top-0 h-[75%] w-[65%] rounded-full bg-gradient-to-br from-sky-200/30 via-transparent to-transparent blur-3xl dark:from-sky-500/[0.12]" />
-      <div className="absolute -right-[18%] bottom-0 h-[65%] w-[55%] rounded-full bg-gradient-to-tl from-violet-200/25 via-transparent to-transparent blur-3xl dark:from-violet-500/[0.1]" />
+      <div className="absolute -right-[18%] bottom-0 h-[65%] w-[55%] rounded-full bg-gradient-to-tl from-primary/15 via-transparent to-transparent blur-3xl dark:from-primary/10" />
     </div>
   );
 }
@@ -138,7 +138,7 @@ function LiquidGlassWash({ enabled }: { enabled: boolean }) {
 const glassShell = cn(
   'border border-white/40 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),inset_0_1px_0_0_rgba(255,255,255,0.55)]',
   'bg-white/[0.72] backdrop-blur-2xl backdrop-saturate-150',
-  'dark:border-white/[0.08] dark:bg-zinc-950/45 dark:shadow-[0_24px_56px_-14px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+  'dark:border-white/[0.08] dark:bg-background/45 dark:shadow-[0_24px_56px_-14px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]'
 );
 
 const glassBubbleAssistant = cn(
@@ -554,7 +554,7 @@ export function Chatbot() {
                         isMinimized ? 'h-9 w-9' : 'h-10 w-10 sm:h-11 sm:w-11'
                       )}
                     >
-                      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white/50 backdrop-blur-sm dark:bg-zinc-900/55">
+                      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white/50 backdrop-blur-sm dark:bg-card/55">
                         {botImageOk ? (
                           <Image
                             src="/logo/chatbot-mascot.webp"
@@ -637,7 +637,7 @@ export function Chatbot() {
                     type="button"
                     aria-label={copy.close}
                     className={cn(
-                      'touch-manipulation rounded-xl border border-transparent hover:border-white/20 hover:bg-red-500/10 hover:text-destructive dark:hover:bg-red-950/30',
+                      'touch-manipulation rounded-xl border border-transparent hover:border-white/20 hover:bg-danger/10 hover:text-destructive dark:hover:bg-danger/15',
                       isMinimized ? 'h-8 w-8 sm:h-9 sm:w-9' : 'h-9 w-9 sm:h-10 sm:w-10'
                     )}
                     onClick={closePanel}
@@ -670,14 +670,14 @@ export function Chatbot() {
                             {message.role === 'assistant' ? (
                               <>
                                 {botImageOk ? <AvatarImage src="/logo/chatbot-mascot.webp" alt="" className={qraMascotImgFilterStatic} /> : null}
-                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-muted/70 dark:text-foreground">
                                   <Bot className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                                 </AvatarFallback>
                               </>
                             ) : (
                               <>
                                 <AvatarImage src={session?.user?.image || ''} alt="" />
-                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-muted/70 dark:text-foreground">
                                   <User className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                                 </AvatarFallback>
                               </>
@@ -716,7 +716,7 @@ export function Chatbot() {
                       >
                         <Avatar className="h-8 w-8 shrink-0 ring-1 ring-white/35 ring-offset-1 ring-offset-transparent dark:ring-white/10 sm:h-9 sm:w-9">
                           {botImageOk ? <AvatarImage src="/logo/chatbot-mascot.webp" alt="" className={qraMascotImgFilterStatic} /> : null}
-                          <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                          <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-muted/70 dark:text-foreground">
                             <Bot className="h-4 w-4" />
                           </AvatarFallback>
                         </Avatar>
@@ -806,7 +806,7 @@ export function Chatbot() {
                     )}
                   </AnimatePresence>
 
-                  <div className="shrink-0 border-t border-white/30 bg-white/30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 backdrop-blur-2xl dark:border-white/[0.07] dark:bg-zinc-950/40 sm:px-4 sm:pb-3.5 sm:pt-3.5">
+                  <div className="shrink-0 border-t border-white/30 bg-white/30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 backdrop-blur-2xl dark:border-white/[0.07] dark:bg-background/40 sm:px-4 sm:pb-3.5 sm:pt-3.5">
                     <div className="mx-auto flex gap-2 sm:gap-2.5">
                       <div className="relative min-w-0 flex-1">
                         <textarea
@@ -822,7 +822,7 @@ export function Chatbot() {
                           className={cn(
                             'min-h-[2.75rem] w-full resize-none touch-manipulation rounded-2xl border border-white/45 bg-white/50 px-3 py-2.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground/75 backdrop-blur-md',
                             'focus:border-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent',
-                            'disabled:opacity-50 dark:border-white/10 dark:bg-zinc-900/45 sm:min-h-11 sm:px-3.5 sm:py-3'
+                            'disabled:opacity-50 dark:border-white/10 dark:bg-card/45 sm:min-h-11 sm:px-3.5 sm:py-3'
                           )}
                           style={{ maxHeight: 140 }}
                         />
@@ -834,7 +834,7 @@ export function Chatbot() {
                           onClick={() => sendMessage(input)}
                           disabled={!input.trim() || isLoading}
                           size="icon"
-                          className="h-11 w-11 touch-manipulation rounded-2xl border border-white/45 bg-gradient-to-b from-white/90 to-white/55 text-primary shadow-md backdrop-blur-md hover:from-white hover:to-white/70 disabled:opacity-50 dark:border-white/12 dark:from-zinc-700/95 dark:to-zinc-800/90 dark:text-white sm:h-12 sm:w-12"
+                          className="h-11 w-11 touch-manipulation rounded-2xl border border-white/45 bg-gradient-to-b from-white/90 to-white/55 text-primary shadow-md backdrop-blur-md hover:from-white hover:to-white/70 disabled:opacity-50 dark:border-white/12 dark:from-muted/95 dark:to-card/90 dark:text-foreground sm:h-12 sm:w-12"
                         >
                           <Send className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                         </Button>

@@ -139,7 +139,7 @@ export function MembersPanel({
                   {m.departmentSlugs.length === 0 && <span className="qx-caption text-warning">{tx.noDepartment}</span>}
                   {m.departmentSlugs.map((s, i) => (
                     <span key={s} className="qx-caption inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-0.5 pl-1.5 pr-0.5 text-fg">
-                      <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: departments.find((d) => d.slug === s)?.color ?? '#6b7280' }} />
+                      <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: departments.find((d) => d.slug === s)?.color ?? 'hsl(var(--muted-foreground))' }} />
                       {i === 0 && m.departmentSlugs.length > 1 && <Star className="h-3 w-3 text-warning" aria-label={tu.birincilDepartman} />}
                       {deptName(s)}
                       {canDept && i !== 0 && (

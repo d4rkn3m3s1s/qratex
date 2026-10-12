@@ -3,27 +3,27 @@
  * `cn()` ile ek sınıflar (gap, boyut) birleştirin.
  */
 export const TW_BRAND_CTA_BUTTON =
-  'bg-gradient-to-r from-primary to-violet-600 text-white hover:from-primary/90 hover:to-violet-700';
+  'bg-gradient-to-r from-primary to-brand-text text-white hover:from-primary/90 hover:to-brand-text/90';
 
 /** FAB / avatar iç dolgusu — chatbot orb vb. */
 export const TW_BRAND_ORB_FILL =
-  'bg-gradient-to-br from-primary via-primary/80 to-violet-500';
+  'bg-gradient-to-br from-primary via-primary/80 to-brand-text';
 
 /** Parlama halkası, şerit animasyonu, textarea glow — yatay gradyan */
 export const TW_BRAND_AURA_LINEAR =
-  'bg-gradient-to-r from-primary via-primary/80 to-violet-500';
+  'bg-gradient-to-r from-primary via-primary/80 to-brand-text';
 
 /** Panel başlığı arka plan şeridi */
 export const TW_BRAND_CHAT_HEADER_BG =
-  'bg-gradient-to-r from-primary/20 via-primary/80/20 to-violet-500/20';
+  'bg-gradient-to-r from-primary/20 via-primary/20 to-brand-text/20';
 
 /** Hareket azaltılmış modda panel kabuğu */
 export const TW_BRAND_PANEL_SHELL_SOFT =
-  'bg-gradient-to-br from-primary/20 via-primary/80/15 to-violet-500/20';
+  'bg-gradient-to-br from-primary/20 via-primary/15 to-brand-text/20';
 
 /** Başlıkta gradient metin */
 export const TW_BRAND_HEADLINE_GRADIENT =
-  'bg-gradient-to-r from-primary to-violet-600 bg-clip-text text-transparent';
+  'bg-gradient-to-r from-primary to-brand-text bg-clip-text text-transparent';
 
 /** Avatar etrafı soluk mor halka */
 export const TW_BRAND_AVATAR_HALO = 'bg-gradient-to-r from-primary to-primary/80';
@@ -45,25 +45,25 @@ export const TW_BRAND_SEND_BTN =
 /**
  * Yalnızca Tailwind durakları — örn. `bg-gradient-to-br ${TW_BRAND_GRADIENT_STOPS_WIDE}` veya kart rozeti.
  */
-export const TW_BRAND_GRADIENT_STOPS_WIDE = 'from-primary to-violet-600';
-export const TW_BRAND_GRADIENT_STOPS_SOFT = 'from-primary to-violet-500';
+export const TW_BRAND_GRADIENT_STOPS_WIDE = 'from-primary to-brand-text';
+export const TW_BRAND_GRADIENT_STOPS_SOFT = 'from-primary to-brand-text';
 
 /** Küçük şerit/rozet (tam `bg-gradient-to-r …`) */
 export const TW_BRAND_GRADIENT_HORIZONTAL_STRONG =
-  'bg-gradient-to-r from-primary to-violet-600';
+  'bg-gradient-to-r from-primary to-brand-text';
 
 /** Büyük hero blokları — journey vb. */
 export const TW_BRAND_HERO_GRADIENT_BR =
-  'bg-gradient-to-br from-primary via-primary/85 to-violet-600';
+  'bg-gradient-to-br from-primary via-primary/85 to-brand-text';
 
 /** Hafif seçili yüzey / ikon kutusu — `cn(..., 'rounded-xl …')` ile birleştirin */
 export const TW_BRAND_BG_SOFT_BR =
-  'bg-gradient-to-br from-primary/20 to-violet-500/20';
+  'bg-gradient-to-br from-primary/20 to-brand-text/20';
 
 /** İnce gri seçenek zemini — tema kartı pasif durum */
 export const TW_BRAND_BG_SUBTLE_BR =
-  'bg-gradient-to-br from-primary/5 to-violet-500/5';
+  'bg-gradient-to-br from-primary/5 to-brand-text/5';
 
 /** Küçük PREMIUM / rozet şeridi */
 export const TW_BRAND_BADGE_SOFT_PILL =
-  'rounded-full bg-gradient-to-r from-primary/20 to-violet-500/20';
+  'rounded-full bg-gradient-to-r from-primary/20 to-brand-text/20';

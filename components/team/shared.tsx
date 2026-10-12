@@ -91,7 +91,7 @@ export function DeptChip({ slug, departments, className }: { slug: string | null
   const d = departments.find((x) => x.slug === slug);
   return (
     <span className={cn('qx-caption inline-flex max-w-full items-center gap-1.5 rounded-chip border border-subtle bg-surface-2 px-1.5 py-0.5 text-fg-muted', className)}>
-      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d?.color ?? '#6b7280' }} />
+      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d?.color ?? 'hsl(var(--muted-foreground))' }} />
       <span className="truncate">{d?.name ?? tu.kaldirilmisDepartman}</span>
     </span>
   );
