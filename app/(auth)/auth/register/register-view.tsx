@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
+import dynamic from 'next/dynamic';
 import { Gift, Mail, User, UserPlus, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { InlineError } from '@/components/states';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { track } from '@/lib/analytics';
-import { registerSchema } from '@/lib/validations';
 import { translateKnownMessageKey } from '@/lib/translate-known-message';
 import { normalizeEmail } from '@/lib/auth/normalize-email';
 import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
@@ -24,8 +23,11 @@ import { evaluatePassword } from '@/components/auth/p-auth/password-policy';
 import { RolePicker, type SignupRole } from '@/components/auth/p-auth/role-picker';
 import { useCountdown } from '@/components/auth/p-auth/use-countdown';
 import { useResendVerification } from '@/components/auth/p-auth/use-resend-verification';
-import { VerifyPending } from '@/components/auth/p-auth/verify-pending';
 import type { ReferralPreview } from '@/components/auth/p-auth/server-data';
+
+// Ağır/geç gereken parçalar ilk yükten ayrılır (Lighthouse perf): doğrulama ekranı yalnız kayıttan
+// sonra, zod şeması (lib/validations) yalnız gönderimde, next-auth signIn yalnız sosyal kayıtta yüklenir.
+const VerifyPending = dynamic(() => import('@/components/auth/p-auth/verify-pending').then((m) => m.VerifyPending));
 
 type Field = 'name' | 'email' | 'password' | 'confirmPassword';
 type FieldErrors = Partial<Record<Field, string>>;
@@ -81,7 +83,8 @@ export function RegisterView({
     if (remembered) setEmail((cur) => cur || remembered);
   }, []);
 
-  const validate = (): FieldErrors => {
+  const validate = async (): Promise<FieldErrors> => {
+    const { registerSchema } = await import('@/lib/validations');
     const parsed = registerSchema.safeParse({ name: name.trim(), email: normalizeEmail(email), password, confirmPassword: confirm, role });
     if (parsed.success) return {};
     const out: FieldErrors = {};
@@ -96,7 +99,7 @@ export function RegisterView({
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || throttle.remaining > 0) return;
-    const fieldErrors = validate();
+    const fieldErrors = await validate();
     setErrors(fieldErrors);
     setServerError(null);
     if (Object.keys(fieldErrors).length > 0) {
@@ -190,7 +193,7 @@ export function RegisterView({
     const base = safeCallback ?? (role === 'DEALER' ? '/dealer' : '/customer');
     const qs = new URLSearchParams({ next: base });
     if (refCode && role === 'CUSTOMER') qs.set('ref', refCode);
-    void signIn(provider, { callbackUrl: `/auth/complete?${qs.toString()}` });
+    void import('next-auth/react').then(({ signIn }) => signIn(provider, { callbackUrl: `/auth/complete?${qs.toString()}` }));
   };
 
   // Yönetici yeni kayıtları kapattıysa form, sosyal kayıt ve davet vaadi gösterilmez (eskiden

@@ -6,9 +6,7 @@ import { ShellProvider } from '@/components/dashboard/shell-context';
 import { getShellConfig } from '@/lib/navigation/get-shell-config';
 import { NavClickTracker } from '@/components/dashboard/nav-click-tracker';
 import { RouteGate } from '@/components/dashboard/route-gate';
-import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
-import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
-import { RealtimeNotifications } from '@/components/dashboard/realtime-notifications';
+import { DealerDeferredIslands } from './deferred-islands';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
@@ -55,10 +53,7 @@ export default async function DealerLayout({
         </main>
       </div>
       {/* Kurulum: Bugün sayfasındaki kurulum kartı (eski gate şeridi + OnboardingSheet turu kaldırıldı). */}
-      <WebVitalsReporter />
-      <RealtimeNotifications />
-      {/* PWA: SW yalnız panelde kaydedilir; QR hunisinde hiç kurulmaz (P0-37). */}
-      <ServiceWorkerRegistrar />
+      <DealerDeferredIslands />
     </div>
     </ShellProvider>
     </ServerLocaleBoundary>
