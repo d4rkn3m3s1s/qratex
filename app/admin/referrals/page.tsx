@@ -127,6 +127,9 @@ export default function AdminReferralsPage() {
               <p className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString(en ? 'en-GB' : 'tr-TR')}</p>
             </div>
           ))}
+          {data && data.recent.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{L('Henüz davet kaydı yok.', 'No invites yet.')}</p>
+          ) : null}
         </CardContent>
       </Card>
       <div className="flex items-center justify-end gap-2">

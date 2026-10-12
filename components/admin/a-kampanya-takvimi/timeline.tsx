@@ -38,7 +38,11 @@ function ticks(from: number, to: number): Array<{ at: number; label: string; maj
     const isMonthStart = d.getUTCDate() === 1;
     if (isMonthStart || i % step === 0) out.push({ at: t, label: formatIstanbulDay(new Date(t)), major: isMonthStart });
   }
-  return out;
+  // Ay başı etiketi düzenli adımın hemen yanına düşünce ikisi üst üste biniyordu ("28 Eyl1 Eki"): ay başına
+  // adımın ~%70ʼinden yakın düzenli etiketi at.
+  const gap = Math.ceil(step * 0.7) * DAY;
+  const majors = out.filter((x) => x.major).map((x) => x.at);
+  return out.filter((x) => x.major || majors.every((m) => Math.abs(m - x.at) >= gap));
 }
 
 function Bar({

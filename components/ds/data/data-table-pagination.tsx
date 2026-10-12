@@ -31,6 +31,8 @@ export function DataTablePagination<TData>({ table, pageSizeOptions, touchTarget
   const pageCount = Math.max(1, table.getPageCount());
   const { from, to } = pageRange(pageIndex, pageSize, rowCount);
   const nf = new Intl.NumberFormat(tag);
+  // Varsayılan sayfa boyutu (ör. 25) seçeneklerde yoksa Select boş görünüyordu; mevcut boyutu listeye kat.
+  const sizeOptions = pageSizeOptions.includes(pageSize) ? pageSizeOptions : [...pageSizeOptions, pageSize].sort((a, b) => a - b);
 
   return (
     <nav aria-label={copy.pagination} className={cn('flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between', className)}>
@@ -49,7 +51,7 @@ export function DataTablePagination<TData>({ table, pageSizeOptions, touchTarget
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {pageSizeOptions.map((n) => (
+                {sizeOptions.map((n) => (
                   <SelectItem key={n} value={String(n)}>
                     {n}
                   </SelectItem>

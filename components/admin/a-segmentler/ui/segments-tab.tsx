@@ -321,10 +321,10 @@ function MembersTable({ c, locale, segment }: { c: SegmentsCopy; locale: 'tr' | 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-full flex-1 sm:min-w-[14rem]">
           <FilterBar fields={fields} resetKeys={['page']} ariaLabel={c.search.label} />
         </div>
-        <div className="flex flex-col items-end gap-0.5">
+        <div className="flex w-full flex-col items-start gap-0.5 sm:w-auto sm:items-end">
           <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
             <a href={membersExportUrl({ segmentId: segment.id, q, sort: table.params.sort })} download>
               <Download aria-hidden className="mr-1.5 h-4 w-4" />

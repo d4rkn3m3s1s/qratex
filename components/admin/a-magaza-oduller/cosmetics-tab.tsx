@@ -132,7 +132,7 @@ export function CosmeticsTab({
         header: 'Sahip',
         meta: { numeric: true, label: ux.sahip } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
-          <div className="text-right">
+          <div>
             <span className="block tabular-nums">{fmtNumber(row.original.owners)}</span>
             <span className="block text-xs text-fg-muted">{fx.equippedN(fmtNumber(row.original.equipped))}</span>
           </div>
@@ -143,7 +143,7 @@ export function CosmeticsTab({
         header: ux.t30Gun,
         meta: { numeric: true, label: ux.t30GunSatis } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
-          <div className="text-right">
+          <div>
             <span className="block tabular-nums">{fmtNumber(row.original.sales30d)}</span>
             {row.original.gifts30d > 0 ? <span className="block text-xs text-fg-muted">+{fmtNumber(row.original.gifts30d)} hediye</span> : null}
           </div>

@@ -132,7 +132,7 @@ export function RewardsTab({
         header: 'Talep',
         meta: { numeric: true, label: ux.talep } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
-          <div className="text-right">
+          <div>
             <span className="block tabular-nums">{fmtNumber(row.original.claims30d)}</span>
             <span className="block text-xs text-fg-muted">toplam {fmtNumber(row.original.claimsTotal)}</span>
           </div>

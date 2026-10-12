@@ -102,7 +102,7 @@ export function RedemptionsTab({ stats, statsError, onRetryStats }: { stats: Red
         meta: { numeric: true, label: ux.odenenPuan } satisfies DataTableColumnMeta,
         cell: ({ row }) =>
           row.original.paidPoints > 0 ? (
-            <div className="text-right">
+            <div>
               <span className="block tabular-nums">{fmtNumber(row.original.paidPoints)}</span>
               {row.original.refundedPoints > 0 ? <span className="block text-xs text-success">{fmtNumber(row.original.refundedPoints)} iade</span> : null}
             </div>
