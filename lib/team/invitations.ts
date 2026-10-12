@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
 import { normalizeEmail } from '@/lib/auth/normalize-email';
 
+const INVITE_INVALID = 'Davet bağlantısı geçersiz ya da bu hesaba ait değil.';
 export const TEAM_INVITE_TTL_HOURS = 72;
 export const TEAM_INVITE_ROLES = ['yonetici', 'uye'] as const;
 export type TeamInviteRole = (typeof TEAM_INVITE_ROLES)[number];
@@ -65,7 +66,7 @@ export async function createTeamInvitation(
   const row = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`team-invite:${email}`}))`;
     const open = await tx.teamInvitation.findFirst({ where: { email, ...openInvitationWhere(now) }, select: { id: true } });
-    if (open) throw new ApiError('CONFLICT', 'Bu kişiye gönderilmiş bekleyen bir davet zaten var. Önce iptal edin ya da süresinin dolmasını bekleyin.');
+    if (open) throw new ApiError('CONFLICT', 'Bu adrese bekleyen bir davet var; bekleyen davetler listesinden yönetebilirsiniz.');
     const created = await tx.teamInvitation.create({
       data: {
         email,
@@ -170,23 +171,24 @@ export async function acceptTeamInvitation(
 ): Promise<AcceptResult> {
   const now = input.now ?? new Date();
   const token = (input.token || '').trim();
-  if (token.length < 20 || token.length > 200) throw new ApiError('NOT_FOUND', 'Davet bağlantısı geçersiz.');
+  if (token.length < 20 || token.length > 200) throw new ApiError('NOT_FOUND', INVITE_INVALID);
   const inv = await db.teamInvitation.findUnique({
     where: { tokenHash: hashInviteToken(token) },
     select: { id: true, email: true, role: true, department: true, expiresAt: true, acceptedAt: true, revokedAt: true, invitedById: true },
   });
-  if (!inv) throw new ApiError('NOT_FOUND', 'Davet bağlantısı geçersiz.');
-  if (inv.acceptedAt) throw new ApiError('CONFLICT', 'Bu davet zaten kullanıldı.');
-  if (inv.revokedAt) throw new ApiError('GONE', 'Bu davet iptal edildi.', { status: 410 });
-  if (inv.expiresAt.getTime() <= now.getTime()) throw new ApiError('GONE', 'Bu davetin süresi doldu. Yöneticinizden yeni davet isteyin.', { status: 410 });
-
-  const user = await db.user.findUnique({ where: { id: input.userId }, select: { id: true, email: true, role: true, adminTeamRole: true } });
-  if (!user?.email || normalizeEmail(user.email) !== inv.email) {
-    throw new ApiError('FORBIDDEN', 'Bu davet başka bir e-posta adresine gönderildi. Davet edilen hesapla giriş yapın.');
+  // Sızıntı yok: davet yoksa ya da oturum davet edilen hesap değilse AYNI genel yanıt —
+  // başkasının davetinin durumu (kullanıldı/iptal/süresi doldu), rolü ya da hedef e-postası
+  // davet edilmeyen hesaba söylenmez.
+  const user = inv
+    ? await db.user.findUnique({ where: { id: input.userId }, select: { id: true, email: true, role: true, adminTeamRole: true } })
+    : null;
+  if (!inv || !user?.email || normalizeEmail(user.email) !== inv.email) {
+    throw new ApiError('NOT_FOUND', INVITE_INVALID);
   }
-  if (user.role !== 'CUSTOMER' && user.role !== 'ADMIN') {
-    throw new ApiError('FORBIDDEN', 'Bayi ve personel hesapları ekip paneline erişemediği için daveti kabul edemez.');
+  if (inv.acceptedAt || inv.revokedAt || inv.expiresAt.getTime() <= now.getTime()) {
+    throw new ApiError('GONE', 'Bu davet artık geçerli değil. Yöneticinizden yeni davet isteyin.', { status: 410 });
   }
+  if (user.role !== 'CUSTOMER' && user.role !== 'ADMIN') throw new ApiError('NOT_FOUND', INVITE_INVALID);
   if (user.adminTeamRole) throw new ApiError('CONFLICT', 'Zaten ekiptesiniz.');
 
   let department: string | null = null;

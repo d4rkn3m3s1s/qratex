@@ -112,19 +112,26 @@ describe('TeamInvitation', () => {
     expect(users.get('u1')).toMatchObject({ adminTeamRole: 'uye', adminDepartment: 'pazarlama' });
     expect(invites[0].acceptedAt).toEqual(NOW);
     users.get('u1')!.adminTeamRole = null; // ekipten çıkarılsa bile token yeniden kullanılamaz
-    await expect(acceptTeamInvitation({ token, userId: 'u1', now: NOW }, D)).rejects.toMatchObject({ status: 409 });
+    await expect(acceptTeamInvitation({ token, userId: 'u1', now: NOW }, D)).rejects.toMatchObject({ status: 410 });
     expect(audits.map((a) => a.action)).toContain('team_invite_accept');
   });
 
-  it('başka hesabın oturumu daveti kabul edemez', async () => {
+  it('başka hesabın oturumu daveti kabul edemez ve davet hakkında ayrıntı almaz', async () => {
     const { token } = await invite();
-    await expect(acceptTeamInvitation({ token, userId: 'u2', now: NOW }, D)).rejects.toMatchObject({ status: 403 });
+    const err = await acceptTeamInvitation({ token, userId: 'u2', now: NOW }, D).catch((e) => e);
+    expect(err).toMatchObject({ status: 404 });
+    expect(String(err.message)).not.toMatch(/ali@|ornek|üye|yönetici/i);
+    // Süresi dolmuş/iptal davet de yabancıya geçersiz token ile AYNI yanıtı verir (durum sızmaz).
+    const later = new Date(NOW.getTime() + (TEAM_INVITE_TTL_HOURS * 3600 + 1) * 1000);
+    const err2 = await acceptTeamInvitation({ token, userId: 'u2', now: later }, D).catch((e) => e);
+    const err3 = await acceptTeamInvitation({ token: 'y'.repeat(43), userId: 'u2', now: NOW }, D).catch((e) => e);
+    expect([err2.status, err2.message]).toEqual([err3.status, err3.message]);
     expect(invites[0].acceptedAt).toBeNull();
   });
 
   it('bayi hesabı (e-posta eşleşse bile) kabul edemez', async () => {
     const { token } = await invite('bayi@ornek.com');
-    await expect(acceptTeamInvitation({ token, userId: 'd1', now: NOW }, D)).rejects.toMatchObject({ status: 403 });
+    await expect(acceptTeamInvitation({ token, userId: 'd1', now: NOW }, D)).rejects.toMatchObject({ status: 404 });
   });
 
   it('süresi dolmuş davet → 410', async () => {

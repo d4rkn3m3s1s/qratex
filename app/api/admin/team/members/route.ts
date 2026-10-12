@@ -21,6 +21,7 @@ const SEARCH_RATE_MAX = 30; // aktör başına / dakika
  * Bayi/personel hesabı eklenirse görev atanabilir ama hiçbir panelden ekip modülüne ulaşamaz
  * (denetim departmanlar Bulgu 6/9: "ölü üye").
  */
+const INVITE_UNAVAILABLE = 'Bu kişiye davet gönderilemiyor. E-posta adresini kontrol edin.';
 const ELIGIBLE_ROLES = ['CUSTOMER', 'ADMIN'] as const;
 
 async function searchRateLimit(actorId: string): Promise<void> {
@@ -125,14 +126,12 @@ export const POST = defineRoute(
       where: body.userId ? { id: body.userId } : { email: emailLookupFilter(normalizeEmail(body.email!)) },
       select: { id: true, role: true, adminTeamRole: true, name: true, email: true },
     });
-    if (!target) throw new ApiError('NOT_FOUND', 'Bu e-posta ile kayıtlı kullanıcı yok. Önce kullanıcı hesabı oluşturulmalı.');
-    if (!(ELIGIBLE_ROLES as readonly string[]).includes(String(target.role))) {
-      throw new ApiError('VALIDATION', 'Bayi ve personel hesapları ekip paneline erişemediği için ekibe eklenemez.');
+    // Hesap sayımı yok: kayıtsız / uygun olmayan rol / zaten ekipte / e-postasız → TEK genel yanıt.
+    if (!target || !(ELIGIBLE_ROLES as readonly string[]).includes(String(target.role)) || target.adminTeamRole || !target.email) {
+      throw new ApiError('NOT_FOUND', INVITE_UNAVAILABLE);
     }
-    if (target.adminTeamRole) throw new ApiError('CONFLICT', 'Bu kişi zaten ekipte.');
     const slugs = await validateSlugs(body.departments ?? (body.department ? [body.department] : []));
 
-    if (!target.email) throw new ApiError('VALIDATION', 'Bu hesabın e-posta adresi yok; davet gönderilemez.');
 
     // Doğrudan rol yazma YOK: davet oluşur, kişi mailindeki tek kullanımlık bağlantıyla kabul
     // eder (oturum e-postası = davet e-postası). Bkz. lib/team/invitations.ts.
@@ -154,7 +153,8 @@ export const POST = defineRoute(
       userName: target.name ?? undefined,
     }).catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : 'mail hatası' }));
     return ok(
-      { invited: true, invitation: { ...invitation, email: target.email }, mailSent: mail.ok },
+      // Ham token / kabul URL'si / hedef e-posta yanıtta YOK (yalnız mailde).
+      { invited: true, invitation: { id: invitation.id, role: invitation.role, expiresAt: invitation.expiresAt }, mailSent: mail.ok },
       { status: 201, legacySpread: true }
     );
   }
