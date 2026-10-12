@@ -77,7 +77,7 @@ export function MysteryBar({ progress, current, threshold, ready = false, classN
       </div>
 
       {/* Sayaç — gizli, sadece "3/6" (rozet adı YOK). */}
-      <p className="mt-1 text-right text-[11px] font-medium tabular-nums text-muted-foreground/70">
+      <p className="mt-1 text-right text-[11px] font-medium tabular-nums text-muted-foreground">
         {filled}/{slots}
       </p>
     </div>

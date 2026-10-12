@@ -190,6 +190,10 @@ const LH_ROUTES_ALL = [
 ];
 // GATES_LH_ROUTES=/a,/b: yalnız bu rotaları ölç (hedefli doğrulama; GATES.md yazılmaz).
 const LH_ONLY = (process.env.GATES_LH_ROUTES ?? '').split(',').filter(Boolean);
+// SEO kapısı yalnız DİZİNLENEN public rotalara uygulanır. /feedback/[code] bilerek `noindex`
+// (QR hunisi, arama sonucu değil); Lighthouse onu "taranamaz" saymalı ama Next'in akışlı
+// metadata'sı (loading.tsx sınırı → etiketler <body>'de) yüzünden SEO puanı rastgele çıkar.
+const LH_NOINDEX = new Set(['/feedback/DEMO-CAFE-002']);
 const LH_ROUTES = LH_ONLY.length ? LH_ROUTES_ALL.filter(([r]) => LH_ONLY.includes(r)) : LH_ROUTES_ALL;
 
 async function waitFor(url, ms) {
@@ -360,6 +364,7 @@ if (!SKIP.has('lighthouse') || E2E_ON_PROD) {
             tbt: lhr.audits['total-blocking-time']?.numericValue ?? null,
             jsKB: Math.round(scripts.reduce((n, i) => n + (i.transferSize ?? 0), 0) / 1024),
             error: lhr.runtimeError?.message ?? null,
+            lcpEl: lhr.audits['largest-contentful-paint-element']?.details?.items?.[0]?.items?.[0]?.node?.selector ?? null,
           });
           log(`lighthouse ${route}`, JSON.stringify(rows[rows.length - 1]));
         }
@@ -383,7 +388,7 @@ if (!SKIP.has('lighthouse') || E2E_ON_PROD) {
       scoreGate('Lighthouse performans (mobil)', 'perf', 90);
       scoreGate('Lighthouse erişilebilirlik', 'a11y', 95);
       scoreGate('Lighthouse en iyi uygulamalar', 'bp', 95);
-      scoreGate('Lighthouse SEO (public)', 'seo', 95, (r) => !r.role);
+      scoreGate('Lighthouse SEO (public)', 'seo', 95, (r) => !r.role && !LH_NOINDEX.has(r.route));
       {
         const bad = rows.filter((r) => r.lcp == null || r.lcp >= 2500);
         gate('LCP (mobil)', '<2.5 sn', `en kötü ${(Math.max(...rows.map((r) => r.lcp ?? 0)) / 1000).toFixed(2)} sn`, bad.length === 0, bad.map((r) => `${fmt(r)}: ${((r.lcp ?? 0) / 1000).toFixed(2)} sn`));
