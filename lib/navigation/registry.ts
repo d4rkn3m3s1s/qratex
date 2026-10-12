@@ -989,6 +989,26 @@ const STAFF: NavRoute[] = [
     keywords: ['vardiya', 'görevler', 'checklist', 'izin', 'eğitim', 'saha bildirimi', 'field report'],
   },
   {
+    // Bayi kasasıyla aynı sayfa (app/staff/kasa → app/dealer/scan); proxy `/dealer/scan`'ı buraya çevirir.
+    id: 'staff.till',
+    role: 'staff',
+    href: '/staff/kasa',
+    label: { tr: 'Kasa', en: 'Till' },
+    icon: 'ScanLine',
+    status: 'primary',
+    keywords: ['kasa', 'okut', 'işlem', 'till', 'scan'],
+  },
+  {
+    // Bayinin seçtiği personel defter kapsamıyla (bugün / bugün + kendi / tümü) sınırlı.
+    id: 'staff.ledger',
+    role: 'staff',
+    href: '/staff/defter',
+    label: { tr: 'İşlem defteri', en: 'Ledger' },
+    icon: 'History',
+    status: 'primary',
+    keywords: ['defter', 'işlemler', 'tüketimler', 'ledger'],
+  },
+  {
     // Emekli: saha bildirimi Bugün ekranında alt sayfa olarak açılır (koçan → `/staff?bildir=1`).
     // Menüde ayrı öğe olarak durursa her tıklama yönlendirmeye iner ve hiç "aktif" görünmez.
     id: 'staff.field',

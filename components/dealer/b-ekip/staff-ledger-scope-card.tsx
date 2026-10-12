@@ -41,6 +41,7 @@ export function StaffLedgerScopeCard({ initial }: { initial: StaffLedgerScope })
       <h2 id="staff-ledger-scope-title" className="text-sm font-semibold">
         Personel işlem defteri görünürlüğü
       </h2>
+      <p className="mt-1 text-sm text-muted-foreground">Personel, kendi panelindeki İşlem defteri sekmesinde bu kapsamı görür.</p>
       <fieldset className="mt-3 grid gap-2 sm:grid-cols-3" disabled={saving}>
         <legend className="sr-only">Personel hangi tüketim kayıtlarını görebilir</legend>
         {OPTIONS.map((o) => (
@@ -54,7 +55,7 @@ export function StaffLedgerScopeCard({ initial }: { initial: StaffLedgerScope })
               value={o.value}
               checked={scope === o.value}
               onChange={() => choose(o.value)}
-              className="mt-0.5 accent-[var(--primary)]"
+              className="mt-1 shrink-0 accent-[var(--primary)]"
             />
             <span>
               <span className="block font-medium">{o.label}</span>

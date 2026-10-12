@@ -85,6 +85,18 @@ const authMiddleware = withAuth(
       '/staff': 'STAFF',
     };
 
+    // Personel kasası ve defteri bayi sayfalarıyla aynıdır ama personel paneli düzeninde açılır
+    // (app/staff/kasa, app/staff/defter). Eski bağlantılar ve defterdeki "Kasaya git" buraya iner;
+    // aksi hâlde aşağıdaki kural personeli /staff'a atıyor, kasa/defter hiç açılmıyordu.
+    if (token?.role === 'STAFF') {
+      const staffAlias = pathname === '/dealer/scan' ? '/staff/kasa' : pathname === '/dealer/consumptions' ? '/staff/defter' : null;
+      if (staffAlias) {
+        const url = req.nextUrl.clone();
+        url.pathname = staffAlias;
+        return NextResponse.redirect(url);
+      }
+    }
+
     for (const [routePrefix, requiredRole] of Object.entries(roleRouteMap)) {
       // /admin-gate de /admin önekiyle eşleşir → ADMIN rolü gerekir (ama kapı çerezi gerekmez).
       if (pathname.startsWith(routePrefix) && token?.role !== requiredRole) {

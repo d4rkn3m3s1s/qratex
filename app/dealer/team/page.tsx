@@ -61,9 +61,7 @@ export default async function DealerTeamPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <>
-      <StaffLedgerScopeCard initial={ledgerScope} />
-      <TeamHubScreen initial={initial} />
-    </>
+    // Kapsam kartı başlığın üstünde sayfa hiyerarşisini bozuyordu → Ekip sekmesine, üye listesinin üstüne.
+    <TeamHubScreen initial={initial} membersExtra={<StaffLedgerScopeCard initial={ledgerScope} />} />
   );
 }

@@ -7,7 +7,7 @@
  * Ağır sekmeler (vardiya ızgarası, eğitim/kontrol, saha, onaylar) yalnız açıldığında yüklenir.
  */
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AlarmClock, CalendarDays, ClipboardCheck, GraduationCap, MapPin, Star, UserPlus, Users, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,8 @@ function readParam(key: string): string | null {
   return new URL(window.location.href).searchParams.get(key);
 }
 
-export function TeamHubScreen({ initial }: { initial: TeamHub | null }) {
+/** `membersExtra`: Ekip sekmesinde üye listesinin üstünde (ör. personel defter kapsamı kartı). */
+export function TeamHubScreen({ initial, membersExtra }: { initial: TeamHub | null; membersExtra?: ReactNode }) {
   const { copy, locale } = useTeamCopy();
   const [tab, setTab] = useState<TabKey>('ekip');
   const [week, setWeek] = useState<string | null>(initial?.weekStart ?? null);
@@ -204,7 +205,12 @@ export function TeamHubScreen({ initial }: { initial: TeamHub | null }) {
                   case 'egitim':
                     return <TrainingPanel hub={hub} />;
                   default:
-                    return <MembersPanel hub={hub} onInvite={() => setInviteOpen(true)} onOpenPerson={openPerson} />;
+                    return (
+                      <>
+                        {membersExtra}
+                        <MembersPanel hub={hub} onInvite={() => setInviteOpen(true)} onOpenPerson={openPerson} />
+                      </>
+                    );
                 }
               }}
             </SectionTabs>
