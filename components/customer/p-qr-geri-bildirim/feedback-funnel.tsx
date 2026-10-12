@@ -337,7 +337,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
             <Motion.section key="rating" {...pane} aria-labelledby="fb-q" className="flex flex-col items-center gap-6 pt-4 text-center">
               <VenueMark name={venue.businessName} logoUrl={venue.logoUrl} size="lg" />
               <div className="space-y-2">
-                <h1 id="fb-q" ref={headingRef} tabIndex={-1} className="qx-h1 text-balance text-fg outline-none">
+                <h1 id="fb-q" ref={headingRef} tabIndex={-1} className="qx-h1 text-balance text-fg outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
                   {copy.ratingQuestion(venue.businessName)}
                 </h1>
                 {venue.welcomeText ? (
@@ -370,7 +370,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
           {step === 'details' && rating && (
             <Motion.section key="details" {...pane} aria-labelledby="fb-details" className="space-y-6">
               <div className="space-y-1">
-                <h1 id="fb-details" ref={headingRef} tabIndex={-1} className="qx-h2 text-fg outline-none">
+                <h1 id="fb-details" ref={headingRef} tabIndex={-1} className="qx-h2 text-fg outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
                   {copy.detailsTitle}
                 </h1>
                 <p className="qx-small text-fg-muted">

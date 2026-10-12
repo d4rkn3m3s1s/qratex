@@ -72,6 +72,9 @@ export interface LandingCopy {
     sub: string;
     categoryCount: string;
     mysteryNote: string;
+    /** Katalog adları Türkçe; yoksa katalog adı gösterilir (anahtar → yerel ad). */
+    categoryNames?: Record<string, string>;
+    leagueNames?: Record<string, string>;
     leaguesTitle: string;
     leaguesSub: string;
     leagueFrom: string;
@@ -354,6 +357,14 @@ const en: LandingCopy = {
       'AI reads the style of your reviews and matches you with one of {characters} characters across {categoryCount} categories. Which one you are is revealed when the category bar fills up.',
     categoryCount: '{n} characters',
     mysteryNote: 'The mystery category only counts long, thoughtful reviews.',
+    categoryNames: {
+      'dram-suc': 'Drama / Crime',
+      komedi: 'Comedy',
+      fantastik: 'Fantasy',
+      'gizem-gerilim': 'Mystery / Thriller',
+      gizemli: 'Enigma',
+    },
+    leagueNames: { BASLANGIC: 'Starter', SAVASCI: 'Warrior' },
     leaguesTitle: 'League tiers',
     leaguesSub: 'Your total points move you up a league.',
     leagueFrom: 'from {points} points',

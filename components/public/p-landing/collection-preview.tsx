@@ -44,7 +44,7 @@ export function CollectionPreview({
                 {c.mystery ? <HelpCircle className="h-5 w-5 text-brand" /> : c.emoji}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-fg">{c.name}</p>
+                <p className="font-semibold text-fg">{copy.categoryNames?.[c.key] ?? c.name}</p>
                 {c.mystery ? <p className="mt-0.5 text-xs text-fg-muted">{copy.mysteryNote}</p> : null}
               </div>
               <p className="qx-num shrink-0 text-sm text-fg-muted">{fmt(copy.categoryCount, { n: formatInt(c.count, locale) })}</p>
@@ -70,7 +70,7 @@ export function CollectionPreview({
                   {i + 1}
                 </span>
                 <span className="text-sm">
-                  <span className="font-semibold text-fg">{l.name}</span>
+                  <span className="font-semibold text-fg">{copy.leagueNames?.[l.key] ?? l.name}</span>
                   <span className="block text-xs text-fg-muted qx-num">
                     {fmt(copy.leagueFrom, { points: formatInt(l.minPoints, locale) })}
                   </span>

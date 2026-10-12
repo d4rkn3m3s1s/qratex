@@ -60,7 +60,7 @@ export function SuccessPanel({
       </Motion.div>
 
       <div className="space-y-2">
-        <h1 ref={headingRef} tabIndex={-1} className="qx-h1 text-fg outline-none">
+        <h1 ref={headingRef} tabIndex={-1} className="qx-h1 text-fg outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
           {queued ? copy.successQueuedTitle : copy.successTitle}
         </h1>
         <p className="qx-body text-fg-muted">{outcome.kind === 'queued' ? (outcome.offline ? copy.successQueued : copy.successQueuedRetry) : copy.successSub(venueName)}</p>

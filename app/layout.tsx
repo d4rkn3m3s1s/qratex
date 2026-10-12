@@ -6,6 +6,7 @@ import './globals.css';
 import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
 import { DeferredRootIslands } from '@/components/deferred-root-islands';
+import { Toaster } from '@/components/ui/toaster';
 import { ChatbotLazy } from '@/components/chat/chatbot-lazy';
 import { siteUrl } from '@/lib/site-config';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -210,7 +211,9 @@ export default async function RootLayout({
           {/* Capacitor native kabuk köprüsü (web'de etkisiz). */}
           <NativeBridge />
           <ChatbotLazy />
-          {/* Toaster + ölçüm (Vercel çerezsiz/URL redaksiyonlu; PostHog yalnız rızayla, P0-31)
+          {/* Toaster eager: Sonner bağlanmadan atılan toast'ları düşürür (ilk yük mount bildirimleri). */}
+          <Toaster />
+          {/* Ölçüm (Vercel çerezsiz/URL redaksiyonlu; PostHog yalnız rızayla, P0-31)
               ilk JS'te değil: hidrasyondan sonra ayrı parça olarak yüklenir (perf: / LCP). */}
           <DeferredRootIslands />
           {/* Rıza bildirimi + tercih merkezi tüm yüzeylerde (panele doğrudan girişte de). */}
