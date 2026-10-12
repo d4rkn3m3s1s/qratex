@@ -88,14 +88,20 @@
     --overlay: 224 40% 8%;
 
     /* Kimlik renkleri (rozet kategorisi, oyun, grafik serisi) — dekoratif, metin değil */
-    --category-1: 262 83% 58%;
-    --category-2: 199 89% 48%;
-    --category-3: 160 84% 39%;
-    --category-4: 38 92% 50%;
-    --category-5: 347 77% 50%;
-    --category-6: 188 86% 40%;
-    --category-7: 25 95% 53%;
-    --category-8: 292 84% 61%;
+    --category-1: 213 68% 50%;
+    --category-2: 17 82% 56%;
+    --category-3: 159 73% 40%;
+    --category-4: 41 100% 46.5%;
+    --category-5: 337 70% 69.6%;
+    --category-6: 120 100% 25.7%;
+    --category-7: 248 62% 57.6%;
+    --category-8: 0 73% 58.6%;
+    /* Veri görselleştirme: doğrulanmış (validate_palette, CVD ΔE≥8) kategorik sıra; sıralı=mavi tek ton, ayrışan=mavi↔gri↔kırmızı */
+    --chart-seq-lo: 213 85% 89%;
+    --chart-seq-hi: 213 79% 24%;
+    --chart-div-neg: 0 73% 52%;
+    --chart-div-mid: 40 9% 93%;
+    --chart-div-pos: 213 68% 50%;
 
     /* Efekt yardımcıları (runtime tema --gradient-from/to'yu preset'e göre yazar) */
     --gradient-from: 262 83% 58%;
@@ -247,14 +253,19 @@
     --shadow-color: 228 30% 2%;
 
     /* Grafik/kimlik renkleri koyu zeminde bir kademe aydınlatılır (çok koyu zeminde sönükleşmesin). */
-    --category-1: 262 83% 66%;
-    --category-2: 199 89% 56%;
-    --category-3: 160 70% 46%;
-    --category-4: 38 92% 56%;
-    --category-5: 347 80% 62%;
-    --category-6: 188 80% 48%;
-    --category-7: 25 95% 60%;
-    --category-8: 292 80% 68%;
+    --category-1: 213 77% 56%;
+    --category-2: 17 70% 50%;
+    --category-3: 159 73% 36%;
+    --category-4: 40 100% 39.4%;
+    --category-5: 338 61% 57.6%;
+    --category-6: 120 100% 25.7%;
+    --category-7: 247 69% 71.8%;
+    --category-8: 0 72% 65.3%;
+    --chart-seq-lo: 213 60% 22%;
+    --chart-seq-hi: 213 85% 75%;
+    --chart-div-neg: 0 72% 65%;
+    --chart-div-mid: 60 2% 22%;
+    --chart-div-pos: 213 77% 60%;
 
     --elevation-1: 0 1px 2px 0 hsl(var(--shadow-color) / 0.5), inset 0 1px 0 0 hsl(0 0% 100% / 0.07);
     --elevation-2: 0 6px 16px -4px hsl(var(--shadow-color) / 0.7), inset 0 1px 0 0 hsl(0 0% 100% / 0.06);
@@ -541,20 +552,20 @@
   .gradient-mesh {
     background-image:
       radial-gradient(at 40% 20%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(var(--category-2) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsl(199 89% 52% / 0.15) 0px, transparent 50%),
       radial-gradient(at 0% 50%, hsl(var(--gradient-from) / 0.15) 0px, transparent 50%),
       radial-gradient(at 80% 50%, hsl(var(--gradient-to) / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--category-4) / 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(38 92% 53% / 0.1) 0px, transparent 50%),
       radial-gradient(at 80% 100%, hsl(var(--gradient-from) / 0.15) 0px, transparent 50%);
   }
 
   .dark .gradient-mesh {
     background-image:
       radial-gradient(at 40% 20%, hsl(var(--gradient-from) / 0.35) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(var(--category-2) / 0.2) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsl(199 89% 52% / 0.2) 0px, transparent 50%),
       radial-gradient(at 0% 50%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%),
       radial-gradient(at 80% 50%, hsl(var(--gradient-to) / 0.2) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--category-4) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(38 92% 53% / 0.15) 0px, transparent 50%),
       radial-gradient(at 80% 100%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%);
   }
 
@@ -952,4 +963,121 @@ main:not(.grid):not(.flex)::after {
   display: block;
   height: var(--qx-fab-space, 0px);
   flex-shrink: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MİKRO-ETKİLEŞİM KATMANI (docs/design/iyilestirme/MIKRO-ETKILESIM.md)
+   Yalnız transform/opacity (+ SVG stroke-dashoffset); hover yalnız gerçek
+   imleçte (@media (hover:hover)); azaltılmış hareket global politikayla sönümlenir.
+───────────────────────────────────────────────────────────── */
+@layer components {
+  /* Çizgi çizimi — onay tikleri (Checkbox, Button success). pathLength=1 ister. */
+  .qx-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: qx-draw var(--motion-slow) var(--ease-emphasized) forwards;
+  }
+
+  /* Button yükleniyor/başarı: etiket yerinde saydamlaşır, üst katman ölçekle belirir. */
+  .qx-btn-content {
+    transition: opacity var(--motion-fast) var(--ease-standard);
+  }
+  .qx-btn-overlay {
+    animation: qx-pop-in var(--motion-base) var(--ease-emphasized) both;
+  }
+
+  /* Switch topuzu: hafif aşmalı yay (≈ SPRING.snappy). */
+  .qx-switch-thumb {
+    transition-timing-function: cubic-bezier(0.34, 1.36, 0.64, 1);
+  }
+
+  /* Form alanı: hata durumuna GEÇİŞTE tek seferlik titreşim (aria-invalid belirince). */
+  .qx-field[aria-invalid='true'] {
+    animation: qx-shake 360ms var(--ease-standard) 1;
+  }
+
+  /* Kart: ince yükselme + ışık kenarı; tıklanabilir kartta basılma. */
+  @media (hover: hover) and (pointer: fine) {
+    .qx-card-hover:hover {
+      transform: translate3d(0, -2px, 0);
+      border-color: hsl(var(--border-strong));
+    }
+  }
+  .qx-card-hover:active {
+    transform: translate3d(0, 0, 0) scale(0.995);
+    transition-duration: var(--motion-fast);
+  }
+
+  /* Liste satırı hover (isteğe bağlı yardımcı). */
+  .qx-row-hover {
+    transition: background-color var(--motion-fast) var(--ease-standard);
+  }
+  @media (hover: hover) {
+    .qx-row-hover:hover {
+      background-color: hsl(var(--muted) / 0.6);
+    }
+  }
+
+  /* İskelet → içerik çapraz geçişi: içerik kabına verilir (2px bulanıklık örtüşmeyi gizler). */
+  .qx-content-in {
+    animation: qx-content-in var(--motion-base) var(--ease-emphasized) both;
+  }
+}
+
+@keyframes qx-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes qx-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes qx-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes qx-content-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qx-card-hover:hover,
+  .qx-card-hover:active {
+    transform: none;
+  }
+  .qx-field[aria-invalid='true'] {
+    animation: none;
+  }
+  .qx-draw {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+}
+html.reduce-animations .qx-card-hover:hover,
+html.reduce-animations .qx-card-hover:active {
+  transform: none;
+}
+html.reduce-animations .qx-field[aria-invalid='true'] {
+  animation: none;
+}
+html.reduce-animations .qx-draw {
+  stroke-dashoffset: 0;
+  animation: none;
 }

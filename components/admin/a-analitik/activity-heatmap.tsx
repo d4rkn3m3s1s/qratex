@@ -12,6 +12,7 @@ import { SectionCard } from '@/components/ds/page';
 import { EmptyState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { fmtNumber, useAdminAnalyticsCopy, useAdminAnalyticsLocale, weekdayName } from './copy';
+import { chartSequentialColor } from '@/components/ds/data/chart-theme';
 
 const HOUR_LABELS = [0, 6, 12, 18];
 
@@ -96,7 +97,7 @@ export function ActivityHeatmap({ heatmap }: { heatmap: { cells: number[][]; max
                     <span
                       key={h}
                       className={active ? 'aspect-square rounded-[3px] ring-2 ring-ring' : 'aspect-square rounded-[3px]'}
-                      style={{ background: v === 0 ? 'hsl(var(--border-subtle))' : `hsl(var(--brand) / ${a.toFixed(3)})` }}
+                      style={{ background: v === 0 ? 'hsl(var(--border-subtle))' : chartSequentialColor(a) }}
                       onPointerEnter={() => setFocus({ d, h })}
                       onClick={() => setFocus({ d, h })}
                     />
@@ -112,7 +113,7 @@ export function ActivityHeatmap({ heatmap }: { heatmap: { cells: number[][]; max
             <div className="qx-caption flex items-center gap-1.5 text-fg-subtle" aria-hidden>
               <span>{copy.heatLess}</span>
               {[0.15, 0.4, 0.65, 1].map((a) => (
-                <span key={a} className="h-3 w-3 rounded-[3px]" style={{ background: `hsl(var(--brand) / ${a})` }} />
+                <span key={a} className="h-3 w-3 rounded-[3px]" style={{ background: chartSequentialColor(a) }} />
               ))}
               <span>{copy.heatMore}</span>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { CHART_THEME } from '@/components/ds/data/chart-theme';
 
 export interface DonutChartDatum {
   name: string;
@@ -52,16 +53,13 @@ export function DonutChart({
             animationDuration={600}
           >
             {displayData.map((entry, index) => (
-              <Cell key={entry.name ?? `cell-${index}`} fill={entry.color} stroke="transparent" />
+              <Cell key={entry.name ?? `cell-${index}`} fill={entry.color} stroke="hsl(var(--card))" strokeWidth={2} />
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{
-              borderRadius: 10,
-              border: '1px solid hsl(var(--border))',
-              background: 'hsl(var(--card))',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            }}
+            contentStyle={CHART_THEME.tooltipStyle}
+            labelStyle={CHART_THEME.tooltipLabelStyle}
+            itemStyle={CHART_THEME.tooltipItemStyle}
             formatter={(value: number) => [`${value}%`, '']}
           />
           {showLegend && (

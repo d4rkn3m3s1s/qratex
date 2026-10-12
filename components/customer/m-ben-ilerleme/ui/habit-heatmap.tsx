@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 import { formatNumber, getMeCopy, type MeLocale } from '../copy';
 import type { ProgressTrends } from '../types';
 import { weekdayName } from './bucket-label';
+import { chartSequentialColor } from '@/components/ds/data/chart-theme';
 
 const BLOCK_HOURS = 3;
 const BLOCKS = 24 / BLOCK_HOURS;
@@ -66,7 +67,7 @@ export function HabitHeatmap({ habits, locale }: { habits: NonNullable<ProgressT
                     <td key={b} className="p-0">
                       <span
                         className={cn('block h-7 rounded-[6px] border', v === 0 ? 'border-subtle bg-surface-2' : 'border-transparent')}
-                        style={v === 0 ? undefined : { backgroundColor: `hsl(var(--brand) / ${alpha.toFixed(2)})` }}
+                        style={v === 0 ? undefined : { backgroundColor: chartSequentialColor(alpha) }}
                       >
                         <span className="sr-only">{c.habitsAria(weekdayName(d + 1, locale, true), blockLabel(b), formatNumber(v, locale))}</span>
                       </span>
@@ -81,7 +82,7 @@ export function HabitHeatmap({ habits, locale }: { habits: NonNullable<ProgressT
       <div aria-hidden className="qx-caption flex items-center justify-end gap-1.5 text-fg-muted">
         <span>{c.habitsLegendLow}</span>
         {[0.18, 0.45, 0.72, 1].map((a) => (
-          <span key={a} className="size-3 rounded-[3px]" style={{ backgroundColor: `hsl(var(--brand) / ${a})` }} />
+          <span key={a} className="size-3 rounded-[3px]" style={{ backgroundColor: chartSequentialColor(a) }} />
         ))}
         <span>{c.habitsLegendHigh}</span>
       </div>

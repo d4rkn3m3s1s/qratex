@@ -16,6 +16,8 @@ export default function QualityTrendChart({ data }: { data: TrendRow[] }) {
         <YAxis domain={[0, 100]} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={44} tickFormatter={(v: number) => `%${v}`} />
         <Tooltip
           contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
           formatter={(v: number, _n, item) => [`%${v} (${(item?.payload as TrendRow | undefined)?.n ?? 0} örnek)`, 'Ortalama doğruluk']}
         />
         <ReferenceLine y={QUALITY_ALERT_THRESHOLD} stroke={CHART_THEME.grid} strokeDasharray="4 4" />

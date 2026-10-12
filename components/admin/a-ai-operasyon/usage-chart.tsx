@@ -14,7 +14,9 @@ export default function UsageChart({ data }: { data: SeriesPoint[] }) {
         <CartesianGrid stroke={CHART_THEME.grid} vertical={false} />
         <XAxis dataKey="label" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} minTickGap={16} />
         <YAxis yAxisId="c" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} />
-        <Tooltip contentStyle={CHART_THEME.tooltipStyle} cursor={{ fill: CHART_THEME.cursor }} />
+        <Tooltip contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle} cursor={{ fill: CHART_THEME.cursor }} />
         <Bar yAxisId="c" dataKey="ok" name="Başarılı çağrı" stackId="a" fill={chartToneColor('info', 0.75)} isAnimationActive={false} />
         <Bar yAxisId="c" dataKey="failures" name="Başarısız çağrı" stackId="a" fill={chartToneColor('danger', 0.85)} isAnimationActive={false} />
         <Line yAxisId="c" type="monotone" dataKey="calls" name="Toplam" stroke={chartToneColor('brand')} dot={false} strokeWidth={1.5} isAnimationActive={false} />

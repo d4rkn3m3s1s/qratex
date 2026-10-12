@@ -27,6 +27,8 @@ export default function TimelineChart({
         <YAxis allowDecimals={false} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={40} />
         <Tooltip
           contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
           cursor={{ fill: CHART_THEME.cursor }}
           formatter={(value: number) => [value, visitorsLabel]}
         />

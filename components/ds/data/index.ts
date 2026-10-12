@@ -56,5 +56,5 @@ export { SEVERITY_ORDER, SEVERITY_TONE, severityRank, toSeverity, type Severity 
 export { KeyValueList, type KeyValueListProps, type KeyValueItem } from './key-value-list';
 export { Timeline, type TimelineProps, type TimelineEvent } from './timeline';
 export { ChartFrame, ChartDataTable, lazyChart, type ChartFrameProps, type ChartColumn, type ChartDataTableProps } from './chart-frame';
-export { CHART_THEME, chartSeriesColor, chartToneColor } from './chart-theme';
+export { CHART_THEME, chartSeriesColor, chartToneColor, chartSequentialColor, chartDivergingColor, chartTooltipProps } from './chart-theme';
 export { useDataCopy, type DataCopy } from './copy';

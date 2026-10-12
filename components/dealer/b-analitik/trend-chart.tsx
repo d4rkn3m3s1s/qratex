@@ -22,6 +22,8 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
   const tooltip = (
     <Tooltip
       contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
       cursor={{ fill: CHART_THEME.cursor }}
       labelFormatter={(d) => dayLabel(String(d), locale, { weekday: 'short', day: 'numeric', month: 'short' })}
       formatter={(value, name) => {
@@ -40,7 +42,7 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
           <XAxis dataKey="day" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} interval={tickInterval} tickFormatter={(d) => dayLabel(String(d), locale)} minTickGap={8} />
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={CHART_THEME.legendStyle} />
           <Bar dataKey="positive" name={copy.colPositive} stackId="s" fill={chartToneColor('success')} isAnimationActive={false} />
           <Bar dataKey="neutral" name={copy.colNeutral} stackId="s" fill={chartToneColor('neutral', 0.55)} isAnimationActive={false} />
           <Bar dataKey="negative" name={copy.colNegative} stackId="s" fill={chartToneColor('danger')} isAnimationActive={false} />
@@ -58,8 +60,8 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
         <YAxis yAxisId="count" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
         <YAxis yAxisId="rating" orientation="right" domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={28} />
         {tooltip}
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar yAxisId="count" dataKey="count" name={copy.colCount} fill={chartSeriesColor(0, 0.75)} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+        <Legend wrapperStyle={CHART_THEME.legendStyle} />
+        <Bar yAxisId="count" dataKey="count" name={copy.colCount} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false}>
           {data.map((p) => (
             <Cell key={p.day} fill={anomalies.has(p.day) ? chartToneColor('danger', 0.85) : chartSeriesColor(0, 0.75)} />
           ))}

@@ -19,9 +19,11 @@ export default function SurveyTrendChart({ data, countLabel }: { data: TrendPoin
         <Tooltip
           cursor={{ fill: CHART_THEME.cursor }}
           contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
           formatter={(value: number) => [value, countLabel]}
         />
-        <Bar dataKey="n" fill={chartToneColor('brand')} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="n" fill={chartToneColor('brand')} radius={CHART_THEME.barRadius} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );

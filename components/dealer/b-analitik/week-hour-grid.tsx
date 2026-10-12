@@ -16,6 +16,7 @@ import { cellValue, CELL_MIN_N } from '@/lib/dealer-analytics/core';
 import { heatLevel, heatThresholds, LEVEL_ALPHA, ratingTone } from '@/lib/dealer-analytics/heat-scale';
 import type { HeatCell, HeatRow, HeatmapMetric, Weekday } from '@/lib/dealer-analytics/types';
 import { formatCurrency, formatNumber, formatRating, useAnalyticsCopy, useAnalyticsLocale, weekdayLabel } from './copy';
+import { chartDivergingColor, chartSequentialColor } from '@/components/ds/data/chart-theme';
 
 export interface GridSelection {
   day: Weekday;
@@ -49,12 +50,13 @@ function cellStyle(c: HeatCell, metric: HeatmapMetric, max: number, baseline: nu
   if (metric === 'rating') {
     if (c.avgRating == null) return undefined;
     const { tone, alpha } = ratingTone(c.avgRating, baseline);
-    const color = tone === 'neutral' ? `hsl(var(--text-3) / ${alpha})` : `hsl(var(--${tone}) / ${alpha})`;
+    // Ayrışan palet (mavi↔gri↔kırmızı): durum yeşil/kırmızısı veri kutbu için kullanılmaz.
+    const color = chartDivergingColor(tone === 'danger' ? -alpha : tone === 'success' ? alpha : 0);
     return c.feedback < CELL_MIN_N ? { backgroundColor: color, backgroundImage: HATCH } : { backgroundColor: color };
   }
   const level = heatLevel(cellValue(c, metric), max);
   if (level === 0) return undefined;
-  return { backgroundColor: `hsl(var(--brand) / ${LEVEL_ALPHA[level]})` };
+  return { backgroundColor: chartSequentialColor(LEVEL_ALPHA[level]) };
 }
 
 function visibleHours(rows: readonly HeatRow[]): number[] {
@@ -252,11 +254,11 @@ function GridLegend({ metric, max }: { metric: HeatmapMetric; max: number }) {
     return (
       <div className="qx-caption mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-fg-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: 'hsl(var(--danger) / 0.7)' }} aria-hidden />
+          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: chartDivergingColor(-0.8) }} aria-hidden />
           {copy.gridLegendLow}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: 'hsl(var(--success) / 0.7)' }} aria-hidden />
+          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: chartDivergingColor(0.8) }} aria-hidden />
           {copy.gridLegendHigh}
         </span>
         <span className="inline-flex items-center gap-1.5">
@@ -277,7 +279,7 @@ function GridLegend({ metric, max }: { metric: HeatmapMetric; max: number }) {
       </span>
       {steps.map((s) => (
         <span key={s.level} className="inline-flex items-center gap-1.5 tabular-nums">
-          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: `hsl(var(--brand) / ${LEVEL_ALPHA[s.level]})` }} aria-hidden />
+          <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: chartSequentialColor(LEVEL_ALPHA[s.level]) }} aria-hidden />
           {s.from === s.to ? fmt(s.to) : `${fmt(s.from)}–${fmt(s.to)}`}
         </span>
       ))}

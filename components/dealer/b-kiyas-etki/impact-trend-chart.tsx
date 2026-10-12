@@ -23,6 +23,8 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
   const tooltip = (
     <Tooltip
       contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
       cursor={{ fill: CHART_THEME.cursor }}
       labelFormatter={(d) => `${c.week}: ${fmtDay(String(d), locale, { day: 'numeric', month: 'short', year: 'numeric' })}`}
       formatter={(value, name) => {
@@ -44,9 +46,9 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           {axis}
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="feedback" name={c.feedback} fill={chartSeriesColor(0, 0.75)} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-          <Bar dataKey="replied" name={c.replied} fill={chartToneColor('success', 0.8)} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          <Legend wrapperStyle={CHART_THEME.legendStyle} />
+          <Bar dataKey="feedback" name={c.feedback} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
+          <Bar dataKey="replied" name={c.replied} fill={chartToneColor('success', 0.8)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
           <Line dataKey="negative" name={c.negative} stroke={chartToneColor('danger')} strokeWidth={2} dot={false} isAnimationActive={false} />
         </ComposedChart>
       ) : view === 'rating' ? (
@@ -63,7 +65,7 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           {axis}
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
-          <Bar dataKey="actionsClosed" name={c.actionsClosed} fill={chartSeriesColor(2, 0.8)} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey="actionsClosed" name={c.actionsClosed} fill={chartSeriesColor(2, 0.8)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
         </ComposedChart>
       ) : (
         <ComposedChart data={data} {...common}>
@@ -72,8 +74,8 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           <YAxis yAxisId="v" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           <YAxis yAxisId="r" orientation="right" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={56} tickFormatter={(v) => fmtNumber(Number(v), locale)} />
           {tooltip}
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar yAxisId="v" dataKey="visits" name={c.visits} fill={chartSeriesColor(1, 0.75)} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          <Legend wrapperStyle={CHART_THEME.legendStyle} />
+          <Bar yAxisId="v" dataKey="visits" name={c.visits} fill={chartSeriesColor(1, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
           <Line yAxisId="r" dataKey="revenue" name={c.revenue} stroke={chartToneColor('success')} strokeWidth={2} dot={false} isAnimationActive={false} />
         </ComposedChart>
       )}

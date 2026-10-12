@@ -31,6 +31,8 @@ export default function AdminTrendChart({ data, showCompare }: { data: OverviewS
         <YAxis yAxisId="rating" orientation="right" domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={28} />
         <Tooltip
           contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
           cursor={{ fill: CHART_THEME.cursor }}
           labelFormatter={(d) => dayLabel(String(d), locale, { weekday: 'short', day: 'numeric', month: 'short' })}
           formatter={(value, name) => {
@@ -39,8 +41,8 @@ export default function AdminTrendChart({ data, showCompare }: { data: OverviewS
             return [name === copy.colAvg ? fmtRating(n, locale) : fmtNumber(n, locale), name];
           }}
         />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar yAxisId="count" dataKey="reviews" name={copy.colReviews} fill={chartSeriesColor(0, 0.75)} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+        <Legend wrapperStyle={CHART_THEME.legendStyle} />
+        <Bar yAxisId="count" dataKey="reviews" name={copy.colReviews} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
         {showCompare && (
           <Line
             yAxisId="count"

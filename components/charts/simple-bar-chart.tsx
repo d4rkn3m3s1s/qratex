@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { CHART_THEME, chartSeriesColor } from '@/components/ds/data/chart-theme';
 
 export interface SimpleBarChartDatum {
   name: string;
@@ -26,7 +27,7 @@ interface SimpleBarChartProps {
   barRadius?: number;
 }
 
-const DEFAULT_COLOR = 'hsl(var(--primary))';
+const DEFAULT_COLOR = chartSeriesColor(0);
 
 export function SimpleBarChart({
   data,
@@ -48,28 +49,24 @@ export function SimpleBarChart({
     <div style={{ width: '100%', height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted/50" vertical={false} />}
+          {showGrid && <CartesianGrid stroke={CHART_THEME.grid} vertical={false} />}
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={CHART_THEME.tick}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={CHART_THEME.tick}
             axisLine={false}
             tickLine={false}
             width={28}
             tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))}
           />
           <Tooltip
-            contentStyle={{
-              borderRadius: 10,
-              border: '1px solid hsl(var(--border))',
-              background: 'hsl(var(--card))',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            }}
-            labelStyle={{ color: 'hsl(var(--foreground))' }}
+            contentStyle={CHART_THEME.tooltipStyle}
+            labelStyle={CHART_THEME.tooltipLabelStyle}
+            itemStyle={CHART_THEME.tooltipItemStyle}
             formatter={(value: number) => [value, 'Değer']}
             labelFormatter={(label) => label}
           />

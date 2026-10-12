@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { CHART_THEME, chartSeriesColor } from '@/components/ds/data/chart-theme';
 
 export interface SimpleAreaChartDatum {
   name: string;
@@ -25,7 +26,7 @@ interface SimpleAreaChartProps {
   gradientId?: string;
 }
 
-const DEFAULT_COLOR = 'hsl(var(--primary))';
+const DEFAULT_COLOR = chartSeriesColor(0);
 
 export function SimpleAreaChart({
   data,
@@ -53,27 +54,24 @@ export function SimpleAreaChart({
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
-          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted/50" vertical={false} />}
+          {showGrid && <CartesianGrid stroke={CHART_THEME.grid} vertical={false} />}
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={CHART_THEME.tick}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={CHART_THEME.tick}
             axisLine={false}
             tickLine={false}
             width={28}
             domain={['auto', 'auto']}
           />
           <Tooltip
-            contentStyle={{
-              borderRadius: 10,
-              border: '1px solid hsl(var(--border))',
-              background: 'hsl(var(--card))',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            }}
+            contentStyle={CHART_THEME.tooltipStyle}
+            labelStyle={CHART_THEME.tooltipLabelStyle}
+            itemStyle={CHART_THEME.tooltipItemStyle}
             formatter={(value: number) => [Number(value).toFixed(1), 'Değer']}
             labelFormatter={(label) => label}
           />

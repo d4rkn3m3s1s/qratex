@@ -37,6 +37,8 @@ export default function BenchTrendChart({ data, metric, bucket }: { data: Series
         <YAxis domain={domain} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={40} ticks={metric === 'rating' ? [1, 2, 3, 4, 5] : undefined} />
         <Tooltip
           contentStyle={CHART_THEME.tooltipStyle}
+          labelStyle={CHART_THEME.tooltipLabelStyle}
+          itemStyle={CHART_THEME.tooltipItemStyle}
           cursor={{ stroke: CHART_THEME.cursor }}
           labelFormatter={(d) => (bucket === 'week' ? `${c.colStart}: ${fmtDay(String(d), locale)}` : fmtDay(String(d), locale, { weekday: 'short', day: 'numeric', month: 'short' }))}
           formatter={(value, name) => {
