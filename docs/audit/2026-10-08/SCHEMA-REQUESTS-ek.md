@@ -18,3 +18,8 @@
 - **PushSubscription.platform String @default("web")** ("web" | "fcm" | "apns") + **PushSubscription.token String?** (native cihaz jetonu); `p256dh`/`auth` native için opsiyonel (`String?`).
   Bugün native jeton geçici olarak `endpoint = "native:<fcm|apns>:<token>"`, `p256dh = auth = "native"` biçiminde saklanıyor (`lib/push-native.ts`, `app/api/push/native/route.ts`); `lib/push.ts` öneke göre ayırıyor. Alan eklenince: kayıt ucu `platform/token` yazar, `sendPush` `platform` ile ayırır, mevcut `native:` satırları tek seferlik betikle taşınır, `@@index([userId, platform, isActive])`.
   Kaynak: native-push işi (Capacitor FCM/APNs).
+
+## InboxMessage: kaynak-bağımsız kimlik (Lark Mail REST, koşullu)
+- Kaynak: docs/integrations/LARK-MAIL.md §3.2. **Yalnız Lark Open API (REST) adaptörü yapılırsa** gerekir. IMAP yolu (önerilen) için gerekmez.
+- İstek: `source String @default("imap")` ve `externalId String?` (Lark message_id dizedir, `uid Int`'e sığmaz); `@@unique([source, externalId])`; `uid` alanı REST satırları için opsiyonel yapılmalı (expand, sonra contract).
+- Ek: `authProvider String?` (raw başlık yoksa doğrulamanın sağlayıcı `security_level`'dan geldiğini işaretlemek için).
