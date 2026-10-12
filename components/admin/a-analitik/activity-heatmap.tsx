@@ -81,7 +81,7 @@ export function ActivityHeatmap({ heatmap }: { heatmap: { cells: number[][]; max
           >
             <span />
             {Array.from({ length: 24 }, (_, h) => (
-              <span key={`l${h}`} className="qx-caption text-fg-subtle qx-num" style={{ gridColumn: h + 2 }}>
+              <span key={`l${h}`} className="qx-caption whitespace-nowrap text-fg-subtle qx-num" style={{ gridColumn: h + 2 }}>
                 {HOUR_LABELS.includes(h) ? String(h).padStart(2, '0') : ''}
               </span>
             ))}
