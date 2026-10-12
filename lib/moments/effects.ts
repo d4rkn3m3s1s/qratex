@@ -15,15 +15,8 @@
  */
 import type confettiNs from 'canvas-confetti';
 import { isReducedMotion, subscribeReducedMotion } from '@/lib/motion/policy';
-import {
-  haptic,
-  sfxClick,
-  sfxCollectStar,
-  sfxFanfare,
-  sfxReveal,
-  sfxWin,
-} from '@/lib/game-sounds';
-import { playRewardChime } from '@/lib/play-chime';
+import { haptic } from '@/lib/game-sounds';
+import { playSound, type SoundName as UiSoundName } from '@/lib/sound';
 
 type ConfettiFn = typeof confettiNs;
 export type RawConfettiOptions = confettiNs.Options;
@@ -335,20 +328,26 @@ export type SoundName =
   /** Arayüz tıkı. */
   | 'click';
 
-const SOUNDS: Record<SoundName, () => void> = {
-  chime: playRewardChime,
-  coin: () => sfxCollectStar(3),
-  win: sfxWin,
-  fanfare: sfxFanfare,
-  reveal: sfxReveal,
-  click: sfxClick,
+/**
+ * An sesleri ortak arayüz ses ailesine (lib/sound) yönlenir: tek ton dili, tek
+ * "Arayüz sesleri" tercihi, spam/eşzamanlılık sınırı. Eski oyun sesleri
+ * (lib/game-sounds) yalnız oyunların içinde kalır.
+ */
+const SOUNDS: Record<SoundName, UiSoundName> = {
+  chime: 'reward',
+  coin: 'coin',
+  win: 'reward',
+  fanfare: 'reward',
+  reveal: 'reward',
+  click: 'tick',
 };
 
-/** Kısa ses çalar. Azaltılmışta, sunucuda ya da Web Audio yoksa sessizce geçer. */
+/** Kısa ses çalar. Ayrıca kullanıcının "Arayüz sesleri" tercihine uyar (lib/sound). */
 export function sound(name: SoundName): void {
-  if (!canRun()) return;
+  // An Motoru kuralı korunur: azaltılmış harekette an sesleri de susar (spec §2).
+  if (typeof window === 'undefined' || !canRun()) return;
   try {
-    SOUNDS[name]?.();
+    playSound(SOUNDS[name] ?? 'tap', { haptic: false });
   } catch {
     /* ses kritik değil */
   }

@@ -38,6 +38,7 @@ import type { FunnelOutcome } from './success-panel';
 import { btnPrimary, btnSecondary } from './button-styles';
 import { VenueBar, VenueMark, type StepIndex } from './venue-bar';
 import type { FeedbackFunnelProps } from './types';
+import { playSound } from '@/lib/sound';
 
 // Huni bütçesi (≤ 150 KB gzip ilk JS): yalnız sonraki adımlarda görünen parçalar ayrı yüklenir.
 // Fotoğraf seçici ve başarı paneli ilk yıldız seçiminde ısıtılır (gönderimde beklemesin,
@@ -228,6 +229,7 @@ export function FeedbackFunnel(props: FeedbackFunnelProps) {
     setOutcome({ kind: 'sent', reward: r });
     setStep('done');
     announce(copy.successTitle);
+    playSound('success');
     if (r.status === 'credited' || r.status === 'capped') {
       // An Motoru: puan kapsülü + bekleyen büyük anlar (seviye/lig/rozet sunucuda kayıtlı, tam bir kez).
       const shown = r.points > 0 || r.xp > 0 ? moments.points({ points: r.points, xp: r.xp }) : true;

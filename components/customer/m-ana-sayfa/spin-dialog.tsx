@@ -9,6 +9,7 @@ import { formatInt } from '@/components/ds/play/shared';
 import { AnimatedNumber } from '@/components/ds/data/animated-number';
 import { EASE, useReducedMotionPref } from '@/lib/motion';
 import { BUZZ, buzz, confetti, sound } from '@/lib/moments/effects';
+import { playSound } from '@/lib/sound';
 import type { HomeSpin } from '@/lib/customer-home/types';
 import { readEnvelope, HomeFetchError } from './use-home';
 import { useSpinCopy } from './spin-copy';
@@ -112,6 +113,7 @@ export default function SpinDialog({
       setPhase('done');
       const gained = r.credited.points + r.credited.xp;
       if (gained > 0) {
+        playSound(r.prize.index === jp ? 'reward' : 'coin');
         buzz(BUZZ.success);
         if (r.prize.index === jp) confetti('burst', { origin: { y: 0.42 } });
       } else {

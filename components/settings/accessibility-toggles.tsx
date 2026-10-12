@@ -10,6 +10,7 @@ import {
   type TextScalePref,
 } from '@/lib/accessibility-prefs';
 import { useLocaleSafe } from '@/lib/app-locale';
+import { SoundToggle } from '@/components/settings/sound-toggle';
 
 /**
  * Erişilebilirlik anahtarları (yüksek kontrast / animasyon azaltma / renk körü).
@@ -91,6 +92,7 @@ export function AccessibilityToggles({
             />
           </div>
         ))}
+        <SoundToggle />
         {/* Yazı boyutu (html.text-scale-lg/xl) — önceden yalnız müşteri ayarlarında seçilebiliyordu. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-3">

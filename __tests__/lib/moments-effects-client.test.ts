@@ -31,6 +31,10 @@ jest.mock('@/lib/game-sounds', () => ({
   sfxWin: () => sfx.win(),
 }));
 jest.mock('@/lib/play-chime', () => ({ playRewardChime: () => sfx.chime() }));
+// An sesleri ortak arayüz ses ailesine (lib/sound) yönlenir: win/chime → 'reward'.
+jest.mock('@/lib/sound', () => ({
+  playSound: (name: string) => (name === 'reward' ? (sfx.win(), sfx.chime()) : undefined),
+}));
 
 import { __effectsTesting, buzz, confetti, prefersReducedMotion, sound, stopAllEffects } from '@/lib/moments/effects';
 import { triggerConfetti, triggerRewardShower, triggerSuccessBurst } from '@/lib/effects/confetti';

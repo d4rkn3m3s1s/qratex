@@ -19,11 +19,18 @@ const PostHogProvider = dynamic(
   { ssr: false }
 );
 
+// Arayüz sesleri: toast başarı/hata sesi tek noktadan (lib/sound). Ses motoru ilk JS'e girmez.
+const ToastSoundBridge = dynamic(
+  () => import('@/components/sound/toast-sound-bridge').then((m) => m.ToastSoundBridge),
+  { ssr: false }
+);
+
 export function DeferredRootIslands() {
   return (
     <>
       <VercelAnalytics />
       <PostHogProvider />
+      <ToastSoundBridge />
     </>
   );
 }

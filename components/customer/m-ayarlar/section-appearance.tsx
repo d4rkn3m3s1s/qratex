@@ -7,6 +7,7 @@ import { useTheme } from 'next-themes';
 import { Contrast, Eye, Globe, Monitor, Moon, Sun, Type, ZapOff } from 'lucide-react';
 import { ChoiceChips } from '@/components/ds/a11y';
 import { useAppLocale } from '@/lib/app-locale';
+import { SoundToggle } from '@/components/settings/sound-toggle';
 import { applyAccessibilityPrefs, readAccessibilityPrefs } from '@/lib/accessibility-prefs';
 import { prefersReducedMotionOS } from '@/lib/motion';
 import type { A11yPreferences, CustomerSettingsSnapshot, TextScale } from '@/lib/customer-settings/contract';
@@ -163,6 +164,7 @@ function A11yPanel({ server, stored }: { server: A11yPreferences; stored: boolea
             icon={it.icon}
           />
         ))}
+        <SoundToggle compact />
         <div className="py-3">
           <p id="a11y-text-size" className="text-base font-medium text-fg">
             {copy.textSize}

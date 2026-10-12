@@ -1,5 +1,6 @@
 'use client';
 
+import { playSound } from '@/lib/sound';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { AnimatePresence, m as Motion } from 'framer-motion';
@@ -82,12 +83,13 @@ export function BoxRevealDialog({
       setResult(payload);
       onRevealed(payload);
       if (policy.reduce || payload.alreadyOpened) {
+        if (!payload.alreadyOpened) playSound('reward');
         finish(payload);
         return;
       }
       const wait = Math.max(0, T_MIN_SHAKE - (performance.now() - t0));
       timers.current.push(window.setTimeout(() => setPhase('opening'), wait));
-      timers.current.push(window.setTimeout(() => setPhase('reveal'), wait + T_OPENING));
+      timers.current.push(window.setTimeout(() => (setPhase('reveal'), playSound('reward')), wait + T_OPENING));
       timers.current.push(
         window.setTimeout(() => {
           if (policy.allowCelebrate && (payload.tier === 'legendary' || payload.tier === 'epic')) {

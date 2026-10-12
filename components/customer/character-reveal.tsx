@@ -209,8 +209,9 @@ export function CharacterReveal({
     if (reduceMotion) return;
     const rt = buildTheme(character?.category?.key, character?.badgeId);
     // Ses opsiyonel — altyapı yoksa/hata olursa sessizce geç.
+    import('@/lib/sound').then((m) => m.playSound('reward')).catch(() => {});
     import('@/lib/game-sounds')
-      .then((m) => { m.sfxReveal?.(); if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
+      .then((m) => { if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
       .catch(() => { /* ses yoksa sorun değil */ });
     // Sarsılma yalnızca common dışında (shake > 0).
     if (rt.shake > 0) setShakeKey((k) => k + 1);

@@ -57,7 +57,7 @@ export function CharacterSurprise({ bar, onRevealed }: { bar: CharacterBar; onRe
     }
     if (isReducedMotion()) return;
     fireStars();
-    import('@/lib/game-sounds').then((m) => m.sfxReveal?.()).catch(() => {});
+    import('@/lib/sound').then((m) => m.playSound('reward')).catch(() => {});
   }, [ready, bar.threshold, fireStars]);
 
   return (
