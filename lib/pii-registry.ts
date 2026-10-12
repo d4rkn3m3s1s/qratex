@@ -531,6 +531,7 @@ export const PII_REGISTRY: readonly PiiRegistryEntry[] = [
     legalBasis: CONTRACT,
   }),
   actor('UserSurpriseBox', 'sentByUserId', 'Kutuyu gönderen işletme/yönetici.'),
+  actor('UserSurpriseBox', 'withdrawnById', 'Kutuyu geri çeken işletme/yönetici.'),
   self('DailySpin', 'userId', {
     categories: ['davranış'],
     piiFields: [],
@@ -808,6 +809,8 @@ export const PII_REGISTRY: readonly PiiRegistryEntry[] = [
     note: 'Yalnız görünüm filtresi; kişisel veri yok.',
   }),
   actor('TeamAutomation', 'createdById'),
+  actor('TeamInvitation', 'invitedById', 'Daveti gönderen ekip yöneticisi; davet e-postası davet edilen kişinin verisidir.'),
+  actor('TeamInvitation', 'acceptedUserId', 'Daveti kabul eden kullanıcı; bağ yalnız üyelik kaydı.'),
   actor('TaskActivity', 'actorId'),
   actor('TaskAttachment', 'uploadedById'),
 

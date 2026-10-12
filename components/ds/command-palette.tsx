@@ -42,7 +42,7 @@ export interface CommandPaletteItem {
   onSelect: () => void;
 }
 
-const KBD = 'inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-1 px-1 font-mono text-[11px] text-fg-muted';
+const KBD = 'inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-1 px-1 font-mono text-xs text-fg-muted';
 const HINTS = {
   tr: { move: 'Gezin', open: 'Aç', close: 'Kapat' },
   en: { move: 'Navigate', open: 'Open', close: 'Close' },
