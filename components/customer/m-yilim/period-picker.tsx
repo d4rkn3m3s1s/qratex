@@ -43,7 +43,7 @@ export function PeriodPicker({ summary, copy }: { summary: YearSummary; copy: Ye
           <span className="qx-overline text-muted-foreground" id="year-picker-years">
             {copy.yearsLabel}
           </span>
-          <ul aria-labelledby="year-picker-years" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <ul aria-labelledby="year-picker-years" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>li]:shrink-0">
             {summary.availableYears.map((y) => {
               const active = y === year;
               const href = hrefFor(y, null);
@@ -62,7 +62,7 @@ export function PeriodPicker({ summary, copy }: { summary: YearSummary; copy: Ye
         <span className="qx-overline text-muted-foreground" id="year-picker-months">
           {copy.monthsLabel}
         </span>
-        <ul aria-labelledby="year-picker-months" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <ul aria-labelledby="year-picker-months" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>li]:shrink-0">
           <li>
             <Link
               href={hrefFor(year, null)}
