@@ -20,6 +20,7 @@ import {
   Users,
   Mail as MailIcon,
   type LucideIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -527,6 +528,15 @@ function MailRow({ item, active, onOpen }: { item: InboxListItem; active: boolea
         <span className={cn('block truncate text-sm', item.seen ? 'text-fg-muted' : 'font-medium text-fg')}>{item.subject || '(konu yok)'}</span>
         <span className="block truncate text-xs text-fg-muted">{item.snippet}</span>
         <span className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+          {item.authVerified === false && (
+            <span
+              className="inline-flex items-center gap-1 rounded-chip bg-warning-subtle px-1.5 py-0.5 text-warning"
+              title={item.authReason ? `Gönderen doğrulanamadı: ${item.authReason}` : 'Gönderen doğrulanamadı'}
+            >
+              <ShieldAlert className="h-3 w-3" aria-hidden />
+              Doğrulanmamış
+            </span>
+          )}
           {item.isBounce && (
             <span className="inline-flex items-center gap-1 rounded-chip bg-danger-subtle px-1.5 py-0.5 text-danger">
               <AlertTriangle className="h-3 w-3" aria-hidden />

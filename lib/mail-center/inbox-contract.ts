@@ -58,6 +58,9 @@ export type InboxListItem = {
   seen: boolean;
   isFromIntern: boolean;
   isBounce: boolean;
+  /** Authentication-Results doğrulaması: true/false; null = değerlendirilmedi (eski kayıt / giden / env yok). */
+  authVerified: boolean | null;
+  authReason: string | null;
   matchedRecipientName: string | null;
   matchedDepartment: string | null;
   attachmentCount: number;
@@ -110,6 +113,9 @@ export type InboxThreadMessage = {
   sentAt: string;
   seen: boolean;
   isBounce: boolean;
+  /** Authentication-Results doğrulaması: true/false; null = değerlendirilmedi (eski kayıt / giden / env yok). */
+  authVerified: boolean | null;
+  authReason: string | null;
   bodyText: string | null;
   hasHtml: boolean;
   /** Gövdede uzak (http/https) görsel var mı — "uzak görselleri göster" bandı için. */

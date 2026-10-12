@@ -309,6 +309,10 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
                 references,
                 threadRoot,
                 isBounce,
+                // Kalıcı doğrulama izi: UI "doğrulanmamış" rozeti buradan okur. MAIL_AUTHSERV_ID
+                // tanımlı değilse değerlendirilemedi → null (rozet "bilinmiyor"), sebep yine yazılır.
+                authVerified: process.env.MAIL_AUTHSERV_ID?.trim() ? auth.verified : null,
+                authReason: auth.reason.slice(0, 200),
               },
             })
             .then(() => 'created' as const)

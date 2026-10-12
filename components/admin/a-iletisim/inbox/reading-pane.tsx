@@ -18,6 +18,7 @@ import {
   Send,
   Trash2,
   UserCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -145,6 +146,11 @@ function Detail({
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           {msg.isBounce && <StatusBadge label="İletilemedi" tone="danger" icon={AlertTriangle} size="sm" />}
+          {msg.authVerified === false && msg.direction === 'in' && (
+            <span title={msg.authReason ? `SPF/DKIM/DMARC: ${msg.authReason}` : undefined}>
+              <StatusBadge label="Gönderen doğrulanmamış" tone="warning" icon={ShieldAlert} size="sm" />
+            </span>
+          )}
           {msg.isFromIntern && (
             <StatusBadge
               label={`Stajyer: ${msg.matchedRecipientName || msg.fromEmail}${msg.matchedDepartment ? ` · ${msg.matchedDepartment}` : ''}`}
