@@ -1,5 +1,6 @@
 'use client';
 
+import { DrawCheck } from '@/components/fx/event-fx';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Ban, ClipboardList, Pencil, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -93,7 +94,12 @@ function TaskRow({ task, onEdit }: { task: TaskDto; onEdit: () => void }) {
               {c.dueAt(fmtDateTime(task.dueAt, locale))}
             </span>
           )}
-          {task.completedAt && <span className="qx-num">✓ {fmtDateTime(task.completedAt, locale)}</span>}
+          {task.completedAt && (
+            <span className="qx-num inline-flex items-center gap-1 text-success">
+              <DrawCheck circle={false} className="h-3.5 w-3.5" />
+              <span className="text-fg-muted">{fmtDateTime(task.completedAt, locale)}</span>
+            </span>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 gap-1">

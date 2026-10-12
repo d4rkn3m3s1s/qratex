@@ -49,7 +49,7 @@ export function Chip({ tone = 'neutral', icon, children, title }: { tone?: Tone;
   return (
     <span
       title={title}
-      className={cn('qx-caption inline-flex max-w-full items-center gap-1 rounded-chip px-2 py-0.5 font-medium', TONE_CHIP[tone])}
+      className={cn('qx-caption qx-fx-status inline-flex max-w-full items-center gap-1 rounded-chip px-2 py-0.5 font-medium', TONE_CHIP[tone])}
     >
       {icon}
       <span className="truncate">{children}</span>

@@ -25,6 +25,7 @@ import {
   UserMinus,
 } from 'lucide-react';
 import { KeyValueList } from '@/components/ds/data';
+import { DrawCheck } from '@/components/fx/event-fx';
 import { InlineError, QueryState, SkeletonDetail } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -98,10 +99,19 @@ function ReplyComposer({ detail, meta, readOnly }: { detail: InboxDetail; meta: 
 
   const vars = { customerName: detail.anonymous ? null : detail.customerName, product: detail.contextLabel, business: meta?.business.name ?? null };
 
+  // Yanıt gönderildi anı: buton ikonu ~1.4 sn çizilen tike döner (ses toast köprüsünden 'success').
+  const [sentAt, setSentAt] = useState(0);
+  useEffect(() => {
+    if (!sentAt) return;
+    const t = window.setTimeout(() => setSentAt(0), 1400);
+    return () => window.clearTimeout(t);
+  }, [sentAt]);
+
   const send = useMutation({
     mutationFn: () => postReply(detail.key, text.trim(), detail.reply ?? null),
     onSuccess: (res) => {
       setConflict(null);
+      setSentAt(Date.now());
       toast.success(res.edited ? copy.editedToast : res.notified ? copy.sentToast : copy.sentNoNotifyToast);
       setEditing(false);
       invalidate(detail.key);
@@ -287,7 +297,13 @@ function ReplyComposer({ detail, meta, readOnly }: { detail: InboxDetail; meta: 
                   </Button>
                 ) : null}
                 <Button type="submit" className="min-h-11 gap-2 sm:h-10 sm:min-h-10" disabled={!text.trim() || send.isPending}>
-                  {send.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <MessageSquareReply aria-hidden className="h-4 w-4" />}
+                  {send.isPending ? (
+                    <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  ) : sentAt ? (
+                    <DrawCheck circle={false} className="h-4 w-4" />
+                  ) : (
+                    <MessageSquareReply aria-hidden className="h-4 w-4" />
+                  )}
                   {send.isPending ? copy.sending : detail.reply ? copy.saveEdit : copy.send}
                 </Button>
               </div>
@@ -438,7 +454,10 @@ function CasePanel({ detail, meta, readOnly }: { detail: InboxDetail; meta: Inbo
       {detail.case ? (
         <p className="qx-small flex flex-wrap items-center gap-2 text-fg">
           <Chip tone={detail.case.status === 'resolved' ? 'success' : 'brand'}>{copy.caseStatus[detail.case.status]}</Chip>
-          {detail.case.assignee && !resolved ? <span>{copy.assignedTo(detail.case.assignee.name)}</span> : null}
+          {detail.case.assignee && !resolved ? (
+            // Atama değişince anahtar değişir → isim kısa bir kayarak-giriş ile yer değiştirir.
+            <span key={detail.case.assignee.id} className="qx-fx-row-in">{copy.assignedTo(detail.case.assignee.name)}</span>
+          ) : null}
         </p>
       ) : null}
       {readOnly ? null : (

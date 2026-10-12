@@ -145,3 +145,45 @@
   70%, 100% { transform: scale(2.2); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .qx-fx-pulse-calm { animation: none; opacity: 0; } }
+
+/* İlerleme çubuğu ilk dolumu (ANIM-MUSTERI-B) — yalnız transform; sonraki değişimler mevcut width geçişinde. */
+.qx-fx-fill { transform-origin: left center; animation: qx-fx-fill 720ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes qx-fx-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .qx-fx-fill { animation: none; } }
+
+/* Bayi: QR önizleme "kod çizilme" — yukarıdan aşağı açılan perde (yalnız yüklenince). */
+.qx-fx-qr-draw { animation: qx-fx-qr-draw 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes qx-fx-qr-draw {
+  from { clip-path: inset(0 0 100% 0); opacity: 0.4; }
+  to { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .qx-fx-qr-draw { animation: none; } }
+
+/* ── Liste kademeli giriş (müşteri listeleri): ilk 8 çocuk 40ms arayla, sonrası gecikmesiz ── */
+.qx-fx-stagger > * { animation: qx-fx-stagger-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.qx-fx-stagger > :nth-child(2) { animation-delay: 40ms; }
+.qx-fx-stagger > :nth-child(3) { animation-delay: 80ms; }
+.qx-fx-stagger > :nth-child(4) { animation-delay: 120ms; }
+.qx-fx-stagger > :nth-child(5) { animation-delay: 160ms; }
+.qx-fx-stagger > :nth-child(6) { animation-delay: 200ms; }
+.qx-fx-stagger > :nth-child(7) { animation-delay: 240ms; }
+.qx-fx-stagger > :nth-child(8) { animation-delay: 280ms; }
+@keyframes qx-fx-stagger-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-fx-stagger > * { animation: none !important; }
+}
+/* Seri alevi: girişte iki kısa titreşim (sonsuz döngü değil). */
+.qx-fx-flame { transform-origin: 50% 90%; animation: qx-fx-flame 520ms 200ms ease-in-out 2 both; }
+@keyframes qx-fx-flame { 0%,100% { transform: scale(1) rotate(0); } 35% { transform: scale(1.18, 1.26) rotate(-6deg); } 70% { transform: scale(0.96, 1.05) rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .qx-fx-flame { animation: none; } }
+
+/* Admin/ekip: kanban kartı bırakılınca yerleşme yayı (hafif büyükten yerine oturur) */
+.qx-fx-settle > * { animation: qx-fx-settle 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes qx-fx-settle {
+  0% { transform: scale(1.04) translateY(-4px); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .qx-fx-settle > * { animation: none; } }

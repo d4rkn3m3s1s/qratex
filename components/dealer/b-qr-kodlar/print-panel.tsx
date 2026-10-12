@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, ExternalLink, FileImage, FileText, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { downloadPng, downloadPrint, printUrl, type PrintParams } from './api';
 import { errorText } from './format';
 import { useQrCopy } from './copy';
 import { copyText } from './clipboard';
+import { DrawCheck } from '@/components/fx/event-fx';
 
 const fieldCls = 'qx-small font-medium text-fg';
 
@@ -42,6 +43,15 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
   const params: PrintParams = { ids: [item.id], template, format: 'svg', fg, bg, cta, link: link || null };
 
   // Önizleme isteği yazarken her tuşta değil, kısa bir bekleme sonrası (sunucu üretir → WYSIWYG).
+  // Kopyala tiki: başarılı kopyadan sonra ikon ~1.2 sn çizilen tike döner.
+  const [copied, setCopied] = useState<'link' | 'utm' | null>(null);
+  const copiedTimer = useRef<number | undefined>(undefined);
+  const flashCopied = (k: 'link' | 'utm') => {
+    setCopied(k);
+    window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(null), 1200);
+  };
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
   const previewSrc = verdict.ok ? printUrl(params) : null;
   const [debounced, setDebounced] = useState(previewSrc);
   const [loaded, setLoaded] = useState(false);
@@ -82,7 +92,7 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
               src={debounced}
               alt={c.previewAlt(item.name, copy.template[template].label)}
               onLoad={() => setLoaded(true)}
-              className={cn('max-h-full max-w-full object-contain shadow-sm transition-opacity duration-base motion-reduce:transition-none', loaded ? 'opacity-100' : 'opacity-0')}
+              className={cn('max-h-full max-w-full object-contain shadow-sm transition-opacity duration-base motion-reduce:transition-none', loaded ? 'qx-fx-qr-draw opacity-100' : 'opacity-0')}
             />
           ) : (
             <p className="qx-small max-w-[16rem] text-center text-fg-muted">{c.unreadable}</p>
@@ -212,8 +222,8 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
           <p className={fieldCls}>{c.link}</p>
           <p className="qx-caption break-all font-mono text-fg-muted">{target}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => copyText(target, copy.common.linkCopied, copy.common.clipboardFailed)}>
-              <Copy className="mr-2 h-4 w-4" aria-hidden /> {c.copy}
+            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => void copyText(target, copy.common.linkCopied, copy.common.clipboardFailed).then((ok) => ok && flashCopied('link'))}>
+              {copied === 'link' ? <DrawCheck circle={false} className="mr-2 h-4 w-4 text-success" /> : <Copy className="mr-2 h-4 w-4" aria-hidden />} {c.copy}
             </Button>
             <Button type="button" variant="ghost" size="sm" className="min-h-11" asChild>
               <a href={target} target="_blank" rel="noopener noreferrer">
@@ -250,9 +260,9 @@ export function PrintPanel({ item, links }: { item: QrItemDto; links: QrLink[] }
               size="sm"
               className="min-h-11"
               disabled={!utm.source.trim()}
-              onClick={() => copyText(campaignUrl, c.utmCopied, copy.common.clipboardFailed)}
+              onClick={() => void copyText(campaignUrl, c.utmCopied, copy.common.clipboardFailed).then((ok) => ok && flashCopied('utm'))}
             >
-              <Copy className="mr-2 h-4 w-4" aria-hidden /> {c.utmCopy}
+              {copied === 'utm' ? <DrawCheck circle={false} className="mr-2 h-4 w-4 text-success" /> : <Copy className="mr-2 h-4 w-4" aria-hidden />} {c.utmCopy}
             </Button>
           </div>
         </details>

@@ -5,7 +5,8 @@
  * sinyal rozeti, kaynak, zaman. Satır seçimi (toplu işlem), klavye odağı (J/K), satıra basınca
  * detay çekmecesi. Hareket: yalnız durum değişimi (kayıt listeden çıkınca) — stagger yok.
  */
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
+import { playSound } from '@/lib/sound';
 import { Camera, Eye, UserCheck } from 'lucide-react';
 import { SelectionCheckbox } from '@/components/ds/data';
 import { CollapseItem, CollapseList } from '@/lib/motion';
@@ -20,6 +21,8 @@ type RowProps = {
   selected: boolean;
   active: boolean;
   focused: boolean;
+  /** Son yenilemede GERÇEKTEN yeni gelen kayıt (filtre/sayfa değişimi değil) — giriş vurgusu. */
+  fresh?: boolean;
   selectable: boolean;
   onToggle: (key: string, checked: boolean) => void;
   onOpen: (key: string) => void;
@@ -27,7 +30,7 @@ type RowProps = {
 };
 
 const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
-  { item, selected, active, focused, selectable, onToggle, onOpen, onFocusRow },
+  { item, selected, active, focused, fresh, selectable, onToggle, onOpen, onFocusRow },
   ref
 ) {
   const copy = useInboxCopy();
@@ -50,7 +53,8 @@ const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
           'group relative mb-1.5 flex gap-3 rounded-card border bg-surface-1 py-3 pl-4 pr-3 transition-colors duration-fast ease-standard',
           active ? 'border-brand ring-1 ring-brand-border' : 'border-subtle hover:bg-surface-muted',
           focused && !active && 'ring-2 ring-ring',
-          selected && 'bg-brand-subtle'
+          selected && 'bg-brand-subtle',
+          fresh && 'qx-fx-row-in'
         )}
       >
         <span aria-hidden className={cn('absolute inset-y-2 left-1 w-1 rounded-full', PRIORITY_STRIPE[item.priority])} />
@@ -159,6 +163,7 @@ export function InboxList({
   onFocusRow: (key: string) => void;
 }) {
   const copy = useInboxCopy();
+  const fresh = useFreshInbox(items);
   return (
     <ul aria-label={copy.listLabel} className="flex flex-col">
       <CollapseList>
@@ -169,6 +174,7 @@ export function InboxList({
             selected={selected.has(item.key)}
             active={activeKey === item.key}
             focused={focusKey === item.key}
+            fresh={fresh.has(item.key)}
             selectable={selectable}
             onToggle={onToggle}
             onOpen={onOpen}
@@ -178,4 +184,32 @@ export function InboxList({
       </CollapseList>
     </ul>
   );
+}
+
+/**
+ * Yeni mesaj tespiti: ilk yüklemedeki en yeni `createdAt` taban alınır; sonraki yenilemelerde
+ * bundan DAHA YENİ kayıtlar "yeni" sayılır (filtre/sayfa/sekme değişimi yanlış alarm vermez).
+ * Yeni kayıt gelince bir kez 'notify' sesi (bayi tercihi kapalıysa sessiz).
+ */
+function useFreshInbox(items: InboxListItem[]): ReadonlySet<string> {
+  const newest = useRef<number | null>(null);
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
+  const key = items.map((i) => i.key).join('|');
+  useEffect(() => {
+    const times = items.map((i) => Date.parse(i.createdAt)).filter(Number.isFinite);
+    const max = times.length ? Math.max(...times) : 0;
+    if (newest.current === null) {
+      if (items.length) newest.current = max;
+      return;
+    }
+    const base = newest.current;
+    const added = items.filter((i) => Date.parse(i.createdAt) > base).map((i) => i.key);
+    if (max > base) newest.current = max;
+    if (added.length) {
+      setFresh(new Set(added));
+      playSound('notify');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return fresh;
 }
