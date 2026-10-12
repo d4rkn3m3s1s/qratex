@@ -325,3 +325,23 @@ arasında canlıya yazılan veri kaybolur; bu yüzden yalnız veri bozulmasında
 - [ ] R5 (An Motoru) deploy edildi.
 - [ ] F0.6 kodu yayında → R6 uygulandı; `confdeltype = r`.
 - [ ] `sessionVersion` zorlaması ayrı deploy'da açıldı, kullanıcı bildirimi yapıldı.
+
+---
+
+## 7. Ek: takip expand göçü (R7, 2026-10-12)
+
+Göç: `prisma/migrations/20261012000000_followup_expand/migration.sql` — yalnız ekleme, idempotent,
+`lock_timeout = 5s`. İçerik: `RemedyOffer.expiresAt` (+ `[status, expiresAt]` index),
+`UserSurpriseBox.withdrawnAt/withdrawnById/withdrawReason` (+ FK SetNull), `InboxMessage.authVerified/authReason`,
+yeni `TeamInvitation` tablosu (tokenHash unique, FK invitedById Cascade / acceptedUserId SetNull).
+
+Sıra: R3 sonrası herhangi bir anda; eski kodla uyumlu (yeni sütunlar NULL, yeni tablo okunmuyor).
+1. Prova branch'inde iki kez uygula (`psql -f`), ikinci çalıştırma hatasız olmalı.
+2. Canlıda aynı dosyayı uygula; ardından `prisma migrate resolve --applied 20261012000000_followup_expand`
+   (göç geçmişi kullanılıyorsa).
+3. Doğrulama: `SELECT conname FROM pg_constraint WHERE conname LIKE 'TeamInvitation_%' OR conname = 'UserSurpriseBox_withdrawnById_fkey';` → 4 satır (pkey dahil).
+4. Ancak bundan sonra bu alanları kullanan kod deploy edilir (`prisma generate` + kod: telafi süresi/expire işi,
+   sürpriz kutu geri çekmede silme yerine `withdrawnAt`, gelen kutusu doğrulama rozeti, ekip davet akışı).
+
+Geri dönüş: kod geri alınır; sütunlar/tablo zararsız kalabilir. Gerekirse
+`DROP TABLE IF EXISTS "TeamInvitation"; ALTER TABLE ... DROP COLUMN IF EXISTS ...` (veri kaybı yalnız yeni alanlarda).

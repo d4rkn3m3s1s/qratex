@@ -82,6 +82,9 @@ model User {
   accounts         Account[]
   sessions         Session[]
   authEmailTokens  AuthEmailToken[]
+  surpriseBoxesWithdrawn UserSurpriseBox[] @relation("UserSurpriseBoxesWithdrawn")
+  teamInvitationsSent    TeamInvitation[]  @relation("TeamInvitationsSent")
+  teamInvitationsAccepted TeamInvitation[] @relation("TeamInvitationsAccepted")
   badges        UserBadge[]
   quests        UserQuest[]
   rewards       UserReward[]
@@ -297,10 +300,15 @@ model UserSurpriseBox {
   /// hediye/manuel kutularda null. @@unique ile aynı gün ikinci kez üretimi engeller (çift ödül fix).
   dayKey       String?
   openedAt     DateTime? // null = henüz açılmadı
+  /// Admin geri çekmesi (silme yerine). Dolu = kutu geçersiz; açılamaz, listelerde gizlenir.
+  withdrawnAt    DateTime?
+  withdrawnById  String?
+  withdrawReason String?
   createdAt    DateTime  @default(now())
 
-  user   User  @relation("UserSurpriseBoxesReceived", fields: [userId], references: [id], onDelete: Cascade)
-  sentBy User? @relation("UserSurpriseBoxesSent", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  user        User  @relation("UserSurpriseBoxesReceived", fields: [userId], references: [id], onDelete: Cascade)
+  sentBy      User? @relation("UserSurpriseBoxesSent", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  withdrawnBy User? @relation("UserSurpriseBoxesWithdrawn", fields: [withdrawnById], references: [id], onDelete: SetNull)
 
   @@unique([userId, dayKey])
   @@index([userId])
@@ -1027,6 +1035,9 @@ model InboxMessage {
   threadRoot   String?   // konuşma kökü (References[0] || inReplyTo || messageId) — gruplama anahtarı
   // Bounce (teslim edilemedi) — mailer-daemon/delivery-status tespiti:
   isBounce     Boolean   @default(false)
+  // Gönderen doğrulaması (verifyMailAuth: hizalı SPF/DKIM/DMARC). null = eski satır, bilinmiyor.
+  authVerified Boolean?
+  authReason   String?
   createdAt    DateTime  @default(now()) // DB'ye çekilme zamanı
 
   @@unique([mailbox, uid])
@@ -1410,6 +1421,8 @@ model RemedyOffer {
   selectedValue       String? // müşterinin seçtiği değer: "20", "100", "1"
   createdAt           DateTime  @default(now())
   acceptedAt          DateTime?
+  /// Bekleyen teklifin son geçerlilik anı (null = süresiz, eski satırlar). Kabulde expiresAt > now.
+  expiresAt           DateTime?
 
   feedback          Feedback?          @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
   consumptionReview ConsumptionReview? @relation(fields: [consumptionReviewId], references: [id], onDelete: Cascade)
@@ -1424,6 +1437,7 @@ model RemedyOffer {
   @@index([status])
   // Dealer onay kuyruğu: where dealerId + status
   @@index([dealerId, status])
+  @@index([status, expiresAt])
 }
 
 /// Bayinin telafi teklif şablonu. Hardcoded DEFAULT_OPTIONS'ın yerini alır:
@@ -3339,4 +3353,26 @@ model ConsentRecord {
   @@index([userId, createdAt])
   @@index([anonId, createdAt])
   @@index([createdAt])
+}
+
+/// İç ekip (admin) daveti. Kabulde User.adminTeamRole (+ adminDepartment) yazılır.
+/// Ham token yalnız mailde; DB'de sha256 hash. Tek-kez kabul: acceptedAt/revokedAt null + expiresAt > now koşullu updateMany.
+model TeamInvitation {
+  id             String    @id @default(cuid())
+  email          String // normalize (küçük harf)
+  role           String // "yonetici" | "uye"
+  department     String? // Department.slug (opsiyonel)
+  invitedById    String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  acceptedUserId String?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  invitedBy    User  @relation("TeamInvitationsSent", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedUser User? @relation("TeamInvitationsAccepted", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([invitedById, createdAt])
 }
