@@ -1,15 +1,17 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import { m as Motion } from 'framer-motion';
-import { Loader2, RotateCw } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { m as Motion, AnimatePresence } from 'framer-motion';
+import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatInt } from '@/components/ds/play/shared';
 import { EASE, useReducedMotionPref } from '@/lib/motion';
+import { BUZZ, buzz, confetti, sound } from '@/lib/moments/effects';
 import type { HomeSpin } from '@/lib/customer-home/types';
 import { readEnvelope, HomeFetchError } from './use-home';
-import { useHomeCopy } from './copy';
+import { useSpinCopy } from './spin-copy';
+import { WheelFace, WheelPointer, jackpotIndex, prizeText, useWheelEngine, type WheelFrame } from './spin-wheel';
 
 export type SpinResult = {
   prize: { id: string; type: 'points' | 'xp' | 'nothing'; value: number; label: string; index: number };
@@ -19,10 +21,6 @@ export type SpinResult = {
   isLevelUp: boolean;
 };
 
-/** Tam tur sayısı ve süre: çarkın gerçek sonuca dönüşü (play kaydı; azaltılmış harekette anında). */
-const TURNS = 5;
-const SPIN_SECONDS = 2.4;
-
 function idempotencyKey(): string {
   try {
     return globalThis.crypto.randomUUID();
@@ -31,18 +29,14 @@ function idempotencyKey(): string {
   }
 }
 
-/** Ödül diliminin merkezini tepe işaretçisine getiren mutlak açı (önceki dönüşten devam eder). */
-export function targetRotation(current: number, index: number, count: number, turns = TURNS): number {
-  const seg = 360 / Math.max(1, count);
-  const center = index * seg + seg / 2;
-  const base = current - (((current % 360) + 360) % 360);
-  return base + turns * 360 + ((360 - center) % 360);
-}
+type Phase = 'idle' | 'spinning' | 'done';
 
 /**
- * Günlük çark diyaloğu (lazy chunk). Sonuç SUNUCUDA belirlenir (`POST /api/gamification/spin`,
- * Idempotency-Key ile); çark yalnız sunucunun seçtiği dilime döner. Kazanç `onResult` ile
- * An Motoru puan kapsülüne ve Ana Sayfa önbelleğine aktarılır. Kayıpta kutlama yok.
+ * Günlük çark — tam ekran çevirme deneyimi (lazy chunk).
+ * Sonuç SUNUCUDA belirlenir (`POST /api/gamification/spin`, Idempotency-Key); düğmeye basınca
+ * çark geri çekilip hızlanır, cevap gelince o dilime yavaşlayarak iner. Kazanç `onResult` ile
+ * An Motoru puan kapsülüne (z-toast, bu katmanın üstünde) ve Ana Sayfa önbelleğine aktarılır.
+ * Azaltılmış harekette çark dönmez: sonuç dilimi doğrudan gösterilir.
  */
 export default function SpinDialog({
   open,
@@ -55,57 +49,87 @@ export default function SpinDialog({
   spin: HomeSpin;
   onResult: (result: SpinResult) => void;
 }) {
-  const { copy, locale } = useHomeCopy();
+  const { copy, locale } = useSpinCopy();
   const reduce = useReducedMotionPref();
-  const [rotation, setRotation] = useState(0);
-  const [phase, setPhase] = useState<'idle' | 'requesting' | 'spinning' | 'done'>('idle');
+  const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<SpinResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** Sunucu "hak bitti" dedi (başka sekme/cihazda çevrilmiş): buton bir daha istek atmaz. */
   const [limitHit, setLimitHit] = useState(false);
-  const pendingRef = useRef<SpinResult | null>(null);
 
   const prizes = spin.prizes;
   const count = Math.max(1, prizes.length);
-  const seg = 360 / count;
+  const jp = jackpotIndex(prizes);
+  const units = useMemo(() => ({ points: copy.unitPoints, xp: copy.unitXp, nothing: copy.nothingShort }), [copy]);
   const remaining = limitHit ? 0 : result ? result.remaining : spin.remaining;
-  const busy = phase === 'requesting' || phase === 'spinning';
+  const busy = phase === 'spinning';
 
-  const slices = useMemo(
-    () =>
-      prizes.map((p, i) => {
-        const a0 = ((i * seg - 90) * Math.PI) / 180;
-        const a1 = (((i + 1) * seg - 90) * Math.PI) / 180;
-        const mid = (((i + 0.5) * seg - 90) * Math.PI) / 180;
-        const large = seg > 180 ? 1 : 0;
-        const path = `M 100 100 L ${100 + 96 * Math.cos(a0)} ${100 + 96 * Math.sin(a0)} A 96 96 0 ${large} 1 ${100 + 96 * Math.cos(a1)} ${100 + 96 * Math.sin(a1)} Z`;
-        return {
-          id: p.id,
-          label: p.label,
-          path,
-          color: `hsl(var(--category-${(i % 8) + 1}) / 0.32)`,
-          tx: 100 + 62 * Math.cos(mid),
-          ty: 100 + 62 * Math.sin(mid),
-          rot: (i + 0.5) * seg,
-        };
-      }),
-    [prizes, seg]
+  // DOM düğümleri: motor her karede bunları doğrudan günceller (React render yok).
+  const faceRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const ghost2Ref = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<HTMLDivElement>(null);
+  const lastTick = useRef(0);
+  const lastBuzz = useRef(0);
+
+  const apply = useCallback((f: WheelFrame) => {
+    const face = faceRef.current;
+    if (face) face.style.transform = `rotate(${f.angle}deg)`;
+    // Hıza bağlı bulanıklık: iki hayalet kopya geride kalır (yalnız transform + opacity).
+    const blur = Math.min(0.42, Math.max(0, (f.speed - 0.25) * 0.4));
+    const g1 = ghostRef.current;
+    const g2 = ghost2Ref.current;
+    if (g1) {
+      g1.style.transform = `rotate(${f.angle - f.speed * 7}deg)`;
+      g1.style.opacity = String(blur);
+    }
+    if (g2) {
+      g2.style.transform = `rotate(${f.angle - f.speed * 14}deg)`;
+      g2.style.opacity = String(blur * 0.55);
+    }
+    const p = pointerRef.current;
+    if (p) p.style.transform = `rotate(${f.deflect}deg)`;
+  }, []);
+
+  const onPeg = useCallback((speed: number) => {
+    const now = performance.now();
+    // Yüksek hızda tık seli olmasın: tık en sık 55 ms'de bir, titreşim yavaşlarken.
+    if (now - lastTick.current > 55) {
+      lastTick.current = now;
+      sound('click');
+    }
+    if (speed < 0.6 && now - lastBuzz.current > 80) {
+      lastBuzz.current = now;
+      buzz(6);
+    }
+  }, []);
+
+  const engine = useWheelEngine({ count, apply, onPeg });
+
+  const finish = useCallback(
+    (r: SpinResult) => {
+      setResult(r);
+      setPhase('done');
+      const gained = r.credited.points + r.credited.xp;
+      if (gained > 0) {
+        buzz(BUZZ.success);
+        if (r.prize.index === jp) confetti('burst', { origin: { y: 0.42 } });
+      } else {
+        buzz(BUZZ.tap);
+      }
+      onResult(r);
+    },
+    [jp, onResult]
   );
-
-  const finish = () => {
-    const r = pendingRef.current;
-    if (!r) return;
-    pendingRef.current = null;
-    setResult(r);
-    setPhase('done');
-    onResult(r);
-  };
 
   const doSpin = async () => {
     if (busy || remaining <= 0) return;
     setError(null);
     setResult(null);
-    setPhase('requesting');
+    setPhase('spinning');
+    if (!reduce) {
+      sound('click');
+      engine.start();
+    }
     try {
       const res = await fetch('/api/gamification/spin', {
         method: 'POST',
@@ -114,117 +138,161 @@ export default function SpinDialog({
         body: '{}',
       });
       const data = await readEnvelope<SpinResult>(res);
-      pendingRef.current = data;
       const index = Math.max(0, Math.min(count - 1, data.prize.index));
+      const r = { ...data, prize: { ...data.prize, index } };
       if (reduce) {
-        setRotation((r) => targetRotation(r, index, count, 0));
-        finish();
+        engine.snap(index);
+        finish(r);
       } else {
-        setPhase('spinning');
-        setRotation((r) => targetRotation(r, index, count));
+        engine.land(index, () => finish(r));
       }
     } catch (e) {
-      setPhase('idle');
       const used = e instanceof HomeFetchError && e.code === 'CONFLICT';
-      if (used) setLimitHit(true);
-      setError(used ? copy.spinUsed : copy.spinError);
+      const settle = () => {
+        setPhase('idle');
+        if (used) setLimitHit(true);
+        setError(used ? copy.used : copy.error);
+      };
+      if (reduce) settle();
+      else engine.land(null, settle);
     }
   };
 
-  const message = (() => {
-    if (!result) return null;
-    if (result.prize.type === 'nothing') return copy.spinNothing;
-    if (result.prize.type === 'points') {
-      return result.credited.points > 0 ? copy.spinWonPoints(formatInt(result.credited.points, locale)) : copy.spinCapped;
-    }
-    return result.credited.xp > 0 ? copy.spinWonXp(formatInt(result.credited.xp, locale)) : copy.spinCapped;
-  })();
+  const won = result ? result.credited.points + result.credited.xp > 0 : false;
+  const capped = result ? result.prize.type !== 'nothing' && !won : false;
+  const resultText = result ? prizeText({ ...result.prize, label: result.prize.label }, units) : null;
+  const shownValue = result
+    ? result.prize.type === 'points'
+      ? formatInt(result.credited.points || result.prize.value, locale)
+      : result.prize.type === 'xp'
+        ? formatInt(result.credited.xp || result.prize.value, locale)
+        : null
+    : null;
+
+  const wheelSize = 'size-[min(84vw,calc(100dvh-20rem),32rem)]';
 
   return (
-    <Dialog open={open} onOpenChange={(v) => (!busy || !v ? onOpenChange(v) : undefined)}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{copy.spinDialogTitle}</DialogTitle>
-          <DialogDescription>{copy.spinDialogDesc}</DialogDescription>
-        </DialogHeader>
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => (!busy || v ? onOpenChange(v) : undefined)}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-modal bg-background data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-modal flex flex-col bg-background text-fg outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0"
+          onEscapeKeyDown={(e) => busy && e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <header className="flex items-start justify-between gap-4 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 sm:pt-6">
+            <div className="min-w-0">
+              <DialogPrimitive.Title className="qx-h2 text-fg">{copy.dialogTitle}</DialogPrimitive.Title>
+              <DialogPrimitive.Description className="qx-small mt-1 max-w-md text-fg-muted">{copy.dialogDesc}</DialogPrimitive.Description>
+            </div>
+            <DialogPrimitive.Close asChild>
+              <button
+                type="button"
+                disabled={busy}
+                className="grid size-11 shrink-0 place-items-center rounded-full border border-subtle bg-surface-1 text-fg transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+              >
+                <X className="size-5" aria-hidden />
+                <span className="sr-only">{copy.close}</span>
+              </button>
+            </DialogPrimitive.Close>
+          </header>
 
-        {/* Konum dış sarmalayıcıda, dönüş içteki Motion elemanında (framer transform kuralı). */}
-        <div className="relative mx-auto aspect-square w-full max-w-[18rem]">
-          <svg viewBox="0 0 200 200" className="absolute inset-0 size-full" aria-hidden>
-            <circle cx="100" cy="100" r="99" fill="hsl(var(--surface-2))" stroke="hsl(var(--border-strong))" strokeWidth="2" />
-          </svg>
-          <Motion.svg
-            viewBox="0 0 200 200"
-            className="absolute inset-0 size-full"
-            aria-hidden
-            animate={{ rotate: rotation }}
-            transition={reduce ? { duration: 0 } : { duration: SPIN_SECONDS, ease: EASE.emphasized }}
-            onAnimationComplete={() => {
-              if (phase === 'spinning') finish();
-            }}
-          >
-            {slices.map((s) => (
-              <g key={s.id}>
-                <path d={s.path} fill={s.color} stroke="hsl(var(--border-subtle))" strokeWidth="1" />
-                <text
-                  x={s.tx}
-                  y={s.ty}
-                  transform={`rotate(${s.rot} ${s.tx} ${s.ty})`}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={count > 8 ? 8 : 10}
-                  fontWeight={700}
-                  fill="hsl(var(--text-1))"
-                >
-                  {s.label.length > 14 ? `${s.label.slice(0, 13)}…` : s.label}
-                </text>
-              </g>
-            ))}
-            <circle cx="100" cy="100" r="16" fill="hsl(var(--surface-1))" stroke="hsl(var(--border-strong))" strokeWidth="2" />
-          </Motion.svg>
-          {/* Tepe işaretçisi (sabit). */}
-          <svg viewBox="0 0 200 200" className="pointer-events-none absolute inset-0 size-full" aria-hidden>
-            <path d="M 100 14 L 91 -2 L 109 -2 Z" transform="translate(0 6)" fill="hsl(var(--brand))" stroke="hsl(var(--surface-1))" strokeWidth="1.5" />
-          </svg>
-        </div>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-8">
+            {/* Sahne: sabit çerçeve; dönüş içteki katmanlarda (transform), konum dış sarmalayıcıda. */}
+            <div className={`relative ${wheelSize} shrink-0`}>
+              <div ref={ghost2Ref} className="absolute inset-0 opacity-0 will-change-transform" aria-hidden>
+                <WheelFace prizes={prizes} units={units} labelsOnly className="size-full" />
+              </div>
+              <div ref={ghostRef} className="absolute inset-0 opacity-0 will-change-transform" aria-hidden>
+                <WheelFace prizes={prizes} units={units} labelsOnly className="size-full" />
+              </div>
+              <div
+                ref={faceRef}
+                className="absolute inset-0 will-change-transform"
+                style={{ transform: `rotate(${engine.initialAngle}deg)` }}
+              >
+                <WheelFace prizes={prizes} units={units} winner={phase === 'done' && result ? result.prize.index : null} className="size-full" />
+              </div>
+              {/* İbre: pim noktası etrafında sapar. */}
+              <div className="pointer-events-none absolute left-1/2 top-0 z-10 w-[11%] -translate-x-1/2 -translate-y-[38%]">
+                <div ref={pointerRef} style={{ transformOrigin: '50% 29%' }}>
+                  <WheelPointer className="block w-full" />
+                </div>
+              </div>
+            </div>
 
-        <div className="min-h-12 text-center" aria-live="polite" role="status">
-          {phase === 'requesting' || phase === 'spinning' ? (
-            <p className="qx-small text-fg-muted">{copy.spinning}</p>
-          ) : message ? (
-            <p className={result?.prize.type === 'nothing' || (result && result.credited.points + result.credited.xp === 0) ? 'qx-body text-fg' : 'qx-h3 text-success'}>
-              {message}
-            </p>
-          ) : error ? (
-            <p className="qx-small text-danger">{error}</p>
-          ) : (
-            <p className="qx-small text-fg-muted">
-              {remaining > 0 ? copy.spinRemaining(remaining) : copy.spinUsed}
-            </p>
-          )}
-        </div>
+            <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+              <div className="flex min-h-[5.5rem] flex-col items-center justify-center" role="status" aria-live="polite" aria-atomic="true">
+                <AnimatePresence mode="wait" initial={false}>
+                  {phase === 'done' && result && resultText ? (
+                    <Motion.div
+                      key="result"
+                      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: reduce ? 0.25 : 0.42, ease: EASE.emphasized }}
+                    >
+                      <span className="sr-only">{copy.resultAnnounce(result.prize.label)}</span>
+                      {result.prize.type === 'nothing' ? (
+                        <>
+                          <p className="qx-h2 text-fg">{copy.nothingTitle}</p>
+                          <p className="qx-small mt-1 text-fg-muted">{copy.nothingBody}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="qx-overline text-fg-muted">{won ? copy.wonTitle : resultText.unit}</p>
+                          <p className="qx-num mt-1 text-5xl font-bold leading-none tracking-tight text-fg tabular-nums">
+                            +{shownValue}
+                            <span className="ml-1.5 text-xl font-semibold text-fg-muted">{resultText.unit}</span>
+                          </p>
+                          <p className="qx-small mt-2 text-fg-muted">{capped ? copy.capped : copy.wonBody}</p>
+                        </>
+                      )}
+                    </Motion.div>
+                  ) : error ? (
+                    <Motion.p key="err" className="qx-small text-danger" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                      {error}
+                    </Motion.p>
+                  ) : (
+                    <Motion.p key="ready" className="qx-body text-fg-muted" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                      {busy ? copy.spinning : remaining > 0 ? copy.ready(remaining) : copy.used}
+                    </Motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" className="min-h-11" onClick={() => onOpenChange(false)} disabled={busy}>
-            {copy.spinClose}
-          </Button>
-          <Button className="min-h-11 gap-2" onClick={doSpin} disabled={busy || remaining <= 0}>
-            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCw className="size-4" aria-hidden />}
-            {copy.spinButton}
-          </Button>
-        </div>
+              {phase === 'done' && remaining <= 0 ? (
+                <Button className="min-h-12 w-full text-base" onClick={() => onOpenChange(false)}>
+                  {copy.done}
+                </Button>
+              ) : (
+                <Button className="min-h-12 w-full gap-2 text-base" onClick={doSpin} disabled={busy || remaining <= 0}>
+                  {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                  {busy ? copy.spinning : phase === 'done' ? copy.spinAgain : copy.spin}
+                </Button>
+              )}
 
-        <details className="qx-caption text-fg-muted">
-          <summary className="min-h-11 cursor-pointer py-3">{copy.spinPrizeList}</summary>
-          <ul className="flex flex-wrap gap-1.5 pb-1">
-            {prizes.map((p) => (
-              <li key={p.id} className="rounded-chip border border-subtle bg-surface-2 px-2 py-1 text-fg">
-                {p.label}
-              </li>
-            ))}
-          </ul>
-        </details>
-      </DialogContent>
-    </Dialog>
+              <ul className="flex flex-wrap justify-center gap-1.5" aria-label={copy.prizes}>
+                {prizes.map((p, i) => {
+                  const t = prizeText(p, units);
+                  return (
+                    <li
+                      key={p.id}
+                      className={
+                        i === jp
+                          ? 'qx-caption rounded-full bg-brand px-2.5 py-1 font-semibold text-brand-fg tabular-nums'
+                          : 'qx-caption rounded-full border border-subtle px-2.5 py-1 text-fg-muted tabular-nums'
+                      }
+                    >
+                      {t.value}
+                      {t.unit ? ` ${t.unit}` : ''}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
