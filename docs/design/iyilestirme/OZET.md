@@ -45,3 +45,32 @@ Hepsi `docs/design/iyilestirme/` altında, `{390,1440}-{light,dark}` dörtlüler
 - **Mobil:** Android ve iOS ilk kez GitHub Actions'ta derlenecek; secrets'ın girilmesi gerekiyor.
 - **Genel:** tur boyunca axe/kontrast/dokunma hedefi taraması toplu çalıştırılmadı. Canlıya almadan önce bu tarama ve prod build yapılmalı.
 - **Ürün kararları** (personel tüketim listesi görünümü, bayi telafi bütçesi, admin zorunlu fayda) bu turun kapsamında değildi.
+
+## İkinci tur (paralel ajanlar)
+
+Doğrulama: tsc 0 hata (filtresiz), `npx jest` 359 suite / 5091 test yeşil.
+
+- **Bayi gelen kutusu** (`fcff3115`): liste satırları gölgesiz, hover'da kenar; sinyal rozetleri en fazla 2 + "+N"; kurulum kartında ikon kutusu kalktı, biten adımlar sönük.
+- **Bayi asistan/içgörü** (`96aa7635`): asistan QDL tip ölçeği ve ton bantlarına bağlandı; içgörü önerileri kart-içi-kart yerine bölünmüş liste; tek bağlantılık AI öğrenme kartı kalktı.
+- **Bayi kasa/ayarlar/ekip/otomasyon** (`f1d94049`): kasa birincil eylemleri 56px; parlak ikon kutuları sade ikon; küçük dokunma hedefleri 44px.
+- **Landing** (`69fd40f3`): hero gerçek ürün ekranı (webp, öncelikli), kısa başlıklar, rakam şeridi başlıklı, gradyan kartlar sade listeye, SSS iki sütun.
+- **Public/auth** (`32cd5202`): form kartlarında süs ikon daireleri kalktı; 404/500 düz zemin + hata referansı; neden-qratex ve güven sayfası eşit ağırlıklı kartlardan listeye.
+- **Koyu tema** (`f2eb8345`): yükselti tonları ayrıştı (kart 9, yüzey-2/popover 12.5, muted 15, sınır 20); koyu grafik renkleri aydınlatıldı.
+- **Animasyon** (`f8b6b597`): operasyon yüzeylerinde süre/eğri değerleri `lib/motion` token'larına; sohbet FAB'ındaki sonsuz parıltı ve dekoratif nabız kalktı.
+- **Sayan sayı** (`8cf5740c`): `components/ds/data/animated-number.tsx`; cüzdan/ana bakiye, PointsChip, çark sonucu, Yılım sayacı bağlandı.
+- **⌘K** (`98cd661b`): sıralı harf bulanık eşleşme; admin aramasında Kartlar ve Bayiler grupları.
+- **Liste/onay hareketi** (`2f0dfbe6`): `lib/motion/collapse-list.tsx` ile silinen satırın boşluğu yumuşak kapanır; `InlineConfirm` yerinde onay.
+- **Müşteri kalanlar** (`58d8eb89`): lig şeridi sıra vurgusu, mekân kartında kimlik önce, çift tonlu ikon kutuları sadeleşti, klan boş durumu.
+
+### Görüntüler
+
+Bu turda yeni `sonra-*.png` alınmadı; mevcut görüntüler yukarıdaki listede. Landing için `public/images/landing/musteri-ana.webp` ve `isletme-bugun.webp` eklendi.
+
+### Kalanlar (ikinci tur)
+
+- Bu turun hiçbir değişikliği tarayıcıda gözle doğrulanmadı; 390/1440 açık/koyu sonra görüntüleri alınmalı (özellikle koyu tema tonları, collapse animasyonu, InlineConfirm).
+- Bayi: kapsamdaki ekranların hepsi elden geçmedi (analitik, kampanya, tüketim derin cila bekliyor).
+- Public/auth: bazı ekranlara dokunulmadı.
+- Animasyon: yalnız operasyon yüzeyleri ele alındı; kalan `animate-pulse` kullanımları değerlendirilmeli.
+- Müşteri: `home-screen.tsx` ve bakiye kartları çakışma nedeniyle bu turda düzenlenmedi.
+- axe/kontrast taraması ve prod build hâlâ yapılmadı.
