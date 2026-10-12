@@ -105,6 +105,9 @@ function CopyCode({ code }: { code: string }) {
   );
 }
 
+// Sunucu varsayılanı 25; DS varsayılan seçenekleri (10/20/50/100) 25'i içermediği için 'Sayfa başına' seçicisi boş görünüyordu.
+const COUPON_PAGE_SIZES: readonly number[] = [10, COUPON_PAGE_SIZE, 50, 100];
+
 export function CouponsCenter({ initial }: { initial: CouponsInitial }) {
   const qc = useQueryClient();
   const { get } = useUrlState();
@@ -115,7 +118,7 @@ export function CouponsCenter({ initial }: { initial: CouponsInitial }) {
   const [batchOpen, setBatchOpen] = useState(false);
 
   const filters = useFilterState(FIELDS);
-  const table = useUrlTableState({ defaultPageSize: COUPON_PAGE_SIZE, defaultSort: [{ id: 'createdAt', desc: true }], sortableIds: [] });
+  const table = useUrlTableState({ defaultPageSize: COUPON_PAGE_SIZE, pageSizeOptions: COUPON_PAGE_SIZES, defaultSort: [{ id: 'createdAt', desc: true }], sortableIds: [] });
   const statusRaw = get('status');
   const status = ((COUPON_STATUS_FILTERS as readonly string[]).includes(statusRaw ?? '') ? statusRaw : 'usable') as CouponStatusFilter;
   const sort = (str(filters.values.sort) || 'new') as CouponSort;
@@ -306,6 +309,7 @@ export function CouponsCenter({ initial }: { initial: CouponsInitial }) {
           manualSorting
           manualFiltering
           rowCount={list.data?.total}
+          pageSizeOptions={COUPON_PAGE_SIZES}
           {...table}
           filtered={filtered}
           activeRowId={sheet.id}

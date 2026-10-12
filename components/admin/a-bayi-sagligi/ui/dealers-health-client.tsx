@@ -305,7 +305,7 @@ function buildColumns(c: HealthCopy, onOpen: (id: string) => void): ColumnDef<He
       header: c.table.score,
       meta: meta({ mobile: 'subtitle' }),
       cell: ({ row }) => (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col items-start gap-1">
           <ScoreBadge score={row.original.score} band={row.original.band} c={c} size="sm" />
           <MiniStack components={row.original.components} />
         </div>
