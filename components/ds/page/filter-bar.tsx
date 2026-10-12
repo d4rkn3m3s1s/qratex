@@ -136,7 +136,7 @@ function SearchField({
   };
 
   return (
-    <div className="relative min-w-0 flex-1 sm:max-w-xs">
+    <div className="relative min-w-0 flex-1 sm:basis-56 sm:max-w-xs">
       <label htmlFor={id} className="sr-only">
         {field.label}
       </label>

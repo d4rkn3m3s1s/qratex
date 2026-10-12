@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TONE_CHIP, type Tone } from '@/components/states';
+import { TONE_CHIP, TONE_TEXT, type Tone } from '@/components/states';
 import { useNumberTicker } from '@/lib/motion';
 import { useDataCopy, useLocaleInfo } from './copy';
 import { DeltaBadge } from './delta-badge';
@@ -79,6 +79,8 @@ export const MetricTile = forwardRef<HTMLDivElement, MetricTileProps>(function M
   const formatted = formatMetricValue({ ...metric, value: display }, tag, locale);
   const lowSample = isLowSample(metric.n, metric.minN);
   const play = register === 'play';
+  // Ops: sıfır değerli uyarı/tehlike kutusu alarm gibi görünmesin.
+  const quietTone = tone === 'neutral' || ((tone === 'warning' || tone === 'danger') && numeric === 0);
   const compact = size === 'compact';
   const series = showSparkline && metric.series && metric.series.length > 1 ? metric.series : null;
   const nFmt = (n: number) => new Intl.NumberFormat(tag).format(n);
@@ -111,9 +113,11 @@ export const MetricTile = forwardRef<HTMLDivElement, MetricTileProps>(function M
           <div
             aria-hidden
             className={cn(
-              'grid shrink-0 place-items-center rounded-control',
-              compact ? 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4' : 'h-9 w-9 [&_svg]:h-[1.125rem] [&_svg]:w-[1.125rem]',
-              TONE_CHIP[tone],
+              'grid shrink-0 place-items-center',
+              play
+                ? cn('rounded-control', compact ? 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4' : 'h-9 w-9 [&_svg]:h-[1.125rem] [&_svg]:w-[1.125rem]', TONE_CHIP[tone])
+                : // ops: dolu renkli ikon kutusu yok — sakin glif; ton yalnız değer sıfırdan büyükse (uyarı/tehlike) renk taşır.
+                  cn('h-5 w-5 [&_svg]:h-4 [&_svg]:w-4', quietTone ? 'text-fg-subtle' : TONE_TEXT[tone]),
             )}
           >
             {icon}
@@ -182,16 +186,16 @@ export const MetricTile = forwardRef<HTMLDivElement, MetricTileProps>(function M
 
 export type MetricGridProps = {
   children?: ReactNode;
-  /** Geniş ekranda sütun sayısı; mobilde 2 (dar ekranda 1). */
+  /** Geniş ekranda sütun sayısı; mobilde 2 (360px altında 1). */
   cols?: 2 | 3 | 4 | 5;
   className?: string;
 };
 
 const METRIC_COLS: Record<NonNullable<MetricGridProps['cols']>, string> = {
-  2: 'grid-cols-1 min-[420px]:grid-cols-2',
-  3: 'grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3',
-  4: 'grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4',
-  5: 'grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
+  2: 'grid-cols-1 min-[360px]:grid-cols-2',
+  3: 'grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4',
+  5: 'grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
 };
 
 /** KPI ızgarası — `MetricTile`'ları eşit yükseklikte dizer. */

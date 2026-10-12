@@ -280,14 +280,7 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
         </MetricGrid>
       )}
 
-      <FilterBar fields={FIELDS} ariaLabel="Kullanıcı filtreleri">
-        <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-10">
-          <a href={exportHref} download aria-label={`Filtre sonucunu CSV olarak indir (${fmtNumber(Math.min(total, EXPORT_MAX_ROWS))} satır)`}>
-            <Download className="h-4 w-4" aria-hidden />
-            CSV ({fmtNumber(Math.min(total, EXPORT_MAX_ROWS))})
-          </a>
-        </Button>
-      </FilterBar>
+      <FilterBar fields={FIELDS} ariaLabel="Kullanıcı filtreleri" />
 
       <DataTable
         ariaLabel="Kullanıcılar"
@@ -302,6 +295,19 @@ export function UsersScreen({ initial }: { initial: UsersInitial }) {
         rowCount={list.data?.total}
         {...table}
         filtered={filters.activeCount > 0}
+        toolbar={
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <p className="qx-small text-fg-muted" aria-live="polite">
+              {list.data ? <><span className="qx-num font-semibold text-fg">{fmtNumber(total)}</span> hesap</> : null}
+            </p>
+            <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
+              <a href={exportHref} download aria-label={`Filtre sonucunu CSV olarak indir (${fmtNumber(Math.min(total, EXPORT_MAX_ROWS))} satır)`}>
+                <Download className="h-4 w-4" aria-hidden />
+                CSV ({fmtNumber(Math.min(total, EXPORT_MAX_ROWS))})
+              </a>
+            </Button>
+          </div>
+        }
         empty={
           filters.activeCount > 0
             ? {

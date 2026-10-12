@@ -57,7 +57,7 @@ export function NavigationStudio({ initial }: { initial: NavStudioState | null }
     staleTime: 30_000,
   });
   return (
-    <QueryState query={query} skeleton="form" className="mx-auto max-w-7xl p-4">
+    <QueryState query={query} skeleton="form" className="mx-auto w-full max-w-[96rem]">
       {(state) => <Studio state={state} reload={() => query.refetch().then((r) => r.data ?? null)} />}
     </QueryState>
   );

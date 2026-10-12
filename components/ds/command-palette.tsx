@@ -20,9 +20,10 @@
  */
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Loader2, Search, CornerDownLeft } from 'lucide-react';
+import { Loader2, Search, CornerDownLeft, ArrowDown, ArrowUp } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppLocale } from '@/lib/app-locale';
 import { scoreMatch } from '@/lib/navigation/search';
 
 export interface CommandPaletteItem {
@@ -40,6 +41,12 @@ export interface CommandPaletteItem {
   idleOnly?: boolean;
   onSelect: () => void;
 }
+
+const KBD = 'inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-1 px-1 font-mono text-[11px] text-fg-muted';
+const HINTS = {
+  tr: { move: 'Gezin', open: 'Aç', close: 'Kapat' },
+  en: { move: 'Navigate', open: 'Open', close: 'Close' },
+} as const;
 
 export interface CommandPaletteCopy {
   title: string;
@@ -79,6 +86,7 @@ export function CommandPalette({
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [asyncState, setAsyncState] = React.useState<AsyncState>({ status: 'idle', items: [] });
   const listRef = React.useRef<HTMLDivElement>(null);
+  const { locale } = useAppLocale();
   const baseId = React.useId();
   const listboxId = `${baseId}-listbox`;
 
@@ -213,6 +221,7 @@ export function CommandPalette({
       : '';
 
   let flatIndex = -1;
+  const hints = HINTS[locale === 'en' ? 'en' : 'tr'];
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -221,15 +230,15 @@ export function CommandPalette({
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            'fixed inset-x-0 top-0 z-modal mx-auto flex max-h-[100dvh] w-full flex-col overflow-hidden border-border bg-popover text-popover-foreground shadow-2xl outline-none',
+            'fixed inset-x-0 top-0 z-modal mx-auto flex max-h-[100dvh] w-full flex-col overflow-hidden border-border bg-surface-1 text-fg qx-elevation-3 outline-none',
             'sm:top-[12vh] sm:max-h-[min(70vh,560px)] sm:w-[min(40rem,calc(100vw-2rem))] sm:rounded-sheet sm:border',
             'pt-[env(safe-area-inset-top,0px)] sm:pt-0',
-            'duration-base data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none'
+            'duration-base data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:data-[state=open]:zoom-in-[0.98] sm:data-[state=open]:slide-in-from-top-2 motion-reduce:animate-none'
           )}
         >
           <DialogPrimitive.Title className="sr-only">{copy.title}</DialogPrimitive.Title>
           <div className="flex items-center gap-2 border-b border-border px-3">
-            <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+            <Search className="h-5 w-5 shrink-0 text-fg-subtle" aria-hidden />
             <input
               autoFocus
               value={query}
@@ -242,7 +251,7 @@ export function CommandPalette({
               aria-autocomplete="list"
               aria-activedescendant={activeItem ? optionId(activeIndex) : undefined}
               aria-label={copy.title}
-              className="h-14 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              className="h-14 min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-fg-subtle focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             {showAsyncLoading && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />}
             <DialogPrimitive.Close
@@ -261,7 +270,7 @@ export function CommandPalette({
           <div ref={listRef} id={listboxId} role="listbox" aria-label={copy.title} className="flex-1 overflow-y-auto overscroll-contain p-2">
             {visible.sections.map((section) => (
               <div key={section.name} role="group" aria-label={section.name} className="mb-2 last:mb-0">
-                <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" aria-hidden>
+                <div className="qx-overline px-2.5 pb-1.5 pt-3 text-fg-subtle" aria-hidden>
                   {section.name}
                 </div>
                 {section.items.map((it) => {
@@ -278,17 +287,19 @@ export function CommandPalette({
                       onMouseMove={() => setActiveIndex(index)}
                       onClick={() => select(it)}
                       className={cn(
-                        'flex min-h-11 cursor-pointer select-none items-center gap-3 rounded-control px-2 py-2 text-sm',
-                        active ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                        'relative flex min-h-11 cursor-pointer select-none items-center gap-3 rounded-control px-2.5 py-2 text-sm',
+                        active
+                          ? 'bg-brand/10 text-fg before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-brand'
+                          : 'text-fg-muted'
                       )}
                     >
-                      {Icon ? <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /> : <span className="w-4" aria-hidden />}
-                      <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                      {it.context && <span className="hidden max-w-[40%] truncate text-xs text-muted-foreground sm:inline">{it.context}</span>}
+                      {Icon ? <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-brand' : 'text-fg-subtle')} aria-hidden /> : <span className="w-4" aria-hidden />}
+                      <span className={cn('min-w-0 flex-1 truncate', active && 'font-medium')}>{it.label}</span>
+                      {it.context && <span className="hidden max-w-[40%] truncate text-xs text-fg-subtle sm:inline">{it.context}</span>}
                       {it.hint && (
                         <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{it.hint}</kbd>
                       )}
-                      {active && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+                      {active && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-fg-subtle" aria-hidden />}
                     </div>
                   );
                 })}
@@ -300,7 +311,24 @@ export function CommandPalette({
                 {copy.error}
               </p>
             )}
-            {isEmpty && !showAsyncError && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{copy.empty}</p>}
+            {isEmpty && !showAsyncError && <p className="px-3 py-6 text-center text-sm text-fg-muted">{copy.empty}</p>}
+          </div>
+
+          {/* Klavye ipuçları — yalnız işaretçi/klavye ekranlarında (dokunmatikte gürültü). */}
+          <div aria-hidden className="hidden items-center gap-4 border-t border-border bg-surface-muted/60 px-4 py-2 text-xs text-fg-subtle sm:flex">
+            <span className="inline-flex items-center gap-1.5">
+              <kbd className={KBD}><ArrowUp className="h-3 w-3" /></kbd>
+              <kbd className={KBD}><ArrowDown className="h-3 w-3" /></kbd>
+              {hints.move}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <kbd className={KBD}><CornerDownLeft className="h-3 w-3" /></kbd>
+              {hints.open}
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1.5">
+              <kbd className={KBD}>Esc</kbd>
+              {hints.close}
+            </span>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
