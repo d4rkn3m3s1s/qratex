@@ -11,7 +11,7 @@ import { QueryState } from '@/components/states';
 import { PageHeader, PanelPage, SectionTabs } from '@/components/ds/page';
 import { IconButton } from '@/components/ds/a11y';
 import { TODAY_LINKS } from '@/lib/dealer-today/core';
-import type { DealerTodayData } from '@/lib/dealer-today/types';
+import type { DealerTodayData, Greeting } from '@/lib/dealer-today/types';
 import { useTodayCopy } from './copy';
 import { useDealerToday, useRefreshToday } from './use-today';
 import { TodaySkeleton } from './today-skeleton';
@@ -63,16 +63,13 @@ export function TodayScreen() {
 }
 
 function TodayContent({ data }: { data: DealerTodayData }) {
-  const { copy, tag } = useTodayCopy();
+  const { copy } = useTodayCopy();
   const params = useSearchParams();
   const refresh = useRefreshToday();
   const [refreshing, setRefreshing] = useState(false);
   const tab: Tab = params?.get('tab') === 'weekly' ? 'weekly' : 'today';
   const week = params?.get('week') ?? null;
   const now = new Date(data.generatedAt);
-
-  const dateLabel = new Intl.DateTimeFormat(tag, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Istanbul' }).format(now);
-  const timeLabel = new Intl.DateTimeFormat(tag, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }).format(now);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -90,34 +87,10 @@ function TodayContent({ data }: { data: DealerTodayData }) {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        variant="hero"
-        eyebrow={copy.eyebrow}
-        icon={<Store />}
-        title={`${copy.greeting[data.greeting]}, ${data.dealer.name ?? copy.fallbackName}`}
-        description={dateLabel}
-        meta={
-          <span className="inline-flex items-center gap-1 text-xs text-fg-muted" aria-live="polite">
-            {refreshing ? copy.refreshing : copy.updatedAt(timeLabel)}
-          </span>
-        }
-        actions={
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button asChild className="flex-1 shadow-none sm:flex-none">
-              <Link href={TODAY_LINKS.scan} prefetch={false}>
-                <ScanLine aria-hidden className="h-4 w-4" />
-                {copy.scan}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="flex-1 shadow-none sm:flex-none">
-              <Link href={TODAY_LINKS.qrCodes} prefetch={false}>
-                <QrCode aria-hidden className="h-4 w-4" />
-                {copy.newQr}
-              </Link>
-            </Button>
-            <IconButton aria-label={copy.refresh} icon={<RefreshCw />} variant="outline" tooltip loading={refreshing} onClick={onRefresh} />
-          </div>
-        }
+      <TodayHeader
+        heading={{ name: data.dealer.name, greeting: data.greeting, generatedAt: data.generatedAt }}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
 
       <SetupCard setup={data.setup} />
@@ -154,5 +127,72 @@ function TodayContent({ data }: { data: DealerTodayData }) {
         }
       </SectionTabs>
     </div>
+  );
+}
+
+/** Başlığın ihtiyaç duyduğu, ağır Bugün verisinden önce sunucuda bilinen alanlar. */
+export interface TodayHeading {
+  name: string | null;
+  greeting: Greeting;
+  generatedAt: string;
+}
+
+/**
+ * Selamlama başlığı (sayfanın LCP öğesi). Veri gelmeden de çizilebilir: `onRefresh` yoksa
+ * bekleme durumundadır (yenile düğmesi yükleniyor, "yenileniyor" etiketi).
+ */
+function TodayHeader({ heading, refreshing = false, onRefresh }: { heading: TodayHeading; refreshing?: boolean; onRefresh?: () => void }) {
+  const { copy, tag } = useTodayCopy();
+  const pending = !onRefresh;
+  const now = new Date(heading.generatedAt);
+  const dateLabel = new Intl.DateTimeFormat(tag, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Istanbul' }).format(now);
+  const timeLabel = new Intl.DateTimeFormat(tag, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }).format(now);
+  return (
+    <PageHeader
+      variant="hero"
+      eyebrow={copy.eyebrow}
+      icon={<Store />}
+      title={`${copy.greeting[heading.greeting]}, ${heading.name ?? copy.fallbackName}`}
+      description={dateLabel}
+      meta={
+        <span className="inline-flex items-center gap-1 text-xs text-fg-muted" aria-live="polite">
+          {pending || refreshing ? copy.refreshing : copy.updatedAt(timeLabel)}
+        </span>
+      }
+      actions={
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Button asChild className="flex-1 shadow-none sm:flex-none">
+            <Link href={TODAY_LINKS.scan} prefetch={false}>
+              <ScanLine aria-hidden className="h-4 w-4" />
+              {copy.scan}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="flex-1 shadow-none sm:flex-none">
+            <Link href={TODAY_LINKS.qrCodes} prefetch={false}>
+              <QrCode aria-hidden className="h-4 w-4" />
+              {copy.newQr}
+            </Link>
+          </Button>
+          <IconButton aria-label={copy.refresh} icon={<RefreshCw />} variant="outline" tooltip loading={pending || refreshing} onClick={onRefresh} />
+        </div>
+      }
+    />
+  );
+}
+
+/**
+ * Bugün verisi sunucuda yüklenirken akışla önce giden kabuk: gerçek selamlama başlığı (bayi adı +
+ * İstanbul saatine göre selam) + iskelet. Başlık, ağır veri turunu beklemeden boyanır (LCP);
+ * veri gelince Suspense bu kabuğu aynı başlıklı gerçek ekranla değiştirir.
+ */
+export function TodayPending({ heading }: { heading: TodayHeading }) {
+  const { copy } = useTodayCopy();
+  return (
+    <PanelPage register="ops" aria-label={copy.pageTitle} aria-busy>
+      <div className="space-y-5">
+        <TodayHeader heading={heading} />
+        <TodaySkeleton compact />
+      </div>
+    </PanelPage>
   );
 }

@@ -34,7 +34,9 @@ export function NextActions({ actions }: { actions: NextAction[] }) {
         <Motion.ol
           className="-mx-1 divide-y divide-subtle"
           variants={policy.variants(listContainer)}
-          initial="hidden"
+          // Sunucu HTML'i görünür çizilir: "hidden" başlangıcı, tembel yüklenen animasyon özellikleri
+          // gelene kadar listeyi opaklık 0'da tutuyordu (yavaş cihazda içerik geç görünüyordu).
+          initial={false}
           animate="visible"
         >
           <AnimatePresence initial={false}>
