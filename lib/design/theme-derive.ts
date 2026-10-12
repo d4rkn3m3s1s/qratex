@@ -63,13 +63,13 @@ export const BASE_THEME_VARS: Record<ThemeMode, ThemeVarMap> = {
   },
   dark: {
     background: '222 47% 5%',
-    card: '222 41% 8%',
-    'surface-2': '222 35% 11%',
-    muted: '217 19% 14%',
+    card: '222 38% 9%',
+    'surface-2': '222 32% 12.5%',
+    muted: '217 22% 15%',
     foreground: '210 40% 98%',
     'muted-foreground': '215 16% 68%',
     'text-3': '215 12% 57%',
-    border: '217 19% 16%',
+    border: '217 19% 20%',
     primary: '262 83% 58%',
     'brand-text': '262 90% 78%',
     'brand-subtle': '262 45% 18%',
@@ -154,10 +154,13 @@ export function deriveThemeVars(seeds: ThemeSeeds, mode: ThemeMode): ThemeVarMap
     const dark = isDarkSurface(bg);
     const [h, s, l] = b;
     if (dark) {
-      card = fmt([h, s * 0.9, l + 3]);
-      surface2 = fmt([h, s * 0.85, l + 6]);
-      muted = fmt([h, Math.min(s, 25), l + 9]);
-      out.border = fmt([h, Math.min(s, 20), l + 11]);
+      // Yükselti tonları (globals.css .dark ile aynı adımlar): kart +4, yüzey-2 +7.5, muted +10, sınır +15.
+      card = fmt([h, s * 0.85, l + 4]);
+      surface2 = fmt([h, s * 0.75, l + 7.5]);
+      muted = fmt([h, Math.min(s, 25), l + 10]);
+      out.border = fmt([h, Math.min(s, 20), l + 15]);
+      // Güçlü sınır (form/ayırıcı) aydınlanan kartta da ≥3:1 kalsın.
+      out['border-strong'] = fmt([h, Math.min(s, 13), Math.max(48, l + 40)]);
       out['glass-bg'] = card;
       out['glass-border'] = fmt([h, Math.min(s, 19), l + 17]);
     } else {
@@ -172,7 +175,7 @@ export function deriveThemeVars(seeds: ThemeSeeds, mode: ThemeMode): ThemeVarMap
     out.input = out.border;
     out.background = bg;
     out.card = card;
-    out.popover = card;
+    out.popover = dark ? surface2 : card;
     out['surface-2'] = surface2;
     out.muted = muted;
   }
