@@ -5,6 +5,7 @@ import { Breadcrumbs } from '@/components/ds/page/breadcrumbs';
 import { BlogCta } from '@/components/public/p-blog-yasal/blog-cta';
 import { JsonLd, breadcrumbLd } from '@/components/public/p-blog-yasal/json-ld';
 import { PostCard } from '@/components/public/p-blog-yasal/post-card';
+import { TurkishOnlyNotice } from '@/components/public/p-blog-yasal/turkish-only-notice';
 import {
   BLOG_CATEGORIES,
   countByCategory,
@@ -115,6 +116,7 @@ export default async function BlogPage({ searchParams }: { searchParams: SearchP
             <p className="qx-overline text-brand">Blog</p>
             <h1 className="qx-h1 text-3xl text-fg md:text-4xl">İçgörüler ve rehberler</h1>
             <p className="text-base leading-7 text-fg-muted">{override?.description || DEFAULT_DESCRIPTION}</p>
+            <TurkishOnlyNotice kind="blog" />
           </div>
           <a
             href="/feed.xml"

@@ -7,7 +7,7 @@ import { useAppLocale } from '@/lib/app-locale';
  * Arayüz İngilizce seçiliyken metnin yalnız Türkçe olduğunu (ve bağlayıcı olanın Türkçe metin
  * olduğunu) açıkça söyler. Sayfa statik kalır; yalnız bu küçük ada dil tercihini okur.
  */
-export function TurkishOnlyNotice({ kind }: { kind: 'legal' | 'article' }) {
+export function TurkishOnlyNotice({ kind }: { kind: 'legal' | 'article' | 'blog' }) {
   const { locale } = useAppLocale();
   if (locale !== 'en') return null;
   return (
@@ -18,7 +18,9 @@ export function TurkishOnlyNotice({ kind }: { kind: 'legal' | 'article' }) {
       <Languages className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       {kind === 'legal'
         ? 'This document is available in Turkish only. The Turkish text is the binding version.'
-        : 'This article is available in Turkish only.'}
+        : kind === 'blog'
+          ? 'Our blog is published in Turkish only.'
+          : 'This article is available in Turkish only.'}
     </p>
   );
 }

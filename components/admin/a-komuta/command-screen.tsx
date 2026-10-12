@@ -18,7 +18,6 @@ import { MetricTile } from '@/components/ds/data/metric-tile';
 import { StatusBadge } from '@/components/ds/data/status-badge';
 import { ChoiceChips } from '@/components/ds/a11y/choice-chips';
 import { ErrorState, QueryState, SkeletonBlock, SkeletonStats } from '@/components/states';
-import { relativeTr } from '@/lib/admin-command/core';
 import { COMMAND_RANGES, type CommandRange, type KpiKey, type SectionResult } from '@/lib/admin-command/types';
 import { useCommandHealth, useCommandOverview, useRefreshCommand } from './use-command';
 import { PulseStrip } from './pulse-strip';
@@ -26,21 +25,22 @@ import { QueuePanel } from './queue-panel';
 import { HEALTH_META, HealthPanel } from './health-panel';
 import { EventsFeed } from './events-feed';
 import { EcosystemCard, TopDealersCard } from './side-cards';
-import { RANGE_LABEL, formatClock } from './format';
+import { formatClock } from './format';
+import { relativeFor, useAdminKomutaCopy, useServerLabel } from './copy';
 
-const KPI_META: Record<KpiKey, { label: string; icon: ReactNode; href: string; tone: 'brand' | 'info' | 'success' | 'warning' | 'neutral' }> = {
-  newUsers: { label: 'Yeni kullanıcı', icon: <UserPlus className="h-4 w-4" />, href: '/admin/users', tone: 'brand' },
-  feedback: { label: 'Geri bildirim', icon: <MessageSquare className="h-4 w-4" />, href: '/admin/feedbacks', tone: 'info' },
-  csat: { label: 'Memnuniyet (CSAT)', icon: <Smile className="h-4 w-4" />, href: '/admin/analytics', tone: 'success' },
-  consumptions: { label: 'Tüketim', icon: <ShoppingBag className="h-4 w-4" />, href: '/admin/analytics', tone: 'neutral' },
-  pointsMinted: { label: 'Basılan puan', icon: <Coins className="h-4 w-4" />, href: '/admin/economy', tone: 'warning' },
-  activeDealers: { label: 'Aktif bayi', icon: <Store className="h-4 w-4" />, href: '/admin/dealers-health', tone: 'brand' },
+const KPI_META: Record<KpiKey, { icon: ReactNode; href: string; tone: 'brand' | 'info' | 'success' | 'warning' | 'neutral' }> = {
+  newUsers: { icon: <UserPlus className="h-4 w-4" />, href: '/admin/users', tone: 'brand' },
+  feedback: { icon: <MessageSquare className="h-4 w-4" />, href: '/admin/feedbacks', tone: 'info' },
+  csat: { icon: <Smile className="h-4 w-4" />, href: '/admin/analytics', tone: 'success' },
+  consumptions: { icon: <ShoppingBag className="h-4 w-4" />, href: '/admin/analytics', tone: 'neutral' },
+  pointsMinted: { icon: <Coins className="h-4 w-4" />, href: '/admin/economy', tone: 'warning' },
+  activeDealers: { icon: <Store className="h-4 w-4" />, href: '/admin/dealers-health', tone: 'brand' },
 };
 
-const RANGE_OPTIONS = COMMAND_RANGES.map((r) => ({ value: r, label: r === '24h' ? '24 sa' : r === '7d' ? '7 gün' : '30 gün', textLabel: RANGE_LABEL[r] }));
 
 /** "x önce" etiketi kendi başına yenilenir; bütün ağaç her saniye render edilmez (admin B13). */
 function Ago({ iso }: { iso: string }) {
+  const c = useAdminKomutaCopy();
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 15_000);
@@ -48,7 +48,7 @@ function Ago({ iso }: { iso: string }) {
   }, []);
   return (
     <time dateTime={iso} title={formatClock(iso)}>
-      {relativeTr(iso)}
+      {relativeFor(iso, c.locale)}
     </time>
   );
 }
@@ -59,6 +59,10 @@ function Section<T>({ result, onRetry, children }: { result: SectionResult<T>; o
 }
 
 export function CommandScreen({ initialRange }: { initialRange: CommandRange }) {
+  const c = useAdminKomutaCopy();
+  const sl = useServerLabel();
+  const RANGE_LABEL = c.rangeLabel;
+  const RANGE_OPTIONS = COMMAND_RANGES.map((r) => ({ value: r, label: c.rangeShort[r], textLabel: c.rangeLabel[r] }));
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -82,7 +86,7 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
     try {
       await refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Yenileme başarısız oldu.');
+      toast.error(e instanceof Error ? e.message : c.refreshFailed);
     } finally {
       setRefreshing(false);
     }
@@ -90,7 +94,7 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
 
   const data = overview.data;
   const retryOverview = () => void overview.refetch();
-  const healthMeta = health.data ? HEALTH_META[health.data.overall] : null;
+  const healthMeta = health.data ? { ...HEALTH_META[health.data.overall], label: c.healthStatus[health.data.overall] } : null;
 
   return (
     <PanelPage
@@ -99,25 +103,25 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
       header={
         <PageHeader
           variant="compact"
-          eyebrow="Genel bakış"
-          title="Komuta Merkezi"
-          description="Bir şey yanıyor mu, ne değişti, bugün neyi ele almalı: platform sağlığı, kuyruklar ve son olaylar tek ekranda."
+          eyebrow={c.eyebrow}
+          title={c.title}
+          description={c.description}
           meta={
             <span className="inline-flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-              {healthMeta ? <StatusBadge label={`Platform: ${healthMeta.label}`} tone={healthMeta.tone} size="sm" /> : null}
+              {healthMeta ? <StatusBadge label={`${c.platform}: ${healthMeta.label}`} tone={healthMeta.tone} size="sm" /> : null}
               {data ? (
                 <span>
-                  Veri <Ago iso={data.generatedAt} /> hesaplandı{overview.isFetching ? ' · güncelleniyor…' : ''}
+                  {c.computedPrefix} <Ago iso={data.generatedAt} />{c.computedSuffix ? ` ${c.computedSuffix}` : ''}{overview.isFetching ? c.updating : ''}
                 </span>
               ) : null}
             </span>
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <ChoiceChips aria-label="Dönem" size="sm" options={RANGE_OPTIONS} value={range} onChange={(v) => v && changeRange(v)} />
+              <ChoiceChips aria-label={c.period} size="sm" options={RANGE_OPTIONS} value={range} onChange={(v) => v && changeRange(v)} />
               <Button variant="outline" size="sm" className="min-h-[44px] gap-1.5" onClick={() => void onRefresh()} disabled={refreshing} aria-busy={refreshing}>
                 <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin motion-reduce:animate-none' : 'h-4 w-4'} aria-hidden />
-                Yenile
+                {c.refresh}
               </Button>
             </div>
           }
@@ -136,7 +140,7 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
       >
         {data ? (
           <div className="space-y-4">
-            <SectionCard title="Kuyruklar" description="İnsan kararı bekleyen işler; her satır ilgili kuyruğa gider." icon={<ListChecks className="h-4 w-4" />}>
+            <SectionCard title={c.queues} description={c.queuesDesc} icon={<ListChecks className="h-4 w-4" />}>
               <Section result={data.queues} onRetry={retryOverview}>
                 {(q) => <QueuePanel data={q} />}
               </Section>
@@ -144,7 +148,7 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
 
             <section aria-labelledby="kpi-heading" className="space-y-2">
               <h2 id="kpi-heading" className="text-sm font-semibold text-fg">
-                {RANGE_LABEL[range]} · metrikler
+                {RANGE_LABEL[range]} · {c.metrics}
               </h2>
               <Section result={data.kpis} onRetry={retryOverview}>
                 {(k) => (
@@ -152,13 +156,13 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
                     {k.kpis.map((e) => (
                       <MetricTile
                         key={e.key}
-                        label={KPI_META[e.key].label}
+                        label={c.kpi[e.key]}
                         icon={KPI_META[e.key].icon}
                         tone={KPI_META[e.key].tone}
                         href={KPI_META[e.key].href}
                         metric={e.metric}
-                        hint={e.footnote ?? undefined}
-                        sparklineLabel={`${KPI_META[e.key].label} eğilimi, ${RANGE_LABEL[range].toLocaleLowerCase('tr-TR')}`}
+                        hint={e.footnote ? sl.t('footnote', e.footnote, e.footnote) : undefined}
+                        sparklineLabel={c.trend(c.kpi[e.key], RANGE_LABEL[range].toLocaleLowerCase(c.locale))}
                         size="compact"
                       />
                     ))}
@@ -170,15 +174,15 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
             <PageGrid cols={3}>
               <SectionCard
                 className="lg:col-span-2"
-                title="Platform nabzı"
-                description={`${RANGE_LABEL[range]} · ${data.window.unit === 'hour' ? 'saatlik' : 'günlük'} kovalar, İstanbul saati`}
+                title={c.pulse}
+                description={c.pulseDesc(RANGE_LABEL[range], data.window.unit === 'hour')}
                 icon={<Activity className="h-4 w-4" />}
               >
                 <Section result={data.kpis} onRetry={retryOverview}>
                   {(k) => <PulseStrip keys={data.window.keys} unit={data.window.unit} series={k.pulse} />}
                 </Section>
               </SectionCard>
-              <SectionCard title="Platform sağlığı" description="30 sn'de bir yoklanır (sekme açıkken)." icon={<HeartPulse className="h-4 w-4" />}>
+              <SectionCard title={c.health} description={c.healthDesc} icon={<HeartPulse className="h-4 w-4" />}>
                 <QueryState
                   query={{ data: health.data, error: health.error, isLoading: health.isLoading, isFetching: health.isFetching, refetch: health.refetch }}
                   skeleton="list"
@@ -190,18 +194,18 @@ export function CommandScreen({ initialRange }: { initialRange: CommandRange }) 
             </PageGrid>
 
             <PageGrid cols={3}>
-              <SectionCard className="lg:col-span-2" title="Son olaylar" description="Denetim kayıtları, insan diliyle." icon={<Activity className="h-4 w-4" />}>
+              <SectionCard className="lg:col-span-2" title={c.events} description={c.eventsDesc} icon={<Activity className="h-4 w-4" />}>
                 <EventsFeed />
               </SectionCard>
               <div className="space-y-4">
-                <SectionCard title="Ekosistem" description="Kayıtlı hesapların rol dağılımı." icon={<Users className="h-4 w-4" />}>
+                <SectionCard title={c.ecosystem} description={c.ecosystemDesc} icon={<Users className="h-4 w-4" />}>
                   <Section result={data.ecosystem} onRetry={retryOverview}>
                     {(e) => <EcosystemCard data={e} />}
                   </Section>
                 </SectionCard>
-                <SectionCard title="En çok geri bildirim alan bayiler" description={`${RANGE_LABEL[range]} · QR + tüketim yorumu`} icon={<Store className="h-4 w-4" />}>
+                <SectionCard title={c.topDealers} description={c.topDealersDesc(RANGE_LABEL[range])} icon={<Store className="h-4 w-4" />}>
                   <Section result={data.topDealers} onRetry={retryOverview}>
-                    {(t) => <TopDealersCard data={t} rangeLabel={RANGE_LABEL[range].toLocaleLowerCase('tr-TR')} />}
+                    {(t) => <TopDealersCard data={t} rangeLabel={RANGE_LABEL[range].toLocaleLowerCase(c.locale)} />}
                   </Section>
                 </SectionCard>
               </div>

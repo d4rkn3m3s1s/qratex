@@ -14,8 +14,18 @@ const dayLongFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'num
 const dateTimeFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: TZ });
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: TZ });
 
-export function bucketLabel(key: string, unit: 'hour' | 'day', long = false): string {
+const enFmt = {
+  hour: new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: TZ }),
+  day: new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: TZ }),
+  dayLong: new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }),
+};
+
+export function bucketLabel(key: string, unit: 'hour' | 'day', long = false, en = false): string {
   const d = keyToDate(key);
+  if (en) {
+    if (unit === 'hour') return long ? `${enFmt.day.format(d)} ${enFmt.hour.format(d)}` : enFmt.hour.format(d);
+    return long ? enFmt.dayLong.format(d) : enFmt.day.format(d);
+  }
   if (unit === 'hour') return long ? `${dayFmt.format(d)} ${hourFmt.format(d)}` : hourFmt.format(d);
   return long ? dayLongFmt.format(d) : dayFmt.format(d);
 }

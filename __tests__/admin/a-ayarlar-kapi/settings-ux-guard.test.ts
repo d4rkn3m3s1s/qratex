@@ -19,7 +19,10 @@ describe('ayarlar merkezi kaydedilmemiş değişiklik koruması', () => {
   it('merkez bölüm değişiminde onay ister ve sağlayıcıyı sarar', () => {
     const src = read('settings-center.tsx');
     expect(src).toMatch(/SettingsDirtyContext\.Provider/);
-    expect(src).toMatch(/dirtySections\.current\.size > 0[\s\S]*window\.confirm/);
+    // Onay native confirm() değil, tasarım sistemi ConfirmAction diyaloğu (bekleyen bölüm durumu).
+    expect(src).toMatch(/dirtySections\.current\.size > 0[\s\S]*setPendingSection/);
+    expect(src).toMatch(/<ConfirmAction/);
+    expect(src).not.toMatch(/window\.confirm/);
   });
 });
 

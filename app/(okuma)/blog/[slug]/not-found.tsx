@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { PostCard } from '@/components/public/p-blog-yasal/post-card';
 import { getAllPosts } from '@/lib/blog-posts';
+import { TurkishOnlyNotice } from '@/components/public/p-blog-yasal/turkish-only-notice';
 
 /** Bilinmeyen / kaldırılmış yazı — genel 404 yerine son yazılara yönlendirir. */
 export default function BlogPostNotFound() {
@@ -13,6 +14,7 @@ export default function BlogPostNotFound() {
         <p className="text-base leading-7 text-fg-muted">
           Yazı kaldırılmış ya da adresi değişmiş olabilir. Son yazılarımıza göz atabilir ya da tüm yazılara dönebilirsiniz.
         </p>
+        <TurkishOnlyNotice kind="blog" />
         <Link
           href="/blog"
           className="inline-flex min-h-11 items-center rounded-control bg-brand px-5 text-sm font-semibold text-brand-fg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"

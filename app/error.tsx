@@ -6,6 +6,7 @@ import { captureClientError } from '@/lib/observability/capture-client-error';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
+import { useLocaleSafe } from '@/lib/app-locale';
 
 export default function Error({
   error,
@@ -14,6 +15,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const en = useLocaleSafe() === 'en';
   useEffect(() => {
     console.error('App error boundary:', error);
     captureClientError(error);
@@ -35,19 +37,21 @@ export default function Error({
         <div className="inline-flex rounded-full bg-destructive/10 p-4" aria-hidden>
           <AlertTriangle className="h-12 w-12 text-destructive" />
         </div>
-        <h1 className="text-2xl font-semibold">Bir hata oluştu</h1>
+        <h1 className="text-2xl font-semibold">{en ? 'Something went wrong' : 'Bir hata oluştu'}</h1>
         <p className="text-muted-foreground text-sm">
-          Beklenmeyen bir sorun oluştu. Sayfayı yenilemeyi veya ana sayfaya dönmeyi deneyin.
+          {en
+            ? 'An unexpected problem came up. Try reloading the page or head back to the home page.'
+            : 'Beklenmeyen bir sorun oluştu. Sayfayı yenilemeyi veya ana sayfaya dönmeyi deneyin.'}
         </p>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Button type="button" onClick={reset} className="gap-2">
             <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
-            Tekrar Dene
+            {en ? 'Try again' : 'Tekrar Dene'}
           </Button>
           <Button asChild variant="outline" className="gap-2">
             <Link href="/">
               <Home className="h-4 w-4 shrink-0" aria-hidden />
-              Ana Sayfa
+              {en ? 'Home' : 'Ana Sayfa'}
             </Link>
           </Button>
         </div>

@@ -22,6 +22,40 @@ import { cn } from '@/lib/utils';
 import type { PulseSeries } from '@/lib/admin-command/types';
 import { bucketLabel, formatInt } from './format';
 import { AdminKomutaText } from './copy';
+import { useDsLocale } from '@/components/ds/a11y/copy';
+
+const PULSE_COPY = {
+  tr: {
+    layer: { feedback: 'Geri bildirim', consumptions: 'Tüketim', newUsers: 'Yeni kullanıcı' },
+    ongoing: ' (sürüyor)',
+    ongoingLegend: 'Sürüyor (kısmi)',
+    readout: (fb: string, co: string, nu: string) => `${fb} geri bildirim · ${co} tüketim · ${nu} yeni kullanıcı`,
+    hour: 'Saat',
+    day: 'Gün',
+    summary: (n: number, hourly: boolean, total: string, max: string) =>
+      `Platform nabzı: ${n} ${hourly ? 'saatlik' : 'günlük'} kovada toplam ${total} olay. En yoğun kova ${max} olay.`,
+    stripAria: 'Nabız şeridi. Kovalar arasında sol ve sağ ok tuşlarıyla gezin.',
+    now: 'şimdi',
+    today: 'bugün',
+    showTable: 'Veri tablosunu göster',
+    csv: 'CSV indir',
+  },
+  en: {
+    layer: { feedback: 'Feedback', consumptions: 'Consumptions', newUsers: 'New users' },
+    ongoing: ' (in progress)',
+    ongoingLegend: 'In progress (partial)',
+    readout: (fb: string, co: string, nu: string) => `${fb} feedback · ${co} consumptions · ${nu} new users`,
+    hour: 'Hour',
+    day: 'Day',
+    summary: (n: number, hourly: boolean, total: string, max: string) =>
+      `Platform pulse: ${total} events across ${n} ${hourly ? 'hourly' : 'daily'} buckets. Busiest bucket: ${max} events.`,
+    stripAria: 'Pulse strip. Use the left and right arrow keys to move between buckets.',
+    now: 'now',
+    today: 'today',
+    showTable: 'Show data table',
+    csv: 'Download CSV',
+  },
+} as const;
 
 type Props = {
   keys: string[];
@@ -51,6 +85,8 @@ function readPalette(): Palette {
 const HEIGHT = 88;
 
 export function PulseStrip({ keys, unit, series, className }: Props) {
+  const isEn = useDsLocale() === 'en';
+  const P = isEn ? PULSE_COPY.en : PULSE_COPY.tr;
   const reduce = useReducedMotionPref();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -184,15 +220,14 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
   const readout =
     keys.length === 0
       ? ''
-      : `${bucketLabel(keys[shown]!, unit, true)}${shown === keys.length - 1 ? ' (sürüyor)' : ''}: ` +
-        `${formatInt(series.feedback[shown] ?? 0)} geri bildirim · ${formatInt(series.consumptions[shown] ?? 0)} tüketim · ` +
-        `${formatInt(series.newUsers[shown] ?? 0)} yeni kullanıcı`;
+      : `${bucketLabel(keys[shown]!, unit, true, isEn)}${shown === keys.length - 1 ? P.ongoing : ''}: ` +
+        P.readout(formatInt(series.feedback[shown] ?? 0), formatInt(series.consumptions[shown] ?? 0), formatInt(series.newUsers[shown] ?? 0));
 
   const downloadCsv = () => {
     // BOM + ';' ayraç (TR Excel); hücreler yalnız sayı/tarih — formül enjeksiyonu yüzeyi yok.
-    const head = [unit === 'hour' ? 'Saat' : 'Gün', ...LAYERS.map((l) => l.label)].join(';');
+    const head = [unit === 'hour' ? P.hour : P.day, ...LAYERS.map((l) => P.layer[l.id])].join(';');
     const lines = keys.map((k, i) =>
-      [bucketLabel(k, unit, true) + (i === keys.length - 1 ? ' (sürüyor)' : ''), series.feedback[i] ?? 0, series.consumptions[i] ?? 0, series.newUsers[i] ?? 0].join(';')
+      [bucketLabel(k, unit, true, isEn) + (i === keys.length - 1 ? P.ongoing : ''), series.feedback[i] ?? 0, series.consumptions[i] ?? 0, series.newUsers[i] ?? 0].join(';')
     );
     const blob = new Blob(['\uFEFF' + [head, ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -205,7 +240,7 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const summary = `Platform nabzı: ${keys.length} ${unit === 'hour' ? 'saatlik' : 'günlük'} kovada toplam ${formatInt(grand)} olay. En yoğun kova ${formatInt(max)} olay.`;
+  const summary = P.summary(keys.length, unit === 'hour', formatInt(grand), formatInt(max));
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -213,12 +248,12 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
         {LAYERS.map((l) => (
           <span key={l.id} className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-2.5 w-2.5 rounded-sm" style={{ background: `hsl(var(${l.token}))` }} />
-            {l.label}
+            {P.layer[l.id]}
           </span>
         ))}
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="h-2.5 w-2.5 rounded-sm border border-dashed border-fg-muted" />
-          Sürüyor (kısmi)
+          {P.ongoingLegend}
         </span>
       </div>
 
@@ -226,7 +261,7 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
         ref={wrapRef}
         role="group"
         tabIndex={0}
-        aria-label="Nabız şeridi. Kovalar arasında sol ve sağ ok tuşlarıyla gezin."
+        aria-label={P.stripAria}
         aria-describedby="pulse-readout"
         onKeyDown={onKeyDown}
         onPointerMove={(e) => setActive(indexFromX(e.clientX))}
@@ -239,26 +274,26 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
       </div>
 
       <div className="flex items-center justify-between gap-2 text-xs tabular-nums text-fg-muted">
-        <span>{keys[0] ? bucketLabel(keys[0], unit) : ''}</span>
+        <span>{keys[0] ? bucketLabel(keys[0], unit, false, isEn) : ''}</span>
         <p id="pulse-readout" aria-live="polite" className="min-w-0 flex-1 truncate text-center text-fg">
           {readout}
         </p>
-        <span>{keys.length ? (unit === 'hour' ? 'şimdi' : 'bugün') : ''}</span>
+        <span>{keys.length ? (unit === 'hour' ? P.now : P.today) : ''}</span>
       </div>
 
       <div className="flex flex-wrap items-start justify-between gap-2">
       <details className="group min-w-0 flex-1 text-sm">
         <summary className="inline-flex min-h-[44px] cursor-pointer items-center rounded-md px-1 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-          Veri tablosunu göster
+          {P.showTable}
         </summary>
         <div className="mt-2 max-h-72 overflow-auto rounded-md border border-border">
           <table className="w-full text-left text-xs tabular-nums">
             <caption className="sr-only"><AdminKomutaText k="pulseData" /></caption>
             <thead className="sticky top-0 bg-surface-muted">
               <tr>
-                <th scope="col" className="px-3 py-2 font-medium">{unit === 'hour' ? 'Saat' : 'Gün'}</th>
+                <th scope="col" className="px-3 py-2 font-medium">{unit === 'hour' ? P.hour : P.day}</th>
                 {LAYERS.map((l) => (
-                  <th key={l.id} scope="col" className="px-3 py-2 text-right font-medium">{l.label}</th>
+                  <th key={l.id} scope="col" className="px-3 py-2 text-right font-medium">{P.layer[l.id]}</th>
                 ))}
               </tr>
             </thead>
@@ -266,8 +301,8 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
               {keys.map((k, i) => (
                 <tr key={k} className="border-t border-border">
                   <th scope="row" className="px-3 py-1.5 font-normal">
-                    {bucketLabel(k, unit, true)}
-                    {i === keys.length - 1 ? ' (sürüyor)' : ''}
+                    {bucketLabel(k, unit, true, isEn)}
+                    {i === keys.length - 1 ? P.ongoing : ''}
                   </th>
                   <td className="px-3 py-1.5 text-right">{formatInt(series.feedback[i] ?? 0)}</td>
                   <td className="px-3 py-1.5 text-right">{formatInt(series.consumptions[i] ?? 0)}</td>
@@ -280,7 +315,7 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
       </details>
         <Button type="button" variant="ghost" size="sm" className="min-h-[44px] gap-1.5" onClick={downloadCsv} disabled={keys.length === 0}>
           <Download className="h-4 w-4" aria-hidden />
-          CSV indir
+          {P.csv}
         </Button>
       </div>
     </div>

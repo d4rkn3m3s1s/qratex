@@ -5,23 +5,26 @@ import { Star } from 'lucide-react';
 import { EmptyState } from '@/components/states';
 import type { EcosystemSection, TopDealersSection } from '@/lib/admin-command/types';
 import { formatInt } from './format';
+import { useAdminKomutaCopy } from './copy';
 
-const ROLE_META: Record<EcosystemSection['byRole'][number]['role'], { label: string; token: string }> = {
-  CUSTOMER: { label: 'Müşteri', token: '--category-1' },
-  DEALER: { label: 'Bayi', token: '--category-2' },
-  STAFF: { label: 'Personel', token: '--category-3' },
-  ADMIN: { label: 'Yönetici', token: '--category-4' },
+const ROLE_META: Record<EcosystemSection['byRole'][number]['role'], { token: string }> = {
+  CUSTOMER: { token: '--category-1' },
+  DEALER: { token: '--category-2' },
+  STAFF: { token: '--category-3' },
+  ADMIN: { token: '--category-4' },
 };
 
 /** Ekosistem bileşimi (eski /admin/ecosystem'in tek özgün içeriği): rol dağılımı + risk sayıları. */
 export function EcosystemCard({ data }: { data: EcosystemSection }) {
+  const c = useAdminKomutaCopy();
+  const [pre, , post] = c.totalAccounts('');
   const total = Math.max(1, data.total);
   return (
     <div className="space-y-3">
       <p className="text-sm text-fg-muted">
-        Toplam <span className="font-semibold tabular-nums text-fg">{formatInt(data.total)}</span> hesap
+        {pre}<span className="font-semibold tabular-nums text-fg">{formatInt(data.total)}</span>{post}
       </p>
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={data.byRole.map((r) => `${ROLE_META[r.role].label} ${r.count}`).join(', ')}>
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={data.byRole.map((r) => `${c.role[r.role]} ${r.count}`).join(', ')}>
         {data.byRole.map((r) =>
           r.count > 0 ? (
             <span key={r.role} className="h-full" style={{ width: `${(r.count / total) * 100}%`, background: `hsl(var(${ROLE_META[r.role].token}))` }} />
@@ -33,7 +36,7 @@ export function EcosystemCard({ data }: { data: EcosystemSection }) {
           <li key={r.role} className="flex items-center justify-between gap-2 rounded-md bg-surface-muted px-2.5 py-1.5">
             <span className="inline-flex items-center gap-1.5 text-fg-muted">
               <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: `hsl(var(${ROLE_META[r.role].token}))` }} />
-              {ROLE_META[r.role].label}
+              {c.role[r.role]}
             </span>
             <span className="tabular-nums font-medium text-fg">
               {formatInt(r.count)}
@@ -43,7 +46,7 @@ export function EcosystemCard({ data }: { data: EcosystemSection }) {
         ))}
       </ul>
       <p className="text-xs text-fg-muted">
-        İçinde: {formatInt(data.flagged)} işaretli, {formatInt(data.shadowBanned)} gölge yasaklı, {formatInt(data.anonymized)} anonimleştirilmiş hesap.
+        {c.within(formatInt(data.flagged), formatInt(data.shadowBanned), formatInt(data.anonymized))}
       </p>
     </div>
   );
@@ -51,12 +54,13 @@ export function EcosystemCard({ data }: { data: EcosystemSection }) {
 
 /** En çok geri bildirim alan bayiler — sıralama SQL'de, seçili pencerede (admin B2). */
 export function TopDealersCard({ data, rangeLabel }: { data: TopDealersSection; rangeLabel: string }) {
+  const c = useAdminKomutaCopy();
   if (data.dealers.length === 0) {
-    return <EmptyState compact title="Bu dönemde geri bildirim yok" description={`${rangeLabel} içinde hiçbir bayi geri bildirim ya da tüketim yorumu almadı.`} />;
+    return <EmptyState compact title={c.noDealerFeedbackTitle} description={c.noDealerFeedbackDesc(rangeLabel)} />;
   }
   const top = data.dealers[0]!.volume || 1;
   return (
-    <ol className="space-y-2" aria-label={`En çok geri bildirim alan bayiler, ${rangeLabel}`}>
+    <ol className="space-y-2" aria-label={c.topDealersAria(rangeLabel)}>
       {data.dealers.map((d, i) => (
         <li key={d.dealerId}>
           <Link
@@ -73,8 +77,8 @@ export function TopDealersCard({ data, rangeLabel }: { data: TopDealersSection; 
                 {d.avgRating != null ? (
                   <span className="inline-flex items-center gap-0.5 text-xs text-fg-muted">
                     <Star className="h-3 w-3" aria-hidden />
-                    <span className="sr-only">ortalama puan</span>
-                    {d.avgRating.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                    <span className="sr-only">{c.avgRating}</span>
+                    {d.avgRating.toLocaleString(c.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </span>
                 ) : null}
               </span>

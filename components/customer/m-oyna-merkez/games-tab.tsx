@@ -1,5 +1,6 @@
 import { Gamepad2 } from 'lucide-react';
 import { loadGamesTab } from '@/lib/play-hub/server';
+import { localizeGamesTab } from '@/lib/play-hub/catalog-en';
 import { playHubCopy, type PlayLocale } from './copy';
 import { Achievements } from './achievements';
 import { DailyQuests } from './daily-quests';
@@ -16,7 +17,7 @@ import { PendingRewardBanner, TournamentCard } from './tournament';
  */
 export async function GamesTab({ userId, locale, mode }: { userId: string; locale: PlayLocale; mode: HubMode }) {
   const c = playHubCopy(locale);
-  const d = await loadGamesTab(userId);
+  const d = localizeGamesTab(await loadGamesTab(userId), locale);
   const todayEntries = d.today.ok ? d.today.data.entries : null;
   const bests = d.bests.ok ? d.bests.data : null;
   const tournamentType = d.tournament.ok ? d.tournament.data.featured?.gameType ?? null : null;

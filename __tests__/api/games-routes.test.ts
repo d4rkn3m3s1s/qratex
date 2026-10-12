@@ -339,9 +339,10 @@ describe('turnuva route', () => {
 
   it('GET: öne çıkan olmayan oyunda ödül tablosu sıfır', async () => {
     const { isoWeekKey } = await import('@/lib/tournament-core');
-    const { featuredGameTypeForWeek } = await import('@/lib/game-tournament');
+    // Rota haftaya dondurulmuş rotasyon takvimini kullanır (featuredGameForWeek), visibleMiniGames değil.
+    const { featuredGameForWeek } = await import('@/lib/game-tournament');
     const { visibleMiniGames } = await import('@/lib/minigame-config');
-    const featured = featuredGameTypeForWeek(isoWeekKey(new Date()), visibleMiniGames().map((g) => g.gameType));
+    const featured = featuredGameForWeek(isoWeekKey(new Date()));
     const other = visibleMiniGames().find((g) => g.gameType !== featured)!.gameType;
     const { GET } = await import('@/app/api/customer/tournament/route');
     const j = await (await GET(new NextRequest(`http://localhost/api/customer/tournament?game=${other}`))).json();

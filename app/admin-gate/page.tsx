@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
+import { useLocaleSafe } from '@/lib/app-locale';
 
 /** Başarılı geçişten sonra gidilecek yer: yalnız aynı kökenli `/admin…` yolu (kapı ekranı hariç). */
 function resolveGateReturn(raw: string | null): string {
@@ -12,11 +13,11 @@ function resolveGateReturn(raw: string | null): string {
   return path === '/admin' || path.startsWith('/admin/') ? safe : '/admin';
 }
 
-function formatUntil(iso: string | null): string {
+function formatUntil(iso: string | null, en = false): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('tr-TR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' });
+  return d.toLocaleString(en ? 'en-GB' : 'tr-TR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' });
 }
 
 /**
@@ -27,6 +28,8 @@ function formatUntil(iso: string | null): string {
  * gelmez; sunucuda doğrulanır (/api/admin/gate).
  */
 export default function AdminGatePage() {
+  const en = useLocaleSafe() === 'en';
+  const L = (tr: string, enText: string) => (en ? enText : tr);
   const [question, setQuestion] = useState<string>('');
   const [digit, setDigit] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'wrong' | 'ok' | 'locked'>('idle');
@@ -50,9 +53,9 @@ export default function AdminGatePage() {
           setStatus('locked');
           setLockedUntil(d.lockedUntil ?? null);
         }
-        if (r.status === 503) setErrorMsg(d?.error || 'Geçit şu anda doğrulanamıyor.');
+        if (r.status === 503) setErrorMsg(d?.error || L('Geçit şu anda doğrulanamıyor.', 'The gate can’t be verified right now.'));
       })
-      .catch(() => setQuestion('Evrenin sırrını çöz.'));
+      .catch(() => setQuestion(L('Evrenin sırrını çöz.', 'Solve the secret of the universe.')));
     inputRef.current?.focus();
   }, []);
 
@@ -148,19 +151,19 @@ export default function AdminGatePage() {
         setDigit('');
         setStatus('locked');
         setLockedUntil(data?.lockedUntil ?? null);
-        setErrorMsg(data?.error || 'Geçit kilitlendi.');
+        setErrorMsg(data?.error || L('Geçit kilitlendi.', 'The gate is locked.'));
         setShake(true);
         setTimeout(() => setShake(false), 500);
       } else {
         setStatus('wrong');
-        setErrorMsg(data?.error || 'Yanlış frekans.');
+        setErrorMsg(data?.error || L('Yanlış frekans.', 'Wrong frequency.'));
         setShake(true);
         setTimeout(() => setShake(false), 500);
         setTimeout(() => { setDigit(''); setStatus('idle'); inputRef.current?.focus(); }, 700);
       }
     } catch {
       setStatus('wrong');
-      setErrorMsg('Bağlantı hatası.');
+      setErrorMsg(L('Bağlantı hatası.', 'Connection error.'));
       setTimeout(() => setStatus('idle'), 700);
     }
   }, [status]);
@@ -218,27 +221,29 @@ export default function AdminGatePage() {
 
         {/* Başlık */}
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.4em] text-purple-300/80">
-          Boyutlar Arası Geçit
+          {L('Boyutlar Arası Geçit', 'Interdimensional Gate')}
         </p>
         <h1 className="mb-1 text-2xl font-black sm:text-3xl">
-          {status === 'ok' ? 'Geçit açılıyor…' : status === 'locked' ? 'Geçit Kilitli' : 'Erişim Doğrulaması'}
+          {status === 'ok' ? L('Geçit açılıyor…', 'Opening the gate…') : status === 'locked' ? L('Geçit Kilitli', 'Gate locked') : L('Erişim Doğrulaması', 'Access check')}
         </h1>
 
         {/* Soru */}
         <p className="mb-8 max-w-md text-base leading-relaxed text-white/70">
           {status === 'ok'
-            ? 'Doğru frekansı buldun. Hoş geldin, kâşif. 🌠'
-            : question || 'Sırra ulaşmak için evrenin şifresini çöz…'}
+            ? L('Doğru frekansı buldun. Hoş geldin, kâşif. 🌠', 'You found the right frequency. Welcome, explorer. 🌠')
+            : question || L('Sırra ulaşmak için evrenin şifresini çöz…', 'Crack the universe’s code to reach the secret…')}
         </p>
 
         {/* Kamuflaj input — ne yazdığın ve KAÇ karakter yazdığın görünmez (hep sabit nokta) */}
         {status === 'locked' && (
           <div role="alert" className="max-w-md rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-            <p className="font-semibold">Çok fazla yanlış frekans denendi.</p>
+            <p className="font-semibold">{L('Çok fazla yanlış frekans denendi.', 'Too many wrong frequencies.')}</p>
             <p className="mt-1 text-red-100/80">
               {lockedUntil
-                ? `Geçit ${formatUntil(lockedUntil)} saatine kadar kapalı. Diğer yöneticiler bilgilendirildi.`
-                : 'Geçit geçici olarak kapalı. Diğer yöneticiler bilgilendirildi.'}
+                ? en
+                  ? `The gate is closed until ${formatUntil(lockedUntil, true)}. The other admins have been notified.`
+                  : `Geçit ${formatUntil(lockedUntil)} saatine kadar kapalı. Diğer yöneticiler bilgilendirildi.`
+                : L('Geçit geçici olarak kapalı. Diğer yöneticiler bilgilendirildi.', 'The gate is temporarily closed. The other admins have been notified.')}
             </p>
           </div>
         )}
@@ -282,7 +287,7 @@ export default function AdminGatePage() {
                 disabled={status === 'checking'}
                 className="absolute inset-0 h-full w-full cursor-text rounded-2xl bg-transparent text-transparent caret-transparent outline-none"
                 style={{ WebkitTextFillColor: 'transparent' }}
-                aria-label="Gizli frekans"
+                aria-label={L('Gizli frekans', 'Secret frequency')}
                 autoFocus
               />
               {status === 'checking' && (
@@ -297,9 +302,9 @@ export default function AdminGatePage() {
               className="mt-5 rounded-full px-6 py-2.5 text-sm font-bold tracking-wide text-white transition-all hover:scale-105 disabled:opacity-50"
               style={{ background: `linear-gradient(135deg, ${ringColor}, #e879f9)`, boxShadow: `0 0 24px ${ringColor}55` }}
             >
-              Frekansı Gönder →
+              {L('Frekansı Gönder →', 'Send frequency →')}
             </button>
-            <p className="mt-4 text-xs text-white/40">İstediğini yaz — frekansı yalnızca içeri ait olanlar bilir</p>
+            <p className="mt-4 text-xs text-white/40">{L('İstediğini yaz — frekansı yalnızca içeri ait olanlar bilir', 'Type anything — only insiders know the frequency')}</p>
             {(status === 'wrong' || status === 'idle') && errorMsg && (
               <p role="alert" className="mt-3 text-sm font-semibold text-red-400">{errorMsg}</p>
             )}
@@ -309,7 +314,7 @@ export default function AdminGatePage() {
 
       {/* Alt imza */}
       <p className="absolute bottom-6 z-10 text-[11px] tracking-widest text-white/25">
-        QRATEX · GÜVENLİ GEÇİT PROTOKOLÜ
+        {L('QRATEX · GÜVENLİ GEÇİT PROTOKOLÜ', 'QRATEX · SECURE GATE PROTOCOL')}
       </p>
 
       <style jsx global>{`

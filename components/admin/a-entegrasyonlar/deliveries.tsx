@@ -10,7 +10,8 @@ import { QueryState } from '@/components/states';
 import { webhookEventLabel, type DeliveryItem } from '@/lib/integrations/contract';
 import { cn } from '@/lib/utils';
 import { errorText, fetchDeliveries, intKeys, resendDelivery } from './api';
-import { ERROR_KIND_LABEL, fmtAbs, fmtRel } from './format';
+import { ERROR_KIND_LABEL, ERROR_KIND_LABEL_EN, fmtAbs, fmtRel } from './format';
+import { useLocaleSafe } from '@/lib/app-locale';
 import { AdminEntegrasyonlarText } from './copy';
 
 function prettyJson(s: string | null): string {
@@ -27,6 +28,7 @@ function prettyJson(s: string | null): string {
  * parçası; gövdesi saklanan teslim "Yeniden gönder" ile aynı uca tekrar gönderilir.
  */
 export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId?: string; hostOf?: (id: string) => string | null; canResend?: boolean }) {
+  const en = useLocaleSafe() === 'en';
   const qc = useQueryClient();
   const [status, setStatus] = useState<'all' | 'failed' | 'ok'>(webhookId ? 'all' : 'failed');
   const [open, setOpen] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
   const resend = useMutation({
     mutationFn: resendDelivery,
     onSuccess: (r) => {
-      if (r.ok) toast.success(`Yeniden gönderildi · HTTP ${r.status}`);
-      else toast.error(`Yeniden gönderim başarısız: ${r.error ?? 'bilinmeyen hata'}`);
+      if (r.ok) toast.success(`${en ? 'Resent' : 'Yeniden gönderildi'} · HTTP ${r.status}`);
+      else toast.error(en ? `Resend failed: ${r.error ?? 'unknown error'}` : `Yeniden gönderim başarısız: ${r.error ?? 'bilinmeyen hata'}`);
       void qc.invalidateQueries({ queryKey: intKeys.all });
     },
     onError: (e) => toast.error(errorText(e)),
@@ -55,9 +57,9 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
       <div role="radiogroup" aria-label="Teslim durumu" className="flex flex-wrap gap-2">
         {(
           [
-            ['failed', 'Başarısız'],
-            ['ok', 'Başarılı'],
-            ['all', 'Tümü'],
+            ['failed', en ? 'Failed' : 'Başarısız'],
+            ['ok', en ? 'Succeeded' : 'Başarılı'],
+            ['all', en ? 'All' : 'Tümü'],
           ] as const
         ).map(([v, l]) => (
           <button
@@ -79,8 +81,8 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
         query={queryLike as never}
         skeleton="list"
         empty={{
-          title: status === 'failed' ? 'Başarısız teslim yok' : 'Teslim kaydı yok',
-          description: status === 'failed' ? 'Bu görünümde hata kaydı bulunmuyor — her şey yolunda.' : 'Abone olunan bir olay gerçekleştiğinde teslimler burada görünür.',
+          title: status === 'failed' ? (en ? 'No failed deliveries' : 'Başarısız teslim yok') : en ? 'No deliveries yet' : 'Teslim kaydı yok',
+          description: status === 'failed' ? (en ? 'Nothing has failed here — all good.' : 'Bu görünümde hata kaydı bulunmuyor — her şey yolunda.') : en ? 'Deliveries show up here once a subscribed event fires.' : 'Abone olunan bir olay gerçekleştiğinde teslimler burada görünür.',
           tone: status === 'failed' ? 'success' : undefined,
         }}
       >
@@ -97,7 +99,7 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
                   aria-controls={`dl-${d.id}`}
                   onClick={() => setOpen(expanded ? null : d.id)}
                 >
-                  <StatusBadge size="sm" tone={d.ok ? 'success' : 'danger'} label={d.ok ? `HTTP ${d.status}` : d.status ? `HTTP ${d.status}` : ERROR_KIND_LABEL[d.errorKind ?? ''] ?? 'Hata'} />
+                  <StatusBadge size="sm" tone={d.ok ? 'success' : 'danger'} label={d.ok ? `HTTP ${d.status}` : d.status ? `HTTP ${d.status}` : (en ? ERROR_KIND_LABEL_EN : ERROR_KIND_LABEL)[d.errorKind ?? ''] ?? (en ? 'Error' : 'Hata')} />
                   <span className="text-sm text-fg">{webhookEventLabel(d.event)}</span>
                   {d.test ? <span className="text-xs text-fg-muted">(test)</span> : null}
                   {d.resendOf ? <span className="text-xs text-fg-muted"><AdminEntegrasyonlarText k="redelivery" /></span> : null}
@@ -131,7 +133,7 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
                     {canResend && d.hasBody ? (
                       <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" disabled={resend.isPending} onClick={() => resend.mutate(d.id)}>
                         {resend.isPending && resend.variables === d.id ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> : <RotateCw className="h-4 w-4" aria-hidden />}
-                        Yeniden gönder
+                        {en ? 'Resend' : 'Yeniden gönder'}
                       </Button>
                     ) : null}
                   </div>
@@ -144,7 +146,7 @@ export function DeliveryLog({ webhookId, hostOf, canResend = true }: { webhookId
           <div className="mt-3 flex justify-center">
             <Button variant="outline" className="min-h-11" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>
               {q.isFetchingNextPage ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> : null}
-              Daha fazla yükle
+              {en ? 'Load more' : 'Daha fazla yükle'}
             </Button>
           </div>
         ) : null}

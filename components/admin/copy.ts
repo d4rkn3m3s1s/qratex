@@ -8,6 +8,8 @@ import { useDsLocale } from '@/components/ds/a11y/copy';
 
 const tr = {
   twoFaOff: 'İki adımlı doğrulama kapalı.',
+  twoFaRisk: 'Yönetici hesabınız yalnız şifreyle korunuyor; ele geçirilirse tüm platform etkilenir.',
+  twoFaSetup: '2FA’yı şimdi kur',
   ruleEditor: 'Kural editörü',
   ruleEditorHint: 'Koşul ve aksiyon tanımlayın; önizleme ile kimlerin etkileneceğini görün.',
   savedRule: 'Kayıtlı kural',
@@ -35,6 +37,8 @@ export type AdminCopy = Record<keyof typeof tr, string>;
 
 const en: AdminCopy = {
   twoFaOff: 'Two-step verification is off.',
+  twoFaRisk: 'Your admin account is protected by a password alone; if it’s compromised, the whole platform is affected.',
+  twoFaSetup: 'Set up 2FA now',
   ruleEditor: 'Rule editor',
   ruleEditorHint: 'Define conditions and actions, then preview who will be affected.',
   savedRule: 'Saved rule',

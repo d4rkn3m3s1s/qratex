@@ -59,6 +59,16 @@ export const ERROR_KIND_LABEL: Record<string, string> = {
   secret: 'İmza sırrı',
 };
 
+export const ERROR_KIND_LABEL_EN: Record<string, string> = {
+  timeout: 'Timed out',
+  network: 'Connection error',
+  blocked_url: 'Address blocked',
+  redirect: 'Redirect',
+  http_4xx: 'Client error (4xx)',
+  http_5xx: 'Server error (5xx)',
+  secret: 'Signing secret',
+};
+
 /** Kalan süre: "12 gün kaldı" / "süresiz". */
 export function expiryText(iso: string | null, now = Date.now()): string {
   if (!iso) return 'Süresiz';
