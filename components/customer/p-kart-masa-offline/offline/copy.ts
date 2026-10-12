@@ -34,7 +34,7 @@ const tr = {
     '/customer/wallet': 'Cüzdan',
     '/customer/wallet/card': 'Kartım',
     '/customer/wallet/activity': 'Hareketler',
-    '/customer/wallet/rewards': 'Ödüller',
+    '/customer/wallet/rewards': 'Mağaza',
     '/customer/games': 'Oyna',
     '/customer/me': 'Ben',
     '/customer/places': 'Keşfet',

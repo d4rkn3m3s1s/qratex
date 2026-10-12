@@ -43,7 +43,7 @@ describe('Qra bilgi tabanı ↔ navigasyon kaydı', () => {
 
   it('istem metni menü yolunu ve sayfa adını taşır', () => {
     const block = buildQraKnowledgeBlock();
-    expect(block).toContain('Cüzdan › Ödüller (/customer/wallet/rewards)');
+    expect(block).toContain('Cüzdan › Mağaza (/customer/wallet/rewards)');
     expect(block).not.toMatch(/\/customer\/(shop|surprise-boxes|my-card|remedy|nearby|feedbacks|badges)\b/);
   });
 });

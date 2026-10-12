@@ -36,14 +36,21 @@ export function SoundToggle({ compact = false }: { compact?: boolean }) {
   const title = en ? 'Interface sounds' : 'Arayüz sesleri';
   return (
     <div className={compact ? 'space-y-2 py-3' : 'space-y-2'}>
-      <div className="flex items-center justify-between gap-3">
+      <div className={compact ? 'flex items-start justify-between gap-3' : 'flex items-center justify-between gap-3'}>
         <div className="flex gap-3">
-          <div className="mt-1">
-            <Volume2 className="h-5 w-5 text-muted-foreground" aria-hidden />
-          </div>
+          {compact ? (
+            // Ayarlar listesindeki SettingSwitchRow ikon karosuyla birebir (32px karo, 16px ikon).
+            <span aria-hidden className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted">
+              <Volume2 className="h-4 w-4" />
+            </span>
+          ) : (
+            <div className="mt-1">
+              <Volume2 className="h-5 w-5 text-muted-foreground" aria-hidden />
+            </div>
+          )}
           <div>
-            <p className="font-medium">{title}</p>
-            <p className="text-sm text-muted-foreground">
+            <p className={compact ? 'text-base font-medium text-fg' : 'font-medium'}>{title}</p>
+            <p className={compact ? 'qx-small mt-0.5 text-fg-muted' : 'text-sm text-muted-foreground'}>
               {en
                 ? 'Soft sounds (and vibration) for rewards, points and confirmations. Saved on this device.'
                 : 'Ödül, puan ve onay anlarında yumuşak sesler (ve titreşim). Bu cihazda saklanır.'}
@@ -53,7 +60,7 @@ export function SoundToggle({ compact = false }: { compact?: boolean }) {
         <Switch checked={prefs.enabled} onCheckedChange={(v) => update({ ...prefs, enabled: v })} aria-label={title} />
       </div>
       {prefs.enabled && (
-        <label className="flex items-center gap-3 pl-8 text-sm text-muted-foreground">
+        <label className={`flex items-center gap-3 ${compact ? 'pl-11' : 'pl-8'} text-sm text-muted-foreground`}>
           <span>{en ? 'Volume' : 'Seviye'}</span>
           <input
             type="range"

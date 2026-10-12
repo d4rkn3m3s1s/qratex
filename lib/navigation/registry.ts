@@ -357,7 +357,7 @@ const CUSTOMER: NavRoute[] = [
     id: 'customer.wallet.rewards',
     role: 'customer',
     href: '/customer/wallet/rewards',
-    label: { tr: 'Ödüller', en: 'Rewards' },
+    label: { tr: 'Mağaza', en: 'Shop' },
     labelKey: 'rewards',
     icon: 'Gift',
     parent: 'customer.wallet',
@@ -365,7 +365,7 @@ const CUSTOMER: NavRoute[] = [
     menuKey: 'rewards',
     moduleKey: 'rewards',
     legacyIds: ['rewards', 'shop'],
-    keywords: ['mağaza', 'kozmetik', 'avatar', 'çerçeve', 'shop'],
+    keywords: ['ödül', 'ödüller', 'rewards', 'mağaza', 'kozmetik', 'avatar', 'çerçeve', 'shop'],
     redirectFrom: ['/customer/rewards', '/customer/shop'],
   },
   {

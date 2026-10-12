@@ -177,8 +177,9 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
   const q = useQuery({ queryKey: dsKeys.theme, queryFn: ({ signal }) => fetchTheme(signal), initialData: initial ?? undefined, staleTime: 30_000 });
   const live = q.data;
   const liveDraft = useMemo(() => (live ? draftFromSnapshot(live.snapshot) : null), [live]);
-  const [draft, setDraft] = useState<ThemeDraft | null>(null);
-  const [tab, setTab] = useState<'preset' | 'custom'>('preset');
+  // İlk boyamada taslak sunucu verisinden hazır (null → içerik sıçraması = CLS olmasın); efekt yalnız tazelemede eşitler.
+  const [draft, setDraft] = useState<ThemeDraft | null>(() => liveDraft);
+  const [tab, setTab] = useState<'preset' | 'custom'>(() => (liveDraft?.activeTheme === 'custom' ? 'custom' : 'preset'));
   const [note, setNote] = useState('');
   const [conflict, setConflict] = useState(false);
 

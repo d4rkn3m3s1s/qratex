@@ -24,8 +24,8 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
   return locale === 'en'
-    ? { title: 'Rewards', description: 'Turn your points into rewards and profile cosmetics.' }
-    : { title: 'Ödüller', description: 'Puanını ödüllere ve profil kozmetiklerine dönüştür.' };
+    ? { title: 'Shop', description: 'Turn your points into rewards and profile cosmetics.' }
+    : { title: 'Mağaza', description: 'Puanını ödüllere ve profil kozmetiklerine dönüştür.' };
 }
 
 export default async function WalletRewardsPage({

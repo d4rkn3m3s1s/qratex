@@ -12,7 +12,13 @@ import { useDesignSystemCopy } from './copy';
 
 export type DesignSystemTab = 'rehber' | 'temalar' | 'erisilebilirlik';
 
-const Loading = () => <SkeletonForPreset preset="detail" />;
+// Yer ayır: sekme parçası gelene kadar iskelet en az bir ekran boyu tutar; altındaki öğeler
+// (altbilgi vb.) görünür alanda olmadığından parça gelince kayma (CLS) olmaz.
+const Loading = () => (
+  <div className="min-h-[100svh]">
+    <SkeletonForPreset preset="detail" />
+  </div>
+);
 // Ağır sekmeler yalnız açıldığında yüklenir (istemci adası küçük kalır).
 const GuideTab = dynamic(() => import('./guide/guide-tab').then((m) => m.GuideTab), { loading: Loading });
 const ThemeStudio = dynamic(() => import('./theme/theme-studio').then((m) => m.ThemeStudio), { loading: Loading });

@@ -10,7 +10,7 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      'group/switch peer inline-flex h-6 w-11 shrink-0 cursor-pointer touch-manipulation items-center rounded-full border-2 border-transparent transition-colors duration-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-[hsl(var(--border-strong))]',
+      'group/switch peer inline-flex h-6 w-11 shrink-0 cursor-pointer touch-manipulation items-center rounded-full border-2 border-transparent transition-colors duration-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-[hsl(var(--border-strong))] dark:data-[state=unchecked]:bg-[hsl(225_9%_47%)]',
       className
     )}
     {...props}
@@ -19,7 +19,7 @@ const Switch = React.forwardRef<
     <SwitchPrimitives.Thumb
       className={cn(
         // Kapalı iz --border-strong (≥ 3:1; eski bg-input koyu temada başparmakla 1,32:1 idi).
-        'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 qx-switch-thumb transition-transform duration-slow group-active/switch:scale-90 data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0 dark:bg-background'
+        'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 qx-switch-thumb transition-transform duration-slow group-active/switch:scale-90 data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0 dark:shadow-[0_1px_3px_rgb(0_0_0/0.6)]'
       )}
     />
   </SwitchPrimitives.Root>
