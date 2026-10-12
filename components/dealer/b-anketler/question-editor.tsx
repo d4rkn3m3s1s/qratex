@@ -77,10 +77,10 @@ export const QuestionEditor = memo(function QuestionEditor({
         <span aria-hidden className="qx-caption grid size-7 shrink-0 place-items-center rounded-chip bg-surface-3 font-semibold text-fg-muted tabular-nums">
           {n}
         </span>
-        <div className="min-w-0 flex-1 sm:flex-none">
+        <div className="min-w-[11rem] flex-1 sm:flex-none">
           <Select value={q.type} onValueChange={(v) => h.onType(q.id, v as SurveyQuestionType)} disabled={q.locked}>
             <SelectTrigger className="h-11 w-full sm:w-56" aria-label={copy.typeLabel(n)} aria-describedby={q.locked ? lockNoteId : undefined}>
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="!flex min-w-0 items-center gap-2 [&>span:last-child]:truncate">
                 <TypeIcon aria-hidden className="size-4 shrink-0 text-brand" />
                 <SelectValue />
               </span>
