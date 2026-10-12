@@ -32,7 +32,7 @@ import { useAutomationCopy } from './copy';
 // Katalog düzenleyicisi sayfanın altındadır; ilk boyamayı bekletmez.
 const RemedyCatalog = dynamic(() => import('./remedy-catalog').then((mod) => mod.RemedyCatalog), {
   ssr: false,
-  loading: () => <div className="h-40 animate-pulse rounded-card bg-surface-2" aria-hidden />,
+  loading: () => <div className="h-40 rounded-card bg-surface-2" aria-hidden />,
 });
 
 export function RemedyScreen() {

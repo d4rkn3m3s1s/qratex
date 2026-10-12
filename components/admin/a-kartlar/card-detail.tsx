@@ -89,7 +89,7 @@ function CardQr({ card }: { card: CardDetail }) {
             </Button>
           </div>
         ) : (
-          <div className="h-full w-full animate-pulse rounded bg-surface-3 motion-reduce:animate-none" role="status" aria-label="QR kodu hazırlanıyor" />
+          <div className="h-full w-full rounded bg-surface-3" role="status" aria-label="QR kodu hazırlanıyor" />
         )}
       </div>
       <div className="flex w-full flex-col gap-2">

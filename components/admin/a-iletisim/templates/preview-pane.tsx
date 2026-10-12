@@ -78,7 +78,7 @@ export function PreviewPane({ draft, className }: { draft: TemplateInput; classN
               className={cn('block h-[70vh] min-h-[480px] w-full border-0 transition-opacity duration-fast motion-reduce:transition-none', loading && 'opacity-70')}
             />
           ) : (
-            <div className="h-[480px] animate-pulse bg-surface-2 motion-reduce:animate-none" aria-hidden />
+            <div className="h-[480px] bg-surface-2" aria-hidden />
           )}
         </div>
       </div>

@@ -48,7 +48,7 @@ export function MailFrame({ id, subject, hasRemoteImages }: { id: string; subjec
       )}
       <div className="relative overflow-hidden rounded-control border border-border bg-white">
         {!loaded && (
-          <div className="absolute inset-0 animate-pulse bg-surface-2 motion-reduce:animate-none" aria-hidden />
+          <div className="absolute inset-0 bg-surface-2" aria-hidden />
         )}
         <iframe
           key={`${id}:${images ? 1 : 0}`}
