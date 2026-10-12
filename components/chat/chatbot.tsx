@@ -346,6 +346,16 @@ export function Chatbot() {
     }
   };
 
+  // FAB görünürken sayfa sonuna yer ayır (globals.css main::after) — son satır/kart/tablo FAB'ın altında kalmasın.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!isOpen) root.style.setProperty('--qx-fab-space', '5.5rem');
+    else root.style.removeProperty('--qx-fab-space');
+    return () => {
+      root.style.removeProperty('--qx-fab-space');
+    };
+  }, [isOpen]);
+
   const fabSpring = { type: 'spring' as const, stiffness: 260, damping: 22 };
   const panelSpring = { type: 'spring' as const, stiffness: 380, damping: 34 };
 

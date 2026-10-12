@@ -944,3 +944,11 @@ html.reduce-animations .qx-marquee-track {
 html.qx-consent-decided [data-consent-banner] {
   display: none;
 }
+
+/* Yüzen asistan düğmesi (chatbot FAB) görünürken içeriğin sonuna boşluk: son satır/kart FAB altında kalmaz. */
+main:not(.grid):not(.flex)::after {
+  content: '';
+  display: block;
+  height: var(--qx-fab-space, 0px);
+  flex-shrink: 0;
+}
