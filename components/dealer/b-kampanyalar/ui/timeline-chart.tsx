@@ -5,6 +5,7 @@
  * Gönderim günü dikey çizgiyle işaretli; gönderim öncesi çubuklar soluk (aynı veri, renk + konum).
  */
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartEnter } from "@/components/ds/data/use-chart-enter";
 import { CHART_THEME, chartToneColor } from '@/components/ds/data/chart-theme';
 
 export type TimelineChartRow = { label: string; offset: number; visitors: number };
@@ -18,6 +19,7 @@ export default function TimelineChart({
   sendLabel: string;
   visitorsLabel: string;
 }) {
+  const enter = useChartEnter();
   const sendRow = data.find((d) => d.offset === 0);
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -40,7 +42,7 @@ export default function TimelineChart({
             label={{ value: sendLabel, position: 'top', fill: CHART_THEME.axisLabel, fontSize: 12 }}
           />
         )}
-        <Bar dataKey="visitors" isAnimationActive={false} radius={[4, 4, 0, 0]}>
+        <Bar dataKey="visitors" {...enter} radius={[4, 4, 0, 0]}>
           {data.map((d) => (
             <Cell key={d.label} fill={d.offset < 0 ? chartToneColor('neutral', 0.35) : chartToneColor('brand')} />
           ))}

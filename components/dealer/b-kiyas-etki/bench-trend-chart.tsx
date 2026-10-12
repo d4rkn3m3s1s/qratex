@@ -7,6 +7,7 @@
  * Ops kaydı: animasyon kapalı. Grafik `aria-hidden` (ChartFrame tablo karşılığını verir).
  */
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartEnter } from "@/components/ds/data/use-chart-enter";
 import { CHART_THEME, chartSeriesColor, chartToneColor } from '@/components/ds/data/chart-theme';
 import type { SeriesMetricKey, SeriesPoint } from '@/lib/dealer-benchmark/types';
 import { useBkCopy } from './copy';
@@ -15,6 +16,7 @@ import { fmtDay, fmtUnit } from './format';
 const MIN_N = 3;
 
 export default function BenchTrendChart({ data, metric, bucket }: { data: SeriesPoint[]; metric: SeriesMetricKey; bucket: 'day' | 'week' }) {
+  const enter = useChartEnter();
   const { copy, locale } = useBkCopy();
   const c = copy.bench.trend;
   const unit = metric === 'rating' ? 'rating' : 'percent';
@@ -47,14 +49,14 @@ export default function BenchTrendChart({ data, metric, bucket }: { data: Series
             return [fmtUnit(Number(value), unit, locale), name];
           }}
         />
-        <Area dataKey="band" name={c.colBand} stroke="none" fill={chartToneColor('neutral', 0.18)} isAnimationActive={false} connectNulls={false} />
-        <Line dataKey="peerP50" name={c.colP50} stroke={chartToneColor('neutral')} strokeDasharray="4 4" dot={false} isAnimationActive={false} connectNulls={false} />
+        <Area dataKey="band" name={c.colBand} stroke="none" fill={chartToneColor('neutral', 0.18)} {...enter} connectNulls={false} />
+        <Line dataKey="peerP50" name={c.colP50} stroke={chartToneColor('neutral')} strokeDasharray="4 4" dot={false} {...enter} connectNulls={false} />
         <Line
           dataKey="you"
           name={c.colYou}
           stroke={chartSeriesColor(0)}
           strokeWidth={2}
-          isAnimationActive={false}
+          {...enter}
           connectNulls={false}
           dot={(props: { cx?: number; cy?: number; payload?: SeriesPoint; index?: number }) => {
             const { cx, cy, payload, index } = props;

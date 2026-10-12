@@ -13,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { PanelPage, PageHeader } from '@/components/ds/page';
 import { ChoiceChips } from '@/components/ds/a11y';
 import { ConfirmAction, EmptyState, InlineError, TONE_CALLOUT } from '@/components/states';
-import { fadeUp } from '@/lib/motion';
+import { fadeUp, SPRING } from '@/lib/motion';
+import { useReducedMotionPref } from '@/lib/motion/use-reduced-motion-pref';
 import { cn } from '@/lib/utils';
 import { isChoiceType, SURVEY_LIMITS, type SurveyQuestionType } from '@/lib/survey-schema';
 import { buildSurveyPayload, mapIssuesToDraftErrors, validateSurveyDraft, type DraftErrors } from '@/lib/survey-draft';
@@ -95,6 +96,7 @@ export function SurveyBuilder(props: SurveyBuilderProps) {
   const [showErrors, setShowErrors] = useState(false);
   const [serverErrors, setServerErrors] = useState<DraftErrors | null>(null);
   const [saving, setSaving] = useState<null | 'publish' | 'paused' | 'update'>(null);
+  const reduceMotion = useReducedMotionPref();
   const [activeQ, setActiveQ] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit');
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -501,7 +503,7 @@ export function SurveyBuilder(props: SurveyBuilderProps) {
                 <ol className="space-y-3">
                   <AnimatePresence initial={false}>
                     {draft.questions.map((q, i) => (
-                      <Motion.li key={q.id} variants={fadeUp} initial="hidden" animate="visible" exit="exit">
+                      <Motion.li key={q.id} layout={reduceMotion ? false : 'position'} transition={{ layout: SPRING.snappy }} variants={fadeUp} initial="hidden" animate="visible" exit="exit">
                         <QuestionEditor
                           q={q}
                           index={i}

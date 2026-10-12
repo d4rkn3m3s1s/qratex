@@ -7,6 +7,7 @@
  * Ops kaydı: animasyon kapalı. Grafik `aria-hidden` (ChartFrame tablo karşılığını verir).
  */
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartEnter } from "@/components/ds/data/use-chart-enter";
 import { CHART_THEME, chartSeriesColor, chartToneColor } from '@/components/ds/data/chart-theme';
 import type { SeriesPoint } from '@/lib/dealer-analytics/types';
 import { dayLabel, formatNumber, formatRating, useAnalyticsCopy, useAnalyticsLocale } from './copy';
@@ -14,6 +15,7 @@ import { dayLabel, formatNumber, formatRating, useAnalyticsCopy, useAnalyticsLoc
 export type TrendView = 'volume' | 'sentiment';
 
 export default function TrendChart({ data, view, anomalyDays, showCompare }: { data: SeriesPoint[]; view: TrendView; anomalyDays: string[]; showCompare: boolean }) {
+  const enter = useChartEnter();
   const locale = useAnalyticsLocale();
   const copy = useAnalyticsCopy();
   const anomalies = new Set(anomalyDays);
@@ -43,10 +45,10 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
           <Legend wrapperStyle={CHART_THEME.legendStyle} />
-          <Bar dataKey="positive" name={copy.colPositive} stackId="s" fill={chartToneColor('success')} isAnimationActive={false} />
-          <Bar dataKey="neutral" name={copy.colNeutral} stackId="s" fill={chartToneColor('neutral', 0.55)} isAnimationActive={false} />
-          <Bar dataKey="negative" name={copy.colNegative} stackId="s" fill={chartToneColor('danger')} isAnimationActive={false} />
-          <Bar dataKey="pending" name={copy.colPending} stackId="s" fill={chartToneColor('info', 0.45)} isAnimationActive={false} />
+          <Bar dataKey="positive" name={copy.colPositive} stackId="s" fill={chartToneColor('success')} {...enter} />
+          <Bar dataKey="neutral" name={copy.colNeutral} stackId="s" fill={chartToneColor('neutral', 0.55)} {...enter} />
+          <Bar dataKey="negative" name={copy.colNegative} stackId="s" fill={chartToneColor('danger')} {...enter} />
+          <Bar dataKey="pending" name={copy.colPending} stackId="s" fill={chartToneColor('info', 0.45)} {...enter} />
         </ComposedChart>
       </ResponsiveContainer>
     );
@@ -61,7 +63,7 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
         <YAxis yAxisId="rating" orientation="right" domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={28} />
         {tooltip}
         <Legend wrapperStyle={CHART_THEME.legendStyle} />
-        <Bar yAxisId="count" dataKey="count" name={copy.colCount} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false}>
+        <Bar yAxisId="count" dataKey="count" name={copy.colCount} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} {...enter}>
           {data.map((p) => (
             <Cell key={p.day} fill={anomalies.has(p.day) ? chartToneColor('danger', 0.85) : chartSeriesColor(0, 0.75)} />
           ))}
@@ -75,7 +77,7 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
             stroke={chartToneColor('neutral')}
             strokeDasharray="4 4"
             dot={false}
-            isAnimationActive={false}
+            {...enter}
           />
         )}
         <Line
@@ -87,7 +89,7 @@ export default function TrendChart({ data, view, anomalyDays, showCompare }: { d
           strokeWidth={2}
           dot={data.length <= 31 ? { r: 2.5 } : false}
           connectNulls={false}
-          isAnimationActive={false}
+          {...enter}
         />
       </ComposedChart>
     </ResponsiveContainer>

@@ -6,6 +6,7 @@
  * Aksiyonlar tamamlanma tarihine göre kovalanır (ROI #2, sunucu). Animasyon kapalı.
  */
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartEnter } from "@/components/ds/data/use-chart-enter";
 import { CHART_THEME, chartSeriesColor, chartToneColor } from '@/components/ds/data/chart-theme';
 import type { TrendPoint } from '@/lib/dealer-impact/types';
 import { useBkCopy } from './copy';
@@ -14,6 +15,7 @@ import { fmtDay, fmtMoney, fmtNumber, fmtRating } from './format';
 export type ImpactTrendView = 'volume' | 'rating' | 'actions' | 'visits';
 
 export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; view: ImpactTrendView }) {
+  const enter = useChartEnter();
   const { copy, locale } = useBkCopy();
   const c = copy.impact.trend;
   const interval = data.length > 14 ? Math.ceil(data.length / 8) - 1 : 0;
@@ -47,9 +49,9 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
           <Legend wrapperStyle={CHART_THEME.legendStyle} />
-          <Bar dataKey="feedback" name={c.feedback} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
-          <Bar dataKey="replied" name={c.replied} fill={chartToneColor('success', 0.8)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
-          <Line dataKey="negative" name={c.negative} stroke={chartToneColor('danger')} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Bar dataKey="feedback" name={c.feedback} fill={chartSeriesColor(0, 0.75)} radius={CHART_THEME.barRadius} {...enter} />
+          <Bar dataKey="replied" name={c.replied} fill={chartToneColor('success', 0.8)} radius={CHART_THEME.barRadius} {...enter} />
+          <Line dataKey="negative" name={c.negative} stroke={chartToneColor('danger')} strokeWidth={2} dot={false} {...enter} />
         </ComposedChart>
       ) : view === 'rating' ? (
         <ComposedChart data={data} {...common}>
@@ -57,7 +59,7 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           {axis}
           <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={40} />
           {tooltip}
-          <Line dataKey="avgRating" name={c.avgRating} stroke={chartSeriesColor(0)} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
+          <Line dataKey="avgRating" name={c.avgRating} stroke={chartSeriesColor(0)} strokeWidth={2} connectNulls={false} {...enter} />
         </ComposedChart>
       ) : view === 'actions' ? (
         <ComposedChart data={data} {...common}>
@@ -65,7 +67,7 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           {axis}
           <YAxis tick={CHART_THEME.tick} stroke={CHART_THEME.grid} allowDecimals={false} width={40} />
           {tooltip}
-          <Bar dataKey="actionsClosed" name={c.actionsClosed} fill={chartSeriesColor(2, 0.8)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
+          <Bar dataKey="actionsClosed" name={c.actionsClosed} fill={chartSeriesColor(2, 0.8)} radius={CHART_THEME.barRadius} {...enter} />
         </ComposedChart>
       ) : (
         <ComposedChart data={data} {...common}>
@@ -75,8 +77,8 @@ export default function ImpactTrendChart({ data, view }: { data: TrendPoint[]; v
           <YAxis yAxisId="r" orientation="right" tick={CHART_THEME.tick} stroke={CHART_THEME.grid} width={56} tickFormatter={(v) => fmtNumber(Number(v), locale)} />
           {tooltip}
           <Legend wrapperStyle={CHART_THEME.legendStyle} />
-          <Bar yAxisId="v" dataKey="visits" name={c.visits} fill={chartSeriesColor(1, 0.75)} radius={CHART_THEME.barRadius} isAnimationActive={false} />
-          <Line yAxisId="r" dataKey="revenue" name={c.revenue} stroke={chartToneColor('success')} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Bar yAxisId="v" dataKey="visits" name={c.visits} fill={chartSeriesColor(1, 0.75)} radius={CHART_THEME.barRadius} {...enter} />
+          <Line yAxisId="r" dataKey="revenue" name={c.revenue} stroke={chartToneColor('success')} strokeWidth={2} dot={false} {...enter} />
         </ComposedChart>
       )}
     </ResponsiveContainer>
