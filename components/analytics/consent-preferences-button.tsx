@@ -7,7 +7,7 @@ import { useAppLocale } from '@/lib/app-locale';
 import { useConsent } from '@/lib/consent/client';
 import { cn } from '@/lib/utils';
 import { getConsentCopy } from './consent-copy';
-import { openConsentCenter } from './consent-center';
+import { openConsentCenter } from './consent-center-lazy';
 import type { ConsentSurface } from './consent-record';
 
 /** Footer ve diğer yüzeyler için "Çerez tercihleri" bağlantısı/butonu (tercih merkezini açar). */

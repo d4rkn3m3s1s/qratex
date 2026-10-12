@@ -10,7 +10,9 @@ import { InstallBanner } from '@/components/pwa/install-banner';
 import { OfflineBanner } from '@/components/layout/offline-banner';
 import { SessionDeviceGuard } from '@/components/customer/p-kart-masa-offline/offline/session-device-guard';
 import { applyRuntimeThemeCss } from '@/lib/apply-runtime-theme';
-import { buildRuntimeThemeCss, runtimeThemeStateFromRows, type RuntimeThemeState } from '@/lib/design-system/theme-runtime';
+// Palet kataloğu (theme-runtime → theme-model) ilk yük JS'inde değil: SSR aynı CSS'i zaten
+// basıyor; istemci yalnız değişiklikte (yayın, dönemsel konsept) tembel modülle yeniden yazar.
+const loadThemeRuntime = () => import('@/lib/design-system/theme-runtime');
 import {
   THEME_SETTINGS_KEYS,
   THEME_SETTINGS_PUBLIC_API_PATH,
@@ -39,7 +41,7 @@ function ThemeColorsProvider({
 }) {
   // SSR satırları varsa durum hazır başlar (aynı CSS zaten app/layout.tsx'te basıldı).
   const [isThemeInitialized, setIsThemeInitialized] = useState(!!initialThemeSettings?.length);
-  const [themeState, setThemeState] = useState<RuntimeThemeState>(() => runtimeThemeStateFromRows(initialThemeSettings));
+  const [themeRows, setThemeRows] = useState<ThemeSettingRow[] | undefined>(initialThemeSettings);
   // Aktif dönemsel konseptin paleti: tema hesaplamasında üst katman (aynı türetme, iki mod).
   const [seasonalThemeId, setSeasonalThemeId] = useState<string | null>(null);
   useEffect(() => {
@@ -48,7 +50,7 @@ function ThemeColorsProvider({
   }, []);
 
   const applyRows = (rows: ThemeSettingRow[]) => {
-    setThemeState(runtimeThemeStateFromRows(rows));
+    setThemeRows(rows);
     setIsThemeInitialized(true);
   };
 
@@ -98,10 +100,17 @@ function ThemeColorsProvider({
 
   // Tek yazar: iki modun bloğu birlikte (lib/design-system/theme-runtime). Mod değişiminde
   // yeniden hesap/boyama yok; erişilebilirlik modları seçici özgüllüğüyle her zaman üstte.
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!isThemeInitialized && !seasonalThemeId) return;
-    applyRuntimeThemeCss(buildRuntimeThemeCss({ ...themeState, seasonalThemeId }));
-  }, [themeState, isThemeInitialized, seasonalThemeId]);
+    let cancelled = false;
+    void loadThemeRuntime().then(({ buildRuntimeThemeCss, runtimeThemeStateFromRows }) => {
+      if (cancelled) return;
+      applyRuntimeThemeCss(buildRuntimeThemeCss({ ...runtimeThemeStateFromRows(themeRows), seasonalThemeId }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [themeRows, isThemeInitialized, seasonalThemeId]);
 
   return <>{children}</>;
 }

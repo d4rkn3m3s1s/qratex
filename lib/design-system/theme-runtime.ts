@@ -23,8 +23,7 @@ export type RuntimeThemeState = {
 };
 
 /** Bu öğelerin içeriği tema CSS'idir (SSR + canlı). */
-export const RUNTIME_THEME_STYLE_ID = 'qx-runtime-theme';
-export const RUNTIME_THEME_LIVE_STYLE_ID = 'qx-runtime-theme-live';
+export { RUNTIME_THEME_STYLE_ID, RUNTIME_THEME_LIVE_STYLE_ID } from './theme-runtime-ids';
 
 export const RUNTIME_THEME_SELECTORS: Record<ThemeMode, string> = {
   light: ':root:not(.dark)',

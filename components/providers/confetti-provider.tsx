@@ -1,7 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
-import { confetti, confettiRaw, type RawConfettiOptions } from '@/lib/moments/effects';
+import type { RawConfettiOptions } from '@/lib/moments/effects';
+
+// Efekt cephesi (ses/titreşim/Capacitor dahil) kök sağlayıcıda statik değil: ilk çağrıda yüklenir (perf-2).
+const loadEffects = () => import('@/lib/moments/effects');
 
 /**
  * `useConfetti()` — geriye uyumlu bağlam. Tüm efektler An Motoru'nun TEK efekt
@@ -26,15 +29,17 @@ const DEFAULT_FIRE: RawConfettiOptions = {
 };
 
 const VALUE: ConfettiContextType = {
-    fire: (options) => confettiRaw({ ...DEFAULT_FIRE, ...options }),
+    fire: (options) => {
+        void loadEffects().then((e) => e.confettiRaw({ ...DEFAULT_FIRE, ...options }));
+    },
     fireSchoolPride: () => {
-        confetti('pride');
+        void loadEffects().then((e) => e.confetti('pride'));
     },
     fireStars: () => {
-        confetti('stars');
+        void loadEffects().then((e) => e.confetti('stars'));
     },
     fireFireworks: () => {
-        confetti('fireworks');
+        void loadEffects().then((e) => e.confetti('fireworks'));
     },
 };
 

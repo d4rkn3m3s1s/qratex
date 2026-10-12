@@ -1,4 +1,4 @@
-import { RUNTIME_THEME_LIVE_STYLE_ID, RUNTIME_THEME_STYLE_ID } from '@/lib/design-system/theme-runtime';
+import { RUNTIME_THEME_LIVE_STYLE_ID, RUNTIME_THEME_STYLE_ID } from '@/lib/design-system/theme-runtime-ids';
 
 /**
  * Tema CSS'ini (lib/design-system/theme-runtime `buildRuntimeThemeCss`) belgeye uygular.

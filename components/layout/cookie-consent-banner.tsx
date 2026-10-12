@@ -11,7 +11,8 @@ import { floatingZTw } from '@/lib/ui-z';
 import { useAppLocale } from '@/lib/app-locale';
 import { fadeUp } from '@/lib/motion/variants';
 import { useConsent } from '@/lib/consent/client';
-import { ConsentCenter, openConsentCenter } from '@/components/analytics/consent-center';
+import { useFirstRunBusy } from '@/lib/first-run-queue';
+import { ConsentCenterLazy, openConsentCenter } from '@/components/analytics/consent-center-lazy';
 import { getConsentCopy } from '@/components/analytics/consent-copy';
 import { adoptAccountConsent, applyConsentDecision } from '@/components/analytics/consent-record';
 import { CONSENT_PREPAINT_CLASS, CONSENT_PREPAINT_SNIPPET } from '@/lib/consent/types';
@@ -59,7 +60,10 @@ export function CookieConsentBanner() {
   // bekliyordu (~7 sn mobil). Artık ilk HTML'de basılır; karar verilmiş/kiosk ziyaretçide
   // `CONSENT_PREPAINT_SNIPPET` ilk boyamadan önce <html>'e sınıf ekler ve CSS gizler (yanıp
   // sönme yok). Hidrasyondan sonra karar React'tedir: ön-kontrol yanıldıysa sınıf kaldırılır.
-  const visible = !consent.ready || (!kiosk && !consent.decided);
+  // İlk açılış sırası: karşılama videosu / tanıtım / doğum günü açıkken band geri çekilir,
+  // akış bitince kendi sırası gelir (üç katman üst üste açılmasın). Karar hâlâ zorunlu.
+  const firstRunBusy = useFirstRunBusy();
+  const visible = !firstRunBusy && (!consent.ready || (!kiosk && !consent.decided));
 
   useEffect(() => {
     if (!consent.ready || consent.decided || kiosk) return;
@@ -71,7 +75,7 @@ export function CookieConsentBanner() {
       {/* Ön-kontrol banner'dan ÖNCE, gövdede satır içi: ayrıştırılınca hemen çalışır (Next'in
           beforeInteractive kuyruğu çalışma zamanını beklediği için ilk boyamaya yetişmez). */}
       <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CONSENT_PREPAINT_SNIPPET }} />
-      <ConsentCenter />
+      <ConsentCenterLazy />
       {/* initial={false}: ilk HTML'deki banner giriş animasyonuyla opaklık 0'dan başlamasın. */}
       <AnimatePresence initial={false}>
         {visible ? (

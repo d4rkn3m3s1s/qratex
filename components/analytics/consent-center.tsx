@@ -19,11 +19,8 @@ import { cn } from '@/lib/utils';
 import { getConsentCopy } from './consent-copy';
 import { applyConsentDecision, type ConsentSurface } from './consent-record';
 
-/** Tercih merkezini belirli bir yüzeyden açar (footer, ayarlar, politika sayfası). */
-export function openConsentCenter(surface: ConsentSurface = 'other'): void {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(CONSENT_OPEN_EVENT, { detail: { surface } }));
-}
+// Hafif açma yardımcısı tembel kabukta yaşar (diyalog modülünü çekmeden çağrılabilsin).
+export { openConsentCenter } from './consent-center-lazy';
 
 function CategoryRow({
   title,
@@ -80,12 +77,19 @@ function CategoryRow({
  * eşit ağırlıkta. Footer, Ayarlar › Gizlilik ve Çerez Politikası'ndan açılır
  * (`openConsentCenter`). Kararın kendisi çerezde, kanıtı sunucuda (`ConsentRecord`).
  */
-export function ConsentCenter({ onDecided }: { onDecided?: () => void }) {
+export function ConsentCenter({
+  onDecided,
+  initialSurface,
+}: {
+  onDecided?: () => void;
+  /** Tembel kabuktan ilk açma olayının yüzeyi: verildiyse diyalog açık başlar. */
+  initialSurface?: ConsentSurface;
+}) {
   const { locale } = useAppLocale();
   const copy = getConsentCopy(locale);
   const consent = useConsent();
-  const [open, setOpen] = useState(false);
-  const [surface, setSurface] = useState<ConsentSurface>('other');
+  const [open, setOpen] = useState(initialSurface !== undefined);
+  const [surface, setSurface] = useState<ConsentSurface>(initialSurface ?? 'other');
   const [analytics, setAnalytics] = useState(false);
   const [replay, setReplay] = useState(false);
 
