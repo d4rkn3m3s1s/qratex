@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { m as Motion } from 'framer-motion';
 import { Twitter, Linkedin, Instagram, Github, Mail, MapPin, Rss } from 'lucide-react';
 import { getRandomSlogan } from '@/lib/slogans';
 import { cn } from '@/lib/utils';
@@ -98,7 +97,7 @@ export function Footer() {
     'rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
   return (
-    <footer className="border-t border-border/40 bg-background/20 backdrop-blur-md">
+    <footer className="border-t border-subtle bg-surface-0">
       <div className="container mx-auto px-4 py-12 lg:py-16">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12">
           {/* Brand */}
@@ -135,25 +134,23 @@ export function Footer() {
             {!(slogan && lang === 'tr') && <div className="mb-6" />}
             <div className="flex items-center gap-3">
               {socialLinks.map((social) => (
-                <Motion.a
+                <a
                   key={social.label}
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={social.label}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary touch-manipulation"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.98 }}
+                  className={cn('flex h-11 w-11 items-center justify-center border border-subtle text-muted-foreground hover:border-brand-border hover:text-brand touch-manipulation', linkFocus)}
                 >
                   <social.icon className="h-5 w-5 shrink-0" aria-hidden />
-                </Motion.a>
+                </a>
               ))}
             </div>
           </div>
 
           {/* Links */}
           <div>
-            <h3 className="font-semibold text-base mb-4">{text.product}</h3>
+            <h3 className="qx-overline mb-4 text-fg-muted">{text.product}</h3>
             <ul className="space-y-3">
               {footerLinks.product.map((link) => (
                 <li key={link.href}>
@@ -169,7 +166,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">{text.company}</h3>
+            <h3 className="qx-overline mb-4 text-fg-muted">{text.company}</h3>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.href}>
@@ -185,7 +182,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">{text.support}</h3>
+            <h3 className="qx-overline mb-4 text-fg-muted">{text.support}</h3>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.href} className="flex items-center gap-1.5">
@@ -203,7 +200,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">{text.legal}</h3>
+            <h3 className="qx-overline mb-4 text-fg-muted">{text.legal}</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.href}>

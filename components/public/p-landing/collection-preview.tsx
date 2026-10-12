@@ -5,16 +5,6 @@ import { fmt, formatInt, type PublicLocale } from './fmt';
 import type { LandingCopy } from './landing-copy';
 import { PublicSection, SectionHeading } from './section';
 
-/** Kategori sırası için QDL kategori renkleri (yalnız destek; anlam metinle). */
-const CATEGORY_TONES = [
-  'from-category-1/25 to-category-1/5 border-category-1/40',
-  'from-category-2/25 to-category-2/5 border-category-2/40',
-  'from-category-3/25 to-category-3/5 border-category-3/40',
-  'from-category-4/25 to-category-4/5 border-category-4/40',
-  'from-category-5/25 to-category-5/5 border-category-5/40',
-  'from-category-6/25 to-category-6/5 border-category-6/40',
-];
-
 /**
  * Rozet koleksiyonu + lig basamakları + ek kazanç yolları. Veri gerçek katalogdan:
  * karakter kategorileri (ad, karakter sayısı), lig kuralları (ad, giriş puanı), davet ve
@@ -39,26 +29,25 @@ export function CollectionPreview({
         id="collection-title"
         eyebrow={copy.eyebrow}
         title={copy.title}
+        align="start"
         sub={fmt(copy.sub, {
           characters: formatInt(earn.characterCount, locale),
           categoryCount: formatInt(earn.characterCategories.length, locale),
         })}
       />
 
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <ul className="grid grid-cols-1 border-t border-subtle sm:grid-cols-2 lg:grid-cols-3">
         {earn.characterCategories.map((c, i) => (
-          <Reveal as="li" index={i} key={c.key} className="list-none">
-            <div
-              className={`relative flex h-full flex-col items-center rounded-card border bg-gradient-to-b p-4 text-center ${
-                CATEGORY_TONES[i % CATEGORY_TONES.length]
-              }`}
-            >
-              <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-1 text-3xl shadow-sm" aria-hidden>
-                {c.mystery ? <HelpCircle className="h-7 w-7 text-brand" /> : c.emoji}
+          <Reveal as="li" index={i} key={c.key} className="list-none border-b border-subtle">
+            <div className="flex h-full items-center gap-4 py-4 sm:pr-6">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface-2 text-2xl" aria-hidden>
+                {c.mystery ? <HelpCircle className="h-5 w-5 text-brand" /> : c.emoji}
               </span>
-              <p className="mt-3 font-semibold text-fg">{c.name}</p>
-              <p className="qx-num mt-0.5 text-sm text-fg-muted">{fmt(copy.categoryCount, { n: formatInt(c.count, locale) })}</p>
-              {c.mystery ? <p className="mt-2 text-xs text-fg-muted">{copy.mysteryNote}</p> : null}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-fg">{c.name}</p>
+                {c.mystery ? <p className="mt-0.5 text-xs text-fg-muted">{copy.mysteryNote}</p> : null}
+              </div>
+              <p className="qx-num shrink-0 text-sm text-fg-muted">{fmt(copy.categoryCount, { n: formatInt(c.count, locale) })}</p>
             </div>
           </Reveal>
         ))}
@@ -75,7 +64,7 @@ export function CollectionPreview({
                 className="flex min-h-11 items-center gap-2 rounded-full border border-subtle bg-surface-0 py-1.5 pl-1.5 pr-3.5"
               >
                 <span
-                  className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-primary to-primary/50 text-xs font-bold text-primary-foreground qx-num"
+                  className="grid h-8 w-8 place-items-center rounded-full bg-brand-subtle text-xs font-bold text-brand qx-num"
                   aria-hidden
                 >
                   {i + 1}

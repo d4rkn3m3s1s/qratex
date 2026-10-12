@@ -16,6 +16,9 @@ export interface LandingCopy {
     loginPrompt: string;
     loginLink: string;
     qrHint: string;
+    shotCustomerAlt: string;
+    shotBusinessAlt: string;
+    shotCaption: string;
   };
   story: {
     exampleTag: string;
@@ -28,6 +31,7 @@ export interface LandingCopy {
     staticSummary: string;
   };
   stats: {
+    eyebrow: string;
     heading: string;
     members: string;
     businesses: string;
@@ -88,6 +92,7 @@ export interface LandingCopy {
     ctaWhy: string;
     ctaPricing: string;
     ctaRegister: string;
+    priceLabel: string;
   };
   faq: {
     eyebrow: string;
@@ -111,16 +116,19 @@ export interface LandingCopy {
 
 const tr: LandingCopy = {
   hero: {
-    eyebrow: 'Geri bildirim ver, ödül kazan',
-    titleLead: 'Fikrini söyle,',
-    titleAccent: 'ödülünü kazan.',
+    eyebrow: 'QR ile geri bildirim, puanla ödül',
+    titleLead: 'Fikrin',
+    titleAccent: 'puan eder.',
     sub:
-      'Masadaki QR kodu okut, deneyimini birkaç saniyede paylaş. Üye olarak verdiğin her geri bildirim puan ve XP kazandırır; puanların rozete, lige ve ödüle dönüşür. İşletmeler de seni gerçekten duyar.',
+      'QR kodu okut, deneyimini birkaç saniyede paylaş. Her geri bildirim puan ve XP kazandırır; puanların rozete, lige ve ödüle dönüşür. İşletme de seni gerçekten duyar.',
     ctaPrimary: 'Ücretsiz üye ol',
     ctaBusiness: 'İşletmem için',
     loginPrompt: 'Zaten üye misin?',
     loginLink: 'Giriş yap',
     qrHint: 'Uygulama indirmen gerekmez: telefonunun kamerasıyla QR kodu okutman yeter.',
+    shotCustomerAlt: 'Müşteri ana ekranı: puan bakiyesi, seviye, alınabilir ödüller ve QR tara düğmesi',
+    shotBusinessAlt: 'İşletme paneli Bugün ekranı: günün geri bildirimleri, ortalama puan ve yanıt oranı',
+    shotCaption: 'Gerçek ürün ekranları (demo hesap).',
   },
   story: {
     exampleTag: 'Örnek görünüm',
@@ -133,7 +141,8 @@ const tr: LandingCopy = {
     staticSummary: 'QR kodu okut → deneyimini puanla → +{points} puan, +{xp} XP',
   },
   stats: {
-    heading: 'Platformdan güncel rakamlar',
+    eyebrow: 'Canlı rakamlar',
+    heading: 'Uydurma yok. Gerçek sayılar.',
     members: 'Kayıtlı üye',
     businesses: 'İşletme',
     feedbacks: 'Geri bildirim',
@@ -183,7 +192,7 @@ const tr: LandingCopy = {
   },
   collection: {
     eyebrow: 'Koleksiyon ve lig',
-    title: 'Yorum üslubun bir karaktere dönüşür',
+    title: 'Üslubun, karakterin.',
     sub:
       'Yapay zekâ yorumlarının üslubunu okur ve seni {categoryCount} kategorideki {characters} karakterden biriyle eşleştirir. Hangisi olduğun, kategori barın dolunca açılır.',
     categoryCount: '{n} karakter',
@@ -199,9 +208,9 @@ const tr: LandingCopy = {
   },
   business: {
     eyebrow: 'İşletmeler için',
-    title: 'Müşterini anında duy, geri gelmesini sağla',
+    title: 'Müşterin konuşsun. Sen duy.',
     sub:
-      'Geri bildirimler QR ile anında paneline düşer; yapay zekâ duygu ve konuları özetler, oyunlaştırma müşterini geri getirir.',
+      'Geri bildirim QR ile anında paneline düşer; yapay zekâ duyguyu ve konuyu özetler, oyunlaştırma müşteriyi geri getirir.',
     points: [
       'QR ile anında geri bildirim; kâğıt anket ya da e-posta formu yok',
       'Yapay zekâ ile duygu, konu ve niyet özeti',
@@ -214,10 +223,11 @@ const tr: LandingCopy = {
     ctaWhy: 'İşletmeler için {brand}',
     ctaPricing: 'Planları gör',
     ctaRegister: 'İşletme hesabı aç',
+    priceLabel: 'Fiyat',
   },
   faq: {
     eyebrow: 'Sık sorulanlar',
-    title: 'Aklındaki sorular',
+    title: 'Kısa sorular, net cevaplar.',
     trustLink: 'Güven ve gizlilik ayrıntıları',
     items: [
       {
@@ -248,7 +258,7 @@ const tr: LandingCopy = {
     contactAnswer: 'Plan ve fiyat bilgisi için {email} adresine yazabilirsin; işletmene uygun planı birlikte belirleriz.',
   },
   final: {
-    title: 'İlk ödülün bir QR uzağında',
+    title: 'Sıradaki QR senin.',
     sub: 'Ücretsiz üye ol, bir sonraki ziyaretinde QR kodu okut ve kazanmaya başla.',
     ctaPrimary: 'Ücretsiz üye ol',
     ctaBusiness: 'İşletme hesabı aç',
@@ -264,15 +274,18 @@ const tr: LandingCopy = {
 const en: LandingCopy = {
   hero: {
     eyebrow: 'Share feedback, earn rewards',
-    titleLead: 'Say what you think,',
-    titleAccent: 'earn your reward.',
+    titleLead: 'Your opinion',
+    titleAccent: 'pays off.',
     sub:
-      'Scan the QR code on the table and share your experience in seconds. Every piece of feedback you give as a member earns points and XP that turn into badges, leagues and rewards. And businesses actually hear you.',
+      'Scan the QR code and share your experience in seconds. Every piece of feedback earns points and XP that turn into badges, leagues and rewards. And the business actually hears you.',
     ctaPrimary: 'Join for free',
     ctaBusiness: 'For my business',
     loginPrompt: 'Already a member?',
     loginLink: 'Sign in',
     qrHint: 'No app needed: just scan the QR code with your phone camera.',
+    shotCustomerAlt: 'Customer home screen: points balance, level, claimable rewards and the scan QR button',
+    shotBusinessAlt: 'Business dashboard Today screen: feedback of the day, average rating and reply rate',
+    shotCaption: 'Real product screens (demo account).',
   },
   story: {
     exampleTag: 'Example view',
@@ -285,7 +298,8 @@ const en: LandingCopy = {
     staticSummary: 'Scan the QR code → rate your experience → +{points} points, +{xp} XP',
   },
   stats: {
-    heading: 'Current numbers from the platform',
+    eyebrow: 'Live numbers',
+    heading: 'No made-up figures. Real numbers.',
     members: 'Registered members',
     businesses: 'Businesses',
     feedbacks: 'Feedback entries',
@@ -335,7 +349,7 @@ const en: LandingCopy = {
   },
   collection: {
     eyebrow: 'Collection and leagues',
-    title: 'Your writing style becomes a character',
+    title: 'Your style, your character.',
     sub:
       'AI reads the style of your reviews and matches you with one of {characters} characters across {categoryCount} categories. Which one you are is revealed when the category bar fills up.',
     categoryCount: '{n} characters',
@@ -351,7 +365,7 @@ const en: LandingCopy = {
   },
   business: {
     eyebrow: 'For businesses',
-    title: 'Hear customers instantly, bring them back',
+    title: 'Let customers talk. You listen.',
     sub: 'Feedback lands in your dashboard the moment a QR code is scanned; AI summarizes sentiment and topics, gamification brings customers back.',
     points: [
       'Instant feedback via QR; no paper surveys or email forms',
@@ -365,10 +379,11 @@ const en: LandingCopy = {
     ctaWhy: '{brand} for business',
     ctaPricing: 'See plans',
     ctaRegister: 'Create business account',
+    priceLabel: 'Pricing',
   },
   faq: {
     eyebrow: 'FAQ',
-    title: 'Questions you may have',
+    title: 'Short questions, clear answers.',
     trustLink: 'Trust and privacy details',
     items: [
       {
@@ -398,7 +413,7 @@ const en: LandingCopy = {
     contactAnswer: 'For plans and pricing, write to {email}; we will find the right plan for your business together.',
   },
   final: {
-    title: 'Your first reward is one QR code away',
+    title: 'The next QR is yours.',
     sub: 'Join for free, scan on your next visit and start earning.',
     ctaPrimary: 'Join for free',
     ctaBusiness: 'Create business account',

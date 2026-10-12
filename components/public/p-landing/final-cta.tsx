@@ -19,12 +19,14 @@ export function FinalCta({
 }) {
   return (
     <PublicSection labelledBy="final-cta-title" className="pb-24">
-      <div className="relative overflow-hidden rounded-sheet border border-brand-border bg-gradient-to-br from-primary/15 via-surface-1/90 to-primary/5 px-6 py-12 text-center shadow-sm backdrop-blur-md sm:px-12 sm:py-16">
-        <h2 id="final-cta-title" className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
+      <div className="flex flex-col gap-8 rounded-sheet border border-brand-border bg-surface-1 px-6 py-10 sm:px-12 sm:py-14 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+        <h2 id="final-cta-title" className="max-w-2xl text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
           {title}
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-base text-fg-muted sm:text-lg">{sub}</p>
-        <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+        <p className="mt-4 max-w-xl text-base text-fg-muted sm:text-lg">{sub}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <Button asChild size="lg" variant="gradient" className="px-8">
             <CtaLink href={primary.href} cta={primary.cta} page={page}>
               {primary.label}

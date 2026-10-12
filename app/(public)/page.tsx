@@ -118,11 +118,9 @@ export default async function HomePage() {
 
       <LandingHero
         copy={copy.hero}
-        story={copy.story}
         points={n(earn.feedback.base.points)}
         xp={n(earn.feedback.base.xp)}
         pointsLabel={copy.tryIt.pointsUnit}
-        xpLabel="XP"
       />
 
       <StatsStrip
@@ -131,6 +129,7 @@ export default async function HomePage() {
         copy={copy.stats}
         locale={locale}
         brand={brand}
+        showHeading
       />
 
       <EarnLoop copy={copy.earn} earn={earn} locale={locale} />
@@ -142,7 +141,14 @@ export default async function HomePage() {
 
       <CollectionPreview copy={copy.collection} earn={earn} locale={locale} />
 
-      <BusinessBand copy={copy.business} plans={plans} pricingEnabled={pricingEnabled} locale={locale} brand={brand} />
+      <BusinessBand
+        copy={copy.business}
+        plans={plans}
+        pricingEnabled={pricingEnabled}
+        locale={locale}
+        brand={brand}
+        businessShotAlt={copy.hero.shotBusinessAlt}
+      />
 
       <FaqList eyebrow={copy.faq.eyebrow} title={copy.faq.title} items={faqItems} trustLink={copy.faq.trustLink} />
 

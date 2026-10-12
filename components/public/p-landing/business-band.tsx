@@ -1,4 +1,5 @@
-import { ArrowRight, Check, Store } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   formatPlanPrice,
@@ -23,12 +24,14 @@ export function BusinessBand({
   pricingEnabled,
   locale,
   brand,
+  businessShotAlt,
 }: {
   copy: LandingCopy['business'];
   plans: PublicPlan[] | null;
   pricingEnabled: boolean;
   locale: PublicLocale;
   brand: string;
+  businessShotAlt: string;
 }) {
   const list = pricingEnabled && plans ? plans : [];
   const lowest = lowestPaidPlan(list);
@@ -46,59 +49,64 @@ export function BusinessBand({
 
   return (
     <PublicSection id="isletmeler" labelledBy="business-title">
-      <div className="relative overflow-hidden rounded-sheet border border-subtle bg-surface-1/90 p-6 shadow-sm backdrop-blur-md sm:p-10">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl"
-        />
-        <div className="relative grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
-          <div>
-            <p className="qx-overline flex items-center gap-2 text-brand">
-              <Store className="h-4 w-4" aria-hidden />
-              {copy.eyebrow}
-            </p>
-            <h2 id="business-title" className="mt-3 text-balance text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
-              {copy.title}
-            </h2>
-            <p className="mt-4 text-base leading-relaxed text-fg-muted sm:text-lg">{copy.sub}</p>
-            <ul className="mt-6 space-y-3">
-              {copy.points.map((p) => (
-                <li key={p} className="flex items-start gap-3 text-fg">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-success-subtle text-success" aria-hidden>
-                    <Check className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="text-sm sm:text-base">{p}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-card border border-subtle bg-surface-0/80 p-5 sm:p-6">
-            {priceLines.map((line) => (
-              <p key={line} className="text-base font-medium text-fg">
-                {line}
-              </p>
+      <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-14">
+        <div>
+          <p className="qx-overline text-brand">{copy.eyebrow}</p>
+          <h2 id="business-title" className="mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
+            {copy.title}
+          </h2>
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-fg-muted sm:text-lg">{copy.sub}</p>
+          <ol className="mt-8 divide-y divide-[hsl(var(--border-subtle))] border-y border-subtle">
+            {copy.points.map((p, i) => (
+              <li key={p} className="flex items-baseline gap-4 py-3.5">
+                <span className="qx-num w-6 shrink-0 text-sm font-semibold text-brand" aria-hidden>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="text-sm text-fg sm:text-base">{p}</span>
+              </li>
             ))}
-            <div className="mt-5 flex flex-col gap-3">
-              <Button asChild size="lg" variant="gradient">
-                <CtaLink href="/auth/register?role=DEALER&src=landing_business" cta="business_register" page="landing">
-                  {copy.ctaRegister}
-                  <ArrowRight className="h-5 w-5" aria-hidden />
-                </CtaLink>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <CtaLink href="/neden-qratex" cta="business_why" page="landing">
-                  {fmt(copy.ctaWhy, { brand })}
-                </CtaLink>
-              </Button>
-              {pricingEnabled ? (
-                <Button asChild size="lg" variant="ghost">
-                  <CtaLink href="/neden-qratex#fiyatlar" cta="business_pricing" page="landing">
-                    {copy.ctaPricing}
-                  </CtaLink>
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          </ol>
+        </div>
+        <div className="overflow-hidden rounded-card border border-subtle bg-surface-1 shadow-lg">
+          <Image
+            src="/images/landing/isletme-bugun.webp"
+            alt={businessShotAlt}
+            width={996}
+            height={452}
+            sizes="(min-width: 1024px) 600px, 100vw"
+            className="h-auto w-full"
+          />
+        </div>
+      </div>
+
+      <div className="mt-10 flex flex-col gap-5 rounded-card border border-subtle bg-surface-1 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="qx-overline text-fg-muted">{copy.priceLabel}</p>
+          {priceLines.map((line) => (
+            <p key={line} className="mt-1 text-base font-medium text-fg sm:text-lg">
+              {line}
+            </p>
+          ))}
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <Button asChild size="lg" variant="gradient">
+            <CtaLink href="/auth/register?role=DEALER&src=landing_business" cta="business_register" page="landing">
+              {copy.ctaRegister}
+              <ArrowRight className="h-5 w-5" aria-hidden />
+            </CtaLink>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <CtaLink href="/neden-qratex" cta="business_why" page="landing">
+              {fmt(copy.ctaWhy, { brand })}
+            </CtaLink>
+          </Button>
+          {pricingEnabled ? (
+            <Button asChild size="lg" variant="ghost">
+              <CtaLink href="/neden-qratex#fiyatlar" cta="business_pricing" page="landing">
+                {copy.ctaPricing}
+              </CtaLink>
+            </Button>
+          ) : null}
         </div>
       </div>
     </PublicSection>
