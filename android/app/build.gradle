@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// Sürüm package.json'dan: versionName = "x.y.z", versionCode = x*10000 + y*100 + z.
+// CI'da QRATEX_VERSION_CODE (ör. github.run_number + taban) verilirse o kullanılır (Play her yüklemede artan kod ister).
+def pkgJson = new groovy.json.JsonSlurper().parse(file('../../package.json'))
+def appVersionName = pkgJson.version.toString()
+def vParts = appVersionName.tokenize('.-').take(3).collect { it.isInteger() ? it.toInteger() : 0 }
+while (vParts.size() < 3) vParts << 0
+def appVersionCode = (System.getenv('QRATEX_VERSION_CODE') ?: (vParts[0] * 10000 + vParts[1] * 100 + vParts[2]).toString()).toInteger()
+
+// İmzalama: anahtar repoya GİRMEZ. CI/yerel env: ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
+// ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. Yoksa release imzasız üretilir (yalnız debug APK kurulabilir).
+def keystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+def hasReleaseSigning = keystorePath && file(keystorePath).exists()
+
 android {
     namespace = "com.qratex.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "com.qratex.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +29,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

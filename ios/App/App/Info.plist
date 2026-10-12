@@ -49,7 +49,7 @@
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
@@ -64,6 +64,21 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Qratex scans the QR code on your table or receipt so you can review and earn points.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Qratex lets you pick a photo to attach to your review or profile.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Qratex saves your loyalty card or QR code image to your photos when you ask it to.</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>tr</string>
+		<string>en</string>
+	</array>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

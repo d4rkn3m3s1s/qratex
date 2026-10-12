@@ -1,0 +1,113 @@
+# Android derlemesi (bulutta; yerel makinede Android SDK yok).
+# - Secrets varsa: imzalı release AAB (Play Console) + imzalı APK.
+# - Secrets yoksa: imzasız debug APK (cihaza elle kurulup denenebilir).
+# Gerekli secrets (docs/native/README.md "İmzalama anahtarı"):
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# İsteğe bağlı: GOOGLE_SERVICES_JSON_BASE64 (FCM push), CAPACITOR_SERVER_URL (varsayılan https://qratex.com)
+name: Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'versionCode (boş = 100000 + run_number)'
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'native-shell/**'
+      - 'package.json'
+      - '.github/workflows/android.yml'
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      HAS_FCM: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 != '' }}
+      CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
+      # Play her yüklemede artan versionCode ister; run_number tabanı package.json türevini (x*10000+...) geçer.
+      QRATEX_VERSION_CODE: ${{ github.event.inputs.version_code || format('{0}', 100000 + github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      # Capacitor 8 + AGP 8.x: JDK 21 (görev metnindeki 17 bu sürümlerde derlemez).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Bağımlılıklar
+        run: npm ci --ignore-scripts
+
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: google-services.json (FCM)
+        if: env.HAS_FCM == 'true'
+        env:
+          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: echo "$GOOGLE_SERVICES" | base64 -d > android/app/google-services.json
+
+      - name: Keystore
+        if: env.HAS_SIGNING == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/qratex-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/qratex-release.jks" >> "$GITHUB_ENV"
+
+      - name: Release derle (imzalı AAB + APK)
+        if: env.HAS_SIGNING == 'true'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease assembleRelease
+
+      - name: Debug derle (imzasız)
+        if: env.HAS_SIGNING != 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Artifact (release)
+        if: env.HAS_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qratex-android-release-${{ env.QRATEX_VERSION_CODE }}
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Artifact (debug)
+        if: env.HAS_SIGNING != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qratex-android-debug-${{ env.QRATEX_VERSION_CODE }}
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Keystore temizle
+        if: always()
+        run: rm -f "$RUNNER_TEMP/qratex-release.jks" android/app/google-services.json

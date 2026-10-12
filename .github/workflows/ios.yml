@@ -1,0 +1,144 @@
+# iOS derlemesi (macOS runner; yerelde Xcode yok).
+# - İmzalama secrets'ı varsa: fastlane match ile sertifika/profil -> xcodebuild archive -> .ipa (+ istenirse TestFlight).
+# - Yoksa: simülatör derlemesi (imzasız; derlenebilirliği doğrular, .app artifact).
+# Gerekli secrets (docs/native/README.md "iOS imzalama — fastlane match"):
+#   MATCH_GIT_URL, MATCH_PASSWORD, MATCH_GIT_BASIC_AUTHORIZATION (base64 "kullanici:PAT"),
+#   APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64 (App Store Connect API anahtarı)
+# İsteğe bağlı: CAPACITOR_SERVER_URL
+name: iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'CFBundleVersion (boş = 100000 + run_number)'
+        required: false
+      upload_testflight:
+        description: 'İmzalı derlemeyi TestFlight’a yükle'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'capacitor.config.ts'
+      - 'native-shell/**'
+      - 'package.json'
+      - '.github/workflows/ios.yml'
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      HAS_SIGNING: ${{ secrets.MATCH_GIT_URL != '' && secrets.ASC_KEY_P8_BASE64 != '' }}
+      CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
+      BUILD_NUMBER: ${{ github.event.inputs.build_number || format('{0}', 100000 + github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Xcode seç
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Bağımlılıklar
+        run: npm ci --ignore-scripts
+
+      - name: Capacitor sync + sürüm
+        run: |
+          npx cap sync ios
+          node scripts/native-version.mjs --build "$BUILD_NUMBER"
+
+      # ── İmzasız: simülatör ──────────────────────────────────────────
+      - name: Simülatör derlemesi
+        if: env.HAS_SIGNING != 'true'
+        working-directory: ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          cd build/Build/Products/Debug-iphonesimulator && zip -qry "$RUNNER_TEMP/Qratex-simulator.zip" App.app
+
+      - name: Artifact (simülatör)
+        if: env.HAS_SIGNING != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qratex-ios-simulator-${{ env.BUILD_NUMBER }}
+          path: ${{ runner.temp }}/Qratex-simulator.zip
+          if-no-files-found: error
+
+      # ── İmzalı: match + archive + export ────────────────────────────
+      - name: App Store Connect API anahtarı
+        if: env.HAS_SIGNING == 'true'
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          echo "$ASC_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/asc.p8"
+          printf '{"key_id":"%s","issuer_id":"%s","key_filepath":"%s","in_house":false}\n' \
+            "$ASC_KEY_ID" "$ASC_ISSUER_ID" "$RUNNER_TEMP/asc.p8" > "$RUNNER_TEMP/asc.json"
+          echo "ASC_JSON=$RUNNER_TEMP/asc.json" >> "$GITHUB_ENV"
+
+      - name: Sertifika + profil (fastlane match, salt-okunur)
+        if: env.HAS_SIGNING == 'true'
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" ci.keychain
+          security set-keychain-settings -lut 3600 ci.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" ci.keychain
+          security list-keychains -d user -s ci.keychain login.keychain
+          fastlane run match type:appstore app_identifier:com.qratex.app readonly:true \
+            api_key_path:"$ASC_JSON" keychain_name:ci.keychain keychain_password:"$KEYCHAIN_PASSWORD"
+
+      - name: Archive + IPA
+        if: env.HAS_SIGNING == 'true'
+        working-directory: ios/App
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Qratex.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="match AppStore com.qratex.app" archive
+          /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" \
+            -c "Add :teamID string $APPLE_TEAM_ID" \
+            -c "Add :signingStyle string manual" \
+            -c "Add :provisioningProfiles dict" \
+            -c "Add :provisioningProfiles:com.qratex.app string match AppStore com.qratex.app" \
+            "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Qratex.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
+
+      - name: Artifact (ipa)
+        if: env.HAS_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qratex-ios-${{ env.BUILD_NUMBER }}
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+
+      - name: TestFlight yükle
+        if: env.HAS_SIGNING == 'true' && github.event.inputs.upload_testflight == 'true'
+        run: |
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -n1)
+          fastlane run upload_to_testflight api_key_path:"$ASC_JSON" ipa:"$IPA" skip_waiting_for_build_processing:true
+
+      - name: Temizlik
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/asc.p8" "$RUNNER_TEMP/asc.json"
+          security delete-keychain ci.keychain 2>/dev/null || true

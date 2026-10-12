@@ -1,0 +1,5 @@
+/* İzin istemleri (Türkçe). en.lproj ile eş tutun. */
+"CFBundleDisplayName" = "Qratex";
+"NSCameraUsageDescription" = "Qratex, değerlendirme yapıp puan kazanman için masadaki ya da fişteki QR kodu kamerayla okur.";
+"NSPhotoLibraryUsageDescription" = "Qratex, değerlendirmene veya profiline fotoğraf eklemen için galerinden seçim yapmanı sağlar.";
+"NSPhotoLibraryAddUsageDescription" = "Qratex, istediğinde sadakat kartını veya QR kodunu fotoğraflarına kaydeder.";

@@ -1,0 +1,5 @@
+/* Permission prompts (English). Keep in sync with tr.lproj. */
+"CFBundleDisplayName" = "Qratex";
+"NSCameraUsageDescription" = "Qratex scans the QR code on your table or receipt so you can review and earn points.";
+"NSPhotoLibraryUsageDescription" = "Qratex lets you pick a photo to attach to your review or profile.";
+"NSPhotoLibraryAddUsageDescription" = "Qratex saves your loyalty card or QR code image to your photos when you ask it to.";

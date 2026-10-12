@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -45,7 +45,11 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
-
+    <!-- İzinler: minimum. INTERNET (canlı sunucu), CAMERA (WebView getUserMedia ile QR okuma; çalışma anında
+         sorulur). POST_NOTIFICATIONS @capacitor/push-notifications manifestinden birleşir (Android 13+ çalışma anında).
+         Konum, mikrofon, kişiler, depolama İSTENMEZ. allowBackup=false: oturum çerezleri buluta yedeklenmesin. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>
