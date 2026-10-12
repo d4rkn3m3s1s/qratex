@@ -25,26 +25,26 @@ export function EarnLoop({ copy, earn, locale }: { copy: LandingCopy['earn']; ea
   return (
     <PublicSection id="nasil-calisir" labelledBy="earn-title">
       <SectionHeading id="earn-title" eyebrow={copy.eyebrow} title={copy.title} sub={copy.sub} />
-      <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Kart tekrarı yerine tek bir akış çizgisi: adımlar sırayla okunur, numara hiyerarşiyi taşır. */}
+      <ol className="relative grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-y-0">
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 top-[1.375rem] hidden h-px bg-gradient-to-r from-primary/60 via-border to-transparent lg:block" />
         {copy.steps.map((step, i) => {
           const Icon = ICONS[i] ?? Gift;
           return (
-            <Reveal as="li" index={i} key={step.title} className="list-none">
-              <div className="relative h-full rounded-card border border-subtle bg-surface-1/85 p-5 backdrop-blur-md sm:p-6">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-glow"
-                    aria-hidden
-                  >
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="qx-overline text-fg-subtle" aria-hidden>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-fg">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-fg-muted">{fmt(step.body, vars)}</p>
+            <Reveal as="li" index={i} key={step.title} className="relative list-none border-l border-subtle pl-5 lg:border-l-0 lg:pl-0">
+              <div className="flex items-center gap-3">
+                <span
+                  className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-subtle bg-surface-1 text-primary"
+                  aria-hidden
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
               </div>
+              <span className="mt-5 block font-mono text-xs tabular-nums text-fg-subtle" aria-hidden>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight text-fg">{step.title}</h3>
+              <p className="mt-2 max-w-[32ch] text-sm leading-relaxed text-fg-muted">{fmt(step.body, vars)}</p>
             </Reveal>
           );
         })}
