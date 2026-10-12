@@ -67,18 +67,18 @@ export function LeagueStrip({ league, showLeaderboardLink }: { league: HomeLeagu
             }}
           />
         </div>
-        <p className="mt-2 qx-small font-medium text-fg">
+        <p className="mt-2 qx-small tabular-nums text-fg-muted">
           {league.next && league.pointsToNext != null
             ? copy.leagueNext(league.next.name, formatInt(league.pointsToNext, locale))
             : copy.leagueMax}
         </p>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
-        <p className="qx-small text-fg-muted">
+      <div className="mt-3 flex flex-col gap-0.5 border-t border-subtle pt-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <p className="qx-body font-semibold tabular-nums text-fg">
           {copy.leagueRank(formatInt(league.rankInLeague, locale), formatInt(league.leagueSize, locale))}
         </p>
-        <p className="qx-small text-fg-muted">
+        <p className={cn('qx-small tabular-nums', isTop ? 'font-medium text-success' : 'text-fg-muted')}>
           {isTop || league.gapToAbove == null ? copy.leagueTop : copy.leagueGap(formatInt(league.gapToAbove, locale))}
         </p>
       </div>

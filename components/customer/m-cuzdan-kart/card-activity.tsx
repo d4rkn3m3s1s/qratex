@@ -28,7 +28,7 @@ export function PendingReviews({
   return (
     <section aria-labelledby="wallet-pending-title" className={cn('rounded-card border p-4', TONE_CALLOUT.warning)}>
       <div className="flex items-start gap-3">
-        <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-warning-subtle text-warning ring-1 ring-inset ring-warning-border">
+        <span aria-hidden className="mt-0.5 shrink-0 text-warning">
           <Award className="h-5 w-5" />
         </span>
         <div className="min-w-0">

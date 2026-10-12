@@ -43,7 +43,7 @@ export function VenueCard({
     >
       <article className="group relative flex gap-3 rounded-card border border-subtle bg-surface-1 p-3 transition-colors duration-fast ease-standard focus-within:ring-2 focus-within:ring-ring hover:border-strong sm:p-4">
         <VenueAvatar name={venue.name} src={venue.image} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-start gap-2">
             <Heading className="qx-body min-w-0 flex-1 font-semibold text-fg">
               <Link
@@ -55,13 +55,14 @@ export function VenueCard({
               </Link>
             </Heading>
           </div>
+          {/* Kimlik (ad + tür) önce, durum satırı sonra; adres yalnız mesafe bilinmezken (konum yokken yön verir). */}
+          <CategoryLine categories={venue.categories} />
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <OpenStateBadge state={venue.openState} />
             <RatingInline rating={venue.rating} />
             <DistanceInline km={venue.distanceKm} />
           </div>
-          <CategoryLine categories={venue.categories} />
-          {venue.address && <span className="qx-caption line-clamp-1 break-words text-fg-subtle">{venue.address}</span>}
+          {venue.address && venue.distanceKm === null && <span className="qx-caption line-clamp-1 break-words text-fg-subtle">{venue.address}</span>}
           {(venue.liveBoost || venue.flashCount > 0 || venue.myVisits > 0) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {venue.liveBoost && <BoostChip boost={venue.liveBoost} />}

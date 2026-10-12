@@ -121,7 +121,7 @@ function HistoryRow({
   }
   return (
     <div className="flex gap-3">
-      <span aria-hidden className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand">
+      <span aria-hidden className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-control bg-surface-2 text-fg-muted">
         <MessageSquare className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">

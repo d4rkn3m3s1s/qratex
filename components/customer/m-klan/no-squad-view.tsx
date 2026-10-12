@@ -24,35 +24,35 @@ export function NoSquadView({ data, joinCode }: { data: SquadOverviewNone; joinC
     <RegisterProvider value="play">
       <div data-register="play" className="mx-auto w-full max-w-5xl space-y-5">
         <GlowCard className="space-y-5">
-          <div className="flex items-start gap-4">
-            <span aria-hidden className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-subtle text-brand-text">
-              <Swords className="h-7 w-7" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{copy.eyebrow}</p>
-              <h1 className="text-balance font-display text-2xl font-bold text-fg sm:text-3xl">{copy.noneTitle}</h1>
-              <p className="mt-2 text-pretty text-sm text-fg-muted sm:text-base">{copy.noneLead}</p>
-            </div>
+          <div className="min-w-0">
+            <p className="qx-overline inline-flex items-center gap-1.5 text-fg-muted">
+              <Swords aria-hidden className="h-4 w-4 text-brand" />
+              {copy.eyebrow}
+            </p>
+            <h1 className="qx-h1 mt-1 text-balance text-fg">{copy.noneTitle}</h1>
+            <p className="qx-body mt-2 max-w-prose text-pretty text-fg-muted">{copy.noneLead}</p>
           </div>
-          <ul className="grid gap-2 sm:grid-cols-3">
-            {copy.noneBullets.map((b) => (
-              <li key={b} className="rounded-xl border border-subtle bg-surface-2/60 p-3 text-sm text-fg">
+          {/* Maddeler eşit kart değil, sıralı tek liste: okuma sırası = nasıl işlediği. */}
+          <ol className="divide-y divide-subtle border-y border-subtle">
+            {copy.noneBullets.map((b, i) => (
+              <li key={b} className="flex items-baseline gap-3 py-2.5 qx-small text-fg">
+                <span aria-hidden className="qx-num w-4 shrink-0 font-semibold text-fg-subtle">{i + 1}</span>
                 {b}
               </li>
             ))}
-          </ul>
+          </ol>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Button className="w-full" size="lg" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-5 w-5" aria-hidden /> {copy.createCta}
               </Button>
-              <p className="text-xs text-fg-muted">{copy.createHint}</p>
+              <p className="qx-caption text-fg-muted">{copy.createHint}</p>
             </div>
             <div className="space-y-1.5">
               <Button className="w-full" size="lg" variant="outline" onClick={() => setJoinOpen(true)}>
                 <KeyRound className="h-5 w-5" aria-hidden /> {copy.joinCta}
               </Button>
-              <p className="text-xs text-fg-muted">{copy.joinHint}</p>
+              <p className="qx-caption text-fg-muted">{copy.joinHint}</p>
             </div>
           </div>
         </GlowCard>

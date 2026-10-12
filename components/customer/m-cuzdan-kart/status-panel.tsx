@@ -111,7 +111,7 @@ function BirthdayMoment({
     return (
       <div className={cn('flex flex-col gap-3 rounded-card border p-4 sm:flex-row sm:items-center', TONE_CALLOUT.brand)}>
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand ring-1 ring-inset ring-brand-border">
+          <span aria-hidden className="mt-0.5 shrink-0 text-brand">
             <Cake className="h-5 w-5" />
           </span>
           <div className="min-w-0">

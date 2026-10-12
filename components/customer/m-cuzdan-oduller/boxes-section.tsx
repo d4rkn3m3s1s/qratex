@@ -84,7 +84,7 @@ export function BoxesSection({
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {unopened.map((b) => (
               <li key={b.id} className="flex min-h-[4.5rem] items-center gap-3 rounded-card border border-subtle bg-surface-1 p-3">
-                <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand">
+                <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted">
                   <Gift className="size-6" />
                 </span>
                 <div className="min-w-0 flex-1">

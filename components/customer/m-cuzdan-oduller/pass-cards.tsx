@@ -43,7 +43,7 @@ export function RemedyPassRow({ pass, onOpen }: { pass: RemedyPassDTO; onOpen: (
   const copy = useWalletCopy();
   return (
     <button type="button" onClick={onOpen} aria-haspopup="dialog" className={ROW}>
-      <span className="grid size-12 shrink-0 place-items-center rounded-control bg-info-subtle text-info ring-1 ring-inset ring-info-border" aria-hidden>
+      <span className="grid size-12 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted" aria-hidden>
         <HeartHandshake className="size-6" />
       </span>
       <span className="min-w-0 flex-1">

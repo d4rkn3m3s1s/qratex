@@ -38,7 +38,7 @@ export function ProfileSection({ data }: { data: CustomerSettingsSnapshot }) {
         href="/customer/me/badges"
         className="group flex min-h-11 items-center gap-3 rounded-card border border-subtle bg-surface-1 p-4 qx-elevation-1 transition-colors duration-fast ease-standard hover:border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
       >
-        <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand">
+        <span aria-hidden className="shrink-0 text-fg-muted">
           <LayoutGrid className="h-[1.125rem] w-[1.125rem]" />
         </span>
         <span className="min-w-0 flex-1">

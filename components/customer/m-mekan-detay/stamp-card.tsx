@@ -106,7 +106,7 @@ export function StampCard({
               {filled && (
                 <Motion.div
                   aria-hidden
-                  className="absolute inset-0 grid place-items-center rounded-full bg-gradient-to-br from-brand to-[hsl(var(--gradient-to))] text-brand-fg shadow-md"
+                  className="absolute inset-0 grid place-items-center rounded-full bg-brand text-brand-fg"
                   initial={fresh ? { scale: 1.6, opacity: 0, rotate: -18 } : false}
                   animate={{ scale: 1, opacity: 1, rotate: 0 }}
                   transition={{
