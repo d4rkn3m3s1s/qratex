@@ -18,7 +18,7 @@ const Card = React.forwardRef<
     className={cn(
       'min-w-0 h-full rounded-card border bg-card text-card-foreground shadow-sm flex flex-col',
       hover &&
-        'touch-manipulation transition-[box-shadow,border-color] duration-base ease-standard hover:border-border hover:shadow-lg hover:shadow-primary/10 motion-reduce:transition-none motion-reduce:hover:shadow-sm',
+        'qx-card-hover touch-manipulation transition-[box-shadow,border-color,transform] duration-base ease-standard hover:border-border hover:shadow-lg hover:shadow-primary/10 motion-reduce:transition-none motion-reduce:hover:shadow-sm',
       className
     )}
     {...props}

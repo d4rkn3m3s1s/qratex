@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
 
 const buttonVariants = cva(
-  'inline-flex min-w-0 max-w-full touch-manipulation items-center justify-center gap-2 whitespace-normal text-center break-words sm:whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-base ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  'relative inline-flex min-w-0 max-w-full touch-manipulation items-center justify-center gap-2 whitespace-normal text-center break-words sm:whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-base ease-standard active:duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:saturate-50 active:scale-[0.97] motion-reduce:active:scale-100',
   {
     variants: {
       variant: {
@@ -48,11 +48,16 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   loading?: boolean;
+  /**
+   * Başarı anı: içerik kısa bir onay ikonuna morph eder (genişlik korunur). Çağıran
+   * birkaç yüz ms sonra `false`'a çeker. İsteğe bağlı, eski kullanımları etkilemez.
+   */
+  success?: boolean;
 }
 
-const Spinner = () => (
+const Spinner = ({ className }: { className?: string }) => (
   <svg
-    className="h-4 w-4 shrink-0 animate-spin"
+    className={cn('h-4 w-4 shrink-0 animate-spin', className)}
     xmlns="http://www.w3.org/2000/svg"
     fill="none"
     viewBox="0 0 24 24"
@@ -68,13 +73,13 @@ const Spinner = () => (
 );
 
 /**
- * `loading`: etiket KORUNUR (eski davranış etiketi "Yükleniyor" ile değiştirip
+ * `loading`: etiket DOM'da/erişilebilir adda KORUNUR (eski davranış etiketi "Yükleniyor" ile değiştirip
  * buton genişliğini zıplatıyor ve eylem bağlamını — "Sil", "Kaydet" — kaybettiriyordu).
- * Solda spinner, `aria-busy`, ekran okuyucuya "Yükleniyor" ek bilgisi; buton devre dışı.
+ * Spinner etiketin ÜSTÜNE biner (etiket saydam ama yerinde → genişlik sabit), `aria-busy`, ekran okuyucuya "Yükleniyor" ek bilgisi; buton devre dışı.
  * Etiketsiz (yalnız ikon) butonda ikon yerine spinner gösterilir.
  */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading, success, children, disabled, ...props }, ref) => {
     const t = useAppT();
     if (asChild) {
       // Slot tek çocuk ister: yükleme göstergesi enjekte edilmez, yalnız durum öznitelikleri.
@@ -92,29 +97,41 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       );
     }
     const iconOnly = size === 'icon' || size === 'icon-sm' || size === 'icon-lg';
+    // Genişlik sabit: içerik yerinde kalır (yalnız saydamlaşır), spinner / onay ikonu
+    // üstüne mutlak yerleşir → yükleme/başarı geçişinde CLS ve zıplama yok.
+    const overlay = loading ? 'loading' : success ? 'success' : null;
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
         aria-busy={loading || undefined}
+        data-state-feedback={overlay ?? undefined}
         {...props}
       >
-        {loading ? (
-          iconOnly ? (
-            <>
-              <Spinner />
-              <span className="sr-only">
-                {children} {t('common.loading')}
-              </span>
-            </>
-          ) : (
-            <>
-              <Spinner />
+        {overlay ? (
+          <>
+            <span
+              aria-hidden={iconOnly || undefined}
+              className="qx-btn-content inline-flex min-w-0 items-center justify-center gap-2 opacity-0"
+            >
               {children}
-              <span className="sr-only">{t('common.loading')}</span>
-            </>
-          )
+            </span>
+            <span aria-hidden className="qx-btn-overlay absolute inset-0 flex items-center justify-center">
+              {overlay === 'loading' ? (
+                <Spinner />
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path className="qx-draw" pathLength={1} d="M5 12.5l4.5 4.5L19 7.5" />
+                </svg>
+              )}
+            </span>
+            {overlay === 'loading' ? (
+              <span className="sr-only">
+                {iconOnly ? children : null} {t('common.loading')}
+              </span>
+            ) : null}
+          </>
         ) : (
           children
         )}

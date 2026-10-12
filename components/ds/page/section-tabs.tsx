@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSlidingIndicator } from '@/lib/motion/use-sliding-indicator';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '@/lib/utils';
 import { usePageCopy } from './copy';
@@ -59,27 +60,41 @@ function SectionTabsView({
 }: ViewProps) {
   const copy = usePageCopy();
   const underline = variant === 'underline';
+  // Kayan gösterge: alt çizgi / hap seçilen sekmeye yayla kayar (bkz. useSlidingIndicator).
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const indicatorRef = useRef<HTMLSpanElement | null>(null);
+  const ready = useSlidingIndicator(listRef, indicatorRef, underline ? { inset: 8, heightFromTab: false } : {});
   return (
     <TabsPrimitive.Root value={value} onValueChange={onValueChange} activationMode="automatic" className={cn('min-w-0', className)}>
       <div className={cn('-mx-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', underline && 'border-b border-subtle')}>
         <TabsPrimitive.List
+          ref={listRef}
+          data-indicator={ready ? 'ready' : undefined}
           aria-label={ariaLabel ?? copy.sections}
-          className={cn('flex w-max min-w-full items-stretch gap-1', !underline && 'rounded-control bg-surface-muted p-1', listClassName)}
+          className={cn('group/tabs relative flex w-max min-w-full items-stretch gap-1', !underline && 'rounded-control bg-surface-muted p-1', listClassName)}
         >
+          <span
+            ref={indicatorRef}
+            aria-hidden
+            className={cn(
+              'pointer-events-none absolute left-0 opacity-0 transition-[transform,width,height,opacity] duration-slow ease-emphasized',
+              underline ? '-bottom-px top-auto h-0.5 rounded-full bg-brand' : 'top-0 rounded-chip bg-surface-1 qx-elevation-1',
+            )}
+          />
           {tabs.map((tab) => (
             <TabsPrimitive.Trigger
               key={tab.value}
               value={tab.value}
               disabled={tab.disabled}
               className={cn(
-                'qx-small group relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap px-3 font-medium text-fg-muted',
+                'qx-small group relative z-[1] inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap px-3 font-medium text-fg-muted',
                 'min-h-11 transition-colors duration-fast ease-standard hover:text-fg',
                 touchTarget ? '' : 'sm:min-h-10',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0',
                 'disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
                 underline
-                  ? 'rounded-t-chip data-[state=active]:text-fg after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent after:transition-colors after:duration-fast data-[state=active]:after:bg-brand'
-                  : 'rounded-chip data-[state=active]:bg-surface-1 data-[state=active]:text-fg data-[state=active]:qx-elevation-1',
+                  ? 'rounded-t-chip data-[state=active]:text-fg after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent after:transition-colors after:duration-fast data-[state=active]:after:bg-brand group-data-[indicator=ready]/tabs:after:hidden'
+                  : 'rounded-chip data-[state=active]:bg-surface-1 data-[state=active]:text-fg data-[state=active]:qx-elevation-1 group-data-[indicator=ready]/tabs:data-[state=active]:bg-transparent group-data-[indicator=ready]/tabs:data-[state=active]:shadow-none',
               )}
             >
               {tab.icon && <span aria-hidden className="inline-flex">{tab.icon}</span>}

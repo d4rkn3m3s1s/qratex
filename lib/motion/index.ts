@@ -10,3 +10,4 @@ export { MotionPolicyConfig } from './motion-policy-config';
 export { Ambient } from './ambient';
 export { Reveal } from './reveal';
 export { CollapseList, CollapseItem } from './collapse-list';
+export { useSlidingIndicator } from './use-sliding-indicator';
