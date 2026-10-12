@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
-import { acceptRemedyOffer, describeRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
+import { acceptRemedyOffer, describeRemedyOffer, isRemedyExpired, isRemedyOfferError } from '@/lib/remedy-offer-service';
 
 const paramsSchema = z.object({ offerId: z.string().min(1).max(64) });
 
@@ -65,10 +65,14 @@ export const GET = defineRoute(
       const { deletedAt: _deletedAt, ...rest } = src;
       return rest;
     };
+    // Süresi geçmiş ama bakım işi henüz kapatmamış teklif müşteriye "süresi doldu" görünür.
+    const effectiveStatus =
+      offer.status === 'pending' && isRemedyExpired(offer.expiresAt, new Date()) ? 'expired' : offer.status;
     const base = {
       id: offer.id,
       message: offer.message,
-      status: offer.status,
+      status: effectiveStatus,
+      expiresAt: offer.expiresAt,
       dealer: offer.dealer,
       feedbackId: offer.feedbackId,
       consumptionReviewId: offer.consumptionReviewId,
@@ -77,7 +81,7 @@ export const GET = defineRoute(
       createdAt: offer.createdAt,
     };
 
-    if (offer.status !== 'pending') {
+    if (effectiveStatus !== 'pending') {
       return ok(
         {
           offer: {

@@ -22,9 +22,14 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { isUniqueViolation } from '@/lib/economy/errors';
 import { mintPoints } from '@/lib/economy/mint';
-import { REMEDY_DEALER_DAILY_CAP } from '@/lib/economy/caps';
+import {
+  effectiveRemedyBudget,
+  loadRemedyBudgetConfig,
+  remedyBudgetExhaustedMessage,
+  remedyPointsUsedToday,
+} from '@/lib/remedy-budget';
+import { REMEDY_PENDING_TTL_DAYS } from '@/lib/dealer-queues/remedy-core';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
-import { startOfDayUTC } from '@/lib/timezone';
 import {
   findRemedySelection,
   formatRemedySelection,
@@ -49,6 +54,7 @@ export type RemedyErrorCode =
   | 'NOT_FOUND'
   | 'FORBIDDEN'
   | 'NOT_PENDING'
+  | 'EXPIRED'
   | 'INVALID_SELECTION'
   | 'DEALER_BUDGET_EXHAUSTED'
   | 'REMEDY_POINTS_CAP';
@@ -61,10 +67,21 @@ const ERROR_STATUS: Record<RemedyErrorCode, number> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
   NOT_PENDING: 409,
+  EXPIRED: 410,
   INVALID_SELECTION: 400,
   DEALER_BUDGET_EXHAUSTED: 409,
   REMEDY_POINTS_CAP: 409,
 };
+
+/** Müşteriye ulaşan (pending) teklifin son geçerlilik anı: yayın/oluşturma + TTL. */
+export function remedyExpiresAt(from: Date): Date {
+  return new Date(from.getTime() + REMEDY_PENDING_TTL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/** Süresi geçmiş mi? (null = eski süresiz satır → bakım işi createdAt'ten sayar.) */
+export function isRemedyExpired(expiresAt: Date | null | undefined, now: Date): boolean {
+  return expiresAt != null && expiresAt.getTime() <= now.getTime();
+}
 
 export class RemedyOfferError extends Error {
   readonly code: RemedyErrorCode;
@@ -253,6 +270,23 @@ export async function createRemedyOffer(
       const existing = await findBlockingRemedyOffer(tx, source, dealerId, userId, blockIfAccepted);
       if (existing) throw conflictFor(existing);
 
+      // Bütçe ön kontrolü: YALNIZ puan seçenekli teklif ve bugünkü bütçe en küçük puan
+      // seçeneğini bile karşılamıyorsa teklif açılmaz (müşteriye kabul edilemeyecek teklif
+      // gitmesin). Karışık seçenekli teklif açılır; kabulde bütçe yine kilit altında sayılır.
+      if (options.every((o) => o.type === 'points')) {
+        const minPoints = Math.min(...options.flatMap((o) => o.values));
+        const cfg = await loadRemedyBudgetConfig(tx, dealerId);
+        const remaining = Math.max(0, effectiveRemedyBudget(cfg) - (await remedyPointsUsedToday(tx, dealerId)));
+        if (minPoints > remaining) {
+          throw new RemedyOfferError(
+            'DEALER_BUDGET_EXHAUSTED',
+            remaining > 0
+              ? `Bugünkü telafi puanı bütçenizde ${remaining.toLocaleString('tr-TR')} puan kaldı; teklifteki en küçük puan seçeneği bunu aşıyor. Daha düşük puan, başka bir telafi türü ekleyin ya da bütçenizi Ayarlar'dan kontrol edin.`
+              : "Bugünkü telafi puanı bütçeniz doldu. Puan dışında bir telafi türü seçin ya da yarın tekrar deneyin (bütçe: Ayarlar › İşletme)."
+          );
+        }
+      }
+
       const offer = await tx.remedyOffer.create({
         data: {
           feedbackId: source.kind === 'feedback' ? source.feedbackId : null,
@@ -262,6 +296,8 @@ export async function createRemedyOffer(
           message,
           status,
           options: options as unknown as Prisma.InputJsonValue,
+          // Kuyruktaki taslağın süresi yayında başlar (remedy-server publish).
+          expiresAt: status === 'pending' ? remedyExpiresAt(new Date()) : null,
         },
         select: { id: true },
       });
@@ -322,7 +358,7 @@ export interface AcceptRemedyOfferResult {
  * "Puan" türü (eskiden vaat edilip hiç kredilenmiyordu): aynı tx'te `mintPoints` ile
  * tek seferlik (`remedy:<offerId>` defter anahtarı), `remedy` tavanlı, bayi atıflı kredi +
  * `completed` zaman çizelgesi olayı (`meta.creditedPoints`). Tx geri alınırsa kredi de yoktur.
- * Ayrıca bayi başına günlük toplam telafi puanı bütçesi (`REMEDY_DEALER_DAILY_CAP`), bayi =
+ * Ayrıca bayi başına günlük toplam telafi puanı bütçesi (lib/remedy-budget: varsayılan 5.000, admin/bayi ayarı), bayi =
  * müşteri reddi ve kaynağı moderasyonla kaldırılmış teklifin reddi.
  */
 export async function acceptRemedyOffer(
@@ -338,6 +374,7 @@ export async function acceptRemedyOffer(
       dealerId: true,
       status: true,
       options: true,
+      expiresAt: true,
       feedback: { select: { deletedAt: true } },
       consumptionReview: { select: { deletedAt: true } },
     },
@@ -350,8 +387,21 @@ export async function acceptRemedyOffer(
   if (offer.userId !== userId || offer.dealerId === userId) {
     throw new RemedyOfferError('FORBIDDEN', 'Bu teklifi kabul etme yetkiniz yok.');
   }
+  if (offer.status === 'expired') {
+    throw new RemedyOfferError('EXPIRED', 'Bu telafi teklifinin süresi doldu.');
+  }
   if (offer.status !== 'pending') {
     throw new RemedyOfferError('NOT_PENDING', 'Bu teklif zaten işlendi.');
+  }
+  const nowForExpiry = params.now ?? new Date();
+  if (isRemedyExpired(offer.expiresAt, nowForExpiry)) {
+    // Bakım işini beklemeden kapat (idempotent: yalnız hâlâ pending ise).
+    try {
+      await db.remedyOffer.updateMany({ where: { id: offerId, status: 'pending' }, data: { status: 'expired' } });
+    } catch {
+      // En iyi çaba: bakım işi (inbox-queues) de kapatır; kabul her durumda reddedilir.
+    }
+    throw new RemedyOfferError('EXPIRED', 'Bu telafi teklifinin süresi doldu.');
   }
   // Kaynağı moderasyonla kaldırılmış (sahte/kötüye kullanım) yorumun telafisi kabul edilemez —
   // aksi hâlde silinen sahte şikâyet, bekleyen teklif üzerinden yine puana çevrilirdi.
@@ -375,7 +425,13 @@ export async function acceptRemedyOffer(
   await db.$transaction(async (tx) => {
     const n = await tx.remedyOffer.updateMany({
       // `options` da koşulda değil: seçenekler yalnız oluştururken yazılır, sonradan değişmez.
-      where: { id: offerId, userId, status: 'pending' },
+      // expiresAt koşulu: kontrol ile yazma arasında süre dolarsa kabul edilmez.
+      where: {
+        id: offerId,
+        userId,
+        status: 'pending',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: acceptedAt } }],
+      },
       data: {
         status: 'accepted',
         selectedType: selection.type,
@@ -396,21 +452,10 @@ export async function acceptRemedyOffer(
       // Aşılırsa tx geri alınır → teklif `pending` kalır; müşteri başka tür seçebilir ya da
       // ertesi gün kabul edebilir (sessizce 0 puanla "kabul edildi" yapılmaz).
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`remedy:dealer-budget:${offer.dealerId}`}))`;
-      const used = await tx.pointsLedger.aggregate({
-        where: {
-          actorId: offer.dealerId,
-          source: 'remedy',
-          status: 'posted',
-          createdAt: { gte: startOfDayUTC(acceptedAt) },
-        },
-        _sum: { delta: true },
-      });
-      const usedToday = Math.max(0, used._sum.delta ?? 0);
-      if (usedToday + selection.value > REMEDY_DEALER_DAILY_CAP) {
-        throw new RemedyOfferError(
-          'DEALER_BUDGET_EXHAUSTED',
-          'İşletmenin bugünkü puan telafisi sınırı doldu. Başka bir telafi türü seçebilir ya da yarın tekrar deneyebilirsiniz.'
-        );
+      const budget = effectiveRemedyBudget(await loadRemedyBudgetConfig(tx, offer.dealerId));
+      const usedToday = await remedyPointsUsedToday(tx, offer.dealerId, acceptedAt);
+      if (usedToday + selection.value > budget) {
+        throw new RemedyOfferError('DEALER_BUDGET_EXHAUSTED', remedyBudgetExhaustedMessage(budget - usedToday));
       }
 
       const minted = await mintPoints(tx, {

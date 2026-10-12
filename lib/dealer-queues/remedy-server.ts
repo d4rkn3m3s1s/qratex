@@ -20,7 +20,7 @@ import { ApiError } from '@/lib/http/define-route';
 import { maskEmail } from '@/lib/http/dto';
 import { isUniqueViolation } from '@/lib/economy/errors';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
-import { describeRemedyOffer } from '@/lib/remedy-offer-service';
+import { describeRemedyOffer, remedyExpiresAt } from '@/lib/remedy-offer-service';
 import {
   getRemedyOptions,
   normalizeRemedyOptions,
@@ -366,7 +366,8 @@ export async function publishRemedyDraft(dealerId: string, offerId: string, acto
 
     const n = await tx.remedyOffer.updateMany({
       where: { id: offer.id, dealerId, status: 'awaiting_dealer_approval' },
-      data: { status: 'pending' },
+      // Süre müşteriye ulaştığı anda başlar (kuyrukta bekleme sayılmaz).
+      data: { status: 'pending', expiresAt: remedyExpiresAt(new Date()) },
     });
     if (n.count === 0) throw notAwaiting('changed');
 

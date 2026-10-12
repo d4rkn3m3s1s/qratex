@@ -244,7 +244,9 @@ describe('acceptRemedyOffer', () => {
     const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'discount', selectedValue: 20 });
     expect(r.selection).toEqual({ type: 'discount', label: 'İndirim', unit: '%', value: 20 });
     const upd = mockOfferUpdateMany.mock.calls[0][0];
-    expect(upd.where).toEqual({ id: 'o1', userId: 'u1', status: 'pending' });
+    expect(upd.where).toMatchObject({ id: 'o1', userId: 'u1', status: 'pending' });
+    // Süre koşulu yazmanın kendisinde: kontrol ile yazma arasında süre dolarsa kabul edilmez.
+    expect(upd.where.OR).toEqual([{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }]);
     expect(upd.data).toMatchObject({ status: 'accepted', selectedType: 'discount', selectedValue: '20' });
     const ev = mockTimelineCreate.mock.calls[0][0].data;
     expect(ev.kind).toBe('accepted');

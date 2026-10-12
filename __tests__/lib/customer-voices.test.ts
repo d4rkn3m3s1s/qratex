@@ -36,6 +36,7 @@ const tx = {
   // Bayi günlük telafi bütçesi: kilit + defter toplamı (boş gün).
   $executeRaw: jest.fn(async () => 1),
   pointsLedger: { aggregate: jest.fn(async () => ({ _sum: { delta: 0 } })) },
+  settings: { findUnique: jest.fn(async () => null) },
   remedyOffer: { updateMany: (...a: unknown[]) => mockOfferUpdateMany(...a) },
   remedyTimelineEvent: { create: (...a: unknown[]) => mockTimelineCreate(...a) },
   notification: { create: (...a: unknown[]) => mockNotificationCreate(...a) },

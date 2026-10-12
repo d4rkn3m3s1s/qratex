@@ -88,9 +88,18 @@ export async function autoResolveAnsweredSla(now: Date): Promise<number> {
 export async function expireStaleRemedies(now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - REMEDY_PENDING_TTL_DAYS * DAY_MS);
   const candidates = await prisma.remedyOffer.findMany({
-    where: { status: 'pending', createdAt: { lt: cutoff } },
+    where: {
+      status: 'pending',
+      OR: [
+        // Yeni satırlar: açık son geçerlilik anı.
+        { expiresAt: { lte: now } },
+        // Eski (süresiz) satırlar: oluşturma/yayın + TTL.
+        { expiresAt: null, createdAt: { lt: cutoff } },
+      ],
+    },
     select: {
       id: true,
+      expiresAt: true,
       timelineEvents: {
         where: { kind: { in: ['published', 'notified'] } },
         orderBy: { createdAt: 'desc' },
@@ -104,9 +113,12 @@ export async function expireStaleRemedies(now: Date): Promise<number> {
   for (const c of candidates) {
     const reachedAt = c.timelineEvents[0]?.createdAt;
     // Kuyrukta bekleyip geç yayınlanan teklifin süresi yayın anından sayılır.
-    if (reachedAt && reachedAt >= cutoff) continue;
+    if (!c.expiresAt && reachedAt && reachedAt >= cutoff) continue;
     await prisma.$transaction(async (tx) => {
-      const res = await tx.remedyOffer.updateMany({ where: { id: c.id, status: 'pending' }, data: { status: 'expired' } });
+      const res = await tx.remedyOffer.updateMany({
+        where: { id: c.id, status: 'pending', OR: [{ expiresAt: null }, { expiresAt: { lte: now } }] },
+        data: { status: 'expired' },
+      });
       if (res.count === 0) return;
       await appendRemedyTimelineEvent(tx, c.id, 'expired', 'Teklifin süresi doldu', { ttlDays: REMEDY_PENDING_TTL_DAYS });
       n += 1;

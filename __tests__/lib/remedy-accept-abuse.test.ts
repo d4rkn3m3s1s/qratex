@@ -15,6 +15,8 @@ const mockNotificationCreate = jest.fn();
 const mockExecuteRaw = jest.fn();
 const mockLedgerAggregate = jest.fn();
 const mockMint = jest.fn();
+// Bayi telafi bütçesi ayarı (lib/remedy-budget: Settings `remedy_budget:<dealerId>`).
+const mockSettingsFindUnique = jest.fn(async (): Promise<unknown> => null);
 
 // İşletme içi (sahip/personel) kişisel teklif kontrolü (lib/remedy-offer-service isDealerInsider):
 // bu senaryolarda müşteri işletme personeli DEĞİL.
@@ -24,6 +26,7 @@ const tx = {
   $executeRaw: (...a: unknown[]) => mockExecuteRaw(...a),
   dealerStaff: { findFirst: (...a: unknown[]) => (mockStaffFindFirst as (...x: unknown[]) => unknown)(...a) },
   pointsLedger: { aggregate: (...a: unknown[]) => mockLedgerAggregate(...a) },
+  settings: { findUnique: () => mockSettingsFindUnique() },
   remedyOffer: { updateMany: (...a: unknown[]) => mockOfferUpdateMany(...a) },
   remedyTimelineEvent: { create: (...a: unknown[]) => mockTimelineCreate(...a) },
   notification: { create: (...a: unknown[]) => mockNotificationCreate(...a) },
@@ -170,5 +173,48 @@ describe('kimlik ve kaynak geçerliliği', () => {
       feedback: { select: { deletedAt: true } },
       consumptionReview: { select: { deletedAt: true } },
     });
+  });
+});
+
+describe('telafi süresi (expiresAt) ve ayarlanabilir bayi bütçesi', () => {
+  it('süresi geçmiş bekleyen teklif → EXPIRED (410), durum expired yapılır, mint yok', async () => {
+    mockOfferFindUnique.mockResolvedValue({ ...pending, expiresAt: new Date(NOW.getTime() - 1000) });
+    const offerUpdate = jest.fn(async () => ({ count: 1 }));
+    // Dış (tx dışı) prisma.remedyOffer.updateMany yok → hata yutulur; yine de EXPIRED döner.
+    await expect(
+      acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100, now: NOW })
+    ).rejects.toMatchObject({ code: 'EXPIRED', status: 410 });
+    expect(offerUpdate).not.toHaveBeenCalled();
+    expect(mockOfferUpdateMany).not.toHaveBeenCalled();
+    expect(mockMint).not.toHaveBeenCalled();
+  });
+
+  it('expired durumundaki teklif → EXPIRED', async () => {
+    mockOfferFindUnique.mockResolvedValue({ ...pending, status: 'expired' });
+    await expect(
+      acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'discount', selectedValue: 10, now: NOW })
+    ).rejects.toMatchObject({ code: 'EXPIRED' });
+  });
+
+  it('süresi gelecekte olan teklif kabul edilir', async () => {
+    mockOfferFindUnique.mockResolvedValue({ ...pending, expiresAt: new Date(NOW.getTime() + 60_000) });
+    const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100, now: NOW });
+    expect(r.creditedPoints).toBe(100);
+  });
+
+  it('bayinin kendi DÜŞÜK limiti uygulanır (varsayılandan bağımsız)', async () => {
+    mockSettingsFindUnique.mockResolvedValue({ value: { adminCap: null, dealerCap: 150 } });
+    mockLedgerAggregate.mockResolvedValue({ _sum: { delta: 100 } });
+    await expect(
+      acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100, now: NOW })
+    ).rejects.toMatchObject({ code: 'DEALER_BUDGET_EXHAUSTED', message: expect.stringContaining('50 puan kaldı') });
+    expect(mockMint).not.toHaveBeenCalled();
+  });
+
+  it('admin override varsayılanın üstüne çıkarabilir', async () => {
+    mockSettingsFindUnique.mockResolvedValue({ value: { adminCap: REMEDY_DEALER_DAILY_CAP * 2, dealerCap: null } });
+    mockLedgerAggregate.mockResolvedValue({ _sum: { delta: REMEDY_DEALER_DAILY_CAP } });
+    const r = await acceptRemedyOffer({ offerId: 'o1', userId: 'u1', selectedType: 'points', selectedValue: 100, now: NOW });
+    expect(r.creditedPoints).toBe(100);
   });
 });
