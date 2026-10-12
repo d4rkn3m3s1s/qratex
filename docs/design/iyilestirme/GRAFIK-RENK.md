@@ -44,6 +44,6 @@ Sınırlar dekoratif (anlam ikon+etikette).
 - Sparkline/MetricTile zaten `TONE_TEXT` + currentColor → tutarlı.
 
 ## Kalanlar
-- Birkaç grafik çift Y ekseni kullanıyor (a-analitik trend, b-kiyas-etki ziyaret/ciro) — beceriye göre anti-desen; iki küçük grafiğe bölünmeli (ürün kararı).
+- ~~Çift Y ekseni (a-analitik trend, b-kiyas-etki ziyaret/ciro)~~ — KAPANDI: her biri ortak X'i paylaşan, üst üste iki küçük grafiğe bölündü (tek eksen + kendi başlığı/birimi, `syncId` ile senkron tooltip, renkler chart-theme; puan/ciro çizgisi rezerve durum tonundan kategorik seriye alındı). ChartFrame tablo görünümü ve use-chart-enter korundu.
 - `lib/chart-palette.ts` CHART_HEX yalnız OG görselleri/arka plan efektleri/tema presetlerinde kullanılıyor (grafik değil).
 - Ekran görüntüleri: `.wf-tmp/shots/grafik/` (bayi analitik/yoğunluk/etki, AI kalite, müşteri ilerleme; 390/1440 açık+koyu). admin.json oturumu süresi dolmuş → /admin/analytics girişe düştü; çerez bandı bazı karelerde grafiği örtüyor.
