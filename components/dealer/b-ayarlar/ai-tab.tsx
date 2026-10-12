@@ -353,7 +353,7 @@ function LearningCard({ section, locked }: { section: AiSection; locked: boolean
           <MetricGrid cols={3}>
             <MetricTile label={c.corrections} metric={{ value: l.correctionsTotal }} size="compact" />
             <MetricTile label={c.correctionsUsed} metric={{ value: l.correctionsUsed }} size="compact" />
-            <MetricTile label={c.trainingCount} metric={{ value: l.trainingFeedbackCount }} size="compact" />
+            <MetricTile label={c.trainingCount} metric={{ value: l.trainingFeedbackCount }} size="compact" className="min-[360px]:max-lg:col-span-2" />
           </MetricGrid>
           <p className="qx-small text-fg-muted">{c.lastTrained(l.lastTrainedAt ? fmtDateTime(l.lastTrainedAt) : null)}</p>
           {l.retrain?.shouldRetrain && (

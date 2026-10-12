@@ -99,6 +99,7 @@ export function InsightsMetrics({ data, inboxHref }: { data: InsightsData; inbox
             hint={copy.metrics.npsHint}
             deltaLabel={deltaLabel}
             animate
+            className="min-[360px]:col-span-2 lg:col-span-3"
           />
         )}
       </MetricGrid>

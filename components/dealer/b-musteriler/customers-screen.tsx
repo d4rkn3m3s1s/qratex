@@ -116,6 +116,7 @@ export function CustomersScreen({ initial }: { initial: CustomersInitial }) {
                   metric={{ value: d.avgCustomerValue, format: 'currency', currency: 'TRY' }}
                   icon={<Wallet />}
                   hint={copy.kpiValueHint}
+                  className="min-[360px]:max-xl:col-span-2"
                 />
               </MetricGrid>
 

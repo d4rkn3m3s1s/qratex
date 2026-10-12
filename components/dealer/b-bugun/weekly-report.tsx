@@ -65,7 +65,7 @@ function WeeklyBody({ data, onWeekChange }: { data: WeeklyData; onWeekChange: (w
         <MetricTile label={copy.weekly.avgRating} metric={m.avgRating} icon={<Star />} tone="warning" deltaLabel={copy.weekly.vsPrevWeek} />
         <MetricTile label={copy.weekly.negativeRate} metric={m.negativeRate} icon={<ThumbsDown />} tone="danger" deltaLabel={copy.weekly.vsPrevWeek} />
         <MetricTile label={copy.weekly.responseRate} metric={m.responseRate} icon={<Reply />} tone="success" deltaLabel={copy.weekly.vsPrevWeek} />
-        <MetricTile label={copy.weekly.consumptions} metric={m.consumptions} icon={<Receipt />} tone="info" deltaLabel={copy.weekly.vsPrevWeek} />
+        <MetricTile label={copy.weekly.consumptions} metric={m.consumptions} icon={<Receipt />} tone="info" deltaLabel={copy.weekly.vsPrevWeek} className="min-[360px]:max-xl:col-span-2" />
       </MetricGrid>
 
       <div className="grid gap-4 lg:grid-cols-2">

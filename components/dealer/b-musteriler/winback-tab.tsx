@@ -112,6 +112,7 @@ function WinBackView({ d }: { d: WinBackOverview }) {
           metric={{ value: r30.runs > 0 ? r30.revenue : null, format: 'currency', currency: 'TRY' }}
           hint={r30.runs > 0 ? copy.results30Value(r30.sent, r30.returned) : copy.results30Empty}
           tone="success"
+          className="min-[360px]:max-xl:col-span-2"
         />
       </MetricGrid>
 

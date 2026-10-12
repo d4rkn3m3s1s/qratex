@@ -97,6 +97,7 @@ export function KpiStrip({
                   icon={<ThumbsDown aria-hidden />}
                   hint={copy.kpiNegativeHint}
                   size="compact"
+                  className="min-[360px]:max-xl:col-span-2"
                 />
               </MetricGrid>
 
