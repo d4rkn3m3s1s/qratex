@@ -22,9 +22,10 @@ export type ColorMode = 'light' | 'dark';
 export type DefaultMode = 'system' | 'light' | 'dark';
 export const DEFAULT_MODES: readonly DefaultMode[] = ['system', 'light', 'dark'];
 
-export type FamilyGroup = 'brand' | 'cool' | 'warm' | 'vivid';
+export type FamilyGroup = 'brand' | 'calm' | 'cool' | 'warm' | 'vivid';
 export const FAMILY_GROUP_LABEL: Record<FamilyGroup, string> = {
   brand: 'Marka varsayılanı',
+  calm: 'Sade ve kurumsal',
   cool: 'Soğuk tonlar',
   warm: 'Doğa ve sıcak tonlar',
   vivid: 'Canlı ve neon',
@@ -45,6 +46,9 @@ const FAMILY_META: Record<string, { name: string; group: FamilyGroup; note: stri
   pink: { name: 'Çiçek', group: 'vivid', note: 'Pembe tonlar' },
   cyberpunk: { name: 'Neon', group: 'vivid', note: 'Neon pembe ve elektrik mavisi' },
   amethyst: { name: 'Ametist', group: 'vivid', note: 'Mor ve pembe' },
+  navy: { name: 'Derin Lacivert', group: 'calm', note: 'Lacivert ve pirinç' },
+  charcoal: { name: 'Sıcak Kömür', group: 'calm', note: 'Sıcak gri ve bakır' },
+  pine: { name: 'Çam', group: 'calm', note: 'Orman yeşili ve hardal' },
 };
 
 export type Palette = {

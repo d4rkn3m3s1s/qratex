@@ -8,7 +8,7 @@ import path from 'node:path';
 import { extractVarsForSelector, layerVars, resolveVar, type VarMap } from '@/lib/design/css-tokens';
 import { contrastRatio } from '@/lib/design/contrast';
 import { contrastContract } from '@/lib/design/tokens';
-import { BASE_THEME_VARS, deriveThemeVars, onFill, type ThemeMode, type ThemeSeeds } from '@/lib/design/theme-derive';
+import { BASE_THEME_VARS, FILL_CHROMA_MAX, deriveThemeVars, hslToOklch, oklchToHsl, onFill, type ThemeMode, type ThemeSeeds } from '@/lib/design/theme-derive';
 import { THEME_FAMILIES, draftContrastReport } from '@/lib/design-system/theme-model';
 import { BRAND_PRIMARY_HEX, VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/brand-colors';
 import { hexToHSL } from '@/lib/hex-to-hsl';
@@ -138,5 +138,48 @@ describe('tema CSS üretimi', () => {
     ]);
     expect(runtimePalette(state, 'dark')?.background).toBe('#050505');
     expect(runtimePalette(state, 'light')?.background).toBeUndefined();
+  });
+});
+
+describe('profesyonel preset ayarı (2026-10, docs/design/iyilestirme/TEMALAR.md)', () => {
+  it('koyu modda dolgu kroması OKLCH ≤ 0.20 (neon parlama yok)', () => {
+    for (const fam of THEME_FAMILIES) {
+      const v = deriveThemeVars(fam.variants.dark, 'dark');
+      for (const k of ['primary', 'secondary', 'accent']) {
+        expect([fam.id, k, hslToOklch(v[k]).c <= FILL_CHROMA_MAX.dark + 0.01]).toEqual([fam.id, k, true]);
+      }
+    }
+  });
+
+  it('orta tonlu dolgu siyah yazı yerine hafif koyulaşıp beyaz yazı alır; gerçekten açık dolgu mürekkep', () => {
+    expect(onFill(hexToHSL('#3B82F6')).fg).toBe('0 0% 100%');
+    expect(onFill(hexToHSL('#EA580C')).fg).toBe('0 0% 100%');
+    expect(onFill(hexToHSL('#FACC15')).fg).toBe('240 10% 10%');
+  });
+
+  it('seçili yüzey kartta görünür, odak halkası tüm yüzeylerde ≥ 3:1', () => {
+    for (const fam of THEME_FAMILIES) {
+      for (const mode of ['light', 'dark'] as const) {
+        const v = layerVars(baseFor(mode), deriveThemeVars(fam.variants[mode], mode));
+        const card = resolveVar(v, 'card')!;
+        expect([fam.id, mode, contrastRatio(resolveVar(v, 'brand-subtle')!, card) >= (mode === 'dark' ? 1.2 : 1.1)]).toEqual([fam.id, mode, true]);
+        for (const s of ['background', 'card', 'surface-2']) {
+          expect([fam.id, mode, s, contrastRatio(resolveVar(v, 'ring')!, resolveVar(v, s)!) >= 3]).toEqual([fam.id, mode, s, true]);
+        }
+        if (mode === 'light') expect([fam.id, contrastRatio(card, resolveVar(v, 'background')!) >= 1.05]).toEqual([fam.id, true]);
+      }
+    }
+  });
+
+  it('sade/kurumsal aileler mevcut ve eski aileler silinmedi', () => {
+    const ids = THEME_FAMILIES.map((f) => f.id);
+    for (const id of ['purple', 'blue', 'arctic', 'obsidian', 'aurora', 'green', 'forestNight', 'orange', 'lava', 'royalGold', 'pink', 'cyberpunk', 'amethyst', 'navy', 'charcoal', 'pine']) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it('OKLCH dönüşümü gidiş-dönüş tutarlı', () => {
+    const o = hslToOklch('262 83% 58%');
+    expect(contrastRatio(oklchToHsl(o), '262 83% 58%')).toBeLessThan(1.03);
   });
 });

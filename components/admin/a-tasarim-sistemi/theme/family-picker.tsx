@@ -21,7 +21,7 @@ function Strip({ p, label }: { p: Palette; label: string }) {
   );
 }
 
-const GROUPS: FamilyGroup[] = ['brand', 'cool', 'warm', 'vivid'];
+const GROUPS: FamilyGroup[] = ['brand', 'calm', 'cool', 'warm', 'vivid'];
 
 /**
  * Hazır paletler — `radiogroup`: ok tuşlarıyla gezinme, Space/Enter ile seçim (seçim yalnız

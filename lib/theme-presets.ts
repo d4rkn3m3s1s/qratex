@@ -56,6 +56,13 @@ export const THEME_COLOR_PRESETS = {
   forestNightLight: { primary: '#059669', secondary: '#65A30D', accent: '#0D9488' },
   amethyst: { primary: '#A855F7', secondary: '#EC4899', accent: '#F472B6' },
   amethystLight: { primary: '#9333EA', secondary: '#DB2777', accent: '#EC4899' },
+  // ── Sade/kurumsal aileler (2026-10): düşük kroma, tek vurgu, göz yormayan ──
+  navy: { primary: '#5B7FD6', secondary: '#7088B0', accent: '#C9A86A' },
+  navyLight: { primary: '#1E3A8A', secondary: '#475E8A', accent: '#8A6A2E' },
+  charcoal: { primary: '#D08A5E', secondary: '#A39A8C', accent: '#8FA37E' },
+  charcoalLight: { primary: '#A9502A', secondary: '#6B6259', accent: '#5E7350' },
+  pine: { primary: '#4CAF84', secondary: '#7FA88E', accent: '#D4B26A' },
+  pineLight: { primary: '#1F6B4F', secondary: '#4D7A63', accent: '#8A6D25' },
 } as const;
 
 export type ThemePresetId = keyof typeof THEME_COLOR_PRESETS;
@@ -267,6 +274,12 @@ const ADMIN_THEME_META: Record<
     foreground: up('#581C87'),
     mode: 'light',
   },
+  navy: { name: 'Derin Lacivert', description: 'Kurumsal lacivert, pirinç vurgu', background: '#0A1124', foreground: '#E6ECF7', mode: 'dark' },
+  navyLight: { name: 'Derin Lacivert Gün', description: 'Açık kurumsal lacivert', background: '#F4F6FB', foreground: '#0F1B33', mode: 'light' },
+  charcoal: { name: 'Sıcak Kömür', description: 'Sıcak gri, bakır vurgu', background: '#13110F', foreground: '#F2EEE8', mode: 'dark' },
+  charcoalLight: { name: 'Sıcak Kömür Gün', description: 'Açık sıcak taş', background: '#F7F5F2', foreground: '#1F1B17', mode: 'light' },
+  pine: { name: 'Çam', description: 'Derin orman yeşili, hardal vurgu', background: '#0A1310', foreground: '#E7F0EA', mode: 'dark' },
+  pineLight: { name: 'Çam Gün', description: 'Açık orman yeşili', background: '#F3F7F4', foreground: '#12241B', mode: 'light' },
 };
 
 /** Admin tema seçici kartları — `isActive` sayfada state ile eklenir */
