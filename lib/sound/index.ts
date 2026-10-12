@@ -2,6 +2,7 @@
  * Arayüz sesleri — tek API: `playSound(name)`.
  *
  * - Prosedürel Web Audio sentezi (bkz. recipes.ts) → indirme yok, lisans yok.
+ *   Adım başına: yumuşak atak, StereoPanner, FM modülatör, detune; ses başına oda yankısı gönderimi.
  * - AudioContext TEMBEL: ilk kullanıcı etkileşiminde oluşturulur/"resume" edilir
  *   (iOS Safari / Capacitor WKWebView otomatik çalma kuralı).
  * - Tercih kapsam başına (müşteri AÇIK düşük seviye, bayi/admin KAPALI) — prefs.ts.
@@ -13,7 +14,7 @@
  * Sunucuda / AudioContext yoksa hiçbir şey yapmaz, asla fırlatmaz.
  */
 import { SoundGate } from './gate';
-import { SOUND_RECIPES, resolveSoundName, type SoundAlias, type SoundName, type SoundRecipe } from './recipes';
+import { DEFAULT_REVERB, SOUND_RECIPES, resolveSoundName, type SoundAlias, type SoundName, type SoundRecipe } from './recipes';
 import { readSoundPrefs, scopeFromPath, type SoundScope } from './prefs';
 
 export type { SoundName, SoundAlias } from './recipes';
@@ -23,6 +24,8 @@ export * from './prefs';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
+/** Oda yankısı girişi (ConvolverNode, üretilmiş IR). Yoksa yankısız çalınır. */
+let reverbIn: GainNode | null = null;
 let listening = false;
 const gate = new SoundGate();
 
@@ -47,6 +50,18 @@ function getCtx(): AudioContext | null {
     comp.threshold.value = -18;
     comp.ratio.value = 4;
     master.connect(lp).connect(comp).connect(ctx.destination);
+    // Hafif oda: 0.45 s'lik stereo, üstel sönen gürültü IR'si (dosya yok). Kuru sinyal bozulmaz.
+    try {
+      const conv = ctx.createConvolver();
+      conv.buffer = makeRoomIR(ctx, 0.45, 3.2);
+      const rvLp = ctx.createBiquadFilter();
+      rvLp.type = 'lowpass';
+      rvLp.frequency.value = 5200;
+      reverbIn = ctx.createGain();
+      reverbIn.connect(conv).connect(rvLp).connect(lp);
+    } catch {
+      reverbIn = null;
+    }
   } catch {
     ctx = null;
     master = null;
@@ -103,23 +118,52 @@ function getNoise(c: AudioContext): AudioBuffer {
   return noiseBuf;
 }
 
+/** Üretilmiş küçük oda IR'si: her kanalda bağımsız gürültü × (1−t)^decay → doğal stereo genişlik. */
+export function makeRoomIR(c: BaseAudioContext, seconds: number, decay: number): AudioBuffer {
+  const len = Math.max(1, Math.floor(c.sampleRate * seconds));
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
 function render(c: AudioContext, out: GainNode, recipe: SoundRecipe, volume: number) {
   const t0 = c.currentTime + 0.005;
+  // Ses başına bir yankı gönderimi (tarif belirler; tick gibi sık sesler 0).
+  let send: GainNode | null = null;
+  const wet = recipe.reverb ?? DEFAULT_REVERB;
+  if (reverbIn && wet > 0) {
+    send = c.createGain();
+    send.gain.value = wet;
+    send.connect(reverbIn);
+  }
   for (const s of recipe.steps) {
     const start = t0 + s.at;
     const end = start + s.dur;
     const env = c.createGain();
     const peak = Math.max(0.0002, s.gain * volume);
+    const atk = Math.min(s.attack ?? 0.008, s.dur / 3);
     env.gain.setValueAtTime(0.0001, start);
-    env.gain.exponentialRampToValueAtTime(peak, start + Math.min(0.008, s.dur / 4));
+    env.gain.exponentialRampToValueAtTime(peak, start + Math.max(0.002, atk));
     env.gain.exponentialRampToValueAtTime(0.0001, end);
-    env.connect(out);
+    let tail: AudioNode = env;
+    if (s.pan && typeof c.createStereoPanner === 'function') {
+      const p = c.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, s.pan));
+      env.connect(p);
+      tail = p;
+    }
+    tail.connect(out);
+    if (send) tail.connect(send);
     if (s.wave === 'noise') {
       const src = c.createBufferSource();
       src.buffer = getNoise(c);
       const bp = c.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = s.freq;
+      bp.frequency.setValueAtTime(s.freq, start);
+      if (s.freqEnd) bp.frequency.exponentialRampToValueAtTime(s.freqEnd, end);
       bp.Q.value = 1.2;
       src.connect(bp).connect(env);
       src.start(start);
@@ -129,6 +173,18 @@ function render(c: AudioContext, out: GainNode, recipe: SoundRecipe, volume: num
       osc.type = s.wave;
       osc.frequency.setValueAtTime(s.freq, start);
       if (s.freqEnd) osc.frequency.exponentialRampToValueAtTime(s.freqEnd, end);
+      if (s.detune) osc.detune.setValueAtTime(s.detune, start);
+      if (s.fm) {
+        // FM: modülatör sapması sönümle birlikte azalır → çan/cam "ting", sonra saf ton.
+        const mod = c.createOscillator();
+        const dev = c.createGain();
+        mod.frequency.setValueAtTime(s.freq * s.fm.ratio, start);
+        dev.gain.setValueAtTime(s.freq * s.fm.index, start);
+        dev.gain.exponentialRampToValueAtTime(Math.max(0.01, s.freq * s.fm.index * 0.05), end);
+        mod.connect(dev).connect(osc.frequency);
+        mod.start(start);
+        mod.stop(end + 0.02);
+      }
       osc.connect(env);
       osc.start(start);
       osc.stop(end + 0.02);

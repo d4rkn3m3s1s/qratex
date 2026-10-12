@@ -39,3 +39,48 @@ Bilinçli olarak ses konmayan yerler: sıradan buton tıklamaları, sekmeler ve 
 - **ZapSplat:** atıf zorunlu ve yeniden dağıtım kısıtlı, PWA için uygun değil.
 - **Material:** seslerin lisansı doğrulanamadı.
 - **Tarz:** Raycast, Linear ve Apple tarzında az, kısa, tonal ve düşük seviyeli sesler; yalnız anlamlı anlarda çalıyor. Duolingo tarzı zengin "ödül" sesi yalnız `reward` için kullanılıyor.
+
+## 2026-10 — Aile zenginleştirmesi (premium katman)
+
+### Motor eklentileri (`lib/sound/index.ts`)
+- **Yumuşak atak** (`attack`, adım başına; varsayılan 8 ms): tıklama "çıtırtısı" yerine kısa şişme.
+- **Stereo genişlik** (`pan`, ±0.1–0.4, `StereoPannerNode`): harmonik katmanlar hafif sağ/sola açılır; mono'da hiçbir şey kaybolmaz.
+- **FM sentez** (`fm: { ratio, index }`): modülatör sapması sönümle birlikte %5'e iner → başta cam/çan "ting", sonra saf sinüs. Oranlar: 2 (oktav, sıcak), 3.5 (çan), 1.5 (yumuşak tahta).
+- **Koro** (`detune`, ±5–7 cent iki katman): reward, rank-up, celebration'da geniş, "pahalı" tını.
+- **Oda yankısı**: ana zincirde tek `ConvolverNode`; IR dosya değil, kodla üretilen 0.45 s stereo üstel gürültü (`makeRoomIR`, kanallar bağımsız → doğal genişlik), 5.2 kHz lowpass. Tarif başına gönderim (`reverb`, varsayılan 0.08; `tick` 0, `celebration` 0.22).
+- **Gürültü filtre süpürmesi**: `noise` adımında `freqEnd` artık bandpass merkezini kaydırır (swipe, send, delete-soft, sheet).
+
+### Tonal aile
+Tüm tonal adımlar **C majör pentatonik** (C D E G A) üzerinde — yeni 16 ses için jest testi bunu frekans→MIDI ile doğrular. Pozitif = yukarı, negatif/kapanış = aşağı (ayna çiftleri testli: toggle-on/off, open/close-sheet).
+
+### Yeni adlar
+| Ad | Karakter | Takma ad |
+|---|---|---|
+| like | FM "bloop" G5→C6 + oktav parıltı | heart, favorite |
+| copy | tahta tık + E6 cam | — |
+| send | yükselen hava + C5→G5 | message-sent |
+| receive-message | FM çan A5→E5 | message |
+| swipe | filtre süpürmeli hışırtı | — |
+| unlock | mekanik tık + G5→D6 | — |
+| streak | E–G–A basamak + alt oktav | — |
+| rank-up | G4–D5–G5 koro | — |
+| purchase | alçak dokunuş + G6 çan | redeem |
+| delete-soft | inen hışırtı + G4→E4 | remove |
+| open-sheet / close-sheet | hava + E5↔A5 | sheet-open / sheet-close |
+| toggle-on / toggle-off | tık + G5↔C6 | — |
+| scan-success | C6 + G6 cam çan | qr-scan |
+| celebration | C-E-G-A arpej → C6 koro + C4 taban + parıltı (≤1.2 s, tek uzun ses, 2.5 s spam aralığı) | confetti, big-win |
+
+Mevcut sesler de cilalandı: tap (minik gürültü tık katmanı), toggle (oktav gölgesi), success (stereo + FM), coin (çan FM), reward (koro), error (yumuşak atak + soluk üst katman), notify (FM çan).
+
+### Bütçe (testli)
+Kısa sesler ≤ 600 ms, `celebration` ≤ 1.2 s; adım kazancı ≤ 0.4; |pan| ≤ 0.5; FM index ≤ 1; detune ≤ 12 cent; yankı ≤ 0.3.
+
+### Kaynaklar
+- UI ses ilkeleri (kısa, ortak "ses", yukarı=olumlu): https://violetrecording.com/how-to-design-ui-sounds/
+- Web Audio UI ses tarifleri (pop 30–80 ms, FM çan bildirimleri, jest kilidi): https://cdn.jsdelivr.net/gh/dannyjpwilliams/ui-sound-design-skill@main/README.md
+- Tek parametre setinden tutarlı kit üretimi: https://vi-control.net/community/threads/exploring-procedural-generation-of-coherent-ui-sound-kits-web-audio-api-pure-synthesis-feedback-welcome.170143/
+- ConvolverNode (1/2/4 kanal IR): https://developer.mozilla.org/docs/Web/API/ConvolverNode
+- Stil referansı (dinleme): Raycast/Linear (az ve kuru), Apple (cam çanlar), Nintendo Switch menü (kısa tahta tık), Duolingo (yalnız büyük anlarda zengin arpej → `celebration`).
+
+Harici dosya kullanılmadı; `public/sounds/LICENSES.md` değişmedi.
