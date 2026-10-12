@@ -41,10 +41,10 @@ export const QR_PRESET_DISPLAY_HEX = {
 
 /**
  * `viewport.themeColor` — tarayıcı çubuğu sayfa zeminiyle aynı ton (`--background`:
- * açık `264 40% 98%`, koyu `222 47% 5%`; eskiden #fafafa / #0b1220 ile ton farkı vardı).
+ * açık `264 40% 98%`, koyu `228 18% 7%`; eskiden #fafafa / #0b1220 ile ton farkı vardı).
  */
 export const VIEWPORT_THEME_COLOR_LIGHT = '#f9f8fc' as const;
-export const VIEWPORT_THEME_COLOR_DARK = '#070a13' as const;
+export const VIEWPORT_THEME_COLOR_DARK = '#0f1015' as const;
 
 /** `app/opengraph-image.tsx` — OG görsel arka planı ve başlık (mevcut görünümle aynı) */
 export const OG_IMAGE_BACKGROUND_GRADIENT =

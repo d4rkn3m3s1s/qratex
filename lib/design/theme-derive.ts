@@ -70,25 +70,25 @@ export const BASE_THEME_VARS: Record<ThemeMode, ThemeVarMap> = {
     'info-subtle': '199 90% 95%',
   },
   dark: {
-    background: '222 47% 5%',
-    card: '222 38% 9%',
-    'surface-2': '222 32% 12.5%',
-    muted: '217 22% 15%',
-    foreground: '210 40% 98%',
-    'muted-foreground': '215 16% 68%',
-    'text-3': '215 12% 57%',
-    border: '217 19% 20%',
-    primary: '262 83% 58%',
-    'brand-text': '262 90% 78%',
-    'brand-subtle': '262 45% 18%',
-    'success-text': '142 69% 58%',
-    'success-subtle': '142 50% 12%',
-    'warning-text': '43 96% 58%',
-    'warning-subtle': '38 60% 12%',
-    'danger-text': '0 91% 71%',
-    'danger-subtle': '0 55% 15%',
-    'info-text': '199 92% 66%',
-    'info-subtle': '201 60% 13%',
+    background: '228 18% 7%',
+    card: '228 15% 10.5%',
+    'surface-2': '228 13% 13.5%',
+    muted: '228 11% 16%',
+    foreground: '220 20% 96%',
+    'muted-foreground': '222 12% 70%',
+    'text-3': '222 9% 58%',
+    border: '228 11% 22%',
+    primary: '262 68% 60%',
+    'brand-text': '260 80% 80%',
+    'brand-subtle': '262 30% 18%',
+    'success-text': '146 52% 60%',
+    'success-subtle': '148 30% 13%',
+    'warning-text': '40 82% 62%',
+    'warning-subtle': '36 35% 13%',
+    'danger-text': '0 78% 73%',
+    'danger-subtle': '0 35% 15%',
+    'info-text': '200 75% 68%',
+    'info-subtle': '205 35% 14%',
   },
 };
 
@@ -251,16 +251,18 @@ export function deriveThemeVars(seeds: ThemeSeeds, mode: ThemeMode): ThemeVarMap
   let card = base.card;
   let surface2 = base['surface-2'];
   let muted = base.muted;
+  let popover = base.card;
   if (seeds.background) {
     const b = parse(hexToHSL(seeds.background));
     bg = fmt(b);
     const dark = isDarkSurface(bg);
     const [h, s, l] = b;
     if (dark) {
-      // Yükselti tonları (globals.css .dark ile aynı adımlar): kart +4, yüzey-2 +7.5, muted +10, sınır +15.
-      card = fmt([h, s * 0.85, l + 4]);
-      surface2 = fmt([h, s * 0.75, l + 7.5]);
-      muted = fmt([h, Math.min(s, 25), l + 10]);
+      // Yükselti merdiveni (globals.css .dark 2026-10 ile aynı): kart +3.5, yüzey-2 +6.5, popover +9, muted +9, sınır +15.
+      card = fmt([h, s * 0.85, l + 3.5]);
+      surface2 = fmt([h, s * 0.75, l + 6.5]);
+      popover = fmt([h, s * 0.7, l + 9]);
+      muted = fmt([h, Math.min(s, 25), l + 9]);
       out.border = fmt([h, Math.min(s, 20), l + 15]);
       // Güçlü sınır (form/ayırıcı) aydınlanan kartta da ≥3:1 kalsın.
       out['border-strong'] = fmt([h, Math.min(s, 13), Math.max(48, l + 40)]);
@@ -281,7 +283,7 @@ export function deriveThemeVars(seeds: ThemeSeeds, mode: ThemeMode): ThemeVarMap
     out.input = out.border;
     out.background = bg;
     out.card = card;
-    out.popover = dark ? surface2 : card;
+    out.popover = dark ? popover : card;
     out['surface-2'] = surface2;
     out.muted = muted;
   }
