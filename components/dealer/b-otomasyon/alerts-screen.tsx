@@ -101,7 +101,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
   const isDefault = JSON.stringify(draft) === JSON.stringify(data.defaults);
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-section">
       <div className="flex flex-wrap items-center gap-3 rounded-card border border-subtle bg-surface-1 p-4" aria-live="polite">
         {status ? (
           <span className={cn('rounded-chip px-3 py-1 qx-body font-semibold', LEVEL_CLS[status.level])}>
@@ -255,7 +255,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
         onDiscard={() => setDraft(data.rules)}
         message={c.dirty}
       />
-    </>
+    </div>
   );
 }
 

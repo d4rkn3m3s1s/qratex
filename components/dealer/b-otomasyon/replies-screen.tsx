@@ -122,7 +122,7 @@ export function RepliesScreen() {
     >
       <QueryState query={q} skeleton="list" onRetry={() => q.refetch()} isEmpty={() => false}>
         {(data) => (
-          <>
+          <div className="flex min-w-0 flex-col gap-section">
             <Summary data={data} />
             <Warnings data={data} />
             {data.rules.length === 0 ? (
@@ -168,7 +168,7 @@ export function RepliesScreen() {
                 }}
               />
             )}
-          </>
+          </div>
         )}
       </QueryState>
     </PanelPage>
@@ -207,6 +207,8 @@ function Warnings({ data }: { data: RepliesOverviewDto }) {
   const c = useAutomationCopy().replies;
   const usesTone = data.rules.some((r) => r.isActive && r.tone);
   const usesSentiment = data.rules.some((r) => r.isActive && r.condition?.field === 'sentiment');
+  // Boş kap flex-col sütununda fazladan bir boşluk adımı üretmesin.
+  if (data.summary.brokenCount === 0 && !(usesTone && data.ai.canUseAi === false) && !(usesSentiment && data.ai.canAnalyze === false)) return null;
   return (
     <div className="space-y-2">
       {data.summary.brokenCount > 0 && (

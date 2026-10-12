@@ -101,7 +101,7 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
   const general = data.catalog.scopes.find((s) => s.locationId === null);
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-section">
       <StatusStrip data={data} />
       <Kpis data={data} />
 
@@ -260,7 +260,7 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
         onDiscard={() => setDraft(data.config)}
         message={c.dirty}
       />
-    </>
+    </div>
   );
 }
 
