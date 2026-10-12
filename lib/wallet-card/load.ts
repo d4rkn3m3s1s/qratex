@@ -27,7 +27,7 @@ export class WalletUserNotFoundError extends Error {
 }
 
 export async function loadWalletCard(userId: string, now: Date = new Date()): Promise<WalletCardPayload> {
-  const [user, cardRows, pendingCount, pendingRows, recentRows, matrix, rules] = await Promise.all([
+  const [user, cardRows, pendingCount, pendingRows, recentRows, earned, matrix, rules] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -82,31 +82,12 @@ export async function loadWalletCard(userId: string, now: Date = new Date()): Pr
         review: { select: { id: true } },
       },
     }),
+    loadRecentEarned(userId),
     getPointsMatrix(),
     getLeagueRules(),
   ]);
 
   if (!user) throw new WalletUserNotFoundError();
-
-  // Tüketim başına kazanılan pasif puan (defter). Defter tablosu henüz yoksa ya da sorgu
-  // düşerse puan sütunu gösterilmez — kart ekranını düşürmez (kritik iş QR).
-  let earned = new Map<string, number>();
-  if (recentRows.length > 0) {
-    try {
-      const ledger = await prisma.pointsLedger.findMany({
-        where: {
-          userId,
-          source: 'dealer_passive',
-          status: 'posted',
-          sourceId: { in: recentRows.map((r) => r.id) },
-        },
-        select: { sourceId: true, delta: true },
-      });
-      earned = sumPointsBySource(ledger);
-    } catch (error) {
-      console.warn('[wallet-card] defter okunamadı; puan sütunu gizlendi', error);
-    }
-  }
 
   return {
     holderName: user.name?.trim() || null,
@@ -137,4 +118,32 @@ export async function loadWalletCard(userId: string, now: Date = new Date()): Pr
     wallet: { apple: isAppleWalletConfigured(), google: isGoogleWalletConfigured() },
     generatedAt: now.toISOString(),
   };
+}
+
+/**
+ * Son {@link WALLET_RECENT_LIMIT} tüketimin kazandırdığı pasif puan (defter), tüketim başına toplam.
+ * Son işlemler alt sorgu olarak SQL'in içinde seçilir → diğer sorgularla PARALEL tek tur (eskiden
+ * son işlemler gelince ikinci bir tur atılıyordu; ölçüm: kart HTML'i ~0,4 sn geç akıyordu → LCP).
+ * Defter tablosu yoksa ya da sorgu düşerse puan sütunu gösterilmez — kart ekranını düşürmez.
+ */
+async function loadRecentEarned(userId: string): Promise<Map<string, number>> {
+  try {
+    const rows = await prisma.$queryRaw<{ sourceId: string | null; delta: number }[]>`
+      SELECT pl."sourceId", SUM(pl."delta")::int AS "delta"
+      FROM "PointsLedger" pl
+      WHERE pl."userId" = ${userId}
+        AND pl."source" = 'dealer_passive'
+        AND pl."status" = 'posted'
+        AND pl."sourceId" IN (
+          SELECT c."id" FROM "Consumption" c
+          WHERE c."customerId" = ${userId}
+          ORDER BY c."createdAt" DESC
+          LIMIT ${WALLET_RECENT_LIMIT}
+        )
+      GROUP BY pl."sourceId"`;
+    return sumPointsBySource(rows.map((r) => ({ sourceId: r.sourceId, delta: Number(r.delta) })));
+  } catch (error) {
+    console.warn('[wallet-card] defter okunamadı; puan sütunu gizlendi', error);
+    return new Map<string, number>();
+  }
 }

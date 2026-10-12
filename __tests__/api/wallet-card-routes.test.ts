@@ -43,7 +43,8 @@ const db = {
   user: { findUnique: jest.fn() },
   physicalCard: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
   consumption: { count: jest.fn(), findMany: jest.fn() },
-  pointsLedger: { findMany: jest.fn() },
+  // Defter puanı tek ham sorgu (son işlemler alt sorguda) — diğer sorgularla paralel.
+  $queryRaw: jest.fn(),
   userBirthday: { findUnique: jest.fn(), create: jest.fn() },
   userVIPStatus: { findUnique: jest.fn(), upsert: jest.fn() },
   notification: { findFirst: jest.fn(), create: jest.fn() },
@@ -90,7 +91,7 @@ describe('GET /api/customer/wallet/card', () => {
             { id: 'k2', createdAt: new Date('2026-10-02Z'), dealer: { businessName: 'Kafe' }, product: null, review: null },
           ]
     );
-    db.pointsLedger.findMany.mockResolvedValue([{ sourceId: 'k1', delta: 20 }]);
+    db.$queryRaw.mockResolvedValue([{ sourceId: 'k1', delta: 20 }]);
   });
 
   it('açık DTO + statü + bekleyen + defter puanı; sentetik kart sorguda elenir', async () => {
@@ -113,7 +114,7 @@ describe('GET /api/customer/wallet/card', () => {
   });
 
   it('defter sorgusu düşerse puan gizlenir, yanıt yine 200', async () => {
-    db.pointsLedger.findMany.mockRejectedValueOnce(new Error('relation does not exist'));
+    db.$queryRaw.mockRejectedValueOnce(new Error('relation does not exist'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { GET } = await import('@/app/api/customer/wallet/card/route');
     const res = await GET(req('/api/customer/wallet/card'), {});
