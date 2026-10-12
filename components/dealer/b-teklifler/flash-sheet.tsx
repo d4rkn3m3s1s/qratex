@@ -216,7 +216,7 @@ export function FlashSheet({
       )}
 
       <div className="rounded-lg border border-subtle bg-surface-0 p-3" aria-live="polite">
-        <p className="qx-caption mb-2 font-semibold uppercase tracking-wide text-fg-muted">{copy.flashForm.preview}</p>
+        <p className="qx-overline mb-2 text-fg-muted">{copy.flashForm.preview}</p>
         <div className="flex items-start gap-3 rounded-md border border-subtle bg-surface-1 p-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
             {offerType === 'COMPLIMENTARY' ? <Gift className="h-5 w-5" aria-hidden /> : <BadgePercent className="h-5 w-5" aria-hidden />}

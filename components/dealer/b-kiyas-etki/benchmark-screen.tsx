@@ -14,7 +14,6 @@ import { PageHeader, PageToolbar, PanelPage, SectionCard } from '@/components/ds
 import { EmptyState, InlineError, QueryState, SkeletonStats, TONE_CALLOUT } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Reveal } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { benchmarkSearchString } from '@/lib/dealer-benchmark/params';
 import {
@@ -150,12 +149,12 @@ function Recommendations({ data }: { data: BenchmarkData }) {
       {data.recommendations.length === 0 ? (
         <EmptyState compact headingLevel="p" tone="success" title={c.none} description={c.noneDesc} />
       ) : (
-        <ol className="space-y-3">
-          {data.recommendations.map((r, i) => {
+        <ol className="-my-3 divide-y divide-subtle">
+          {data.recommendations.map((r) => {
             const t = recText(r, data, copy, locale);
             return (
-              <Reveal key={`${r.kind}-${r.topic ?? ''}`} index={i} as="li">
-                <div className="flex flex-col gap-3 rounded-control border border-subtle bg-surface-1 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <li key={`${r.kind}-${r.topic ?? ''}`}>
+                <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="qx-small font-medium text-fg">{t.title}</p>
                     <p className="qx-caption mt-0.5 text-fg-muted">{t.body}</p>
@@ -167,7 +166,7 @@ function Recommendations({ data }: { data: BenchmarkData }) {
                     </Link>
                   </Button>
                 </div>
-              </Reveal>
+              </li>
             );
           })}
         </ol>

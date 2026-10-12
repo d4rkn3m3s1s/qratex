@@ -114,7 +114,7 @@ function Group({
   if (items.length === 0) return null;
   return (
     <section>
-      <h3 className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</h3>
+      <h3 className="px-2 pb-1 qx-overline text-fg-muted">{title}</h3>
       <ul className="space-y-0.5">
         {items.map((c) => (
           <Row key={c.id} c={c} active={c.id === activeId} onSelect={onSelect} copy={copy} />
@@ -175,7 +175,7 @@ function Row({ c, active, onSelect, copy }: { c: ConversationSummary; active: bo
                 setEditing(false);
               }
             }}
-            className="min-h-10 min-w-0 flex-1 rounded-md border border-border bg-surface-0 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="min-h-10 min-w-0 flex-1 rounded-md border border-border bg-surface-0 px-2 qx-small text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           />
           <Button type="submit" size="sm" className="min-h-10">
             {copy.save}
@@ -196,11 +196,11 @@ function Row({ c, active, onSelect, copy }: { c: ConversationSummary; active: bo
           active ? 'text-brand' : 'text-fg',
         )}
       >
-        <span className="flex w-full items-center gap-1.5 truncate text-sm font-medium">
+        <span className="flex w-full items-center gap-1.5 truncate qx-small font-medium">
           {c.pinned && <Pin className="h-3 w-3 shrink-0" aria-hidden />}
           <span className="truncate">{label}</span>
         </span>
-        <time dateTime={c.updatedAt} className="text-xs text-fg-muted">
+        <time dateTime={c.updatedAt} className="qx-caption text-fg-muted">
           {new Date(c.updatedAt).toLocaleString(copy.tag, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' })}
         </time>
       </button>

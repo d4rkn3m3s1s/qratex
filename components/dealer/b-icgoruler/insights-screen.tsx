@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bot, Brain, Layers, LayoutDashboard, Lightbulb, QrCode, RefreshCw, Settings2, Activity } from 'lucide-react';
+import { Bot, Layers, LayoutDashboard, Lightbulb, QrCode, RefreshCw, Settings2, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState, InlineError, QueryState } from '@/components/states';
 import { PageHeader, PanelErrorBoundary, PanelPage, SectionCard, SectionTabs } from '@/components/ds/page';
@@ -223,7 +223,6 @@ function InsightsBody({ data, lang, onRefresh }: { data: InsightsData; lang: 'tr
                   <div className="min-w-0 space-y-4">
                     <AlertsPanel data={data} handlers={handlers} />
                     <AskCard />
-                    <LearnCard />
                   </div>
                 </div>
               </div>
@@ -254,21 +253,18 @@ function AskCard() {
           </li>
         ))}
       </ul>
-    </SectionCard>
-  );
-}
-
-/** Öğrenme profili ve düzeltme geçmişi Ayarlar → AI'a taşındı (rapor Bulgu 9/10). */
-function LearnCard() {
-  const { copy } = useInsightsCopy();
-  return (
-    <SectionCard title={copy.footer.learnTitle} description={copy.footer.learnDesc} icon={<Brain className="h-4 w-4" aria-hidden />} density="compact">
-      <Button asChild variant="outline" className="min-h-11 w-full">
-        <Link href={AI_SETTINGS_HREF}>
-          <Settings2 className="mr-1.5 h-4 w-4" aria-hidden />
+      {/* Öğrenme profili ve düzeltme geçmişi Ayarlar → AI'a taşındı (rapor Bulgu 9/10): tek bağlantı
+          için ayrı kart yerine sakin bir alt satır. */}
+      <p className="mt-4 border-t border-subtle pt-3 qx-caption text-fg-muted">
+        {copy.footer.learnDesc}{' '}
+        <Link
+          href={AI_SETTINGS_HREF}
+          className="inline-flex min-h-6 items-center gap-1 rounded-chip font-medium text-fg underline underline-offset-4 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        >
+          <Settings2 className="h-3.5 w-3.5" aria-hidden />
           {copy.footer.learnCta}
         </Link>
-      </Button>
+      </p>
     </SectionCard>
   );
 }

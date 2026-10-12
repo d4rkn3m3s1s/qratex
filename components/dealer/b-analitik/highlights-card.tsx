@@ -76,7 +76,7 @@ export function HighlightsCard({ data, heatmapEnabled }: { data: AnalyticsOvervi
       </div>
 
       <div className="mt-4 border-t border-subtle pt-3">
-        <h3 className="qx-caption mb-2 flex items-center gap-1.5 font-semibold uppercase tracking-wide text-fg-muted">
+        <h3 className="qx-overline mb-2 flex items-center gap-1.5 text-fg-muted">
           <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
           {copy.attentionTitle}
         </h3>

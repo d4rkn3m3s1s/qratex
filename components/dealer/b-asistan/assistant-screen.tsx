@@ -114,8 +114,8 @@ export function AssistantScreen() {
               onClick={toggleList}
             />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">{copy.title}</p>
-              <h1 id="assistant-title" className="truncate text-base font-semibold text-fg">
+              <p className="qx-overline text-fg-muted">{copy.title}</p>
+              <h1 id="assistant-title" className="truncate qx-body font-semibold text-fg">
                 {title}
               </h1>
             </div>

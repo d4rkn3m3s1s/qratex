@@ -109,7 +109,7 @@ export function QuestionResultCard({
               <p className="qx-small text-fg-muted">{copy.noTexts}</p>
             ) : (
               <>
-                <h3 className="qx-caption font-semibold uppercase tracking-wide text-fg-muted">{copy.latestTexts}</h3>
+                <h3 className="qx-overline text-fg-muted">{copy.latestTexts}</h3>
                 <ul className="space-y-2">
                   {q.texts.map((t, i) => (
                     <li key={`${t.at}-${i}`} className="rounded-control border border-subtle bg-surface-2 p-3">

@@ -46,9 +46,9 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
       {data.recommendations.length === 0 ? (
         <p className="qx-small text-fg-muted">{copy.recs.none}</p>
       ) : (
-        <ol className="space-y-3">
+        <ol className="-my-3 divide-y divide-subtle">
           {data.recommendations.map((r) => (
-            <li key={r.id} className="rounded-control border border-subtle bg-surface-1 p-3 sm:p-4">
+            <li key={r.id} className="py-3 sm:py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge label={copy.recs.priority[r.priority]} tone={PRIORITY_TONE[r.priority]} size="sm" />
                 <span className="qx-caption text-fg-muted">{copy.recs.count(r.count)}</span>

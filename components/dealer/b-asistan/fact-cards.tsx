@@ -32,13 +32,13 @@ function Delta({ m, tag, digits = 1, suffix = '' }: { m: FactMetric; tag: string
 function Metric({ label, m, tag, digits = 1, suffix = '', copy }: { label: string; m: FactMetric; tag: string; digits?: number; suffix?: string; copy: AssistantCopy }) {
   return (
     <div className="min-w-0 rounded-md bg-surface-2 px-2.5 py-2">
-      <dt className="truncate text-xs text-fg-muted">{label}</dt>
+      <dt className="truncate qx-caption text-fg-muted">{label}</dt>
       <dd className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 tabular-nums">
-        <span className="text-base font-semibold text-fg">
+        <span className="qx-body font-semibold text-fg">
           {fmt(m.value, tag, digits)}
           {m.value != null ? suffix : ''}
         </span>
-        <span className="text-xs">
+        <span className="qx-caption">
           <Delta m={m} tag={tag} digits={digits} suffix={suffix} />
         </span>
       </dd>
@@ -51,11 +51,11 @@ function Shell({ title, period, href, linkLabel, copy, children }: { title: stri
   return (
     <section className="rounded-lg border border-border bg-surface-1 p-3" aria-label={`${copy.facts}: ${title}`}>
       <header className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <h4 className="min-w-0 truncate qx-overline text-fg-muted">
           {title} <span className="font-normal normal-case tracking-normal text-fg-subtle">· {period}</span>
         </h4>
         {href && (
-          <Link href={href} className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+          <Link href={href} className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded qx-caption font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             {linkLabel}
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
@@ -96,12 +96,12 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
       return (
         <Shell title={copy.fact.topics} period={per} href={analyticsHref(fact.period)} linkLabel={copy.openAnalytics} copy={copy}>
           {top.length === 0 ? (
-            <p className="text-xs text-fg-muted">{copy.fact.lowSample}</p>
+            <p className="qx-caption text-fg-muted">{copy.fact.lowSample}</p>
           ) : (
             <ul className="space-y-1.5">
               {top.map((t) => (
                 <li key={t.key} className="space-y-0.5">
-                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <div className="flex items-baseline justify-between gap-2 qx-caption">
                     <span className="truncate font-medium text-fg">{topicLabel(t.key, copy.locale)}</span>
                     <span className="shrink-0 tabular-nums text-fg-muted">
                       {copy.fact.mentions(t.count)} · <span className="text-danger">−{t.negative}</span> / <span className="text-success">+{t.positive}</span>
@@ -132,7 +132,7 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
             ))}
           </div>
           {fact.anomalies.length > 0 && (
-            <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
+            <ul className="mt-2 space-y-0.5 qx-caption text-fg-muted">
               {fact.anomalies.slice(0, 3).map((a) => (
                 <li key={`${a.day}-${a.kind}`}>{copy.fact.anomaly(a.day)} ({a.value.toLocaleString(tag)})</li>
               ))}
@@ -145,7 +145,7 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
       const rows = fact.rows.slice(0, 5);
       return (
         <Shell title={copy.fact.locations} period={per} href={analyticsHref(fact.period)} linkLabel={copy.openAnalytics} copy={copy}>
-          <ul className="divide-y divide-border text-xs">
+          <ul className="divide-y divide-border qx-caption">
             {rows.map((r) => (
               <li key={r.id} className="flex items-baseline justify-between gap-2 py-1">
                 <span className="min-w-0 truncate text-fg">{r.locationName ? `${r.locationName} · ${r.name}` : r.name}</span>
@@ -162,9 +162,9 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
       return (
         <Shell title={copy.fact.busiestDay} period={per} href={analyticsHref(fact.period)} linkLabel={copy.openAnalytics} copy={copy}>
           {!fact.peakDay && !fact.peakHour ? (
-            <p className="text-xs text-fg-muted">{copy.fact.lowSample}</p>
+            <p className="qx-caption text-fg-muted">{copy.fact.lowSample}</p>
           ) : (
-            <dl className="grid grid-cols-2 gap-1.5 text-xs">
+            <dl className="grid grid-cols-2 gap-1.5 qx-caption">
               {fact.peakDay && (
                 <div className="rounded-md bg-surface-2 px-2.5 py-2">
                   <dt className="text-fg-muted">{copy.fact.busiestDay}</dt>
@@ -198,7 +198,7 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
           linkLabel={copy.openInbox}
           copy={copy}
         >
-          <p className="text-xs text-fg-muted">
+          <p className="qx-caption text-fg-muted">
             {copy.fact.matched(fact.matched, fact.returned)} · {copy.fact.method[fact.method] ?? fact.method}
           </p>
         </Shell>
@@ -212,7 +212,7 @@ export function FactCard({ fact, copy }: { fact: AssistantFact; copy: AssistantC
             <Metric label={copy.fact.analyzed} m={{ value: fact.analyzed, compare: null }} tag={tag} digits={0} copy={copy} />
           </dl>
           {fact.topics.length > 0 && (
-            <p className="mt-2 text-xs text-fg-muted">
+            <p className="mt-2 qx-caption text-fg-muted">
               {fact.topics.slice(0, 4).map((t) => `${topicLabel(t.key, copy.locale)} (${t.count})`).join(' · ')}
             </p>
           )}

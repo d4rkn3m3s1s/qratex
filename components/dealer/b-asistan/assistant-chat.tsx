@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ArrowUp, Bot, QrCode, Settings2, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, QrCode, Settings2, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, SkeletonList } from '@/components/states';
 import { IconButton } from '@/components/ds/a11y';
@@ -194,7 +194,7 @@ export function AssistantChat({
           />
         ) : null}
 
-        {conversation.data?.truncated && <p className="mb-3 text-center text-xs text-fg-muted">{copy.truncatedNote}</p>}
+        {conversation.data?.truncated && <p className="mb-3 text-center qx-caption text-fg-muted">{copy.truncatedNote}</p>}
 
         <ol className="mx-auto max-w-3xl space-y-5">
           {messages.map((m, i) => {
@@ -224,11 +224,11 @@ export function AssistantChat({
             />
           )}
           {myPending && myPending.phase === 'error' && myPending.error && (
-            <li className="rounded-lg border border-danger/40 bg-surface-1 p-3 text-sm" role="alert">
+            <li className="rounded-lg border border-danger-border bg-danger-subtle p-3 qx-small" role="alert">
               <p className="font-medium text-danger">{errorText(myPending.error.code, copy)}</p>
-              {myPending.error.retryAfterSec ? <p className="mt-0.5 text-xs text-fg-muted">{copy.retryIn(myPending.error.retryAfterSec)}</p> : null}
+              {myPending.error.retryAfterSec ? <p className="mt-0.5 qx-caption text-fg-muted">{copy.retryIn(myPending.error.retryAfterSec)}</p> : null}
               {myPending.error.code === 'AI_DISABLED' && (
-                <Link href="/dealer/settings" className="mt-1 inline-flex min-h-9 items-center text-xs font-medium text-brand hover:underline">
+                <Link href="/dealer/settings" className="mt-1 inline-flex min-h-9 items-center qx-caption font-medium text-brand hover:underline">
                   {copy.status.ai_disabled.cta}
                 </Link>
               )}
@@ -280,14 +280,14 @@ export function AssistantChat({
               <IconButton type="submit" aria-label={copy.send} icon={<ArrowUp />} variant="solid" size="md" disabled={blocked || draft.trim().length < 2} />
             )}
           </div>
-          <div id={hintId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-fg-muted">
+          <div id={hintId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 qx-caption text-fg-muted">
             <label className="inline-flex items-center gap-1.5">
               <span>{copy.periodLabel}</span>
               <select
                 value={period}
                 onChange={(e) => changePeriod(e.target.value as AssistantPeriod)}
                 disabled={busy}
-                className="min-h-9 rounded-md border border-border bg-surface-0 px-2 text-xs text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                className="min-h-9 rounded-md border border-border bg-surface-0 px-2 qx-caption text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
                 {ASSISTANT_PERIODS.map((p) => (
                   <option key={p} value={p}>
@@ -315,7 +315,7 @@ function BlockedNotice({ overview, resetTime }: { overview: AssistantOverview; r
   const copy = useAssistantCopy();
   if (overview.status === 'ai_disabled') {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-surface-2 px-3 py-2 text-sm" role="status">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning-border bg-warning-subtle text-fg px-3 py-2 qx-small" role="status">
         <span>{copy.status.ai_disabled.desc}</span>
         <Button asChild size="sm" variant="outline" className="min-h-10">
           <Link href="/dealer/settings">
@@ -327,10 +327,10 @@ function BlockedNotice({ overview, resetTime }: { overview: AssistantOverview; r
     );
   }
   if (overview.status === 'unconfigured') {
-    return <p className="rounded-lg border border-warning/40 bg-surface-2 px-3 py-2 text-sm" role="status">{copy.status.unconfigured.desc}</p>;
+    return <p className="rounded-lg border border-warning-border bg-warning-subtle text-fg px-3 py-2 qx-small" role="status">{copy.status.unconfigured.desc}</p>;
   }
   if (overview.quota?.exhausted) {
-    return <p className="rounded-lg border border-warning/40 bg-surface-2 px-3 py-2 text-sm" role="status">{copy.quotaExhausted(resetTime)}</p>;
+    return <p className="rounded-lg border border-warning-border bg-warning-subtle text-fg px-3 py-2 qx-small" role="status">{copy.quotaExhausted(resetTime)}</p>;
   }
   return null;
 }
@@ -369,19 +369,11 @@ function Welcome({
   }
   return (
     <div className={cn('mx-auto max-w-3xl', variant === 'page' ? 'py-6 sm:py-10' : 'py-2')}>
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-subtle text-brand" aria-hidden>
-          <Bot className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <h2 className={cn('font-semibold text-fg', variant === 'page' ? 'text-lg' : 'text-base')}>{copy.welcomeTitle}</h2>
-          <p className="mt-1 text-sm text-fg-muted">{copy.welcomeDesc}</p>
-        </div>
-      </div>
+      <h2 className={cn('text-fg', variant === 'page' ? 'qx-h2' : 'qx-h3')}>{copy.welcomeTitle}</h2>
+      <p className="mt-1 max-w-prose qx-small text-fg-muted">{copy.welcomeDesc}</p>
       {overview.suggestions.length > 0 && (
         <section className="mt-5" aria-label={copy.suggestionsLabel}>
-          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          <h3 className="mb-2 qx-overline text-fg-muted">
             {copy.suggestionsLabel}
           </h3>
           <ul className={cn('grid gap-2', variant === 'page' && 'sm:grid-cols-2')}>
@@ -393,7 +385,7 @@ function Welcome({
                     type="button"
                     disabled={disabled}
                     onClick={() => onPick(text)}
-                    className="flex min-h-11 w-full items-center rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-start text-sm text-fg transition-colors hover:border-brand-border hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
+                    className="flex min-h-11 w-full items-center rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-start qx-small text-fg transition-colors hover:border-brand-border hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
                   >
                     {text}
                   </button>

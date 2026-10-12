@@ -164,7 +164,7 @@ function Visibility({ data }: { data: FlashSectionData }) {
   }
   return (
     <div className="rounded-lg border border-subtle bg-surface-0 p-3">
-      <p className="qx-caption mb-2 font-semibold uppercase tracking-wide text-fg-muted">{copy.flash.visibility}</p>
+      <p className="qx-overline mb-2 text-fg-muted">{copy.flash.visibility}</p>
       <ul className="space-y-1.5">
         {rows.map((r) => (
           <li key={r.text} className="qx-small flex items-start gap-2">
