@@ -4,6 +4,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useSavedFlash } from './shared';
 import { KeyRound, Unlock, LogOut, Rocket, Save, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,6 +184,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, flashSaved] = useSavedFlash();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Sunucudan yeni sürüm gelince (başka admin değiştirdi / kaydettik) soruyu tazele.
@@ -214,6 +216,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
       setCurrentAnswer('');
       setNewAnswer('');
       setConfirmAnswer('');
+      flashSaved();
       toast.success(
         res.answerChanged
           ? 'Cevap değişti. Diğer bütün yöneticiler kapıdan yeniden geçecek; sizin oturumunuz yenilendi.'
@@ -366,7 +369,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
             {formError && !Object.keys(fieldErrors).length && <InlineError variant="banner">{formError}</InlineError>}
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" loading={saving} disabled={!canSave || saving} className="gap-2">
+              <Button type="submit" loading={saving} success={saved} disabled={!canSave || saving} className="gap-2">
                 <Save className="h-4 w-4" aria-hidden />
                 Kaydet
               </Button>

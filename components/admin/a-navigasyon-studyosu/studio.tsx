@@ -105,6 +105,28 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
     setHighlight(focusId);
   };
 
+  // Üst düzey düğümleri sürükleyerek sıralama; bırakınca layout yayı yeni yere taşır.
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const nodeDrag: NodeDrag = {
+    from: dragFrom,
+    over: dragOver,
+    setFrom: setDragFrom,
+    setOver: setDragOver,
+    reset: () => { setDragFrom(null); setDragOver(null); },
+    drop: (to) => {
+      const from = dragFrom;
+      setDragFrom(null);
+      setDragOver(null);
+      if (from === null || from === to) return;
+      const next = nodes.slice();
+      const [moved] = next.splice(from, 1);
+      if (!moved) return;
+      next.splice(to, 0, moved);
+      applyNodes(next, moved.kind === 'item' ? moved.item.route.id : moved.items[0]?.route.id ?? '');
+    },
+  };
+
   const adopt = (next: NavStudioState) => {
     setSaved(next);
     setDrafts(toDrafts(next));
@@ -283,7 +305,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
             <AnimatePresence initial={false}>
               {visibleNodes.map(({ n, index }) =>
                 n.kind === 'item' ? (
-                  <NodeShell key={n.key}>
+                  <NodeShell key={n.key} index={search ? undefined : index} drag={nodeDrag}>
                     <ItemRow
                       role={role}
                       cfg={cfg}
@@ -301,7 +323,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
                     />
                   </NodeShell>
                 ) : (
-                  <NodeShell key={n.key}>
+                  <NodeShell key={n.key} index={search ? undefined : index} drag={nodeDrag}>
                     <GroupCard
                       role={role}
                       cfg={cfg}
@@ -371,10 +393,23 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
 
 // ───────────────────────────── Parçalar ─────────────────────────────
 
-function NodeShell({ children }: { children: React.ReactNode }) {
+function NodeShell({ children, index, drag }: { children: React.ReactNode; index?: number; drag?: NodeDrag }) {
   const motion = useMotionPolicy();
+  const dnd = drag && index !== undefined;
+  const isOver = dnd && drag.over === index && drag.from !== null && drag.from !== index;
   return (
     <Motion.li
+      // Sürükle-bırak sırası (masaüstü). Klavye/mobil için ↑/↓ düğmeleri aynen duruyor.
+      draggable={dnd || undefined}
+      onDragStartCapture={dnd ? (e: React.DragEvent) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(index)); drag.setFrom(index); } : undefined}
+      onDragOver={dnd ? (e: React.DragEvent) => { if (drag.from === null) return; e.preventDefault(); if (drag.over !== index) drag.setOver(index); } : undefined}
+      onDrop={dnd ? (e: React.DragEvent) => { e.preventDefault(); drag.drop(index); } : undefined}
+      onDragEnd={dnd ? () => drag.reset() : undefined}
+      className={cn(
+        dnd && 'cursor-grab active:cursor-grabbing',
+        drag?.from === index && 'opacity-60',
+        isOver && 'rounded-card ring-2 ring-brand-border ring-offset-2 ring-offset-bg',
+      )}
       layout={motion.reduce ? false : 'position'}
       initial={motion.reduce ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -385,6 +420,15 @@ function NodeShell({ children }: { children: React.ReactNode }) {
     </Motion.li>
   );
 }
+
+type NodeDrag = {
+  from: number | null;
+  over: number | null;
+  setFrom: (i: number) => void;
+  setOver: (i: number) => void;
+  drop: (to: number) => void;
+  reset: () => void;
+};
 
 type UpdateFn = (fn: (c: RoleConfig) => RoleConfig) => void;
 

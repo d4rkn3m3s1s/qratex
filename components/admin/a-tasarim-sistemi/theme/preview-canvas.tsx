@@ -29,7 +29,7 @@ function MiniApp({ t, mode }: { t: ResolvedTokens; mode: ColorMode }) {
       <figcaption className="qx-caption font-medium text-fg-muted">{label}</figcaption>
       <div
         aria-hidden
-        className="overflow-hidden rounded-card border transition-colors duration-base motion-reduce:transition-none"
+        className="qx-theme-xfade overflow-hidden rounded-card border transition-colors duration-base motion-reduce:transition-none"
         style={{ background: hsl(t.background), color: hsl(t.foreground), borderColor: hsl(t.border) }}
       >
         <div className="flex min-h-[15rem]">

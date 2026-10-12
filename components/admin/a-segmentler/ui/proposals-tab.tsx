@@ -12,6 +12,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import type { ColumnDef } from '@tanstack/react-table';
 import { Bell, Check, Clock, Hourglass, Loader2, PauseCircle, Send, ShieldAlert, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { DrawCheck } from '@/components/fx/event-fx';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -319,6 +320,8 @@ function ProposalReview({
   const [error, setError] = useState<string | null>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Karar anı: onaylanınca rozet yanında kendini çizen tik (rozet rengi qx-fx-status ile geçer).
+  const [decided, setDecided] = useState<AdminDecision | null>(null);
 
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
@@ -337,6 +340,7 @@ function ProposalReview({
     try {
       await decide(d.id, decision, trimmed || null);
       const msg = decision === 'APPROVED' ? c.p.detail.approvedToast : c.p.detail.rejectedToast;
+      setDecided(decision);
       toast.success(msg);
       announce(msg);
       onDecided();
@@ -381,6 +385,8 @@ function ProposalReview({
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge className="qx-fx-status" tone={isProposalStatus(d.status) ? STATUS_TONE[d.status] : 'neutral'} label={statusLabel(d.status, c)} />
+                {decided === 'APPROVED' && d.status === 'APPROVED' && <DrawCheck className="h-5 w-5 text-success" />}
+                {decided === 'REJECTED' && d.status === 'REJECTED' && <X aria-hidden className="qx-fx-spin-in h-5 w-5 text-danger" />}
                 <StatusBadge tone="neutral" icon={null} label={c.p.segments[d.segmentKey] ?? d.segmentKey} />
                 {d.dealer.isDemo && <StatusBadge tone="info" label={c.p.table.demo} />}
                 {pending && <span className={d.ageHours > PENDING_SLA_HOURS ? 'qx-caption font-semibold text-warning' : 'qx-caption text-fg-muted'}>{c.p.table.ageValue(d.ageHours)}</span>}

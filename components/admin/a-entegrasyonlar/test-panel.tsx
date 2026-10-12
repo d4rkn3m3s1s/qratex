@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, m as Motion } from 'framer-motion';
-import { CheckCircle2, Loader2, Send, XCircle } from 'lucide-react';
+import { Loader2, Send, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,6 +11,8 @@ import { InlineError, TONE_CALLOUT } from '@/components/states';
 import { WEBHOOK_EVENTS } from '@/lib/integrations/contract';
 import { DURATION, EASE, useReducedMotionPref } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { DrawCheck } from '@/components/fx/event-fx';
+import { playSound } from '@/lib/sound';
 import { errorText, intKeys, testWebhook } from './api';
 import { ERROR_KIND_LABEL, ERROR_KIND_LABEL_EN } from './format';
 import { useLocaleSafe } from '@/lib/app-locale';
@@ -24,6 +26,9 @@ export function TestPanel({ webhookId, disabled }: { webhookId: string; disabled
   const [event, setEvent] = useState<string>(WEBHOOK_EVENTS[0].key);
   const test = useMutation({
     mutationFn: () => testWebhook(webhookId, event),
+    // Webhook test anı: sonuca göre ses (admin kapsamında varsayılan KAPALI, tercihle açılır).
+    onSuccess: (res) => playSound(res.ok ? 'success' : 'error'),
+    onError: () => playSound('error'),
     onSettled: () => void qc.invalidateQueries({ queryKey: intKeys.all }),
   });
   const r = test.data;
@@ -58,10 +63,10 @@ export function TestPanel({ webhookId, disabled }: { webhookId: string; disabled
               initial={reduce ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: DURATION.base, ease: EASE.emphasized }}
-              className={cn('space-y-1 rounded-card border p-3 text-sm', TONE_CALLOUT[r.ok ? 'success' : 'danger'])}
+              className={cn('space-y-1 rounded-card border p-3 text-sm', !r.ok && !reduce && 'qx-fx-shake-once', TONE_CALLOUT[r.ok ? 'success' : 'danger'])}
             >
               <p className="flex items-center gap-2 font-medium">
-                {r.ok ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <XCircle className="h-4 w-4" aria-hidden />}
+                {r.ok ? <DrawCheck className="h-4 w-4" /> : <XCircle className="qx-fx-spin-in h-4 w-4" aria-hidden />}
                 {r.ok ? `${en ? 'Succeeded' : 'Başarılı'} · HTTP ${r.status}` : `${en ? 'Failed' : 'Başarısız'}${r.status ? ` · HTTP ${r.status}` : ''}${r.errorKind ? ` · ${(en ? ERROR_KIND_LABEL_EN : ERROR_KIND_LABEL)[r.errorKind] ?? r.errorKind}` : ''}`}
                 <span className="ml-auto text-xs font-normal">{r.durationMs} ms</span>
               </p>

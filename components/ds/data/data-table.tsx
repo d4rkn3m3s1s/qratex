@@ -42,6 +42,8 @@ import {
   type QueryLike,
 } from '@/components/states';
 import { fadeUp } from '@/lib/motion';
+import { AnimatedNumber } from './animated-number';
+import { useNewIds } from '@/components/fx/event-fx';
 import { useDataCopy, type DataCopy } from './copy';
 import { DataTablePagination } from './data-table-pagination';
 import { SelectionCheckbox } from './selection-checkbox';
@@ -209,9 +211,11 @@ type RowProps<TData> = {
   titleColumnId: string | undefined;
   density: 'comfortable' | 'compact';
   onRowClick?: (row: TData) => void;
+  /** İlk çizimden sonra listeye giren satır (ekleme / filtre / sayfa değişimi) — kısa opaklık girişi. */
+  fresh?: boolean;
 };
 
-function DataTableRowImpl<TData>({ row, selected, active, titleColumnId, density, onRowClick }: RowProps<TData>) {
+function DataTableRowImpl<TData>({ row, selected, active, titleColumnId, density, onRowClick, fresh }: RowProps<TData>) {
   const pad = density === 'compact' ? 'px-3 py-2' : 'px-4 py-3';
   const clickable = !!onRowClick;
   return (
@@ -240,6 +244,7 @@ function DataTableRowImpl<TData>({ row, selected, active, titleColumnId, density
       }
       className={cn(
         'border-b border-subtle transition-colors duration-fast ease-standard last:border-b-0',
+        fresh && 'qx-fx-row-fade',
         'data-[state=selected]:bg-brand-subtle/60 data-[active=true]:bg-brand-subtle',
         clickable && 'cursor-pointer hover:bg-surface-muted focus-visible:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
       )}
@@ -382,7 +387,12 @@ function BulkBar({ count, copy, children, onClear }: { count: number; copy: Data
           className="sticky top-2 z-sticky flex flex-wrap items-center gap-2 rounded-control border border-brand-border bg-brand-subtle px-3 py-2 qx-elevation-2"
         >
           <p className="qx-small qx-num mr-auto font-medium text-fg" aria-live="polite" aria-atomic="true">
-            {copy.selectedRows(count)}
+            <span className="sr-only">{copy.selectedRows(count)}</span>
+            {/* Görsel: sayı akarak değişir (toplu seçim sayacı), metnin geri kalanı sabit. */}
+            <span aria-hidden="true">
+              <AnimatedNumber value={count} srLabel={null} />
+              {copy.selectedRows(count).replace(String(count), '')}
+            </span>
           </p>
           <div className="flex flex-wrap items-center gap-2">{children}</div>
           <Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-11 gap-1.5 text-fg-muted hover:text-fg sm:h-9">
@@ -599,6 +609,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
 
   const visibleColumnCount = table.getVisibleLeafColumns().length;
   const pageRows = table.getRowModel().rows;
+  const isFreshRow = useNewIds(pageRows.map((r) => r.id), pageRows.length > 0);
   const bp = CARD_BP[cardBreakpoint];
   const headPad = density === 'compact' ? 'px-3 py-2' : 'px-4 py-3';
   const emptyNode =
@@ -723,6 +734,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                         titleColumnId={titleColumnId}
                         density={density}
                         onRowClick={onRowClick}
+                        fresh={isFreshRow(row.id)}
                       />
                     ))
                   )}

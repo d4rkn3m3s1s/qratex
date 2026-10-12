@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { Accessibility, ArrowUpRight, Rocket, ShieldCheck, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSavedFlash } from './shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -82,6 +83,7 @@ function AccountCard() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [category, setCategory] = useState<string>(avatarList[0]?.category ?? '');
   const [saving, setSaving] = useState(false);
+  const [saved, flashSaved] = useSavedFlash();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,6 +106,7 @@ function AccountCard() {
       await updateProfile({ name: name.trim(), ...(image && image !== sessionImage ? { image } : {}) });
       await update({ name: name.trim(), ...(image ? { image } : {}) });
       toast.success('Profil güncellendi.');
+      flashSaved();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -143,7 +146,7 @@ function AccountCard() {
             <Input id={ids.email} value={session?.user?.email ?? ''} readOnly disabled />
           </div>
           {error ? <InlineError variant="banner">{error}</InlineError> : null}
-          <Button type="submit" loading={saving} disabled={!dirty || nameInvalid || saving} className="min-h-11">
+          <Button type="submit" loading={saving} success={saved} disabled={!dirty || nameInvalid || saving} className="min-h-11">
             Profili kaydet
           </Button>
         </div>
@@ -219,6 +222,7 @@ function PasswordCard() {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saved, flashSaved] = useSavedFlash();
   const [error, setError] = useState<string | null>(null);
   const strength = passwordScore(next);
   const tooShort = next.length > 0 && next.length < 8;
@@ -235,6 +239,7 @@ function PasswordCard() {
       setCurrent('');
       setNext('');
       setConfirm('');
+      flashSaved();
       toast.success('Şifre güncellendi. Diğer cihazlardaki oturumlarınız kapatıldı.');
     } catch (err) {
       const msg = errorText(err);
@@ -306,7 +311,7 @@ function PasswordCard() {
           </div>
         ) : null}
         <div className="sm:col-span-3">
-          <Button type="submit" loading={saving} disabled={!canSave} className="min-h-11">
+          <Button type="submit" loading={saving} success={saved} disabled={!canSave} className="min-h-11">
             Şifreyi değiştir
           </Button>
         </div>

@@ -59,7 +59,7 @@ export const StatusBadge = forwardRef<HTMLSpanElement, StatusBadgeProps>(functio
       ref={ref}
       title={title}
       className={cn(
-        'inline-flex max-w-full shrink-0 items-center whitespace-nowrap rounded-chip font-medium leading-none',
+        'qx-fx-status inline-flex max-w-full shrink-0 items-center whitespace-nowrap rounded-chip font-medium leading-none',
         SIZE[size],
         TONE_CHIP[tone],
         className,

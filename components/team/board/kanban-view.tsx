@@ -37,6 +37,8 @@ export function KanbanView({
   const actions = useTaskActions({ onProofRequired: openTask, weekKey });
   const [dragTask, setDragTask] = useState<TaskDto | null>(null);
   const [over, setOver] = useState<TaskStatus | null>(null);
+  // Bırakılan kart yeni kolonda kısa bir "yerleşme yayı" oynatır (qx-fx-settle).
+  const [settledId, setSettledId] = useState<string | null>(null);
 
   const byCol = useMemo(() => {
     const map: Record<TaskStatus, TaskDto[]> = {
@@ -99,7 +101,11 @@ export function KanbanView({
               const t = dragTask;
               setOver(null);
               setDragTask(null);
-              if (t && droppable) void actions.move(t, col);
+              if (t && droppable) {
+                setSettledId(t.id);
+                window.setTimeout(() => setSettledId((cur) => (cur === t.id ? null : cur)), 600);
+                void actions.move(t, col);
+              }
             }}
           >
             <header className="flex items-center justify-between gap-2 px-1.5 pb-2 pt-1">
@@ -120,7 +126,7 @@ export function KanbanView({
             <div className="flex min-h-[6rem] flex-col [&>*>*]:mb-2">
               <CollapseList>
                 {items.map((t) => (
-                  <CollapseItem key={t.id}>
+                  <CollapseItem key={t.id} className={settledId === t.id ? "qx-fx-settle" : undefined}>
                     <TaskCard
                       task={t}
                       selectable={selectMode}

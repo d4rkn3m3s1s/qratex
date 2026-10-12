@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useId, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
@@ -177,4 +177,17 @@ export function SettingSwitchRow({
 
 export function effectOf(key: keyof typeof PLATFORM_SETTINGS): string {
   return PLATFORM_SETTINGS[key].effect;
+}
+
+/** Kaydet düğmesinde kısa "başarılı" tiki: kayıt bitince `flash()` → `saved` ~1.4 sn true (Button success). */
+export function useSavedFlash(ms = 1400): [boolean, () => void] {
+  const [saved, setSaved] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const flash = useCallback(() => {
+    setSaved(true);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setSaved(false), ms);
+  }, [ms]);
+  return [saved, flash];
 }
