@@ -527,6 +527,16 @@ const CUSTOMER: NavRoute[] = [
     status: 'child',
     teamOnly: true,
   },
+  {
+    // Gizli akış: e-postadaki ekip daveti bağlantısının kabul/ret ekranı (davetli henüz üye değil).
+    id: 'customer.team.invite',
+    role: 'customer',
+    href: '/customer/ekip-davet',
+    label: { tr: 'Ekip daveti', en: 'Team invitation' },
+    icon: 'UserPlus',
+    parent: 'customer.team',
+    status: 'hidden',
+  },
   // Eski derin linkler (DB'de kalmış bildirim/e-posta bağlantıları) — emekli koçanları Seslerim
   // detay çekmecesine yönlendirir; yeni kod doğrudan `/customer/me/voices?id=…` üretir.
   {
@@ -1438,6 +1448,16 @@ const ADMIN: NavRoute[] = [
     icon: 'Building2',
     parent: 'admin.team',
     status: 'secondary',
+  },
+  {
+    // Gizli akış: ekip daveti kabul/ret ekranı (e-posta bağlantısı).
+    id: 'admin.team.invite',
+    role: 'admin',
+    href: '/admin/ekip/davet',
+    label: { tr: 'Ekip daveti', en: 'Team invitation' },
+    icon: 'UserPlus',
+    parent: 'admin.team',
+    status: 'hidden',
   },
   {
     // Emekli: Ekip › Girişimler sekmesi (koçan → `/admin/ekip?tab=initiatives`).
