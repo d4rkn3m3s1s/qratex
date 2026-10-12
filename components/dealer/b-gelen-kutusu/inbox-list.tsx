@@ -6,10 +6,9 @@
  * detay çekmecesi. Hareket: yalnız durum değişimi (kayıt listeden çıkınca) — stagger yok.
  */
 import { forwardRef } from 'react';
-import { AnimatePresence, m } from 'framer-motion';
 import { Camera, Eye, UserCheck } from 'lucide-react';
 import { SelectionCheckbox } from '@/components/ds/data';
-import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
+import { CollapseItem, CollapseList } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { InboxListItem } from '@/lib/dealer-inbox/types';
 import { formatDateTime, formatRelative } from './api';
@@ -33,22 +32,22 @@ const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
 ) {
   const copy = useInboxCopy();
   const locale = useInboxLocale();
-  const policy = useMotionPolicy();
   const name = item.anonymous ? copy.anonymous : item.customerName ?? copy.unnamed;
   const unread = item.source === 'qr' && !item.viewedAt && item.status === 'new';
+  // Sinyal rozetleri en fazla 2 görünür; fazlası "+N" (tümü title'da) — satır rozet duvarına dönmesin.
+  const signals = [
+    item.urgent && copy.badge.urgent,
+    item.churnHigh && copy.badge.churn,
+    item.trustFlagged && copy.badge.trust,
+    item.toxic && copy.badge.toxic,
+  ].filter((x): x is string => typeof x === 'string');
 
   return (
-    <m.li
-      ref={ref}
-      initial={false}
-      exit={policy.reduce ? { opacity: 0 } : { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
-      transition={policy.transition({ duration: DURATION.base, ease: EASE.standard })}
-      className="list-none overflow-hidden"
-    >
+    <CollapseItem as="li" ref={ref} className="list-none">
       <div
         data-inbox-row={item.key}
         className={cn(
-          'group relative flex gap-3 rounded-card border bg-surface-1 py-3 pl-4 pr-3 qx-elevation-1 transition-colors duration-fast ease-standard',
+          'group relative mb-1.5 flex gap-3 rounded-card border bg-surface-1 py-3 pl-4 pr-3 transition-colors duration-fast ease-standard',
           active ? 'border-brand ring-1 ring-brand-border' : 'border-subtle hover:bg-surface-muted',
           focused && !active && 'ring-2 ring-ring',
           selected && 'bg-brand-subtle'
@@ -115,10 +114,10 @@ const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
               <Chip tone={item.status === 'resolved' ? 'success' : 'info'}>{copy.status[item.status]}</Chip>
             ) : null}
             <SlaChip sla={item.sla} title={copy.slaDue(formatDateTime(item.sla.dueAt, locale))} />
-            {item.urgent ? <SignalChip>{copy.badge.urgent}</SignalChip> : null}
-            {item.churnHigh ? <SignalChip>{copy.badge.churn}</SignalChip> : null}
-            {item.trustFlagged ? <SignalChip>{copy.badge.trust}</SignalChip> : null}
-            {item.toxic ? <SignalChip>{copy.badge.toxic}</SignalChip> : null}
+            {signals.slice(0, 2).map((label) => (
+              <SignalChip key={label}>{label}</SignalChip>
+            ))}
+            {signals.length > 2 ? <Chip title={signals.slice(2).join(', ')}>+{signals.length - 2}</Chip> : null}
             {item.hasMedia ? <Chip icon={<Camera aria-hidden className="h-3 w-3" />}>{copy.badge.media}</Chip> : null}
             {item.remedyStatus ? (
               <Chip tone={item.remedyStatus === 'accepted' ? 'success' : item.remedyStatus === 'awaiting_dealer_approval' ? 'warning' : 'neutral'}>
@@ -130,13 +129,13 @@ const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
                 {copy.assignedTo(item.case.assignee.name)}
               </Chip>
             ) : null}
-            {item.topics.slice(0, 2).map((t) => (
+            {item.topics.slice(0, signals.length > 1 ? 0 : 2).map((t) => (
               <Chip key={t}>#{t}</Chip>
             ))}
           </div>
         </div>
       </div>
-    </m.li>
+    </CollapseItem>
   );
 });
 
@@ -161,8 +160,8 @@ export function InboxList({
 }) {
   const copy = useInboxCopy();
   return (
-    <ul aria-label={copy.listLabel} className="space-y-2">
-      <AnimatePresence initial={false}>
+    <ul aria-label={copy.listLabel} className="flex flex-col">
+      <CollapseList>
         {items.map((item) => (
           <InboxRow
             key={item.key}
@@ -176,7 +175,7 @@ export function InboxList({
             onFocusRow={onFocusRow}
           />
         ))}
-      </AnimatePresence>
+      </CollapseList>
     </ul>
   );
 }

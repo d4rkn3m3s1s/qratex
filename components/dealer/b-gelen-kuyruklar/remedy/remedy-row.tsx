@@ -48,7 +48,7 @@ export function RemedyRow({
     <article
       aria-labelledby={titleId}
       className={cn(
-        'relative flex gap-3 overflow-hidden rounded-card border border-subtle bg-surface-1 p-3 sm:p-4 qx-elevation-1',
+        'relative flex gap-3 overflow-hidden rounded-card border border-subtle bg-surface-1 p-3 sm:p-4 transition-colors duration-fast hover:border-strong',
         selected && 'ring-2 ring-inset ring-brand-border'
       )}
     >

@@ -43,7 +43,7 @@ export function IncidentRow({
     <article
       aria-labelledby={titleId}
       className={cn(
-        'relative flex gap-3 overflow-hidden rounded-card border bg-surface-1 p-3 pl-4 sm:p-4 sm:pl-5 qx-elevation-1',
+        'relative flex gap-3 overflow-hidden rounded-card border bg-surface-1 p-3 pl-4 sm:p-4 sm:pl-5 transition-colors duration-fast hover:border-strong',
         item.severity === 'critical' && open ? 'border-danger-border' : 'border-subtle'
       )}
     >

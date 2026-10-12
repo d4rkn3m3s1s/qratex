@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
-import { Check, ChevronDown, Rocket } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { safeLocalGet, safeLocalSet } from './storage';
@@ -35,11 +35,8 @@ export function SetupCard({ setup }: { setup: SetupState }) {
   const nextStep = setup.steps.find((s) => s.key === setup.nextKey) ?? null;
 
   return (
-    <section aria-labelledby={`${listId}-title`} className="min-w-0 rounded-card border border-brand-border/70 bg-surface-1 qx-elevation-1">
+    <section aria-labelledby={`${listId}-title`} className="min-w-0 rounded-card border border-subtle bg-surface-1">
       <div className="flex flex-wrap items-start gap-3 px-card py-4 sm:flex-nowrap">
-        <div aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand ring-1 ring-inset ring-brand-border">
-          <Rocket className="h-5 w-5" />
-        </div>
         <div className="min-w-0 flex-1">
           <h2 id={`${listId}-title`} className="text-base font-semibold text-fg">
             {copy.setup.title}
@@ -91,7 +88,7 @@ export function SetupCard({ setup }: { setup: SetupState }) {
               key={step.key}
               className={cn(
                 'flex min-w-0 flex-col gap-2 rounded-control border p-3',
-                step.done ? 'border-success-border bg-success-subtle/40' : isNext ? 'border-brand-border bg-brand-subtle/40' : 'border-subtle bg-surface-1'
+                step.done ? 'border-subtle bg-surface-muted/60' : isNext ? 'border-brand-border bg-brand-subtle/40' : 'border-subtle bg-surface-1'
               )}
             >
               <div className="flex items-start gap-2">
@@ -105,7 +102,7 @@ export function SetupCard({ setup }: { setup: SetupState }) {
                   {step.done ? <Check className="h-3.5 w-3.5" /> : i + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">
+                  <p className={cn('text-sm font-medium', step.done ? 'text-fg-muted line-through decoration-fg-subtle' : 'text-fg')}>
                     {text.title}
                     {!step.required && <span className="ml-2 rounded-chip bg-surface-3 px-1.5 py-0.5 text-xs font-normal text-fg-muted">{copy.setup.optional}</span>}
                     <span className="sr-only">{step.done ? ` — ${copy.setup.done}` : ''}</span>
