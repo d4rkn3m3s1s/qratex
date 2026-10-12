@@ -505,7 +505,7 @@ export function CatalogScreen() {
                   </div>
                 ) : null}
                 <ul
-                  className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 ${query.isPlaceholderData ? 'opacity-70 transition-opacity duration-base' : ''}`}
+                  className={`grid gap-3 pb-24 sm:grid-cols-2 md:pb-0 xl:grid-cols-3 2xl:grid-cols-4 ${query.isPlaceholderData ? 'opacity-70 transition-opacity duration-base' : ''}`}
                   aria-busy={query.isFetching && query.isPlaceholderData}
                 >
                   <AnimatePresence initial={false}>
