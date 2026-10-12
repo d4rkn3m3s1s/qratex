@@ -45,3 +45,8 @@ export function qrHref(role: SearchRole, code: { code: string; dealerId: string 
   if (role === 'ADMIN') return code.dealerId ? `/admin/dealers-health?dealer=${enc(code.dealerId)}` : null;
   return null;
 }
+
+/** Fiziksel kart token'ı → yalnız admin: kart listesi o token ile aranmış hâli. */
+export function cardHref(role: SearchRole, token: string): string | null {
+  return role === 'ADMIN' ? `/admin/cards?q=${enc(token.trim().slice(0, 80))}` : null;
+}

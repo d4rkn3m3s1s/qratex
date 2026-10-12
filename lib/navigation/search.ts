@@ -16,6 +16,13 @@ export function normalizeSearchText(input: string): string {
     .trim();
 }
 
+/** `needle` harfleri `hay` içinde sırayla (aralıklı olabilir) geçiyor mu. */
+export function isSubsequence(needle: string, hay: string): boolean {
+  let i = 0;
+  for (let j = 0; j < hay.length && i < needle.length; j++) if (hay[j] === needle[i]) i++;
+  return i === needle.length;
+}
+
 /** 0 = eşleşme yok; büyük = daha iyi. Çok kelimeli sorguda her kelime eşleşmeli. */
 export function scoreMatch(query: string, label: string, keywords: readonly string[] = [], extra: readonly string[] = []): number {
   const q = normalizeSearchText(query);
@@ -33,6 +40,11 @@ export function scoreMatch(query: string, label: string, keywords: readonly stri
       if (k.startsWith(term)) best = Math.max(best, 40);
       else if (k.split(/[\s·/,-]+/).some((w) => w.startsWith(term))) best = Math.max(best, 30);
       else if (k.includes(term)) best = Math.max(best, 20);
+    }
+    // Bulanık geri düşüş: harfler sırayla geçiyorsa ("kllnc" → "kullanıcı") zayıf eşleşme.
+    if (best === 0 && term.length >= 3) {
+      if (isSubsequence(term, l)) best = 12;
+      else if (kws.some((k) => isSubsequence(term, k))) best = 6;
     }
     if (best === 0) return 0;
     total += best;

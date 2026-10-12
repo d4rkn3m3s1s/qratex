@@ -55,3 +55,19 @@ describe('global arama iniş adresleri', () => {
     expect(qrHref('ADMIN', { code: 'X', dealerId: 'd1' })).toBe('/admin/dealers-health?dealer=d1');
   });
 });
+
+import { cardHref } from '@/lib/navigation/search-targets';
+import { scoreMatch, isSubsequence } from '@/lib/navigation/search';
+
+describe('⌘K kart hedefi ve bulanık eşleşme', () => {
+  it('kart token yalnız admin için', () => {
+    expect(cardHref('ADMIN', 'abc123')).toBe('/admin/cards?q=abc123');
+    expect(cardHref('DEALER', 'abc123')).toBeNull();
+  });
+  it('sıralı harf bulanık eşleşir, Türkçe duyarsız', () => {
+    expect(isSubsequence('kllnc', 'kullanici')).toBe(true);
+    expect(scoreMatch('kllnc', 'Kullanıcılar')).toBeGreaterThan(0);
+    expect(scoreMatch('odul', 'Ödüller')).toBeGreaterThan(scoreMatch('odl', 'Ödüller'));
+    expect(scoreMatch('xyz', 'Ödüller')).toBe(0);
+  });
+});

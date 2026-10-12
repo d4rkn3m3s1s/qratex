@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { cachedJson } from '@/lib/redis';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { INPUT_LIMITS } from '@/lib/input-limits';
-import { feedbackHref, productHref, qrHref, userHref } from '@/lib/navigation/search-targets';
+import { feedbackHref, productHref, qrHref, userHref, cardHref } from '@/lib/navigation/search-targets';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,12 +35,13 @@ const querySchema = z.object({
 
 type Results = {
   users: { id: string; name: string | null; email: string; businessName: string | null; role: string; href: string }[];
+  cards: { id: string; token: string; status: string; customerName: string | null; href: string }[];
   feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
   products: { id: string; name: string; categoryName?: string; href: string }[];
   qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
 };
 
-const EMPTY: Results = { users: [], feedbacks: [], products: [], qrCodes: [] };
+const EMPTY: Results = { users: [], feedbacks: [], products: [], qrCodes: [], cards: [] };
 
 export const GET = defineRoute(
   { name: 'search.global', roles: ['ADMIN', 'DEALER', 'CUSTOMER'], query: querySchema, rateLimit: 'read' },
@@ -50,7 +51,7 @@ export const GET = defineRoute(
     // Komut paleti her tuşta (debounce sonrası) arar; aynı kişi + aynı sorgu 30 sn Redis'ten
     // döner (perf O6 ara çözüm — kalıcı çözüm pg_trgm GIN, SCHEMA-REQUESTS). Anahtar kullanıcıya
     // ve role özgü: kapsamı farklı iki kişi birbirinin sonucunu göremez.
-    const cacheKey = `search:v1:${user.id}:${user.role}:${createHash('sha1').update(q).digest('hex')}`;
+    const cacheKey = `search:v2:${user.id}:${user.role}:${createHash('sha1').update(q).digest('hex')}`;
     const results = await cachedJson<Results>(cacheKey, 30, async () => {
       const role = user.role as 'ADMIN' | 'DEALER' | 'CUSTOMER';
       const isAdmin = role === 'ADMIN';
@@ -67,7 +68,7 @@ export const GET = defineRoute(
             : {};
       const searchProducts = productHref(role, 'x') !== null;
 
-      const [usersResult, feedbacksResult, productsResult, qrCodesResult] = await Promise.all([
+      const [usersResult, feedbacksResult, productsResult, qrCodesResult, cardsResult] = await Promise.all([
         isAdmin
           ? prisma.user.findMany({
               where: { OR: [{ name: searchContains }, { email: searchContains }, { businessName: searchContains }] },
@@ -111,6 +112,15 @@ export const GET = defineRoute(
               select: { id: true, name: true, code: true, dealerId: true, dealer: { select: { businessName: true, name: true } } },
             })
           : Promise.resolve([]),
+        // Kart token'ı yalnız admin için; kısa sorgu tüm kartları taramasın diye ≥4 karakter.
+        isAdmin && q.length >= 4
+          ? prisma.physicalCard.findMany({
+              where: { archivedAt: null, token: searchContains },
+              take: LIMIT_PER_TYPE,
+              orderBy: { createdAt: 'desc' },
+              select: { id: true, token: true, status: true, customer: { select: { name: true, email: true } } },
+            })
+          : Promise.resolve([]),
       ]);
 
       const computed: Results = {
@@ -139,6 +149,10 @@ export const GET = defineRoute(
           return href
             ? [{ id: c.id, name: c.name, code: c.code, businessName: c.dealer?.businessName ?? c.dealer?.name ?? null, href }]
             : [];
+        }),
+        cards: cardsResult.flatMap((c) => {
+          const href = cardHref(role, c.token);
+          return href ? [{ id: c.id, token: c.token, status: c.status, customerName: c.customer?.name ?? c.customer?.email ?? null, href }] : [];
         }),
       };
       return computed;

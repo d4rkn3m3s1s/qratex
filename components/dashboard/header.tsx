@@ -32,6 +32,8 @@ import {
   QrCode,
   Package,
   Users,
+  Store,
+  CreditCard,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
@@ -102,6 +104,7 @@ interface SearchApiResults {
   feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
   products: { id: string; name: string; categoryName?: string; href: string }[];
   qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
+  cards?: { id: string; token: string; status: string; customerName: string | null; href: string }[];
 }
 
 /** Son ziyaret edilen kayıt sayfaları (rol başına, en çok 5) — yalnız bu tarayıcıda; ⌘K boşken üstte. */
@@ -306,8 +309,9 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           id: `u-${u.id}`,
           label: u.businessName || u.name || u.email,
           context: u.email,
-          section: t('appShell.globalSearchSectionUsers'),
-          icon: Users,
+          // Bayiler ayrı grup: admin "kimi arıyorum" sorusuna rol ile değil bölümle yanıt alır.
+          section: u.role === 'DEALER' ? bl({ tr: 'Bayiler', en: 'Dealers' }) : t('appShell.globalSearchSectionUsers'),
+          icon: u.role === 'DEALER' ? Store : Users,
           onSelect: go(u.href),
         })),
         ...r.feedbacks.map((f) => ({
@@ -334,9 +338,17 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           icon: QrCode,
           onSelect: go(c.href),
         })),
+        ...(r.cards ?? []).map((c) => ({
+          id: `c-${c.id}`,
+          label: c.token,
+          context: c.customerName ?? c.status,
+          section: bl({ tr: 'Kartlar', en: 'Cards' }),
+          icon: CreditCard,
+          onSelect: go(c.href),
+        })),
       ];
     },
-    [router, t]
+    [router, t, bl]
   );
 
   const paletteCopy = useMemo(
