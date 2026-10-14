@@ -79,7 +79,8 @@ import { formatDate, getCardStatusLabel, getCardStatusColor } from '@/lib/utils'
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 // QR Code domain
-const QR_DOMAIN = 'https://demoqratex.vercel.app';
+// Kart QR adresi: ana alan adı (env), yoksa www.qratex.app. Eski demoqratex kartları 308 ile yönlenir.
+const QR_DOMAIN = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.qratex.app').replace(/\/+$/, '');
 
 const cardToasts = {
   success: (message: string) => toast.success(message),

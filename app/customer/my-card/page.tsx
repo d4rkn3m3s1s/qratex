@@ -38,7 +38,8 @@ import { toast } from '@/lib/admin-toast';
 import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor, cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
 
-const QR_DOMAIN = 'https://demoqratex.vercel.app';
+// Kart QR adresi: ana alan adı (env), yoksa www.qratex.app. Eski demoqratex kartları 308 ile yönlenir.
+const QR_DOMAIN = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.qratex.app').replace(/\/+$/, '');
 
 /** İnce gürültü — kart yüzeyine derinlik */
 const NOISE_SVG =
