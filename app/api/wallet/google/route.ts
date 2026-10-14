@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         configured: false,
         message: 'Google Wallet henüz yapılandırılmamış',
         // Provide a fallback URL
-        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/customer/my-card`,
+        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL?.trim()}/customer/my-card`,
       }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
         success: true,
         configured: false,
         message: 'JWT oluşturulamadı',
-        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/customer/my-card`,
+        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL?.trim()}/customer/my-card`,
       }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
   } catch (error) {

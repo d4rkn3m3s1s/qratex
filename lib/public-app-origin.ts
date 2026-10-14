@@ -6,8 +6,8 @@ import type { NextRequest } from 'next/server';
  */
 export function getPublicAppOrigin(): string {
   const trimmed =
-    process.env.NEXTAUTH_URL?.replace(/\/$/, '') ||
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    process.env.NEXTAUTH_URL?.trim()?.replace(/\/$/, '') ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, '') ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/\/$/, '')}` : '');
   return trimmed || 'http://localhost:3000';
 }

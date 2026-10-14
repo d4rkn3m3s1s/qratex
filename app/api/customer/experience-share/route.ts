@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   });
 
   const base =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, '') ||
     new URL(request.url).origin;
 
   return NextResponse.json(

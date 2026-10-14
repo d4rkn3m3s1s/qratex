@@ -37,8 +37,8 @@ export function getStripeWebhookSecret(): string | null {
 /** Checkout sonrası dönülecek başarı/iptal URL kökü. */
 export function getBillingReturnOrigin(): string {
   return (
-    process.env.NEXTAUTH_URL?.replace(/\/$/, '') ||
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    process.env.NEXTAUTH_URL?.trim()?.replace(/\/$/, '') ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, '') ||
     'http://localhost:3000'
   );
 }

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Doğrulama token'ı (24 saat geçerli)
     const verifyToken = crypto.randomBytes(32).toString('hex');
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl?.origin || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl?.origin || 'http://localhost:3000';
     await prisma.verificationToken.create({
       data: {
         identifier: email,
