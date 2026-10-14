@@ -169,6 +169,9 @@ export function redactPostHogEvent<T extends CaptureLike>(event: T | null): T | 
 }
 
 /** PostHog başlatma ayarları: rıza ayrıca doğrulanana kadar hiçbir şey gönderilmez. */
+/** PostHog'un ek (ağır) eklentileri; varsayılan kapalı. */
+const POSTHOG_EXTRAS = process.env.NEXT_PUBLIC_POSTHOG_REPLAY === '1';
+
 export function postHogInitConfig(apiHost: string) {
   return {
     api_host: apiHost,
@@ -180,6 +183,11 @@ export function postHogInitConfig(apiHost: string) {
     opt_out_capturing_by_default: true,
     // Oturum kaydı ayrı kategori: yalnız açıkça başlatılır.
     disable_session_recording: true,
+    // Ağır uzak eklentiler (surveys ~33 KB, dead-clicks, web-vitals) varsayılan KAPALI;
+    // web vitals zaten Vercel Speed Insights'ta. Geri açmak: NEXT_PUBLIC_POSTHOG_REPLAY=1.
+    disable_surveys: !POSTHOG_EXTRAS,
+    capture_dead_clicks: POSTHOG_EXTRAS,
+    capture_performance: POSTHOG_EXTRAS ? undefined : false,
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: '[data-ph-mask], [data-private]',

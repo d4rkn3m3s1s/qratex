@@ -35,11 +35,27 @@ const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
 let instance: PostHog | null = null;
 let loading: Promise<PostHog | null> | null = null;
 
+/** İlk boyamayı bloklamamak için: sayfa yüklendikten sonra, tarayıcı boştayken çözülür. */
+function afterLoadIdle(): Promise<void> {
+  return new Promise((resolve) => {
+    const run = () => {
+      const ric = (window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      }).requestIdleCallback;
+      if (ric) ric(() => resolve(), { timeout: 4000 });
+      else setTimeout(resolve, 1500);
+    };
+    if (document.readyState === 'complete') run();
+    else window.addEventListener('load', run, { once: true });
+  });
+}
+
 /** Yalnız analitik rızası varken çağrılır: kütüphaneyi indirir ve (bir kez) başlatır. */
 function loadPostHog(): Promise<PostHog | null> {
   if (!KEY || typeof window === 'undefined') return Promise.resolve(null);
   if (instance) return Promise.resolve(instance);
-  loading ??= import('posthog-js')
+  loading ??= afterLoadIdle()
+    .then(() => import('posthog-js'))
     .then(({ default: posthog }) => {
       if (!(posthog as unknown as { __loaded?: boolean }).__loaded) {
         posthog.init(KEY, {
