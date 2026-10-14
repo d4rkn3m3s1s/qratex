@@ -48,14 +48,6 @@ function afterLoadIdle(): Promise<void> {
     if (document.readyState === 'complete') run();
     else window.addEventListener('load', run, { once: true });
   });
-  return initPromise;
-}
-
-let ready: Promise<void> | null = null;
-/** Init boşta tetiklenir; pageview'lar init bitene kadar bekler (kaybolmaz). */
-function whenReady(): Promise<void> {
-  if (!ready) ready = new Promise<void>((res) => whenIdle(() => void initPostHog()?.then(() => res())));
-  return ready;
 }
 
 /** Yalnız analitik rızası varken çağrılır: kütüphaneyi indirir ve (bir kez) başlatır. */
