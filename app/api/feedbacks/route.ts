@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { servedFeedbackMedia } from '@/lib/storage/served-url';
 import { requireAuth } from '@/lib/api-auth';
 import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
 import { prisma } from '@/lib/prisma';
@@ -124,7 +125,7 @@ export async function GET(request: NextRequest) {
         userId: f.userId,
         rating: f.rating,
         text: f.text,
-        media: f.media,
+        media: servedFeedbackMedia(f.id, f.media),
         npsScore: f.npsScore,
         sentiment: f.sentiment,
         topics,

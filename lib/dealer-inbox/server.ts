@@ -15,6 +15,7 @@
  * iyimser eşzamanlılıkla yapılır: bayinin gördüğü yanıt (`expectedReply`) değişmişse — ör.
  * otomatik yanıt kuralı araya girdiyse — 409 döner ve kimsenin yanıtı ezilmez.
  */
+import { servedFeedbackMedia } from '@/lib/storage/served-url';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { runAfterResponse } from '@/lib/run-after';
@@ -913,7 +914,7 @@ export async function getInboxDetail(dealerId: string, actorId: string, key: str
       toxic: !!f.isToxic,
       topics: normalizeTopics(f.topics, 8),
       hasMedia: hasMedia(f.media),
-      media: normalizeMedia(f.media),
+      media: normalizeMedia(servedFeedbackMedia(f.id, f.media)),
       priority: priorityOf({ rating: f.rating, sentiment: f.sentiment, urgency: f.urgency, churnRisk: f.churnRisk }),
       sla: computeSla({ createdAt: f.createdAt, negative: isNegativeItem(f.rating, f.sentiment), closed: replied || resolved, now, hours: sla }),
       case: caseDto(entry, names),

@@ -8,6 +8,7 @@ import { TEAM_ROUTE_ROLES, findVisibleTask, requireTeamViewer } from '@/lib/team
 import { canAttach, canDeleteAttachment } from '@/lib/team/permissions';
 import { TEAM_ATTACHMENT_MAX_BYTES, TEAM_ATTACHMENT_MAX_LABEL } from '@/lib/team/constants';
 import { removeStoredTaskFile } from '@/lib/team/files';
+import { toServedUrl } from '@/lib/storage/served-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,6 +165,7 @@ export const POST = defineRoute(
     let storedPath: string;
     if (isR2Configured()) {
       try {
+        // DB'ye KEY yazılır (public URL değil); istemciye yetkili uç URL'si verilir.
         storedPath = await uploadToR2(`tasks/${randomUUID()}/${objectName}`, bytes, kind.mime, disposition);
       } catch {
         throw new ApiError('SERVICE_UNAVAILABLE', 'Dosya depolamaya yüklenemedi. Biraz sonra tekrar deneyin.', { retryable: true });
@@ -186,7 +188,13 @@ export const POST = defineRoute(
       .create({ data: { taskId: task.id, actorId: viewer.userId, action: 'attachment', detail: `Dosya ekledi: ${file.name.slice(0, 60)}` } })
       .catch(() => undefined);
 
-    return { attachment: { ...attachment, createdAt: attachment.createdAt.toISOString() } };
+    return {
+      attachment: {
+        ...attachment,
+        path: toServedUrl(attachment.path, { kind: 'task', taskId: task.id }) ?? attachment.path,
+        createdAt: attachment.createdAt.toISOString(),
+      },
+    };
   }
 );
 

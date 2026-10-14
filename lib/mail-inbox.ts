@@ -274,6 +274,7 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
                 // `text/html`/`image/svg+xml` herkese açık R2 URL'sinde çalıştırılabilir tür
                 // olarak durmasın (guvenlik-admin-api B4) — izin dışı her şey octet-stream.
                 const stored = attachmentDisposition(contentType, filename);
+                // `url` alanına artık bucket KEY'i yazılır (public URL yok); sunum yetkili uçtan.
                 url = await uploadToR2(key, content, stored.contentType, stored.disposition).catch(() => null);
               }
               attachmentsMeta.push({ filename, contentType, size, url });

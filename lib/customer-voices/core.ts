@@ -261,7 +261,7 @@ export function mediaUrls(raw: unknown, max = 5): string[] {
     const type = item && typeof item === 'object' ? (item as { type?: unknown }).type : undefined;
     if (typeof url !== 'string') continue;
     if (type && type !== 'image') continue;
-    if (/^https:\/\//i.test(url) || /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(url)) out.push(url);
+    if (/^https:\/\//i.test(url) || url.startsWith('/api/files/feedback/') || /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(url)) out.push(url);
     if (out.length >= max) break;
   }
   return out;

@@ -4,6 +4,7 @@ import path from 'path';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { isR2Configured, uploadToR2 } from '@/lib/r2-storage';
+import { publicFileUrl } from '@/lib/storage/served-url';
 import {
   validateMimeMagic,
   svgContainsScript,
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic';
  * `fs.writeFile` ile yazılıyordu. Vercel Functions'ta dosya sistemi salt-okunur
  * (`/var/task`) ve çalışma zamanında yazılan dosya statik `public` servisine
  * girmez → üretimde her yükleme 500 ya da kırık görsel. Artık nesne depolama
- * (Cloudflare R2) kullanılır ve kalıcı, herkese açık HTTPS URL döner.
+ * (Cloudflare R2) kullanılır; görsel `/api/files/public/assets/...` iç ucundan sunulur.
  *
  * Yerel geliştirmede R2 yapılandırılmamışsa (ve Vercel/üretim değilse) eski
  * yerel-dosya yolu yalnız geliştirici kolaylığı için korunur; üretimde R2
@@ -47,17 +48,6 @@ function sanitizeFilename(name: string): string {
 function getExtByMime(mime: string): string {
   if (mime === 'image/svg+xml') return '.svg';
   return '.png';
-}
-
-function hasPublicR2Url(): boolean {
-  const v = process.env.R2_PUBLIC_URL;
-  if (!v || !v.trim()) return false;
-  try {
-    const u = new URL(v.trim());
-    return u.protocol === 'https:' || u.protocol === 'http:';
-  } catch {
-    return false;
-  }
 }
 
 /** Üretim benzeri ortam: salt-okunur FS, yerel yazma ASLA denenmez. */
@@ -128,21 +118,23 @@ export async function POST(req: Request) {
     // Tahmin edilemez + çakışmasız ad (aynı milisaniyede iki yükleme üzerine yazmasın).
     const filename = `${base}-${Date.now()}-${randomBytes(4).toString('hex')}${ext}`;
 
-    if (isR2Configured() && hasPublicR2Url()) {
+    if (isR2Configured()) {
       const key = `assets/${folder}/${filename}`;
       // SVG doğrudan açılırsa belge olarak çalışmasın: attachment (img içinde normal görünür).
-      const url = await uploadToR2(key, bytes, file.type, assetContentDisposition(file.type, filename));
+      await uploadToR2(key, bytes, file.type, assetContentDisposition(file.type, filename));
+      // Bucket public değil: görsel uygulamanın public dosya ucundan sunulur (DB'ye iç URL yazılır).
+      const url = publicFileUrl(key);
       // `path` geriye uyumluluk için korunur (rozet/ödül formları bu alanı okur).
       return json({ success: true, path: url, url, storage: 'r2' });
     }
 
     if (isReadOnlyRuntime()) {
-      console.error('[assets/upload] R2 yapılandırılmamış (R2_* ve R2_PUBLIC_URL gerekli); üretimde yerel yazma yapılmaz.');
+      console.error('[assets/upload] R2 yapılandırılmamış (R2_* gerekli); üretimde yerel yazma yapılmaz.');
       return json(
         {
           success: false,
           code: 'STORAGE_NOT_CONFIGURED',
-          error: 'Görsel depolama yapılandırılmamış. Yönetici R2 ayarlarını (R2_PUBLIC_URL dahil) tamamlamalı.',
+          error: 'Görsel depolama yapılandırılmamış. Yönetici R2 ayarlarını tamamlamalı.',
         },
         503
       );

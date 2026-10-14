@@ -5,9 +5,13 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, Get
  * Genel amaçlı: görev ekleri (tasks/), ileride rozet (badges/) ve avatar (avatars/) için de kullanılır.
  * Vercel serverless read-only filesystem sorununu çözer (fs.writeFile yerine object storage).
  *
- * Gerekli env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL.
+ * Gerekli env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET.
  * (R2_ENDPOINT verilirse onu kullanır; yoksa account id'den türetir.)
+ *
+ * Bucket PUBLIC DEĞİL: dosyalar uygulama uçlarından sunulur (lib/storage/served-url.ts).
+ * `R2_PUBLIC_URL` yalnız DB'deki eski tam URL'leri key'e çevirmek için (geri uyum) okunur.
  */
+import { storedKeyOf } from '@/lib/storage/served-url';
 
 function env(key: string): string | undefined {
   const v = process.env[key];
@@ -44,7 +48,7 @@ function getClient(): S3Client {
  * Dosyayı R2'ye yükler. `key` = bucket içi tam yol (ör. "tasks/abc-123.pdf").
  * `contentDisposition` verilirse (ör. 'attachment; filename="x"') nesneye yazılır;
  * indirilmesi gereken (tarayıcıda çalıştırılmaması gereken) türler için kullanılır.
- * Döner: public URL (R2_PUBLIC_URL/key). R2_PUBLIC_URL yoksa key döner (uyarı).
+ * Döner: bucket KEY'i (public URL DEĞİL). DB'ye key ya da `toServedUrl` çıktısı yazılır.
  */
 export async function uploadToR2(key: string, body: Buffer, contentType: string, contentDisposition?: string): Promise<string> {
   const bucket = env('R2_BUCKET')!;
@@ -55,12 +59,7 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string,
     ContentType: contentType,
     ContentDisposition: contentDisposition,
   }));
-  const publicBase = env('R2_PUBLIC_URL');
-  if (!publicBase) {
-    // Public URL ayarlanmamış — dosya yüklendi ama tarayıcıdan erişilemez.
-    return `/${key}`;
-  }
-  return `${publicBase.replace(/\/$/, '')}/${key}`;
+  return key;
 }
 
 /**
@@ -90,13 +89,27 @@ export async function deleteFromR2(key: string): Promise<void> {
  * R2 nesnesini okur (yetkili uçtan akıtmak için — public URL'yi istemciye vermeden).
  * Döner: gövde akışı + boyut; nesne yoksa null.
  */
-export async function getR2Object(key: string): Promise<{ body: ReadableStream<Uint8Array>; size: number | null } | null> {
+export type R2Object = {
+  body: ReadableStream<Uint8Array>;
+  size: number | null;
+  contentType: string | null;
+  etag: string | null;
+  lastModified: Date | null;
+};
+
+export async function getR2Object(key: string): Promise<R2Object | null> {
   const bucket = env('R2_BUCKET')!;
   try {
     const out = await getClient().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     if (!out.Body) return null;
     const body = (out.Body as { transformToWebStream: () => ReadableStream<Uint8Array> }).transformToWebStream();
-    return { body, size: typeof out.ContentLength === 'number' ? out.ContentLength : null };
+    return {
+      body,
+      size: typeof out.ContentLength === 'number' ? out.ContentLength : null,
+      contentType: out.ContentType ?? null,
+      etag: out.ETag ?? null,
+      lastModified: out.LastModified ?? null,
+    };
   } catch (e) {
     const name = (e as { name?: string })?.name;
     if (name === 'NoSuchKey' || name === 'NotFound') return null;
@@ -104,13 +117,10 @@ export async function getR2Object(key: string): Promise<{ body: ReadableStream<U
   }
 }
 
-/** Public URL'den bucket key'ini çıkarır (silme için). */
+/**
+ * Saklanan referanstan (eski public URL, iç `/api/files/public/...` URL'si, `/key` ya da çıplak
+ * key) bucket key'ini çıkarır. Tanınmayan biçim / güvensiz key → null.
+ */
 export function keyFromPublicUrl(url: string): string | null {
-  const publicBase = env('R2_PUBLIC_URL');
-  if (publicBase && url.startsWith(publicBase)) {
-    return url.slice(publicBase.replace(/\/$/, '').length + 1);
-  }
-  // /key formatı (public URL yokken)
-  if (url.startsWith('/')) return url.slice(1);
-  return null;
+  return storedKeyOf(url);
 }

@@ -86,22 +86,6 @@ const OUTPUT_FILE_TRACING_EXCLUDE_GLOBS = [
   'node_modules/@img/sharp-libvips-linuxmusl*/**/*',
 ];
 
-/**
- * R2 (nesne depolama) herkese açık host'u: admin rozet/ödül görselleri buraya
- * yüklenir (P0-39) ve next/image ile gösterilir. Env yoksa/bozuksa desen eklenmez.
- */
-function r2RemotePatterns() {
-  const raw = (process.env.R2_PUBLIC_URL || '').trim();
-  if (!raw) return [];
-  try {
-    const u = new URL(raw);
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return [];
-    return [{ protocol: u.protocol.replace(':', ''), hostname: u.hostname }];
-  } catch {
-    return [];
-  }
-}
-
 /** Yapılandırılmış tek bir dış adresin (ör. Supabase projesi) host'u; tanımsızsa hiçbiri. */
 function envHostPattern(raw) {
   const v = (raw || '').trim();
@@ -161,7 +145,7 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
-      ...r2RemotePatterns(),
+      // R2 görselleri artık aynı kökenden (/api/files/public/...) sunulur; r2.dev deseni yok.
       ...envHostPattern(process.env.NEXT_PUBLIC_SUPABASE_URL),
     ],
   },

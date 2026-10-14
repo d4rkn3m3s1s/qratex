@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { toServedUrl } from '@/lib/storage/served-url';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { defineRoute } from '@/lib/http/define-route';
@@ -73,7 +74,7 @@ export const GET = defineRoute(
     const items = rows.slice(0, PAGE).map((f) => ({
       id: f.id,
       filename: f.filename,
-      path: f.path,
+      path: toServedUrl(f.path, { kind: 'task', taskId: f.task.id }) ?? '',
       mime: f.mime,
       size: f.size,
       createdAt: f.createdAt.toISOString(),

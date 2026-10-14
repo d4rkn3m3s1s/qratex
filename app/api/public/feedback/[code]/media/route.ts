@@ -4,8 +4,8 @@
  * Eski akış base64'ü JSON gövdesine koyup Postgres'e yazıyordu (Vercel 4,5 MB sınırında 413,
  * DB'de megabaytlarca base64). Şimdi: QR açık olmalı, IP başına 10 dk'da 12 yükleme, dosya
  * ≤ 4 MB (istemci ~1,5 MB'a küçültür), biçim BAYTLARDAN doğrulanır, sharp ile yeniden
- * kodlanır (EXIF/konum dahil tüm meta veri atılır) ve R2'ye yazılır. Yanıt yalnız HTTPS URL.
- * Gönderim ucu yalnız bu biçimdeki, bu QR'a ait URL'leri kabul eder.
+ * kodlanır (EXIF/konum dahil tüm meta veri atılır) ve R2'ye yazılır. Yanıt bucket key'i (`url` alanında).
+ * Gönderim ucu yalnız bu biçimdeki, bu QR'a ait key'leri kabul eder.
  */
 import { z } from 'zod';
 import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
@@ -49,6 +49,7 @@ export const POST = defineRoute(
     const processed = await processFeedbackPhoto(Buffer.from(await file.arrayBuffer()));
     if (!processed) throw new ApiError('VALIDATION', 'Yalnız JPEG, PNG, WebP ya da HEIC fotoğraf yüklenebilir.');
 
+    // `url` alanı geri uyum için korunur; değeri bucket KEY'idir (public URL yok, bucket kapalı).
     const url = await uploadToR2(newMediaKey(qr.id), processed.buffer, 'image/jpeg', 'inline');
     return ok({ url, width: processed.width, height: processed.height }, { status: 201 });
   }

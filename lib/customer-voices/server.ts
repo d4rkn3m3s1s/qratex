@@ -10,6 +10,7 @@
  *  - Sayıyı kod hesaplar: toplamlar `count/aggregate`, puan `points_credited` defter olayından.
  *  - GET'te LLM yok; "AI ne anladı" yalnız kayıtlı analizden okunur ve modül kapısına bağlıdır.
  */
+import { servedFeedbackMedia } from '@/lib/storage/served-url';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getModuleControls } from '@/lib/module-gate';
@@ -569,7 +570,7 @@ async function getQrDetail(userId: string, feedbackId: string): Promise<VoiceDet
       rating: f.rating,
       text: f.text?.trim() || null,
       dimensions: null,
-      media: mediaUrls(f.media),
+      media: mediaUrls(servedFeedbackMedia(f.id, f.media)),
       createdAt: f.createdAt.toISOString(),
       updatedAt: f.updatedAt.toISOString(),
     },

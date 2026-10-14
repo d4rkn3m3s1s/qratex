@@ -229,7 +229,8 @@ export function eraseWhere(entry: Pick<PiiRegistryEntry, 'model' | 'relation'>, 
 function collectUrls(value: unknown, out: string[], depth = 0): void {
   if (depth > 4 || value == null) return;
   if (typeof value === 'string') {
-    if (/^https?:\/\//i.test(value)) out.push(value);
+    // Eski tam URL ya da yeni kayıtlardaki çıplak R2 key'i (`feedback/...` vb.).
+    if (/^https?:\/\//i.test(value) || keyFromPublicUrl(value)) out.push(value);
     return;
   }
   if (Array.isArray(value)) {

@@ -129,8 +129,9 @@ describe('hızlı etiketler', () => {
 });
 
 describe('medya URL süzgeci', () => {
-  it('yalnız kendi R2 alanımız + bu QR + beklenen anahtar biçimi', () => {
-    const good = 'https://cdn.qratex.test/feedback/qr1/2026-10/AAAAAAAAAAAAAAAAAAAAAAAA.jpg';
+  it('yalnız kendi R2 alanımız + bu QR + beklenen anahtar biçimi; çıktı KEY', () => {
+    const goodKey = 'feedback/qr1/2026-10/AAAAAAAAAAAAAAAAAAAAAAAA.jpg';
+    const good = `https://cdn.qratex.test/${goodKey}`;
     expect(
       acceptedMediaUrls(
         [
@@ -140,10 +141,12 @@ describe('medya URL süzgeci', () => {
           'https://evil.test/feedback/qr1/2026-10/AAAAAAAAAAAAAAAAAAAAAAAA.jpg',
           'https://cdn.qratex.test/feedback/qr2/2026-10/AAAAAAAAAAAAAAAAAAAAAAAA.jpg',
           'https://cdn.qratex.test/tasks/x.pdf',
+          goodKey,
+          'feedback/qr1/2026-10/../../qr2/2026-10/AAAAAAAAAAAAAAAAAAAAAAAA.jpg',
         ],
         'qr1'
       )
-    ).toEqual([good]);
+    ).toEqual([goodKey]);
   });
 });
 

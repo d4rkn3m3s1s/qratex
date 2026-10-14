@@ -19,8 +19,9 @@ export async function removeStoredTaskFile(storedPath: string | null | undefined
       await unlink(path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks', safe)).catch(() => undefined);
       return;
     }
-    // R2 public URL yokken `/<key>` biçimi.
-    if (storedPath.startsWith('/tasks/')) await deleteFromR2(storedPath.slice(1));
+    // Yeni yüklemeler çıplak key (`tasks/...`); eski `/<key>` biçimi de desteklenir.
+    const key = keyFromPublicUrl(storedPath);
+    if (key && key.startsWith('tasks/')) await deleteFromR2(key);
   } catch (err) {
     console.warn('[team] dosya silinemedi:', storedPath, err);
   }

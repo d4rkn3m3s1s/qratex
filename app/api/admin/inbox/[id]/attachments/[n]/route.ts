@@ -21,7 +21,9 @@ export const GET = defineRoute(
   async ({ params }) => {
     const att = await getAttachment(params.id, params.n);
     const { isR2Configured, keyFromPublicUrl, getR2Object } = await import('@/lib/r2-storage');
+    // DB'de çıplak key (yeni) ya da eski tam public URL; yalnız `inbox/` öneki sunulur.
     const key = att.url ? keyFromPublicUrl(att.url) : null;
+    if (key && !key.startsWith('inbox/')) throw new ApiError('NOT_FOUND', 'Ek bulunamadı.');
     if (!isR2Configured() || !key) throw new ApiError('SERVICE_UNAVAILABLE', 'Ek deposuna şu anda ulaşılamıyor.');
     const obj = await getR2Object(key);
     if (!obj) throw new ApiError('NOT_FOUND', 'Ek depoda bulunamadı.');

@@ -57,23 +57,23 @@ describe('POST /api/admin/assets/upload', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     process.env = { ...ORIGINAL_ENV };
     mockRequireAuth.mockResolvedValue({ session: { user: { id: 'admin1', role: 'ADMIN' } } });
-    mockUploadToR2.mockImplementation(async (key: string) => `https://pub.r2.dev/${key}`);
+    mockUploadToR2.mockImplementation(async (key: string) => key);
   });
 
   afterAll(() => {
     process.env = ORIGINAL_ENV;
   });
 
-  it('R2 yapılandırılmışsa nesne depolamaya yükler ve kalıcı HTTPS URL döner (yerel FS’e yazmaz)', async () => {
+  it('R2 yapılandırılmışsa nesne depolamaya yükler ve uygulamanın public dosya ucunu döner (r2.dev yok, yerel FS yok)', async () => {
     mockIsR2Configured.mockReturnValue(true);
-    setEnv({ R2_PUBLIC_URL: 'https://pub.r2.dev', NODE_ENV: 'production', VERCEL: '1' });
+    setEnv({ R2_PUBLIC_URL: undefined, NODE_ENV: 'production', VERCEL: '1' });
 
     const res = await upload('rewards', svgFile());
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(json.storage).toBe('r2');
-    expect(json.url).toMatch(/^https:\/\/pub\.r2\.dev\/assets\/rewards\/rozet-ikonu-\d+-[0-9a-f]{8}\.svg$/);
+    expect(json.url).toMatch(/^\/api\/files\/public\/assets\/rewards\/rozet-ikonu-\d+-[0-9a-f]{8}\.svg$/);
     expect(json.path).toBe(json.url); // geriye uyumlu alan
     expect(mockUploadToR2).toHaveBeenCalledWith(expect.stringMatching(/^assets\/rewards\//), expect.any(Buffer), 'image/svg+xml', expect.stringMatching(/^attachment;/));
     expect(mockWriteFile).not.toHaveBeenCalled();
@@ -89,14 +89,6 @@ describe('POST /api/admin/assets/upload', () => {
     expect(json.code).toBe('STORAGE_NOT_CONFIGURED');
     expect(mockWriteFile).not.toHaveBeenCalled();
     expect(mockMkdir).not.toHaveBeenCalled();
-  });
-
-  it('R2 anahtarları var ama R2_PUBLIC_URL yoksa (görsel tarayıcıdan açılamaz) üretimde 503', async () => {
-    mockIsR2Configured.mockReturnValue(true);
-    setEnv({ R2_PUBLIC_URL: undefined, NODE_ENV: 'production', VERCEL: '1' });
-    const res = await upload('badges', svgFile());
-    expect(res.status).toBe(503);
-    expect(mockUploadToR2).not.toHaveBeenCalled();
   });
 
   it('yerel geliştirmede R2 yoksa public/ altına yazar', async () => {

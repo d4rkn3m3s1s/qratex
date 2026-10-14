@@ -9,6 +9,7 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
 import { uploadToR2 } from '@/lib/r2-storage';
+import { legacyPublicBase, publicFileUrl } from '@/lib/storage/served-url';
 import { feedbackPhotosEnabled, MAX_UPLOAD_BYTES, processFeedbackPhoto } from '@/lib/feedback-funnel/media';
 import { buildImportReport, isAcceptedProductImage, productImageKey, toProductDto, type RawProduct } from './core';
 import { adjustMinorByPercent, minorToPrice, priceToMinor } from './money';
@@ -29,11 +30,6 @@ const PRODUCT_SELECT = {
   updatedAt: true,
   category: { select: { id: true, name: true, icon: true, isActive: true } },
 } as const;
-
-function publicBase(): string | null {
-  const v = process.env.R2_PUBLIC_URL?.trim();
-  return v ? v.replace(/\/$/, '') : null;
-}
 
 function toDto(p: unknown, dealerId: string): CatalogProductDto {
   return toProductDto(p as RawProduct, dealerId, undefined, true);
@@ -71,7 +67,7 @@ async function usableCategory(dealerId: string, categoryId: string) {
 
 function assertImage(dealerId: string, url: string | null | undefined, current: string | null = null) {
   if (url === undefined || url === null || url === current) return;
-  if (!isAcceptedProductImage(url, dealerId, publicBase())) {
+  if (!isAcceptedProductImage(url, dealerId, legacyPublicBase())) {
     throw new ApiError('VALIDATION', 'Görsel bu ekrandan yüklenmeli.', { details: [{ path: 'image', message: 'Görsel geçersiz.' }] });
   }
 }
@@ -214,7 +210,8 @@ export async function uploadProductImage(dealerId: string, file: { size: number;
   const processed = await processFeedbackPhoto(Buffer.from(await file.arrayBuffer()));
   if (!processed) throw new ApiError('VALIDATION', 'Yalnız JPEG, PNG, WebP ya da HEIC görsel yüklenebilir.');
   const key = productImageKey(dealerId, randomBytes(18).toString('base64url'));
-  const url = await uploadToR2(key, processed.buffer, 'image/jpeg', 'inline');
+  await uploadToR2(key, processed.buffer, 'image/jpeg', 'inline');
+  const url = publicFileUrl(key);
   return { url, width: processed.width, height: processed.height };
 }
 

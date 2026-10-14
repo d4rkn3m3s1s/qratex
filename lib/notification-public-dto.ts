@@ -2,6 +2,7 @@
  * Public notification payload for GET /api/notifications.
  * Strips internal DB fields and JSON keys not intended for the client.
  */
+import { servePublicRef } from '@/lib/storage/served-url';
 
 import { clampTakeParam } from '@/lib/api-http';
 
@@ -55,7 +56,8 @@ export function sanitizeNotificationData(data: unknown): Record<string, string |
     if (!(key in data)) continue;
     const v = data[key];
     if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-      out[key] = v;
+      // Eski bildirimlerde kopyalanmış r2.dev görsel URL'si → iç public uç (bucket kapalı).
+      out[key] = typeof v === 'string' ? servePublicRef(v) : v;
     }
   }
   return Object.keys(out).length > 0 ? out : undefined;

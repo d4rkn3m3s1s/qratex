@@ -323,12 +323,15 @@ export function productImageKey(dealerId: string, random: string, now: Date = ne
  * Ürüne yazılabilecek görsel: yalnız BU bayinin `products/` alanındaki R2 nesnesi (harici URL,
  * data: URI ya da başka bayinin görseli reddedilir — eskiden `z.string().url()` her şeyi alıyordu).
  */
-export function isAcceptedProductImage(url: string, dealerId: string, publicBase: string | null): boolean {
-  if (!publicBase) return false;
-  const base = publicBase.replace(/\/$/, '');
-  if (!url.startsWith(`${base}/`)) return false;
-  const key = url.slice(base.length + 1);
-  if (!IMAGE_KEY_RE.test(key)) return false;
+export function isAcceptedProductImage(url: string, dealerId: string, publicBase: string | null = null): boolean {
+  // Yeni biçim: uygulamanın public dosya ucu (bucket kapalı). Eski biçim: tam R2 public URL'si.
+  let key: string | null = null;
+  if (url.startsWith('/api/files/public/')) key = url.slice('/api/files/public/'.length);
+  else if (publicBase) {
+    const base = publicBase.replace(/\/$/, '');
+    if (url.startsWith(`${base}/`)) key = url.slice(base.length + 1);
+  }
+  if (!key || !IMAGE_KEY_RE.test(key)) return false;
   const safe = dealerId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
   return key.startsWith(`${PRODUCT_IMAGE_PREFIX}${safe}/`);
 }

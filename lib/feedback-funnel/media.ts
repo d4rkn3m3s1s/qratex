@@ -7,11 +7,13 @@
  *
  * Yeni akış: istemci fotoğrafı küçültür (PhotoPicker, EXIF/GPS silinir) → her foto ayrı
  * multipart istekle `POST /api/public/feedback/[code]/media` → sunucu biçimi baytlardan
- * doğrular, sharp ile yeniden kodlar (meta veri atılır), R2'ye yazar ve HTTPS URL döner.
- * Gönderim yalnız KENDİ R2 alanımızdaki `feedback/` önekli URL'leri kabul eder.
+ * doğrular, sharp ile yeniden kodlar (meta veri atılır), R2'ye yazar ve bucket KEY'ini döner.
+ * Gönderim yalnız `feedback/<qr>/` önekli key'leri (ya da eski tam URL'leri) kabul eder; DB'ye key yazılır.
+ * Okuma: /api/files/feedback/[id]/[n] (sahiplik denetimli).
  */
 import { randomBytes } from 'crypto';
 import { isR2Configured } from '@/lib/r2-storage';
+import { storedKeyOf } from '@/lib/storage/served-url';
 
 /** Sunucuya kabul edilen tek dosya üst sınırı (istemci ~1,5 MB'a küçültür). */
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
@@ -21,21 +23,9 @@ export const MEDIA_KEY_PREFIX = 'feedback/';
 
 const KEY_RE = /^feedback\/[A-Za-z0-9_-]{1,64}\/\d{4}-\d{2}\/[A-Za-z0-9_-]{16,64}\.jpg$/;
 
-function publicBase(): string | null {
-  const v = process.env.R2_PUBLIC_URL?.trim();
-  if (!v) return null;
-  try {
-    const u = new URL(v);
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-    return v.replace(/\/$/, '');
-  } catch {
-    return null;
-  }
-}
-
-/** Fotoğraf eklemek bu ortamda mümkün mü (R2 + herkese açık URL). Değilse UI bölümü gizler. */
+/** Fotoğraf eklemek bu ortamda mümkün mü (R2). Değilse UI bölümü gizler. Bucket public olmak zorunda değil. */
 export function feedbackPhotosEnabled(): boolean {
-  return isR2Configured() && publicBase() !== null;
+  return isR2Configured();
 }
 
 /** R2 nesne anahtarı: `feedback/<qrId>/<yyyy-mm>/<rastgele>.jpg` (yıl-ay İstanbul saatine göre). */
@@ -48,21 +38,20 @@ export function newMediaKey(qrCodeId: string, now: Date = new Date()): string {
 }
 
 /**
- * Gönderilen medya URL'lerini süzer: yalnız kendi R2 alanımızdaki, bu QR'a ait, beklenen
- * biçimdeki anahtarlar. Diğerleri sessizce atılır (data:, harici URL, başka QR'ın fotoğrafı).
+ * Gönderilen medya referanslarını süzer: yalnız kendi R2'mizdeki, bu QR'a ait, beklenen biçimdeki
+ * anahtarlar. Yeni yükleme çıplak key döner; eski istemci/taslak tam public URL gönderebilir
+ * (geri uyum). Çıktı her zaman KEY (DB'ye URL değil key yazılır). Diğerleri sessizce atılır
+ * (data:, harici URL, başka QR'ın fotoğrafı, `..` içeren yol).
  */
 export function acceptedMediaUrls(urls: readonly string[] | null | undefined, qrCodeId: string): string[] {
   if (!Array.isArray(urls) || urls.length === 0) return [];
-  const base = publicBase();
-  if (!base) return [];
   const safeQr = qrCodeId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
   const out: string[] = [];
   for (const raw of urls) {
-    if (typeof raw !== 'string' || !raw.startsWith(`${base}/`)) continue;
-    const key = raw.slice(base.length + 1);
-    if (!KEY_RE.test(key)) continue;
+    const key = storedKeyOf(raw);
+    if (!key || !KEY_RE.test(key)) continue;
     if (!key.startsWith(`${MEDIA_KEY_PREFIX}${safeQr}/`)) continue;
-    if (!out.includes(raw)) out.push(raw);
+    if (!out.includes(key)) out.push(key);
   }
   return out;
 }

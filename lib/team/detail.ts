@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { toServedUrl } from '@/lib/storage/served-url';
 import { findVisibleTask } from './access';
 import {
   canAttach,
@@ -132,7 +133,7 @@ export async function loadTaskDetail(viewer: TeamViewer, id: string) {
         createdAt: c.createdAt.toISOString(),
         editedAt: iso(c.editedAt),
         parentId: c.parentId,
-        attachmentPath: c.attachmentPath,
+        attachmentPath: c.attachmentPath ? toServedUrl(c.attachmentPath, { kind: 'task', taskId: t.id }) : null,
         attachmentName: c.attachmentName,
         author: c.author,
         reactions: c.reactions,
@@ -149,7 +150,7 @@ export async function loadTaskDetail(viewer: TeamViewer, id: string) {
       attachments: t.attachments.map((a) => ({
         id: a.id,
         filename: a.filename,
-        path: a.path,
+        path: toServedUrl(a.path, { kind: 'task', taskId: t.id }) ?? '',
         mime: a.mime,
         size: a.size,
         createdAt: a.createdAt.toISOString(),

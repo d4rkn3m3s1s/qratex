@@ -414,14 +414,17 @@ export function normalizeMedia(raw: unknown): string[] {
   const out: string[] = [];
   for (const item of list) {
     const url = typeof item === 'string' ? item : item && typeof item === 'object' ? (item as { url?: unknown }).url : null;
-    if (typeof url === 'string' && /^https:\/\/[^\s"'<>]+$/i.test(url) && url.length <= 2048) out.push(url);
+    // https (eski/harici) ya da yetkili iç uç (`/api/files/feedback/...`, servedFeedbackMedia çıktısı).
+    if (typeof url === 'string' && /^(https:\/\/|\/api\/files\/)[^\s"'<>]+$/i.test(url) && url.length <= 2048) out.push(url);
     if (out.length >= 6) break;
   }
   return out;
 }
 
 export function hasMedia(raw: unknown): boolean {
-  return normalizeMedia(raw).length > 0;
+  if (normalizeMedia(raw).length > 0) return true;
+  // Yeni kayıtlar çıplak R2 key'i tutar (`feedback/...`).
+  return Array.isArray(raw) && raw.some((m) => typeof m === 'string' && m.startsWith('feedback/'));
 }
 
 /** `actionSuggestions` → kısa öneri metinleri (en fazla 3). */

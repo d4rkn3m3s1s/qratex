@@ -1,22 +1,58 @@
 import { PrismaClient } from '@prisma/client';
+import { servePublicRef } from '@/lib/storage/served-url';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
+
+/**
+ * R2 bucket'ı public değil (docs/ops/R2-GUVENLIK.md). DB'de duran ESKİ tam r2.dev URL'leri
+ * (logo, ürün görseli, rozet/ödül/kozmetik ikonu…) okunurken `/api/files/public/<key>` iç ucuna
+ * çevrilir — migration yok, her okuma yolu (select/include, iç içe ilişki) tek noktadan kapsanır.
+ * Yalnız `R2_PUBLIC_URL/` ile başlayan değerler değişir; emoji/harici URL/iç URL aynen kalır.
+ * (`$queryRaw` sonuçları kapsanmaz.) Tür PrismaClient olarak kalır: alan türleri değişmiyor.
+ */
+function servedField<F extends string>(field: F) {
+  return {
+    [field]: {
+      needs: { [field]: true } as Record<F, true>,
+      compute: (row: Record<F, unknown>) => servePublicRef(row[field]),
+    },
+  } as Record<F, { needs: Record<F, true>; compute: (row: Record<F, unknown>) => unknown }>;
+}
+
+function withServedFileUrls(client: PrismaClient): PrismaClient {
+  return client.$extends({
+    name: 'served-file-urls',
+    result: {
+      user: { ...servedField('businessLogo'), ...servedField('image') },
+      product: servedField('image'),
+      productCategory: servedField('icon'),
+      badge: servedField('icon'),
+      quest: servedField('icon'),
+      reward: servedField('icon'),
+      cosmeticItem: servedField('imageUrl'),
+      donationProject: servedField('icon'),
+      vIPTier: servedField('icon'),
+      seasonalCampaign: servedField('imageUrl'),
+      menuItem: servedField('icon'),
+    },
+  }) as unknown as PrismaClient;
+}
 
 function createPrismaClient() {
   try {
     if (!process.env.DATABASE_URL) {
       console.error('DATABASE_URL is not defined');
     }
-    return new PrismaClient({
+    return withServedFileUrls(new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
       // Etkileşimli $transaction havuzdan bağlantı beklerken varsayılan 2 sn'de P2028 ("Unable to
       // start a transaction in the given time") ile düşüyordu: Neon pooler + connection_limit=5
       // altında eşzamanlı istek patlamasında vaka açma/çözme 500 verdi (e2e b-bugun-gelen).
       // Yalnız bekleme süresi uzar; çağrı başına verilen seçenekler bunu yine ezer.
       transactionOptions: { maxWait: 10_000 },
-    });
+    }));
   } catch (error) {
     console.error('Failed to create Prisma Client:', error);
     throw error;

@@ -13,6 +13,7 @@ import { detectPromptInjection } from '@/lib/prompt-injection';
 import { invalidateDealerAiPolicy } from '@/lib/ai-policy';
 import { defaultAvatars } from '@/lib/avatar-options';
 import { deleteFromR2, keyFromPublicUrl, uploadToR2 } from '@/lib/r2-storage';
+import { publicFileUrl } from '@/lib/storage/served-url';
 import { feedbackPhotosEnabled, MAX_UPLOAD_BYTES, processFeedbackPhoto } from '@/lib/feedback-funnel/media';
 import type { AccountPatch, AiPatch, AiSettingsView, BusinessPatch, WeeklyHours } from './contract';
 import { validateWeek, weekToStored } from './hours';
@@ -125,7 +126,8 @@ export async function uploadDealerLogo(
   if (!processed) throw new ApiError('VALIDATION', 'Yalnız JPEG, PNG, WebP ya da HEIC görsel yüklenebilir.');
   const safe = dealerId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'dealer';
   const key = `${LOGO_KEY_PREFIX}${safe}/${randomBytes(18).toString('base64url')}.jpg`;
-  const url = await uploadToR2(key, processed.buffer, 'image/jpeg', 'inline');
+  await uploadToR2(key, processed.buffer, 'image/jpeg', 'inline');
+  const url = publicFileUrl(key);
 
   const previous = await prisma.$transaction(async (tx) => {
     await lockResource(tx, `logo:${dealerId}`);
