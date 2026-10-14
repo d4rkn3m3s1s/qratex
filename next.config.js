@@ -149,6 +149,10 @@ const nextConfig = {
       ...envHostPattern(process.env.NEXT_PUBLIC_SUPABASE_URL),
     ],
   },
+  // SEO: Next 16 metadata'yı normal tarayıcılara <body>'ye stream eder, yalnızca bilinen
+  // botlara <head>'de blocking verir. Lighthouse (mobil UA) ve bazı tarayıcı-tabanlı
+  // tarayıcılar meta description'ı <head>'de bulamıyordu → tüm UA'larda blocking metadata.
+  htmlLimitedBots: /.*/,
   experimental: {
     optimizePackageImports: [
       'lucide-react',
