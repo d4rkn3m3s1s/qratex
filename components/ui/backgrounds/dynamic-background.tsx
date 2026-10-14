@@ -1,32 +1,35 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
-import { AuroraBackground } from './aurora';
-import { SparklesBackground } from './sparkles';
-import { BackgroundBeams } from './beams';
-import { GradientAnimation } from './gradient-animation';
-import { MeteorsBackground } from './meteors';
-import { GridDotsBackground } from './grid-dots';
-import { MatrixBackground } from './matrix';
-import { ParticlesBackground } from './particles';
-import { WavesBackground } from './waves';
-import { StarfieldBackground } from './starfield';
-import { CyberpunkBackground } from './cyberpunk';
-import { GeometricBackground } from './geometric';
-import { FirefliesBackground } from './fireflies';
-import { ChristmasBackground } from './christmas';
-import { ValentineBackground } from './valentine';
-import { BirthdayBackground } from './birthday';
-import { NebulaBackground } from './nebula';
-import { NorthernLightsBackground } from './northern-lights';
-import { HolographicBackground } from './holographic';
-import { GalaxyBackground } from './galaxy';
-import { SummerBackground } from './summer';
-import { WinterBackground } from './winter';
-import { AutumnBackground } from './autumn';
-import { SpringBackground } from './spring';
-import { IceKingdomBackground } from './ice-kingdom';
+
+// Her varyant ayrı chunk: yalnız seçili efektin kodu indirilir (21 canvas tek pakette değil).
+const AuroraBackground = dynamic(() => import('./aurora').then((mod) => mod.AuroraBackground), { ssr: false });
+const SparklesBackground = dynamic(() => import('./sparkles').then((mod) => mod.SparklesBackground), { ssr: false });
+const BackgroundBeams = dynamic(() => import('./beams').then((mod) => mod.BackgroundBeams), { ssr: false });
+const GradientAnimation = dynamic(() => import('./gradient-animation').then((mod) => mod.GradientAnimation), { ssr: false });
+const MeteorsBackground = dynamic(() => import('./meteors').then((mod) => mod.MeteorsBackground), { ssr: false });
+const GridDotsBackground = dynamic(() => import('./grid-dots').then((mod) => mod.GridDotsBackground), { ssr: false });
+const MatrixBackground = dynamic(() => import('./matrix').then((mod) => mod.MatrixBackground), { ssr: false });
+const ParticlesBackground = dynamic(() => import('./particles').then((mod) => mod.ParticlesBackground), { ssr: false });
+const WavesBackground = dynamic(() => import('./waves').then((mod) => mod.WavesBackground), { ssr: false });
+const StarfieldBackground = dynamic(() => import('./starfield').then((mod) => mod.StarfieldBackground), { ssr: false });
+const CyberpunkBackground = dynamic(() => import('./cyberpunk').then((mod) => mod.CyberpunkBackground), { ssr: false });
+const GeometricBackground = dynamic(() => import('./geometric').then((mod) => mod.GeometricBackground), { ssr: false });
+const FirefliesBackground = dynamic(() => import('./fireflies').then((mod) => mod.FirefliesBackground), { ssr: false });
+const ChristmasBackground = dynamic(() => import('./christmas').then((mod) => mod.ChristmasBackground), { ssr: false });
+const ValentineBackground = dynamic(() => import('./valentine').then((mod) => mod.ValentineBackground), { ssr: false });
+const BirthdayBackground = dynamic(() => import('./birthday').then((mod) => mod.BirthdayBackground), { ssr: false });
+const NebulaBackground = dynamic(() => import('./nebula').then((mod) => mod.NebulaBackground), { ssr: false });
+const NorthernLightsBackground = dynamic(() => import('./northern-lights').then((mod) => mod.NorthernLightsBackground), { ssr: false });
+const HolographicBackground = dynamic(() => import('./holographic').then((mod) => mod.HolographicBackground), { ssr: false });
+const GalaxyBackground = dynamic(() => import('./galaxy').then((mod) => mod.GalaxyBackground), { ssr: false });
+const SummerBackground = dynamic(() => import('./summer').then((mod) => mod.SummerBackground), { ssr: false });
+const WinterBackground = dynamic(() => import('./winter').then((mod) => mod.WinterBackground), { ssr: false });
+const AutumnBackground = dynamic(() => import('./autumn').then((mod) => mod.AutumnBackground), { ssr: false });
+const SpringBackground = dynamic(() => import('./spring').then((mod) => mod.SpringBackground), { ssr: false });
+const IceKingdomBackground = dynamic(() => import('./ice-kingdom').then((mod) => mod.IceKingdomBackground), { ssr: false });
 
 export type BackgroundVariant =
   | 'original'

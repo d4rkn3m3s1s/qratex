@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { m as Motion } from 'framer-motion';
-import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
+import { useEffect, useState, type CSSProperties } from 'react';
+import dynamic from 'next/dynamic';
+import type { BackgroundVariant } from '@/components/ui/backgrounds';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
 import {
@@ -11,6 +11,15 @@ import {
   LANDING_SNOW_VIOLET_300,
 } from '@/lib/landing-hero-colors';
 import { CHART_HEX } from '@/lib/chart-palette';
+
+// 21 canvas varyantı yalnız admin özel varyant seçtiyse gerekir → ayrı chunk, SSR'siz.
+const DynamicBackground = dynamic(
+  () => import('@/components/ui/backgrounds/dynamic-background').then((mod) => mod.DynamicBackground),
+  { ssr: false },
+);
+
+/** CSS custom property'li stil (keyframe'ler globals.css'te: landing-orb/snow/sparkle). */
+type VarStyle = CSSProperties & Record<`--${string}`, string | number>;
 
 /** Deterministic 0-1 value from seed (SSR/client hydration-safe) */
 function seeded(seed: number): number {
@@ -89,17 +98,20 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
             { size: 180, x: '5%', y: '82%', color: 'bg-primary/45', blur: 'blur-3xl', duration: 9 },
             { size: 130, x: '40%', y: '22%', color: 'bg-fuchsia-500/30', blur: 'blur-2xl', duration: 7 },
           ].map((orb, i) => (
-            <Motion.div
+            <div
               key={`orb-${i}`}
-              className={`absolute rounded-full ${orb.color} ${orb.blur}`}
-              style={{ width: orb.size, height: orb.size, left: orb.x, top: orb.y }}
-              animate={{
-                x: [0, 30 * (i % 2 === 0 ? 1 : -1), -20 * (i % 2 === 0 ? 1 : -1), 0],
-                y: [0, -25, 35, 0],
-                scale: [1, 1.15, 0.9, 1],
-                opacity: [0.4, 0.7, 0.35, 0.4],
-              }}
-              transition={{ duration: orb.duration, repeat: Infinity, ease: 'easeInOut', delay: i * 0.5 }}
+              className={`landing-orb absolute rounded-full ${orb.color} ${orb.blur}`}
+              style={
+                {
+                  width: orb.size,
+                  height: orb.size,
+                  left: orb.x,
+                  top: orb.y,
+                  '--dir': i % 2 === 0 ? 1 : -1,
+                  animationDuration: `${orb.duration}s`,
+                  animationDelay: `${i * 0.5}s`,
+                } as VarStyle
+              }
             />
           ))}
 
@@ -111,10 +123,13 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
             const delay = seeded(i * 10 + 3) * 12;
             const drift = (seeded(i * 10 + 4) - 0.5) * 120;
             return (
-              <Motion.div
+              <div
                 key={`snow-${i}`}
-                className="absolute rounded-full"
+                className="landing-snow absolute rounded-full"
                 style={{
+                  '--drift': `${drift}px`,
+                  animationDuration: `${duration}s`,
+                  animationDelay: `${delay}s`,
                   width: size,
                   height: size,
                   left: `${startX}%`,
@@ -135,27 +150,27 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
                         : i % 4 === 2
                           ? '0 0 10px 3px rgba(244, 114, 182, 0.5)'
                           : '0 0 10px 3px rgba(192, 132, 252, 0.5)',
-                }}
-                animate={{ y: ['0vh', '105vh'], x: [0, drift, drift * 0.5, drift * 1.2, 0], rotate: [0, 360], opacity: [0, 1, 1, 1, 0] }}
-                transition={{ duration, repeat: Infinity, ease: 'linear', delay }}
+                } as VarStyle}
               />
             );
           })}
 
           {/* Işıldayan yıldızlar */}
           {[...Array(6)].map((_, i) => (
-            <Motion.div
+            <div
               key={`sparkle-${i}`}
               className="absolute"
               style={{ left: `${5 + seeded(2000 + i * 5) * 90}%`, top: `${5 + seeded(2000 + i * 5 + 1) * 90}%` }}
             >
-              <Motion.div
-                className="h-1 w-1 rounded-full bg-white"
-                style={{ boxShadow: '0 0 10px 4px rgba(255,255,255,0.8), 0 0 20px 8px rgba(240, 171, 252, 0.5)' }}
-                animate={{ scale: [0, 1.5, 0], opacity: [0, 1, 0] }}
-                transition={{ duration: 2 + seeded(2000 + i * 5 + 2) * 2, repeat: Infinity, ease: 'easeInOut', delay: seeded(2000 + i * 5 + 3) * 4 }}
+              <div
+                className="landing-sparkle h-1 w-1 rounded-full bg-white"
+                style={{
+                  boxShadow: '0 0 10px 4px rgba(255,255,255,0.8), 0 0 20px 8px rgba(240, 171, 252, 0.5)',
+                  animationDuration: `${2 + seeded(2000 + i * 5 + 2) * 2}s`,
+                  animationDelay: `${seeded(2000 + i * 5 + 3) * 4}s`,
+                }}
               />
-            </Motion.div>
+            </div>
           ))}
         </>
       )}
