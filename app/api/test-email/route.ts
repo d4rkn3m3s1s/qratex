@@ -1,3 +1,4 @@
+import { envAppUrl } from '@/lib/env-url';
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response;
   const to = parsed.data.email;
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = envAppUrl() || 'http://localhost:3000';
   const verifyUrl = `${baseUrl}/auth/verify-email?token=test-token-link-calisimaz`;
 
   const result = await sendVerificationEmail(to, verifyUrl, 'Test Kullanıcı');

@@ -1,3 +1,4 @@
+import { envAppUrl } from '@/lib/env-url';
 /**
  * Admin → Fiziksel Kartlar (Dalga 2) sunucu mantığı. Yalnız `requireAuth(['ADMIN'])` arkasındaki
  * BFF uçlarından ve sunucu sayfasından çağrılır.
@@ -52,7 +53,7 @@ export function istanbulDayStart(now: Date, daysAgo = 0): Date {
 }
 
 export function cardOrigin(): string {
-  return resolveCardOrigin(process.env.NEXT_PUBLIC_CARD_BASE_URL || process.env.NEXT_PUBLIC_APP_URL, getPublicAppOrigin());
+  return resolveCardOrigin(process.env.NEXT_PUBLIC_CARD_BASE_URL?.trim() || envAppUrl(), getPublicAppOrigin());
 }
 
 // ───────────────────────────── Liste ─────────────────────────────

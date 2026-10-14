@@ -1,3 +1,4 @@
+import { envAppUrl } from '@/lib/env-url';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import type * as forge from 'node-forge';
@@ -52,7 +53,7 @@ interface PassData {
 export function generatePassJson(data: PassData): object {
   const passTypeId = process.env.APPLE_PASS_TYPE_IDENTIFIER || 'pass.com.qratex.card';
   const teamId = process.env.APPLE_TEAM_IDENTIFIER || 'XXXXXXXXXX';
-  const webServiceURL = process.env.NEXT_PUBLIC_APP_URL || 'https://qratex.com';
+  const webServiceURL = envAppUrl() || 'https://qratex.com';
   
   return {
     formatVersion: 1,
@@ -284,7 +285,7 @@ interface GooglePassData {
  */
 export function generateGooglePassObject(data: GooglePassData): object {
   const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID || '';
-  const webServiceURL = process.env.NEXT_PUBLIC_APP_URL || 'https://qratex.com';
+  const webServiceURL = envAppUrl() || 'https://qratex.com';
   
   return {
     id: `${issuerId}.${data.id}`,
@@ -366,7 +367,7 @@ export async function generateGoogleWalletJWT(passObject: object): Promise<strin
   const claims = {
     iss: serviceAccountEmail,
     aud: 'google',
-    origins: [process.env.NEXT_PUBLIC_APP_URL || 'https://qratex.com'],
+    origins: [envAppUrl() || 'https://qratex.com'],
     typ: 'savetowallet',
     payload: {
       // Sınıf da JWT ile gönderilir: konsolda önceden oluşturulmamışsa "Kaydet" başarısız oluyordu.

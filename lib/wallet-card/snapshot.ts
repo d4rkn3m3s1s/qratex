@@ -81,7 +81,7 @@ export function resolveCardOrigin(configured: string | undefined | null, pageOri
   const pick = (v: string | undefined | null) => {
     if (!v) return null;
     try {
-      const u = new URL(v);
+      const u = new URL(v.trim());
       return u.protocol === 'https:' || u.protocol === 'http:' ? u.origin : null;
     } catch {
       return null;

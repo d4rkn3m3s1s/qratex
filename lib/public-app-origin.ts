@@ -1,3 +1,4 @@
+import { envAppUrl, envAuthUrl } from '@/lib/env-url';
 import type { NextRequest } from 'next/server';
 
 /**
@@ -6,9 +7,9 @@ import type { NextRequest } from 'next/server';
  */
 export function getPublicAppOrigin(): string {
   const trimmed =
-    process.env.NEXTAUTH_URL?.replace(/\/$/, '') ||
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/\/$/, '')}` : '');
+    envAuthUrl() ||
+    envAppUrl() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim().replace(/\/$/, '')}` : '');
   return trimmed || 'http://localhost:3000';
 }
 

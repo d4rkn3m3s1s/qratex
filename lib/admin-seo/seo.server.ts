@@ -1,3 +1,4 @@
+import { envAppUrl, envAuthUrl } from '@/lib/env-url';
 /**
  * Admin → SEO Motoru sunucu mantığı.
  *
@@ -294,7 +295,7 @@ function hostOf(u: string): string | null {
 
 /** Sunucudan istek atılabilecek host'lar: uygulamanın kendi adresleri (SSRF sınırı). */
 function allowedHosts(): Set<string> {
-  const hosts = [envSiteUrl, process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]
+  const hosts = [envSiteUrl, envAppUrl(), envAuthUrl()]
     .filter((x): x is string => typeof x === 'string' && isHttpUrl(x))
     .map(hostOf)
     .filter((x): x is string => !!x);

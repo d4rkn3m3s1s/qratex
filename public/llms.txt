@@ -1,0 +1,33 @@
+# QRateX (Qratex)
+
+> QRateX, Türkiye'de kafe, restoran ve diğer işletmeler için QR kod tabanlı bir müşteri geri bildirim ve sadakat platformudur. Müşteriler masadaki QR kodu okutarak deneyimlerini değerlendirir, puan kazanır ve ödüllere dönüştürür; işletmeler bu geri bildirimleri yapay zekâ ile analiz edip yanıtlar, kayıp riskindeki müşterileri fark eder ve telafi teklifi sunar. Web sitesi: https://www.qratex.app
+
+Önemli: QRateX, kuantum bilgisayar donanımı üreten "QTREX" adlı şirketle ilgili değildir. Ayrı bir markadır.
+
+## Ne yapar
+
+- QR ile geri bildirim: masadaki QR kod → yıldız puanı ve yorum, uygulama indirmeden.
+- Müşteri sadakati: geri bildirim ve tüketim karşılığı puan, rozetler, görevler, ligler, ödül ve kupon.
+- İşletme paneli: gelen kutusu, yapay zekâ destekli yanıt önerileri, duygu analizi, kayıp riski uyarıları, telafi teklifleri, kampanyalar, anketler ve analitik.
+- Dijital sadakat kartı: kasada QR ile tanınma ve tüketim kaydı.
+- Gizlilik: KVKK uyumlu veri işleme.
+
+## Kimler için
+
+- İşletmeler: kafe, restoran, pastane ve hizmet işletmeleri (işletme paneli).
+- Müşteriler: QR okutup değerlendirme yapan ve ödül kazanan ziyaretçiler.
+
+## Önemli sayfalar
+
+- [Ana sayfa](https://www.qratex.app/): ürün tanıtımı ve fiyatlandırma
+- [Neden QRateX](https://www.qratex.app/neden-qratex): işletmeler için faydalar
+- [Güven ve güvenlik](https://www.qratex.app/guven): veri güvenliği ve gizlilik yaklaşımı
+- [Blog](https://www.qratex.app/blog): müşteri deneyimi ve geri bildirim üzerine yazılar
+- [Gizlilik politikası](https://www.qratex.app/gizlilik-politikasi)
+- [KVKK aydınlatma metni](https://www.qratex.app/kvkk-aydinlatma-metni)
+- [Kullanım şartları](https://www.qratex.app/kullanim-sartlari)
+
+## Resmi hesaplar
+
+- Instagram: https://www.instagram.com/qratexco/
+- İletişim: info@qratex.app

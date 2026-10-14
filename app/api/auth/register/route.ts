@@ -1,3 +1,4 @@
+import { envAppUrl } from '@/lib/env-url';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/password';
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Doğrulama bağlantısı (hash'li, 24 saat). Üretim/gönderim hatası hesabı geri almaz:
     // kullanıcı "yeniden gönder" ile devam eder (ekranda dürüstçe "gönderilemedi" yazar).
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl?.origin || 'http://localhost:3000';
+    const baseUrl = envAppUrl() || request.nextUrl?.origin || 'http://localhost:3000';
     let verifyUrl: string | null = null;
     let emailSent = false;
     try {

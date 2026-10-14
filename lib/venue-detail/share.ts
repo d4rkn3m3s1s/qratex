@@ -1,3 +1,4 @@
+import { envAppUrl } from '@/lib/env-url';
 /**
  * Deneyim kartı paylaşımı (anonim, 7 gün) — eski `/customer/experiences`'tan taşındı.
  *
@@ -147,6 +148,6 @@ export async function listShareLinks(userId: string, dealerId: string, baseUrl: 
 
 /** Paylaşım linki tabanı: yapılandırılmış uygulama adresi, yoksa isteğin kökeni. */
 export function resolveShareBase(origin: string | null | undefined): string {
-  const env = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  const env = envAppUrl();
   return env || (origin ?? '').replace(/\/$/, '');
 }

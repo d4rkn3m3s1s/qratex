@@ -1,3 +1,4 @@
+import { envAppUrl, envAuthUrl } from '@/lib/env-url';
 /**
  * Stripe istemcisi ve yapılandırma yardımcıları.
  *
@@ -37,8 +38,8 @@ export function getStripeWebhookSecret(): string | null {
 /** Checkout sonrası dönülecek başarı/iptal URL kökü. */
 export function getBillingReturnOrigin(): string {
   return (
-    process.env.NEXTAUTH_URL?.replace(/\/$/, '') ||
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    envAuthUrl() ||
+    envAppUrl() ||
     'http://localhost:3000'
   );
 }
