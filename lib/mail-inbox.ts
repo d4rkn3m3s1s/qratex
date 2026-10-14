@@ -1,5 +1,5 @@
 /**
- * GELEN KUTUSU (IMAP) — qratex.co@gmail.com gelen kutusunu çeker, parse eder, DB'ye depolar.
+ * GELEN KUTUSU (IMAP) — info@qratex.app (Lark IMAP) gelen kutusunu çeker, parse eder, DB'ye depolar.
  * Stajyer/görev alıcılarından gelen mailleri otomatik EŞLEŞTİRİR (isFromIntern + matched*).
  *
  * Serverless uyumlu: her sync'te bağlan → son N maili çek → kapat (kalıcı bağlantı yok).

@@ -177,7 +177,7 @@ export default function InboxPage() {
       <DashboardPageHero
         icon={<Inbox className="text-white" />}
         title="Gelen Kutusu"
-        description="qratex.co@gmail.com gelen kutusu. Stajyerlerden (görev alıcıları) gelen mailler otomatik ayrılır."
+        description="info@qratex.app gelen kutusu. Stajyerlerden (görev alıcıları) gelen mailler otomatik ayrılır."
       />
 
       {!inboxConfigured && (
