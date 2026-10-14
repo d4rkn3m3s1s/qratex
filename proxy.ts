@@ -18,7 +18,7 @@ function addSecurityHeaders(res: NextResponse): void {
   const csp = [
     "default-src 'self'",
     // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcıda çalışır, sunucu CPU yakmaz).
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net https://*.posthog.com",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",

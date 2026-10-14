@@ -344,12 +344,12 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcı tarafı).
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net https://*.posthog.com",
               "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.ingest.sentry.io https://vercel.live https://cdn.jsdelivr.net https://tile.openstreetmap.org",
+              "connect-src 'self' https://*.posthog.com https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.ingest.sentry.io https://vercel.live https://cdn.jsdelivr.net https://tile.openstreetmap.org",
               "frame-src 'self' https://vercel.live",
               "frame-ancestors 'none'",
               // base-uri: <base> ile script kaçırma/relative-URL hijack önlemi.
