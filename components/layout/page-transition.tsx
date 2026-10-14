@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface PageTransitionProps {
   children: ReactNode;
@@ -19,11 +19,18 @@ interface PageTransitionProps {
  * streaming sırasında sunucuda <Suspense>, istemcide <div> farkı yaratıp "recoverable"
  * hidrasyon uyarısı çıkarıyordu. Çocukları AÇIKÇA bir <Suspense> ile sarmalayınca
  * sunucu ve istemci aynı ağaç yapısını görür → uyarı biter.
+ *
+ * PERF (LCP): Kök seviyede (app/ ve app/(public)/) loading.tsx ve buradaki <Suspense>
+ * kaldırıldı. Kök üstünde bekleyen bir sınır olunca landing'in TÜM içeriği gizli
+ * <div hidden id="S:0"> içinde gelip React'in $RC reveal'ını (300ms throttle + JS
+ * yürütmesi sonrası) bekliyordu → mobil LCP ~6s "render delay" + footer CLS. Artık
+ * public sayfa içeriği ilk HTML akışında doğrudan boyanır. Panel bölümlerinin
+ * (admin/customer/dealer/staff) kendi loading.tsx'leri yerinde.
  */
 export const PageTransition = ({ children }: PageTransitionProps) => {
   return (
     <div className="w-full h-full min-h-screen">
-      <Suspense fallback={null}>{children}</Suspense>
+      {children}
     </div>
   );
 };

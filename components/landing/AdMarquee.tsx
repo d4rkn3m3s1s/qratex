@@ -67,7 +67,7 @@ export default function AdMarquee({ items = DEMO_ITEMS }: { items?: MarqueeItem[
         <ul className="qx-marquee-track flex shrink-0 items-center gap-8 pr-8" aria-hidden={false}>
           {row.map((item, i) => (
             <li key={`${item.label}-${i}`}>
-              <div className="flex items-center gap-3 whitespace-nowrap text-base font-semibold text-foreground/55 grayscale transition-all duration-300 hover:text-foreground/90 hover:grayscale-0">
+              <div className="flex items-center gap-3 whitespace-nowrap text-base font-semibold text-foreground/75 grayscale transition-all duration-300 hover:text-foreground/90 hover:grayscale-0">
                 {item.logo}
                 {item.label}
               </div>

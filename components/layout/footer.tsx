@@ -206,9 +206,9 @@ export function Footer() {
         </div>
 
         {/* ReverBot üretici imzası (placeholder — gerçek logo geldiğinde img ile değiştir) */}
-        <div className="mt-8 flex items-center justify-center gap-1.5 text-[11px] tracking-wide text-muted-foreground/50">
+        <div className="mt-8 flex items-center justify-center gap-1.5 text-[11px] tracking-wide text-muted-foreground">
           <span>Powered by</span>
-          <span className="font-semibold text-foreground/60">ReverBot</span>
+          <span className="font-semibold text-foreground/80">ReverBot</span>
         </div>
       </div>
     </footer>

@@ -27,6 +27,52 @@ function contrastTextHsl(mode: 'light' | 'dark'): string {
   return mode === 'dark' ? '0 0% 100%' : '240 10% 10%';
 }
 
+
+// --- WCAG kontrast yardımcıları (AA 4.5:1) -------------------------------------------
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return [f(0), f(8), f(4)];
+}
+
+function relLum([r, g, b]: [number, number, number]): number {
+  const c = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+}
+
+function parseHsl(hsl: string): [number, number, number] {
+  const [h, s, l] = hsl.replace(/%/g, '').split(/\s+/).map(Number);
+  return [h || 0, (s || 0) / 100, (l || 0) / 100];
+}
+
+function contrast(a: string, b: string): number {
+  const la = relLum(hslToRgb(...parseHsl(a)));
+  const lb = relLum(hslToRgb(...parseHsl(b)));
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Üzerine `fg` metni yazılacak dolgu rengini, ton/doygunluk aynı kalacak şekilde yalnızca
+ * açıklığını kaydırarak AA (4.5:1) kontrasta getirir. Zaten yeterliyse aynen döner.
+ * Gradyan/vurgu değişkenleri orijinal rengi korur; sadece "metin altı dolgu" değişir.
+ */
+export function ensureFillContrast(fillHsl: string, fgHsl: string, min = 4.5): string {
+  if (contrast(fillHsl, fgHsl) >= min) return fillHsl;
+  const [h, s, l0] = parseHsl(fillHsl);
+  const fgLight = relLum(hslToRgb(...parseHsl(fgHsl))) > 0.5;
+  let l = l0;
+  for (let i = 0; i < 100; i++) {
+    l = fgLight ? l - 0.01 : l + 0.01;
+    if (l <= 0 || l >= 1) break;
+    const cand = `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+    if (contrast(cand, fgHsl) >= min) return cand;
+  }
+  return fillHsl;
+}
+
 /**
  * Hex tema renklerini belge köküne uygular (`providers`, tema hook, admin sayfası).
  */
@@ -45,6 +91,7 @@ export function applyRuntimeThemeToRoot(
       setVar(target, '--ring', primaryHSL);
       setVar(target, '--gradient-from', primaryHSL);
       setVar(target, '--primary-foreground', isDark ? '0 0% 100%' : '0 0% 100%');
+      setVar(target, '--primary-solid', ensureFillContrast(primaryHSL, '0 0% 100%'));
     }
   } else {
     for (const target of targets) {
@@ -52,13 +99,14 @@ export function applyRuntimeThemeToRoot(
       setVar(target, '--ring');
       setVar(target, '--gradient-from');
       setVar(target, '--primary-foreground');
+      setVar(target, '--primary-solid');
     }
   }
 
   if (colors.secondary) {
     const secondaryHSL = hexToHSL(colors.secondary);
     for (const target of targets) {
-      setVar(target, '--secondary', secondaryHSL);
+      setVar(target, '--secondary', ensureFillContrast(secondaryHSL, contrastTextHsl(mode)));
       setVar(target, '--gradient-to', secondaryHSL);
       setVar(target, '--sidebar-accent', secondaryHSL);
       setVar(target, '--secondary-foreground', contrastTextHsl(mode));
@@ -74,7 +122,7 @@ export function applyRuntimeThemeToRoot(
 
   if (colors.accent) {
     for (const target of targets) {
-      setVar(target, '--accent', hexToHSL(colors.accent));
+      setVar(target, '--accent', ensureFillContrast(hexToHSL(colors.accent), contrastTextHsl(mode)));
       setVar(target, '--accent-foreground', contrastTextHsl(mode));
     }
   } else {
