@@ -37,9 +37,14 @@ jobs:
     env:
       HAS_SIGNING: ${{ secrets.MATCH_GIT_URL != '' && secrets.ASC_KEY_P8_BASE64 != '' }}
       CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
-      BUILD_NUMBER: ${{ github.event.inputs.build_number || format('{0}', 100000 + github.run_number) }}
     steps:
       - uses: actions/checkout@v4
+
+      # GitHub ifadeleri aritmetik desteklemez; numara kabukta hesaplanır.
+      - name: Derleme numarası
+        env:
+          INPUT_NUM: ${{ github.event.inputs.build_number }}
+        run: echo "BUILD_NUMBER=${INPUT_NUM:-$((100000 + ${{ github.run_number }}))}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:

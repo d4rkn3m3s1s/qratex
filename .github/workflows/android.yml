@@ -34,9 +34,14 @@ jobs:
       HAS_FCM: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 != '' }}
       CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
       # Play her yüklemede artan versionCode ister; run_number tabanı package.json türevini (x*10000+...) geçer.
-      QRATEX_VERSION_CODE: ${{ github.event.inputs.version_code || format('{0}', 100000 + github.run_number) }}
     steps:
       - uses: actions/checkout@v4
+
+      # GitHub ifadeleri aritmetik desteklemez; numara kabukta hesaplanır.
+      - name: Derleme numarası
+        env:
+          INPUT_NUM: ${{ github.event.inputs.version_code }}
+        run: echo "QRATEX_VERSION_CODE=${INPUT_NUM:-$((100000 + ${{ github.run_number }}))}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
