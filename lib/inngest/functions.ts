@@ -23,7 +23,7 @@ export const analyzeFeedbackFn = inngest.createFunction(
 
 export const outboxProcessFn = inngest.createFunction(
   { id: 'outbox-process', retries: 2 },
-  { cron: '*/2 * * * *' },
+  { cron: '0 3 * * *' },
   async ({ step }) => {
     return step.run('delegate-outbox', () => invokeInternalCron('/api/internal/inngest/outbox-process'));
   }
@@ -31,7 +31,7 @@ export const outboxProcessFn = inngest.createFunction(
 
 export const syntheticMonitorFn = inngest.createFunction(
   { id: 'synthetic-monitor', retries: 1 },
-  { cron: '*/15 * * * *' },
+  { cron: '0 3 * * *' },
   async () => {
     const baseUrl = internalAppBaseUrl();
     const results: Array<{ name: string; ok: boolean }> = [];
@@ -59,7 +59,7 @@ export const syntheticMonitorFn = inngest.createFunction(
 
 export const negativeFeedbackSLAFn = inngest.createFunction(
   { id: 'negative-feedback-sla', retries: 2 },
-  { cron: '0 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-negative-feedback-sla', () =>
       invokeInternalCron('/api/internal/inngest/negative-feedback-sla')
@@ -69,7 +69,7 @@ export const negativeFeedbackSLAFn = inngest.createFunction(
 
 export const churnPlaybookFn = inngest.createFunction(
   { id: 'churn-playbook', retries: 2 },
-  { cron: '0 6 * * *' },
+  { cron: '0 3 * * *' },
   async ({ step }) => {
     return step.run('delegate-churn-playbook', () => invokeInternalCron('/api/internal/inngest/churn-playbook'));
   }
@@ -97,7 +97,7 @@ export const teamWeeklyReminderFn = inngest.createFunction(
 // Ekip günlük bakım — 06:00 UTC: tekrarlayan görevleri klonla + yaklaşan/geçmiş deadline in-app bildirimi.
 export const teamDailyMaintenanceFn = inngest.createFunction(
   { id: 'team-daily-maintenance', retries: 2 },
-  { cron: '0 6 * * *' },
+  { cron: '0 3 * * *' },
   async ({ step }) => {
     return step.run('delegate-team-daily-maintenance', () => invokeInternalCron('/api/internal/inngest/team-daily-maintenance'));
   }
@@ -105,7 +105,7 @@ export const teamDailyMaintenanceFn = inngest.createFunction(
 
 export const calculateClvFn = inngest.createFunction(
   { id: 'calculate-clv', retries: 2 },
-  { cron: '0 2 * * *' },
+  { cron: '0 3 * * *' },
   async ({ step }) => {
     return step.run('delegate-calculate-clv', () => invokeInternalCron('/api/internal/inngest/calculate-clv'));
   }
@@ -123,7 +123,7 @@ export const aiQualitySampleFn = inngest.createFunction(
 
 export const featureFlagCleanupFn = inngest.createFunction(
   { id: 'feature-flag-cleanup', retries: 2 },
-  { cron: '0 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-feature-flag-cleanup', () =>
       invokeInternalCron('/api/internal/inngest/feature-flag-cleanup')
@@ -143,7 +143,7 @@ export const analyticsEventCleanupFn = inngest.createFunction(
 
 export const rateLimitCleanupFn = inngest.createFunction(
   { id: 'rate-limit-cleanup', retries: 2 },
-  { cron: '15 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-rate-limit-cleanup', () =>
       invokeInternalCron('/api/internal/inngest/rate-limit-cleanup')
@@ -163,7 +163,7 @@ export const weeklyDigestFn = inngest.createFunction(
 
 export const dealerFlashOfferExpiryFn = inngest.createFunction(
   { id: 'dealer-flash-offer-expiry', retries: 2 },
-  { cron: '0 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-flash-offer-expiry', () =>
       invokeInternalCron('/api/internal/inngest/dealer-flash-offer-expiry')
@@ -173,7 +173,7 @@ export const dealerFlashOfferExpiryFn = inngest.createFunction(
 
 export const churnInterventionFn = inngest.createFunction(
   { id: 'churn-intervention', retries: 2 },
-  { cron: '30 3 * * *' },
+  { cron: '0 3 * * *' },
   async ({ step }) => {
     return step.run('delegate-churn-intervention', () =>
       invokeInternalCron('/api/internal/inngest/churn-intervention')
@@ -183,7 +183,7 @@ export const churnInterventionFn = inngest.createFunction(
 
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
-  { cron: '0 */6 * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-customer-reminder-nudges', () =>
       invokeInternalCron('/api/internal/inngest/customer-reminder-nudges')
@@ -193,7 +193,7 @@ export const customerReminderNudgeFn = inngest.createFunction(
 
 export const partnerDigestWebhookFn = inngest.createFunction(
   { id: 'partner-digest-webhook', retries: 2 },
-  { cron: '15 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-partner-digest-webhook', () =>
       invokeInternalCron('/api/internal/inngest/partner-digest-webhook')
@@ -204,7 +204,7 @@ export const partnerDigestWebhookFn = inngest.createFunction(
 // Dönemsel konsept aktivasyonu: penceresi açılan/kapanan konsepti Settings'e yazar.
 export const seasonalConceptActivationFn = inngest.createFunction(
   { id: 'seasonal-concept-activation', retries: 2 },
-  { cron: '5 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-seasonal-concept-activation', () =>
       invokeInternalCron('/api/internal/inngest/seasonal-concept-activation')
@@ -215,7 +215,7 @@ export const seasonalConceptActivationFn = inngest.createFunction(
 // Süresi dolan klan savaşlarını otomatik bitirir (önceden yalnızca elle kapanıyordu).
 export const squadBattlesFinishFn = inngest.createFunction(
   { id: 'squad-battles-finish', retries: 2 },
-  { cron: '*/10 * * * *' },
+  { cron: '0 3,9,15,21 * * *' },
   async ({ step }) => {
     return step.run('delegate-squad-battles-finish', () =>
       invokeInternalCron('/api/internal/inngest/squad-battles-finish')
