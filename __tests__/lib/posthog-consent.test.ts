@@ -68,6 +68,49 @@ describe('analitik rızası', () => {
     expect(d.clearStorage).toHaveBeenCalledTimes(1);
   });
 
+  it('YARIŞ: yükleme (load+idle) sürerken rıza geri çekilirse opt-in YAPILMAZ', async () => {
+    const ph = fakePostHog();
+    let release!: () => void;
+    let current: PostHogPort | null = null;
+    const d = {
+      enabled: true,
+      current: jest.fn(() => current),
+      load: jest.fn(
+        () =>
+          new Promise<PostHogPort>((resolve) => {
+            release = () => {
+              current = ph;
+              resolve(ph);
+            };
+          })
+      ),
+      clearStorage: jest.fn(),
+    } satisfies PostHogDeps;
+    const accept = syncAnalyticsConsent(ANALYTICS_ONLY, d);
+    // Yükleme bitmeden kullanıcı rızayı geri çeker (henüz instance yok → geri çekme boşa düşer).
+    await expect(syncAnalyticsConsent(REJECTED, d)).resolves.toBe('withdrawn');
+    release();
+    await expect(accept).resolves.toBe('withdrawn');
+    expect(ph.opt_in_capturing).not.toHaveBeenCalled();
+    expect(ph.opt_out_capturing).toHaveBeenCalled();
+  });
+
+  it('YARIŞ: yükleme sürerken kayıt rızası geri çekilirse oturum kaydı BAŞLAMAZ', async () => {
+    const ph = fakePostHog(true);
+    let release!: () => void;
+    const d = {
+      enabled: true,
+      current: jest.fn(() => null),
+      load: jest.fn(() => new Promise<PostHogPort>((resolve) => { release = () => resolve(ph); })),
+      clearStorage: jest.fn(),
+    } satisfies PostHogDeps;
+    const start = syncReplay(ALL, '/customer', d);
+    await expect(syncReplay(ANALYTICS_ONLY, '/customer', d)).resolves.toBe('stopped');
+    release();
+    await expect(start).resolves.toBe('stopped');
+    expect(ph.startSessionRecording).not.toHaveBeenCalled();
+  });
+
   it('rıza henüz okunmadıysa (SSR/hidrasyon) hiçbir şey yapılmaz', async () => {
     const d = deps(null, fakePostHog());
     await expect(syncAnalyticsConsent({ ready: false, analytics: true, replay: true }, d)).resolves.toBe('skipped');

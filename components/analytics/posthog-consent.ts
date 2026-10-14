@@ -63,17 +63,28 @@ export function withdrawPostHog(ph: PostHogPort | null, clearStorage: () => void
 export type AnalyticsSyncResult = 'skipped' | 'withdrawn' | 'opted_in' | 'unavailable';
 
 /** Analitik kategorisini uygular. Rıza yoksa `load` HİÇ çağrılmaz. */
+/** Modül düzeyi: en son senkronlanan analitik rızası (yarış koşulu koruması). */
+let latestAnalyticsConsent = false;
+let latestReplayAllowed = false;
+
 export async function syncAnalyticsConsent<P extends PostHogPort>(
   consent: ConsentView,
   deps: PostHogDeps<P>
 ): Promise<AnalyticsSyncResult> {
   if (!deps.enabled || !consent.ready) return 'skipped';
+  // Son bilinen rıza: yükleme ertelendiği için (load+idle) bekleme sırasında rıza geri
+  // çekilebilir; await sonrası bu değere bakılır, yoksa geri çekmeden sonra opt-in olurdu.
+  latestAnalyticsConsent = consent.analytics;
   if (!consent.analytics) {
     withdrawPostHog(deps.current(), deps.clearStorage);
     return 'withdrawn';
   }
   const ph = await deps.load();
   if (!ph) return 'unavailable';
+  if (!latestAnalyticsConsent) {
+    withdrawPostHog(ph, deps.clearStorage);
+    return 'withdrawn';
+  }
   safely(() => ph.set_config({ disable_persistence: false }));
   safely(() => {
     if (!ph.has_opted_in_capturing()) ph.opt_in_capturing({ captureEventName: false });
@@ -95,13 +106,16 @@ export async function syncReplay<P extends PostHogPort>(
   deps: PostHogDeps<P>
 ): Promise<ReplaySyncResult> {
   if (!deps.enabled) return 'skipped';
-  if (!replayAllowed(consent, pathname)) {
+  latestReplayAllowed = replayAllowed(consent, pathname);
+  if (!latestReplayAllowed) {
     const ph = deps.current();
     if (ph) safely(() => ph.stopSessionRecording());
     return 'stopped';
   }
   const ph = await deps.load();
   if (!ph) return 'unavailable';
+  // Bekleme sırasında kayıt rızası geri çekildiyse/yol değiştiyse başlatma.
+  if (!latestReplayAllowed) return 'stopped';
   let opted = false;
   safely(() => {
     opted = ph.has_opted_in_capturing();
