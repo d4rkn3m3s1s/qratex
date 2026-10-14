@@ -39,7 +39,12 @@ export default async function HomePage() {
         '@id': `${base}/#organization`,
         name: sanitizeSeoString(seo.organizationName),
         url: base,
-        logo: { '@type': 'ImageObject', url: `${base}/logo/logo.png` },
+        // Kare, koyu zeminli logo: Google'ın marka/AI özetlerinde beyaz zeminde de görünür.
+        logo: { '@type': 'ImageObject', url: `${base}/icons/favicon-512.png`, width: 512, height: 512 },
+        image: `${base}/icons/favicon-512.png`,
+        // Varlık ayrımı (QTREX vb. benzer adlarla karışmasın): resmi adlar ve resmi profiller.
+        alternateName: ['QRateX', 'Qratex', 'QRateX App'],
+        sameAs: ['https://www.instagram.com/qratexco/'],
         description: sanitizeSeoString(seo.organizationDescription),
       },
       {

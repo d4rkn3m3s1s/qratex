@@ -103,15 +103,17 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     manifest: '/manifest.json',
     icons: {
+      // Google arama favicon'u: kare, 48'in katı (48/96/144/192), koyu zemin üstünde amblem.
       icon: [
-        { url: '/logo/logo.png', type: 'image/png' },
-        { url: '/icons/icon-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
-        { url: '/icons/icon-512x512.svg', sizes: '512x512', type: 'image/svg+xml' },
+        { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
+        { url: '/icons/favicon-48.png', sizes: '48x48', type: 'image/png' },
+        { url: '/icons/favicon-96.png', sizes: '96x96', type: 'image/png' },
+        { url: '/icons/favicon-144.png', sizes: '144x144', type: 'image/png' },
+        { url: '/icons/favicon-192.png', sizes: '192x192', type: 'image/png' },
+        { url: '/icons/favicon-512.png', sizes: '512x512', type: 'image/png' },
       ],
-      shortcut: '/logo/logo.png',
-      apple: [
-        { url: '/logo/logo.png', sizes: '180x180', type: 'image/png' },
-      ],
+      shortcut: '/favicon.ico',
+      apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
     },
     appleWebApp: {
       capable: true,
@@ -155,7 +157,6 @@ export default async function RootLayout({
         {/* Logo preload KALDIRILDI: header <Image priority> next/image'in KENDİ preload'unu
             (/_next/image?url=... optimize URL) üretiyor; raw /logo/logo.png preload'u onunla
             eşleşmiyordu → "preloaded but not used" uyarısı + boşa indirme. */}
-        <link rel="icon" type="image/png" href="/logo/logo.png" />
         <link rel="alternate" type="application/rss+xml" title="RSS" href="/feed.xml" />
       </head>
       <body className="min-h-dvh bg-background font-sans antialiased" suppressHydrationWarning>

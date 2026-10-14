@@ -7,7 +7,7 @@ const SITEMAP_INDEX_THRESHOLD = 5000;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const seo = await getSeoSettings();
   if (!seo.sitemapEnabled) return [];
-  const base = seo.canonicalBase || seo.siteUrl;
+  const base = (seo.canonicalBase || seo.siteUrl || '').trim().replace(/\/+$/, '');
   const defaultEntries: MetadataRoute.Sitemap = [
     {
       url: base,
