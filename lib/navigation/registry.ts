@@ -1373,6 +1373,16 @@ const ADMIN: NavRoute[] = [
     keywords: ['plan', 'abonelik'],
   },
   {
+    id: 'admin.changelog',
+    role: 'admin',
+    href: '/admin/changelog',
+    label: { tr: 'Değişiklik Günlüğü', en: 'Changelog' },
+    icon: 'History',
+    group: 'platform',
+    status: 'primary',
+    keywords: ['changelog', 'güncelleme', 'sürüm', 'sürüm notları', 'commit', 'geçmiş', 'release notes'],
+  },
+  {
     id: 'admin.observability',
     role: 'admin',
     href: '/admin/observability',

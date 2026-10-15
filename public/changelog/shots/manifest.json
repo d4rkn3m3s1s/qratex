@@ -1,0 +1,39 @@
+{
+ "shots": [
+  {
+   "week": "2026-W06",
+   "date": "2026-02-07",
+   "src": "/changelog/shots/2026-W06-anasayfa.webp",
+   "caption": "Ana sayfa — Şubat 2026 (internet arşivi kaydı)",
+   "url": "https://web.archive.org/web/20260207222708/https://demoqratex.vercel.app/"
+  },
+  {
+   "week": "2026-W34",
+   "date": "2026-08-22",
+   "src": "/changelog/shots/2026-W34-anasayfa.webp",
+   "caption": "Ana sayfa — yeniden tasarım öncesi (Vercel deploy ef47f33a)",
+   "url": null
+  },
+  {
+   "week": "2026-W34",
+   "date": "2026-08-22",
+   "src": "/changelog/shots/2026-W34-ozellikler.webp",
+   "caption": "Ana sayfa özellikler bölümü — Ağustos 2026",
+   "url": null
+  },
+  {
+   "week": "2026-W34",
+   "date": "2026-08-22",
+   "src": "/changelog/shots/2026-W34-giris.webp",
+   "caption": "Giriş sayfası — demo hesap kartlarıyla eski tasarım",
+   "url": null
+  },
+  {
+   "week": "2026-W42",
+   "date": "2026-10-15",
+   "src": "/changelog/shots/2026-W42-musteri-paneli.webp",
+   "caption": "Müşteri paneli — büyük güncelleme sonrası (canlı)",
+   "url": "https://www.qratex.app/customer"
+  }
+ ]
+}

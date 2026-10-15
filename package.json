@@ -31,7 +31,9 @@
     "audit:customer-responsive": "node scripts/customer-responsive-scan.mjs",
     "api:ensure-dynamic": "node scripts/ensure-api-force-dynamic.mjs",
     "catalog:admin-api": "node scripts/generate-admin-api-catalog.mjs",
-    "analyze": "cross-env ANALYZE=true next build --webpack"
+    "analyze": "cross-env ANALYZE=true next build --webpack",
+    "changelog:build": "node scripts/changelog/build.mjs",
+    "changelog:update": "node scripts/changelog/extract.mjs .wf-tmp/changelog/raw .git qratex && node scripts/changelog/build.mjs"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
