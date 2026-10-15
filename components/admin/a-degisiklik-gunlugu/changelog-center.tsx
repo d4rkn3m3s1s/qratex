@@ -25,7 +25,7 @@ let searchIndex: Promise<Record<string, string>> | null = null;
 /** Madde başlıkları + commit mesajlarından oluşan tam metin dizini; ilk aramada yüklenir. */
 function loadSearchIndex() {
   if (!searchIndex) {
-    searchIndex = fetch('/changelog/search.json')
+    searchIndex = fetch('/api/admin/changelog/search', { credentials: 'same-origin' })
       .then((r) => (r.ok ? (r.json() as Promise<Record<string, string>>) : {}))
       .catch(() => {
         searchIndex = null;

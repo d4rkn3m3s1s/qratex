@@ -15,11 +15,11 @@ import s from './changelog.module.css';
 const MAIN_REPO = 'qratex';
 const detailCache = new Map<string, Promise<ChangelogWeekDetail>>();
 
-/** Hafta ayrıntısını /changelog/weeks/<hafta>.json'dan bir kez yükler (bellekte önbellek). */
+/** Hafta ayrıntısını /api/admin/changelog/weeks/<hafta> (yalnız ADMIN) uç noktasından bir kez yükler (bellekte önbellek). */
 export function loadWeekDetail(week: string): Promise<ChangelogWeekDetail> {
   let p = detailCache.get(week);
   if (!p) {
-    p = fetch(`/changelog/weeks/${encodeURIComponent(week)}.json`).then((r) => {
+    p = fetch(`/api/admin/changelog/weeks/${encodeURIComponent(week)}`, { credentials: 'same-origin' }).then((r) => {
       if (!r.ok) throw new Error(String(r.status));
       return r.json() as Promise<ChangelogWeekDetail>;
     });

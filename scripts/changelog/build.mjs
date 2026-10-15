@@ -107,8 +107,9 @@ fs.mkdirSync(path.join(root, 'lib', 'changelog'), { recursive: true });
 fs.writeFileSync(path.join(root, 'lib', 'changelog', 'data.json'), JSON.stringify(out));
 
 // İstemci için hafta ayrıntısı (bölümler, gün dökümü, riskler, commit listesi) ayrı dosyalarda:
-// sayfa yalnız özet gönderir, kart açılınca /changelog/weeks/<hafta>.json isteğe bağlı yüklenir.
-const detailDir = path.join(root, 'public', 'changelog', 'weeks');
+// sayfa yalnız özet gönderir, kart açılınca /api/admin/changelog/weeks/<hafta> (yalnız ADMIN) yükler.
+// GÜVENLİK: public/ altına YAZILMAZ — orası herkese açık servis edilir.
+const detailDir = path.join(root, 'lib', 'changelog', 'weeks');
 fs.rmSync(detailDir, { recursive: true, force: true });
 fs.mkdirSync(detailDir, { recursive: true });
 for (const w of weeks) {
@@ -120,5 +121,5 @@ const search = Object.fromEntries(weeks.map((w) => [w.week, [
   ...w.risks, ...w.sections.map((s) => s.title), ...w.sections.flatMap((s) => arr(s.items).map((i) => i.title)),
   ...w.commits.map((c) => `${c.short} ${c.subject}`),
 ].filter(Boolean).join(' | ').toLocaleLowerCase('tr')]));
-fs.writeFileSync(path.join(root, 'public', 'changelog', 'search.json'), JSON.stringify(search));
-console.log(`[changelog] ${weeks.length} hafta, ${tc} commit → lib/changelog/data.json + public/changelog/weeks/*.json`);
+fs.writeFileSync(path.join(root, 'lib', 'changelog', 'search.json'), JSON.stringify(search));
+console.log(`[changelog] ${weeks.length} hafta, ${tc} commit → lib/changelog/data.json + lib/changelog/weeks/*.json + lib/changelog/search.json`);

@@ -118,6 +118,11 @@ const nextConfig = {
   },
   // Vercel: `public/` içeriği statik olarak servis edilir; output file tracing bunu her lambda’ya
   // kopyalayınca 250MB+ uyarısı oluşuyordu. public’a sadece URL üzerinden erişilir (fs okuma yok).
+  // Değişiklik Günlüğü ayrıntıları (yalnız ADMIN) fs ile okunur; lambda paketine dahil edilmeli.
+  outputFileTracingIncludes: {
+    '/api/admin/changelog/weeks/[week]': ['./lib/changelog/weeks/*.json'],
+    '/api/admin/changelog/search': ['./lib/changelog/search.json'],
+  },
   outputFileTracingExcludes: {
     '*': expandOutputFileTracingExcludes(OUTPUT_FILE_TRACING_EXCLUDE_GLOBS),
   },
